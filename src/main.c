@@ -9,9 +9,11 @@
  *      avon jam    [FILE]             printed form to a SKIT container
  *      avon cue    [FILE]             SKIT container to printed form
  *      avon prefix [FILE]             the term in prefix form (` for application)
- *      avon witness [--rows=N] [--cells=N] [FILE]
+ *      avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [FILE]
  *                                     the witness strategy's table, for
- *                                     lean-ski's aircheck and plonky3 (§17)
+ *                                     lean-ski's aircheck and plonky3 (§17);
+ *                                     with JETS, lean-ski's jet file for the
+ *                                     term, instantiation rows (§18.1)
  *      avon --version
  *
  *  A FILE may be in the printed form, a SKIT container (docs/DESIGN.md
@@ -41,6 +43,7 @@ typedef struct {
     bool        birds;
     uint64_t    rows, cells;      /* witness budgets */
     const char *jets;             /* a dictionary export, or NULL */
+    const char *jet_table;        /* lean-ski's jet file, or NULL */
     uint64_t    jet_floor;
     const char *file;
 } args;
@@ -53,7 +56,7 @@ static int usage(void) {
         "       avon jam    [--budget=N] [FILE]\n"
         "       avon cue    [--budget=N] [FILE]\n"
         "       avon prefix [FILE]\n"
-        "       avon witness [--rows=N] [--cells=N] [FILE]\n"
+        "       avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT --jet-floor=N --jet-check=N --no-jets)\n"
         "       avon --version\n");
@@ -74,6 +77,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->budget = 1000000;
     g->birds = false;
     g->jets = NULL;
+    g->jet_table = NULL;
     g->jet_floor = 8;
     g->rows = 1u << 21;          /* bench/plonky3's MAX_LOG_HEIGHT */
     g->cells = 1u << 21;
@@ -87,6 +91,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--allow-bird-atoms") == 0) g->birds = true;
         else if (strncmp(s, "--jets=", 7) == 0 && s[7]) g->jets = s + 7;
         else if (strcmp(s, "--no-jets") == 0)        g->o.jets = false;
+        else if (strncmp(s, "--jet-table=", 12) == 0 && s[12]) g->jet_table = s + 12;
         else if (strncmp(s, "--jet-floor=", 12) == 0 && number(s + 12, &v))
             g->jet_floor = v;
         else if (strncmp(s, "--jet-check=", 12) == 0 && number(s + 12, &v))
@@ -215,23 +220,45 @@ int main(int argc, char **argv) {
             av_arena *a = new_arena(&g, 1u << 16);
             uint32_t t = a ? load(a, src, len) : AV_NONE;
             av_witness w;
+            av_jettable jt;
+            bool have_jt = false;
+            uint64_t insts = 0;
             const char *msg = NULL;
             av_buf b = { 0 };
             rc = 1;
+            if (t != AV_NONE && g.jet_table) {
+                FILE *jf = fopen(g.jet_table, "rb");
+                size_t jlen = 0;
+                char *jsrc = jf ? slurp(jf, &jlen) : NULL;
+                if (jf) fclose(jf);
+                if (!jsrc) {
+                    fprintf(stderr, "avon: cannot read %s\n", g.jet_table);
+                    t = AV_NONE;
+                } else if (!av_jettable_read(jsrc, jlen, &jt, &msg)) {
+                    fprintf(stderr, "avon: %s: %s\n", g.jet_table, msg);
+                    t = AV_NONE;
+                } else {
+                    have_jt = true;
+                }
+                free(jsrc);
+            }
             if (t != AV_NONE) {
-                av_status st = av_witness_run(a, t, (size_t)g.rows, (size_t)g.cells, &w, &msg);
+                av_status st = av_witness_run_jets(a, t, have_jt ? &jt : NULL, (size_t)g.rows,
+                                                   (size_t)g.cells, &w, &insts, &msg);
                 if (st != AV_WHNF) {
                     fprintf(stderr, "avon: no witness: %s\n", msg);
                 } else if (!av_witness_table(a, t, &w, 4, &b)) {
                     fprintf(stderr, "avon: could not write the table\n");
                 } else {
                     fwrite(b.s, 1, b.len, stdout);
-                    fprintf(stderr, "contractions %llu rows %zu cells %zu loaded %zu\n",
-                            (unsigned long long)w.contractions, w.nrows, w.nmem, w.loaded);
+                    fprintf(stderr, "contractions %llu rows %zu cells %zu loaded %zu insts %llu\n",
+                            (unsigned long long)w.contractions, w.nrows, w.nmem, w.loaded,
+                            (unsigned long long)insts);
                     rc = 0;
                 }
                 av_witness_free(&w);
             }
+            if (have_jt) av_jettable_free(&jt);
             av_buf_free(&b);
             av_arena_free(a);
         } else if (strcmp(cmd, "prefix") == 0) {

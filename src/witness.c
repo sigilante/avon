@@ -111,27 +111,191 @@ static const av_cell *cons_at(const av_witness *w, uint32_t addr) {
     return c && c->tag == AV_CELL_CONS ? c : NULL;
 }
 
+/*  --------------------------------------------------------- the jet table */
+
+void av_jettable_free(av_jettable *jt) {
+    for (size_t i = 0; i < jt->njets; i++) free(jt->jets[i].cells);
+    free(jt->jets);
+    free(jt->root_addr);
+    free(jt->root_jet);
+    memset(jt, 0, sizeof *jt);
+}
+
+/*  A cursor over the file: whitespace-separated words. */
+typedef struct { const char *s; size_t len, pos; } cursor;
+
+static bool word(cursor *c, const char **w, size_t *n) {
+    while (c->pos < c->len && (c->s[c->pos] == ' ' || c->s[c->pos] == '\n' ||
+                               c->s[c->pos] == '\r' || c->s[c->pos] == '\t'))
+        c->pos++;
+    size_t start = c->pos;
+    while (c->pos < c->len && c->s[c->pos] != ' ' && c->s[c->pos] != '\n' &&
+           c->s[c->pos] != '\r' && c->s[c->pos] != '\t')
+        c->pos++;
+    *w = c->s + start;
+    *n = c->pos - start;
+    return *n > 0;
+}
+
+static bool nat32(cursor *c, uint32_t *out) {
+    const char *w;
+    size_t n;
+    if (!word(c, &w, &n) || n > 10) return false;
+    uint64_t v = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (w[i] < '0' || w[i] > '9') return false;
+        v = v * 10 + (uint64_t)(w[i] - '0');
+    }
+    if (v > UINT32_MAX) return false;
+    *out = (uint32_t)v;
+    return true;
+}
+
+static bool keyword(cursor *c, const char *k) {
+    const char *w;
+    size_t n;
+    return word(c, &w, &n) && n == strlen(k) && memcmp(w, k, n) == 0;
+}
+
+static bool operand(cursor *c, av_jop *op) {
+    const char *w;
+    size_t n;
+    if (!word(c, &w, &n) || n != 1) return false;
+    op->kind = w[0] == 'L' ? AV_JOP_LOCAL : w[0] == 'A' ? AV_JOP_ARG :
+               w[0] == 'G' ? AV_JOP_GLOBAL : 99u;
+    return op->kind != 99u && nat32(c, &op->val);
+}
+
+bool av_jettable_read(const char *src, size_t len, av_jettable *jt, const char **err) {
+    memset(jt, 0, sizeof *jt);
+    cursor c = { src, len, 0 };
+    uint32_t r, g;
+    const char *msg = "malformed jet file";
+    if (!keyword(&c, "roots") || !nat32(&c, &r)) goto fail;
+    jt->root_addr = calloc(r ? r : 1, sizeof *jt->root_addr);
+    jt->root_jet = calloc(r ? r : 1, sizeof *jt->root_jet);
+    if (!jt->root_addr || !jt->root_jet) { msg = "out of memory"; goto fail; }
+    for (uint32_t i = 0; i < r; i++) {
+        if (!nat32(&c, &jt->root_addr[i]) || !nat32(&c, &jt->root_jet[i])) goto fail;
+        jt->nroots++;
+    }
+    if (!keyword(&c, "jets") || !nat32(&c, &g)) goto fail;
+    jt->jets = calloc(g ? g : 1, sizeof *jt->jets);
+    if (!jt->jets) { msg = "out of memory"; goto fail; }
+    for (uint32_t j = 0; j < g; j++) {
+        av_tjet *J = &jt->jets[j];
+        uint32_t n;
+        if (!nat32(&c, &J->k) || !nat32(&c, &n) || !operand(&c, &J->root)) goto fail;
+        jt->njets++;
+        J->cells = calloc(n ? n : 1, sizeof *J->cells);
+        if (!J->cells) { msg = "out of memory"; goto fail; }
+        for (uint32_t i = 0; i < n; i++) {
+            av_jcell *x = &J->cells[i];
+            if (!nat32(&c, &x->tag) || x->tag > 3) goto fail;
+            if (x->tag == 3 && (!operand(&c, &x->a) || !operand(&c, &x->b))) goto fail;
+            J->ncells++;
+        }
+    }
+    const char *w;
+    size_t n;
+    if (word(&c, &w, &n)) { msg = "text after the jet file"; goto fail; }
+    /* every root names a jet; every local operand an earlier cell; every
+       argument operand an argument */
+    for (size_t i = 0; i < jt->nroots; i++)
+        if (jt->root_jet[i] >= jt->njets) { msg = "a root names no jet"; goto fail; }
+    for (size_t j = 0; j < jt->njets; j++) {
+        const av_tjet *J = &jt->jets[j];
+        for (size_t i = 0; i < J->ncells; i++) {
+            const av_jcell *x = &J->cells[i];
+            if (x->tag != 3) continue;
+            const av_jop ops[2] = { x->a, x->b };
+            for (int q = 0; q < 2; q++) {
+                if (ops[q].kind == AV_JOP_LOCAL && ops[q].val >= i) { msg = "a local operand names a later cell"; goto fail; }
+                if (ops[q].kind == AV_JOP_ARG && ops[q].val >= J->k) { msg = "an argument operand past the arity"; goto fail; }
+            }
+        }
+        if (J->root.kind == AV_JOP_LOCAL && J->root.val >= J->ncells) { msg = "a root operand past the cells"; goto fail; }
+        if (J->root.kind == AV_JOP_ARG && J->root.val >= J->k) { msg = "a root operand past the arity"; goto fail; }
+    }
+    return true;
+fail:
+    if (err) *err = msg;
+    av_jettable_free(jt);
+    return false;
+}
+
 av_status av_witness_run(const av_arena *a, uint32_t t, size_t max_rows,
                          size_t max_cells, av_witness *w, const char **err) {
+    return av_witness_run_jets(a, t, NULL, max_rows, max_cells, w, NULL, err);
+}
+
+static uint32_t resolve(av_jop op, uint32_t c, const uint32_t *ps) {
+    return op.kind == AV_JOP_LOCAL ? c + op.val : op.kind == AV_JOP_ARG ? ps[op.val] : op.val;
+}
+
+av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *jt,
+                              size_t max_rows, size_t max_cells, av_witness *w,
+                              uint64_t *insts, const char **err) {
     memset(w, 0, sizeof *w);
+    if (insts) *insts = 0;
     if (max_cells > AV_MAX_NODES) max_cells = AV_MAX_NODES;  /* 32-bit cells */
+    uint32_t *root_of = NULL;   /* jet + 1 at each root of the loaded heap */
+    uint32_t *ps = NULL;        /* the argument pointers an instantiation pops */
+    av_status st = AV_SIZE;
+    const char *msg = NULL;
     uint32_t hd;
-    const char *msg = build(a, t, w, max_cells, &hd);
-    if (msg) { if (err) *err = msg; return AV_SIZE; }
+    msg = build(a, t, w, max_cells, &hd);
+    if (msg) goto out;
     uint32_t stk = (uint32_t)w->nmem;
-    if (!put_cell(w, AV_CELL_NIL, 0, 0)) { if (err) *err = "out of memory"; return AV_SIZE; }
+    if (!put_cell(w, AV_CELL_NIL, 0, 0)) { msg = "out of memory"; goto out; }
     w->loaded = w->nmem;
     w->hd0 = hd;
     w->stk0 = stk;
+    if (jt) {
+        uint32_t maxk = 1;
+        for (size_t j = 0; j < jt->njets; j++)
+            if (jt->jets[j].k > maxk) maxk = jt->jets[j].k;
+        root_of = calloc(w->loaded, sizeof *root_of);
+        ps = calloc(maxk, sizeof *ps);
+        if (!root_of || !ps) { msg = "out of memory"; goto out; }
+        for (size_t i = 0; i < jt->nroots; i++) {
+            if (jt->root_addr[i] >= w->loaded) { msg = "a root outside the loaded heap"; goto out; }
+            root_of[jt->root_addr[i]] = jt->root_jet[i] + 1;
+        }
+    }
 
     for (;;) {
-        if (w->nrows >= max_rows) {
-            if (err) *err = "the run exceeds the row budget";
-            return AV_SIZE;
-        }
-        if (w->nmem > UINT32_MAX - 3) { if (err) *err = "address space"; return AV_SIZE; }
+        if (w->nrows >= max_rows) { msg = "the run exceeds the row budget"; goto out; }
+        if (w->nmem > UINT32_MAX - 3) { msg = "address space"; goto out; }
         uint32_t c = (uint32_t)w->nmem;
-        if (!put_row(w, hd, stk, c)) { if (err) *err = "out of memory"; return AV_SIZE; }
+        if (!put_row(w, hd, stk, c)) { msg = "out of memory"; goto out; }
+
+        /* An instantiation, at a licensed root with enough arguments. */
+        if (root_of && hd < w->loaded && root_of[hd]) {
+            const av_tjet *J = &jt->jets[root_of[hd] - 1];
+            uint32_t s = stk;
+            uint32_t i = 0;
+            for (; i < J->k; i++) {
+                const av_cell *cc = cons_at(w, s);
+                if (!cc) break;
+                ps[i] = cc->a;
+                s = cc->b;
+            }
+            if (i == J->k) {
+                if (w->nmem + J->ncells > max_cells) { msg = "the run exceeds the cell budget"; goto out; }
+                for (size_t q = 0; q < J->ncells; q++) {
+                    const av_jcell *x = &J->cells[q];
+                    bool ok = x->tag == 3
+                        ? put_cell(w, AV_CELL_APP, resolve(x->a, c, ps), resolve(x->b, c, ps))
+                        : put_cell(w, x->tag, 0, 0);   /* S, K, I share the mem bus's tags */
+                    if (!ok) { msg = "out of memory"; goto out; }
+                }
+                hd = resolve(J->root, c, ps);
+                stk = s;
+                if (insts) (*insts)++;
+                continue;
+            }
+        }
 
         /* Air.stepG over the heap, counter c */
         const av_cell *h = get(w, hd);
@@ -171,21 +335,20 @@ av_status av_witness_run(const av_arena *a, uint32_t t, size_t max_rows,
         default:
             goto halted;
         }
-        if (w->nmem + writes > max_cells) {
-            if (err) *err = "the run exceeds the cell budget";
-            return AV_SIZE;
-        }
+        if (w->nmem + writes > max_cells) { msg = "the run exceeds the cell budget"; goto out; }
         if (h->tag != AV_CELL_APP) w->contractions++;
         for (size_t i = 0; i < writes; i++)
-            if (!put_cell(w, ws[i].tag, ws[i].a, ws[i].b)) {
-                if (err) *err = "out of memory";
-                return AV_SIZE;
-            }
+            if (!put_cell(w, ws[i].tag, ws[i].a, ws[i].b)) { msg = "out of memory"; goto out; }
         hd = nhd;
         stk = nstk;
     }
 halted:
-    return AV_WHNF;
+    st = AV_WHNF;
+out:
+    free(root_of);
+    free(ps);
+    if (msg && err) *err = msg;
+    return st;
 }
 
 /*  --------------------------------------------------------------- tables */

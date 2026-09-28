@@ -361,6 +361,55 @@ av_status av_witness_run(const av_arena *a, uint32_t t, size_t max_rows,
                          size_t max_cells, av_witness *w, const char **err);
 void      av_witness_free(av_witness *w);
 
+/*  -------------------------------------------------------- jetted witness
+ *
+ *  lean-ski's jet table for a term (`lake exe jets emit`, its
+ *  JetTable.jetTable): licensed roots, addresses in the loaded heap, each
+ *  naming a jet; and each jet's arity, root operand and body cells in
+ *  ibuild order.  An operand is a cell the instantiation wrote (local, by
+ *  offset), an argument (by index) or a public cell (global, by address).
+ *  Nothing here is trusted: lean-ski's `lake exe jets check` checks the
+ *  table a jetted witness writes against Air.AcceptsJ, recomputing the
+ *  roots from the term.
+ */
+
+enum { AV_JOP_LOCAL = 0, AV_JOP_ARG = 1, AV_JOP_GLOBAL = 2 };
+
+typedef struct { uint32_t kind, val; } av_jop;
+typedef struct { uint32_t tag; av_jop a, b; } av_jcell;   /* tag 0..3 */
+typedef struct {
+    uint32_t  k;                /* arity */
+    av_jop    root;
+    av_jcell *cells;
+    size_t    ncells;
+} av_tjet;
+typedef struct {
+    uint32_t *root_addr, *root_jet;
+    size_t    nroots;
+    av_tjet  *jets;
+    size_t    njets;
+} av_jettable;
+
+/*  Read a jet file (`roots R`, R lines `addr jet`, `jets G`, per jet a line
+ *  `k n root` and n cell lines `tag` or `3 a b`, an operand `L j`, `A i` or
+ *  `G a`).  False, with *err, on anything malformed or out of range.
+ */
+bool av_jettable_read(const char *src, size_t len, av_jettable *jt, const char **err);
+void av_jettable_free(av_jettable *jt);
+
+/*  av_witness_run, jetted: at a licensed root with at least k arguments on
+ *  the stack, one row instantiates the jet (lean-ski's Mach.instStepG: pop
+ *  k argument pointers, write the body's cells at the counter, the head
+ *  the body's root, the stack the rest); otherwise a row is a machine
+ *  transition.  That is lean-ski's policy (bench/JetCost.lean runJ,
+ *  bench/plonky3/src/jets.rs run_jets), so the table is the one its prover
+ *  writes.  *insts counts the instantiations; `contractions` counts the
+ *  machine's contractions only.  jt NULL is av_witness_run.
+ */
+av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *jt,
+                              size_t max_rows, size_t max_cells, av_witness *w,
+                              uint64_t *insts, const char **err);
+
 /*  The table in Ski/AirCheck.lean's format: the term in prefix form (`
  *  for application), the memory table, the rows.  Both are padded to a
  *  power of two at least 2^min_log, rows by repeating the halted row and

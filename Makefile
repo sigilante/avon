@@ -1,6 +1,7 @@
 # Avon.  `make` builds the release binary, `make check` runs the unit tests
 # under ASan and UBSan and builds build/dbg/avon, a sanitized binary for
 # tests/diff_aviary.py, `make witness-check` runs tests/witness_check.sh,
+# `make jet-witness-check` runs tests/jet_witness_check.sh,
 # `make clean` removes build/.  Requires GNU Make 3.81+.
 
 CC      := clang
@@ -22,7 +23,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
-.PHONY: all check clean witness-check
+.PHONY: all check clean witness-check jet-witness-check
 .SECONDARY:
 
 all: $(BUILD)/avon
@@ -54,6 +55,9 @@ check: $(TEST_BIN) $(BUILD)/dbg/avon
 # (docs/DESIGN.md §17); needs a lean-ski checkout at $$LEAN_SKI (~/lean-ski).
 witness-check: $(BUILD)/avon
 	tests/witness_check.sh
+
+jet-witness-check: $(BUILD)/avon
+	tests/jet_witness_check.sh
 
 clean:
 	rm -rf $(BUILD)

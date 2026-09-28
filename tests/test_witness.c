@@ -181,6 +181,77 @@ TEST(the_witness_halts_where_copy_mode_does) {
     CHECK(compared > cases / 2);
 }
 
+/*  Jetted witnesses (§18.1): lean-ski's jet file, and instantiation rows.
+ *  The jet `λx y. x` compiles to K, so K's cell is its root; it pops two
+ *  arguments, writes no cell, and its root is its first argument. */
+
+static const char K_JET[] = "roots 1\n0 0\njets 1\n2 0 A 0\n";
+
+TEST(a_jet_file_is_read_and_its_errors_refused) {
+    av_jettable jt;
+    CHECK(av_jettable_read(K_JET, strlen(K_JET), &jt, NULL));
+    CHECK_EQ(jt.nroots, 1);
+    CHECK_EQ(jt.njets, 1);
+    CHECK_EQ(jt.jets[0].k, 2);
+    CHECK_EQ(jt.jets[0].ncells, 0);
+    CHECK(jt.jets[0].root.kind == AV_JOP_ARG && jt.jets[0].root.val == 0);
+    av_jettable_free(&jt);
+    /* a cell with operands, then each kind of bad file */
+    const char *ok = "roots 0\njets 1\n1 2 L 1\n1\n3 L 0 A 0\n";
+    CHECK(av_jettable_read(ok, strlen(ok), &jt, NULL));
+    av_jettable_free(&jt);
+    const char *bad[] = {
+        "roots 1\n0 1\njets 1\n2 0 A 0\n",         /* a root names no jet */
+        "roots 0\njets 1\n1 1 L 0\n3 L 0 A 0\n",   /* a local operand names itself */
+        "roots 0\njets 1\n1 1 L 0\n3 A 1 A 0\n",   /* an argument past the arity */
+        "roots 0\njets 1\n1 0 L 0\n",               /* a root past the cells */
+        "roots 0\njets 0\nextra",                    /* text after the file */
+        "roots 1\n0 0\njets 1\n2 0 X 0\n",         /* no such operand */
+    };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        const char *err = NULL;
+        CHECK(!av_jettable_read(bad[i], strlen(bad[i]), &jt, &err));
+        CHECK(err != NULL);
+    }
+}
+
+TEST(a_jet_instantiates_at_its_root) {
+    av_arena *a = av_arena_new(0);
+    uint32_t t = av_parse(a, "K S K", 5, NULL);
+    av_jettable jt;
+    CHECK(av_jettable_read(K_JET, strlen(K_JET), &jt, NULL));
+    av_witness w;
+    uint64_t insts = 0;
+    CHECK_EQ(av_witness_run_jets(a, t, &jt, 100, 100, &w, &insts, NULL), AV_WHNF);
+    /* loaded: K0 S1 A(0,1)2 K3 A(2,3)4 N5; two unwinds put S and K on the
+     * stack, then one row instantiates the jet at K: the head becomes S
+     * (address 1), the stack the empty one, and nothing is written */
+    CHECK_EQ(insts, 1);
+    CHECK_EQ(w.contractions, 0);
+    CHECK_EQ(w.nrows, 4);
+    CHECK_EQ(w.nmem, 6 + 2);
+    CHECK(w.rows[2].hd == 0 && w.rows[2].stk == 7 && w.rows[2].ctr == 8);
+    CHECK(w.rows[3].hd == 1 && w.rows[3].stk == 5 && w.rows[3].ctr == 8);
+    av_witness_free(&w);
+    av_jettable_free(&jt);
+    av_arena_free(a);
+}
+
+TEST(an_instantiation_needs_its_arguments) {
+    av_arena *a = av_arena_new(0);
+    uint32_t t = av_parse(a, "K S", 3, NULL);
+    av_jettable jt;
+    CHECK(av_jettable_read(K_JET, strlen(K_JET), &jt, NULL));
+    av_witness w;
+    uint64_t insts = 0;
+    CHECK_EQ(av_witness_run_jets(a, t, &jt, 100, 100, &w, &insts, NULL), AV_WHNF);
+    CHECK_EQ(insts, 0);                          /* K with one argument halts */
+    CHECK_EQ(w.nrows, 2);
+    av_witness_free(&w);
+    av_jettable_free(&jt);
+    av_arena_free(a);
+}
+
 TEST_MAIN(
     TEST_CASE(i_k_is_lean_skis_table),
     TEST_CASE(s_k_k_s_writes_three_cells_per_s),
@@ -188,4 +259,7 @@ TEST_MAIN(
     TEST_CASE(a_table_needs_a_run),
     TEST_CASE(prefix_form_round_trips),
     TEST_CASE(the_witness_halts_where_copy_mode_does),
+    TEST_CASE(a_jet_file_is_read_and_its_errors_refused),
+    TEST_CASE(a_jet_instantiates_at_its_root),
+    TEST_CASE(an_instantiation_needs_its_arguments),
 )
