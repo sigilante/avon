@@ -8,10 +8,14 @@
  *                                     "STATUS steps term" line per term
  *      avon jam    [FILE]             printed form to a SKIT container
  *      avon cue    [FILE]             SKIT container to printed form
+ *      avon prefix [FILE]             the term in prefix form (` for application)
+ *      avon witness [--rows=N] [--cells=N] [FILE]
+ *                                     the witness strategy's table, for
+ *                                     lean-ski's aircheck and plonky3 (§17)
  *      avon --version
  *
- *  A FILE may be in the printed form or a SKIT container (docs/DESIGN.md
- *  §4.2), told apart by its magic.  Options: --strategy=copy|share
+ *  A FILE may be in the printed form, a SKIT container (docs/DESIGN.md
+ *  §4.2), or the prefix form, told apart by a magic or a leading `.  Options: --strategy=copy|share
  *  (default share), --whnf, --fuel=N, --max-nodes=N, --budget=N (nodes
  *  printed or jammed; default 1000000), --allow-bird-atoms (§4.3).
  */
@@ -32,6 +36,7 @@ typedef struct {
     av_opts     o;
     size_t      budget;
     bool        birds;
+    uint64_t    rows, cells;      /* witness budgets */
     const char *file;
 } args;
 
@@ -42,6 +47,8 @@ static int usage(void) {
         "       avon batch  [same options]\n"
         "       avon jam    [--budget=N] [FILE]\n"
         "       avon cue    [--budget=N] [FILE]\n"
+        "       avon prefix [FILE]\n"
+        "       avon witness [--rows=N] [--cells=N] [FILE]\n"
         "       (all accept --allow-bird-atoms)\n"
         "       avon --version\n");
     return 2;
@@ -60,6 +67,8 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->o = av_opts_default();
     g->budget = 1000000;
     g->birds = false;
+    g->rows = 1u << 21;          /* bench/plonky3's MAX_LOG_HEIGHT */
+    g->cells = 1u << 21;
     g->file = NULL;
     for (int i = 2; i < argc; i++) {
         const char *s = argv[i];
@@ -75,6 +84,12 @@ static bool parse_args(int argc, char **argv, args *g) {
             g->o.max_nodes = (uint32_t)v;
         else if (strncmp(s, "--budget=", 9) == 0 && number(s + 9, &v))
             g->budget = (size_t)v;
+        else if (strncmp(s, "--rows=", 7) == 0 && number(s + 7, &v)
+                 && v <= AV_MAX_NODES)
+            g->rows = v;
+        else if (strncmp(s, "--cells=", 8) == 0 && number(s + 8, &v)
+                 && v <= AV_MAX_NODES)
+            g->cells = v;
         else if (s[0] != '-' && !g->file) g->file = s;
         else return false;
     }
@@ -98,6 +113,16 @@ static char *slurp(FILE *f, size_t *len) {
 
 /* A term from either format; reports its own errors. */
 static uint32_t load(av_arena *a, const char *src, size_t len) {
+    size_t lead = 0;
+    while (lead < len && (src[lead] == ' ' || src[lead] == '\n' ||
+                          src[lead] == '\r' || src[lead] == '\t'))
+        lead++;
+    if (lead < len && src[lead] == '`') {
+        const char *msg = NULL;
+        uint32_t t = av_parse_prefix(a, src, len, &msg);
+        if (t == AV_NONE) fprintf(stderr, "avon: bad prefix term: %s\n", msg);
+        return t;
+    }
     if (len >= 4 && memcmp(src, "SKIT", 4) == 0) {
         const char *msg = NULL;
         uint32_t t = av_cue(a, (const uint8_t *)src, len, &msg);
@@ -148,7 +173,8 @@ int main(int argc, char **argv) {
 
     const char *cmd = argv[1];
     if (strcmp(cmd, "reduce") == 0 || strcmp(cmd, "jam") == 0 ||
-        strcmp(cmd, "cue") == 0) {
+        strcmp(cmd, "cue") == 0 || strcmp(cmd, "prefix") == 0 ||
+        strcmp(cmd, "witness") == 0) {
         FILE *f = g.file ? fopen(g.file, "rb") : stdin;
         if (!f) { perror(g.file); return 1; }
         size_t len;
@@ -158,6 +184,38 @@ int main(int argc, char **argv) {
         int rc;
         if (strcmp(cmd, "reduce") == 0) {
             rc = run_one(&g, src, len, '\n');
+        } else if (strcmp(cmd, "witness") == 0) {
+            av_arena *a = new_arena(&g, 1u << 16);
+            uint32_t t = a ? load(a, src, len) : AV_NONE;
+            av_witness w;
+            const char *msg = NULL;
+            av_buf b = { 0 };
+            rc = 1;
+            if (t != AV_NONE) {
+                av_status st = av_witness_run(a, t, (size_t)g.rows, (size_t)g.cells, &w, &msg);
+                if (st != AV_WHNF) {
+                    fprintf(stderr, "avon: no witness: %s\n", msg);
+                } else if (!av_witness_table(a, t, &w, 4, &b)) {
+                    fprintf(stderr, "avon: could not write the table\n");
+                } else {
+                    fwrite(b.s, 1, b.len, stdout);
+                    fprintf(stderr, "contractions %llu rows %zu cells %zu loaded %zu\n",
+                            (unsigned long long)w.contractions, w.nrows, w.nmem, w.loaded);
+                    rc = 0;
+                }
+                av_witness_free(&w);
+            }
+            av_buf_free(&b);
+            av_arena_free(a);
+        } else if (strcmp(cmd, "prefix") == 0) {
+            av_arena *a = new_arena(&g, 1u << 16);
+            uint32_t t = a ? load(a, src, len) : AV_NONE;
+            av_buf b = { 0 };
+            rc = t != AV_NONE && av_prefix(a, t, g.budget, &b) ? 0 : 1;
+            if (rc == 0) printf("%s\n", b.s);
+            else if (t != AV_NONE) fprintf(stderr, "avon: node budget exceeded or not closed\n");
+            av_buf_free(&b);
+            av_arena_free(a);
         } else {
             av_arena *a = new_arena(&g, 1u << 16);
             uint32_t t = a ? load(a, src, len) : AV_NONE;

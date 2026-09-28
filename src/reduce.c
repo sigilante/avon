@@ -110,6 +110,8 @@ static bool ensure(R *r, size_t k) {
     av_arena *a = r->a;
     if (k > AV_MAX_NODES) return false;
     if (a->cap - a->used >= k) return true;
+    if (r->o->no_collect)
+        return av_reserve(a, (uint32_t)k) && a->used <= r->o->max_nodes;
     if (!av_collect(a, (uint32_t)k, roots, remap_marks, r)) return false;
     return a->used <= r->o->max_nodes;
 }
@@ -339,6 +341,7 @@ av_opts av_opts_default(void) {
         .max_steps = UINT64_MAX,
         .max_nodes = AV_MAX_NODES,
         .interrupt = NULL,
+        .no_collect = false,
     };
 }
 

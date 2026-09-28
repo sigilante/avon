@@ -5,6 +5,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "avon.h"
 
@@ -75,6 +76,16 @@ uint32_t av_parse(av_arena *a, const char *src, size_t len,
         } else {
             size_t start = i;
             while (i < len && is_name(src[i])) i++;
+            if (src[start] == '@') {
+                i = start;
+                msg = "atom names beginning with @ are reserved for probe markers";
+                goto done;
+            }
+            if (memchr(src + start, '`', i - start)) {
+                i = start;
+                msg = "` belongs to the prefix form, not to atom names";
+                goto done;
+            }
             if (!a->allow_bird_atoms && av_is_bird(src + start, i - start)) {
                 i = start;
                 msg = "atom named like a live aviary combinator (§4.3)";

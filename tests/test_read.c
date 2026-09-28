@@ -68,6 +68,10 @@ TEST(malformed_input_is_rejected) {
     CHECK(parse_error("S K)") != NULL);
     CHECK(parse_error("S () K") != NULL);
     CHECK(parse_error("S K") == NULL);
+    CHECK(parse_error("S @1") != NULL);       /* reserved for probe markers */
+    CHECK(parse_error("K `x") != NULL);       /* the prefix form's mark */
+    CHECK(parse_error("K x`y") != NULL);
+    CHECK(parse_error("K x@y") == NULL);      /* @ only reserved in front */
 
     /* a NUL inside a name would be silently truncated by lookup and print */
     av_arena *a = av_arena_new(0);

@@ -80,6 +80,9 @@ void      av_arena_free(av_arena *a);
  */
 uint32_t  av_app(av_arena *a, uint32_t f, uint32_t x);
 
+/*  Grow the arena until k more nodes fit.  False if they cannot. */
+bool      av_reserve(av_arena *a, uint32_t k);
+
 /*  The interned leaf node for a name: S, K, I, or an opaque atom. */
 uint32_t  av_leaf(av_arena *a, const char *name, size_t len);
 
@@ -140,7 +143,8 @@ typedef struct { size_t pos; const char *msg; } av_parse_error;
 /*  Parse a whole term.  Returns its root, or AV_NONE with *err filled.
  *  A NUL byte anywhere is an error: atom names are C strings.  An atom
  *  named like one of the reference host's live combinators is an error
- *  unless a->allow_bird_atoms (§4.3).
+ *  unless a->allow_bird_atoms (§4.3).  An atom name may not begin with "@",
+ *  reserved for probe markers, or contain "`", which marks the prefix form.
  */
 uint32_t av_parse(av_arena *a, const char *src, size_t len,
                   av_parse_error *err);
@@ -227,6 +231,8 @@ typedef struct {
     uint64_t    max_steps;      /* fuel, checked before each attempt    */
     uint32_t    max_nodes;      /* live nodes after a collection        */
     volatile sig_atomic_t *interrupt;   /* polled with fuel; may be NULL */
+    bool        no_collect;     /* grow instead of collecting, so every
+                                   index the caller holds stays valid */
 } av_opts;
 
 typedef struct {
@@ -239,5 +245,100 @@ av_opts   av_opts_default(void);
 
 /*  Reduce `t` under normal order.  May collect: see av_root_push. */
 av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o);
+
+/*  ---------------------------------------------------------------- probing
+ *
+ *  Reading a value by running it, never by reading its syntax (docs/
+ *  DESIGN.md §0, python/skijack/run.py): a Scott datum of an n-constructor
+ *  type, applied to n fresh marker atoms and reduced to weak head normal
+ *  form, returns the marker of its own constructor applied to its fields.
+ *  Markers are atoms named "@" and a number.  The parser, cue and the
+ *  snapshot loader refuse any atom name beginning with "@", so a loaded
+ *  term cannot carry one; a caller building atoms with av_leaf must not
+ *  either.
+ *  Probes reduce with the caller's options but never collect, so the
+ *  fields and memo keys they hand back stay valid.
+ */
+#define AV_PEEL_MAX 8
+
+typedef struct {
+    unsigned ctor;                      /* index in declaration order */
+    unsigned nfields;
+    uint32_t field[AV_PEEL_MAX];
+} av_peeled;
+
+/*  Which of nctors constructors t is, and its fields.  False, with *err
+ *  set, if probing does not reach weak head normal form or the head is not
+ *  one of the markers.
+ */
+bool av_peel(av_arena *a, uint32_t t, unsigned nctors, const av_opts *o,
+             av_peeled *out, const char **err);
+
+/*  Decode a quoted datum of an object type -- nctors constructors, names
+ *  in declaration order, app_ctor the application constructor -- into a
+ *  term whose leaves are the constructor names, for printing.  Memoized by
+ *  node, and at most max_probes probes.
+ */
+uint32_t av_decode(av_arena *a, uint32_t datum, unsigned nctors,
+                   const char *const *names, unsigned app_ctor,
+                   size_t max_probes, const av_opts *o, const char **err);
+
+/*  Read a Scott numeral: zero z s = z, suc n z s = s n. */
+bool av_read_nat(av_arena *a, uint32_t t, size_t max_depth, const av_opts *o,
+                 uint64_t *n, const char **err);
+
+/*  ---------------------------------------------------------------- witness
+ *
+ *  The witness strategy (docs/DESIGN.md §17): lean-ski's heap machine,
+ *  Air.stepG, run literally over its own append-only heap of the circuit's
+ *  cells.  Its contraction count equals copy mode's, and its table is the
+ *  one Ski/AirCheck.lean decides and bench/plonky3 proves.  Weak head normal
+ *  form only.  Terms with atoms are refused for now (§17.3).
+ */
+
+/*  Cell tags, numbered as the Plonky3 tables' mem bus numbers them. */
+enum {
+    AV_CELL_S = 0, AV_CELL_K = 1, AV_CELL_I = 2, AV_CELL_APP = 3,
+    AV_CELL_NIL = 4, AV_CELL_CONS = 5, AV_CELL_ATOM = 6,
+};
+
+typedef struct { uint32_t tag, a, b; } av_cell;   /* A f x, C x r */
+typedef struct { uint32_t hd, stk, ctr; } av_row;
+
+typedef struct {
+    av_cell  *mem;              /* the heap: loaded, then every write */
+    size_t    nmem, memcap;
+    av_row   *rows;             /* one per state, the halted one last */
+    size_t    nrows, rowcap;
+    size_t    loaded;           /* cells of Mach.load t, the nil included */
+    uint32_t  hd0, stk0;
+    uint64_t  contractions;     /* rows whose head is not an application */
+} av_witness;
+
+/*  Load t and run it to weak head normal form.  AV_WHNF on success;
+ *  AV_SIZE, with *err, if it needs more than max_rows rows or max_cells
+ *  cells, or holds atoms or jets.  A diverging term stops at max_rows.
+ */
+av_status av_witness_run(const av_arena *a, uint32_t t, size_t max_rows,
+                         size_t max_cells, av_witness *w, const char **err);
+void      av_witness_free(av_witness *w);
+
+/*  The table in Ski/AirCheck.lean's format: the term in prefix form (`
+ *  for application), the memory table, the rows.  Both are padded to a
+ *  power of two at least 2^min_log, rows by repeating the halted row and
+ *  memory with nil cells, as bench/plonky3's table_of pads them (min_log
+ *  4 there).
+ */
+bool av_witness_table(const av_arena *a, uint32_t t, const av_witness *w,
+                      unsigned min_log, av_buf *out);
+
+/*  A closed {S,K,I} term in prefix form, under a node budget. */
+bool av_prefix(const av_arena *a, uint32_t t, size_t budget, av_buf *out);
+
+/*  Parse the prefix form: S, K, I, and ` before an application's function
+ *  and argument, surrounding whitespace allowed.  AV_NONE on anything else.
+ */
+uint32_t av_parse_prefix(av_arena *a, const char *src, size_t len,
+                         const char **err);
 
 #endif /* AVON_H */

@@ -267,6 +267,11 @@ TEST(malformed_containers_are_rejected) {
                       10,0,0,0,0,0,0,0, 0x67, 0x01 };
     e = cue_err(dup, sizeof dup);
     CHECK(e && strstr(e, "duplicate"));
+    /* one atom "@0", term I @0 would be 11 100 101: refused by name */
+    uint8_t marker[] = { 'S','K','I','T', 1,0,0,0, 1,0,0,0, 2,0,0,0,'@','0',
+                         8,0,0,0,0,0,0,0, 0xa7 };
+    e = cue_err(marker, sizeof marker);
+    CHECK(e && strstr(e, "invalid atom name"));
     uint8_t named_s[] = { 'S','K','I','T', 1,0,0,0, 1,0,0,0, 1,0,0,0,'S',
                           4,0,0,0,0,0,0,0, 0x05 };
     e = cue_err(named_s, sizeof named_s);

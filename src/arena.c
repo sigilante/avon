@@ -74,6 +74,12 @@ void av_arena_free(av_arena *a) {
     free(a);
 }
 
+bool av_reserve(av_arena *a, uint32_t k) {
+    while (a->cap - a->used < k)
+        if (!grow_nodes(a)) return false;
+    return true;
+}
+
 uint32_t av_app(av_arena *a, uint32_t f, uint32_t x) {
     return alloc_node(a, f, x);
 }

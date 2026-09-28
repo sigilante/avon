@@ -272,6 +272,7 @@ av_arena *av_snapshot_load(const char *path, uint32_t *root, const char **err) {
         if (len == 0 || len > n - pos) { msg = "truncated atom table"; goto done; }
         const char *nm = (const char *)img + pos;
         if (memchr(nm, 0, len)) { msg = "NUL in atom name"; goto done; }
+        if (nm[0] == '@') { msg = "atom named like a probe marker"; goto done; }
         if (!a->allow_bird_atoms && av_is_bird(nm, len)) {
             msg = "atom named like a live aviary combinator (§4.3)";
             goto done;

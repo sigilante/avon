@@ -173,9 +173,10 @@ static bool valid_name(const uint8_t *s, size_t len) {
     for (size_t i = 0; i < len; i++) {
         uint8_t c = s[i];
         if (c == 0 || c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
-            c == '(' || c == ')')
+            c == '(' || c == ')' || c == '`')
             return false;           /* it must print and parse back */
     }
+    if (s[0] == '@') return false;  /* reserved for probe markers */
     return !(len == 1 && (s[0] == 'S' || s[0] == 'K' || s[0] == 'I'));
 }
 

@@ -1,0 +1,191 @@
+/**  test_witness.c
+ *
+ *  The witness strategy (docs/DESIGN.md §17): its tables for I K and
+ *  S K K S are lean-ski's, byte for byte; atoms and over-budget runs are
+ *  refused; and on random closed terms it halts with copy mode's count on
+ *  the term copy mode reaches, read back from its heap as Mach.decode does.
+ *  tests/witness_check.sh checks the corpus against lean-ski itself.
+ */
+
+#include <stdlib.h>
+#include <string.h>
+
+#include "avon.h"
+#include "test.h"
+
+static char *table_of(const char *src) {
+    av_arena *a = av_arena_new(0);
+    uint32_t t = av_parse(a, src, strlen(src), NULL);
+    av_witness w;
+    av_buf b = { 0 };
+    char *out = NULL;
+    if (av_witness_run(a, t, 1u << 20, 1u << 20, &w, NULL) == AV_WHNF &&
+        av_witness_table(a, t, &w, 4, &b))
+        out = b.s;
+    else
+        av_buf_free(&b);
+    av_witness_free(&w);
+    av_arena_free(a);
+    return out;
+}
+
+/* bench/plonky3/tables/ik.txt as ski-air writes it (lean-ski 0da9554) */
+static const char IK[] =
+    "`IK\n16\nI\nK\nA 0 1\nN\nC 1 3\nN\nN\nN\nN\nN\nN\nN\nN\nN\nN\nN\n16\n"
+    "2 3 4\n0 4 5\n1 3 5\n1 3 5\n1 3 5\n1 3 5\n1 3 5\n1 3 5\n1 3 5\n1 3 5\n"
+    "1 3 5\n1 3 5\n1 3 5\n1 3 5\n1 3 5\n1 3 5\n";
+
+TEST(i_k_is_lean_skis_table) {
+    char *t = table_of("I K");
+    CHECK(t && strcmp(t, IK) == 0);
+    free(t);
+}
+
+TEST(s_k_k_s_writes_three_cells_per_s) {
+    av_arena *a = av_arena_new(0);
+    uint32_t t = av_parse(a, "S K K S", 7, NULL);
+    av_witness w;
+    CHECK_EQ(av_witness_run(a, t, 100, 100, &w, NULL), AV_WHNF);
+    CHECK_EQ(w.contractions, 2);                 /* S, then K */
+    CHECK_EQ(w.loaded, 8);                       /* 7 term cells and nil */
+    CHECK_EQ(w.nrows, 6);                        /* 3 unwinds, S, K, halt */
+    CHECK_EQ(w.nmem, 8 + 3 + 3);                 /* 3 unwinds, 3 for S */
+    /* loaded: S0 K1 A(0,1)2 K3 A(2,3)4 S5 A(4,5)6 N7; three unwinds leave
+     * x = K1, y = K3, z = S5 on the stack, and the S step at c = 11 writes
+     * A y z, C c s3, C z (c+1) */
+    CHECK(w.mem[11].tag == AV_CELL_APP && w.mem[11].a == 3 && w.mem[11].b == 5);
+    CHECK(w.mem[12].tag == AV_CELL_CONS && w.mem[12].a == 11 && w.mem[12].b == 7);
+    CHECK(w.mem[13].tag == AV_CELL_CONS && w.mem[13].a == 5 && w.mem[13].b == 12);
+    av_witness_free(&w);
+    av_arena_free(a);
+}
+
+TEST(atoms_and_budgets_are_refused) {
+    av_arena *a = av_arena_new(0);
+    uint32_t t = av_parse(a, "I X", 3, NULL);
+    av_witness w;
+    const char *err = NULL;
+    CHECK_EQ(av_witness_run(a, t, 100, 100, &w, &err), AV_SIZE);
+    CHECK(err && strstr(err, "atoms"));
+    av_witness_free(&w);
+
+    t = av_parse(a, "S I I (S I I)", 13, NULL);    /* diverges */
+    err = NULL;
+    CHECK_EQ(av_witness_run(a, t, 1000, 1u << 20, &w, &err), AV_SIZE);
+    CHECK(err && strstr(err, "row budget"));
+    CHECK_EQ(w.nrows, 1000);
+    av_witness_free(&w);
+    err = NULL;
+    CHECK_EQ(av_witness_run(a, t, 1u << 20, 1000, &w, &err), AV_SIZE);
+    CHECK(err && strstr(err, "cell budget"));
+    av_witness_free(&w);
+    av_arena_free(a);
+}
+
+TEST(a_table_needs_a_run) {
+    av_arena *a = av_arena_new(0);
+    av_witness w;
+    memset(&w, 0, sizeof w);
+    av_buf b = { 0 };
+    CHECK(!av_witness_table(a, AV_NODE_I, &w, 4, &b));
+    av_buf_free(&b);
+    av_arena_free(a);
+}
+
+TEST(prefix_form_round_trips) {
+    av_arena *a = av_arena_new(0);
+    const char *src = "S (K I) (S I K) K";
+    uint32_t t = av_parse(a, src, strlen(src), NULL);
+    av_buf b = { 0 }, p = { 0 };
+    CHECK(av_prefix(a, t, 100, &b));
+    CHECK(strcmp(b.s, "```S`KI``SIKK") == 0);
+    uint32_t u = av_parse_prefix(a, b.s, b.len, NULL);
+    CHECK(u != AV_NONE && av_print(a, u, 100, &p) && strcmp(p.s, src) == 0);
+    CHECK(av_parse_prefix(a, "`S", 2, NULL) == AV_NONE);
+    CHECK(av_parse_prefix(a, "SK", 2, NULL) == AV_NONE);
+    CHECK(av_parse_prefix(a, "`SX", 3, NULL) == AV_NONE);
+    av_buf_free(&b);
+    av_buf_free(&p);
+    av_arena_free(a);
+}
+
+/*  -------------------------------------- against copy mode, at random */
+
+/* Mach.decode: the head's term applied to the stack's arguments. */
+static uint32_t cell_term(av_arena *a, const av_witness *w, uint32_t addr) {
+    const av_cell *c = &w->mem[addr];
+    switch (c->tag) {
+    case AV_CELL_S: return AV_NODE_S;
+    case AV_CELL_K: return AV_NODE_K;
+    case AV_CELL_I: return AV_NODE_I;
+    case AV_CELL_APP:
+        return av_app(a, cell_term(a, w, c->a), cell_term(a, w, c->b));
+    default: return AV_NONE;
+    }
+}
+
+static uint32_t decode_state(av_arena *a, const av_witness *w) {
+    const av_row *r = &w->rows[w->nrows - 1];
+    uint32_t t = cell_term(a, w, r->hd);
+    for (uint32_t s = r->stk; w->mem[s].tag == AV_CELL_CONS; s = w->mem[s].b)
+        t = av_app(a, t, cell_term(a, w, w->mem[s].a));
+    return t;
+}
+
+static uint64_t rng = 0x5851f42d4c957f2du;
+static uint32_t next(void) {
+    rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17;
+    return (uint32_t)(rng >> 32);
+}
+
+static uint32_t gen(av_arena *a, int depth) {
+    if (depth == 0 || next() % 10 < 3) {
+        static const uint32_t leaf[] = { AV_NODE_S, AV_NODE_K, AV_NODE_I };
+        return leaf[next() % 3];
+    }
+    uint32_t f = gen(a, depth - 1);
+    return av_app(a, f, gen(a, depth - 1));
+}
+
+TEST(the_witness_halts_where_copy_mode_does) {
+    int cases = getenv("AVON_FUZZ") ? atoi(getenv("AVON_FUZZ")) : 20000;
+    int compared = 0;
+    for (int i = 0; i < cases; i++) {
+        av_arena *a = av_arena_new(0);
+        uint32_t t = gen(a, 7);
+        av_root_push(a, &t);
+        av_opts o = av_opts_default();
+        o.strategy = AV_COPY;
+        o.whnf_only = true;
+        o.max_steps = 3000;
+        av_result r = av_reduce(a, t, &o);
+        if (r.status == AV_WHNF) {
+            av_buf want = { 0 }, got = { 0 };
+            if (av_print(a, r.term, 20000, &want)) {
+                av_witness w;
+                CHECK_EQ(av_witness_run(a, t, 1u << 22, 1u << 22, &w, NULL), AV_WHNF);
+                CHECK_EQ(w.contractions, r.steps);
+                /* Air.checkA's final condition: the last row halts */
+                uint32_t d = decode_state(a, &w);
+                CHECK(d != AV_NONE && av_print(a, d, 20000, &got) &&
+                      strcmp(got.s, want.s) == 0);
+                av_witness_free(&w);
+                compared++;
+            }
+            av_buf_free(&want);
+            av_buf_free(&got);
+        }
+        av_root_pop(a);
+        av_arena_free(a);
+    }
+    CHECK(compared > cases / 2);
+}
+
+TEST_MAIN(
+    TEST_CASE(i_k_is_lean_skis_table),
+    TEST_CASE(s_k_k_s_writes_three_cells_per_s),
+    TEST_CASE(atoms_and_budgets_are_refused),
+    TEST_CASE(a_table_needs_a_run),
+    TEST_CASE(prefix_form_round_trips),
+    TEST_CASE(the_witness_halts_where_copy_mode_does),
+)

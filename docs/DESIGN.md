@@ -681,21 +681,32 @@ Effects and events are terms. Avon does not invent a syntax for them.
 
 ### 10.1 What Python must export
 
-One new module, `python/skijack/export.py`, and a CLI flag. For each corpus
-program it writes a directory:
+One new module, `python/skijack/export.py`, run as
+`python3 -m skijack.export OUTDIR`. **Built in stage 3**, with two changes
+from the first plan, both to keep Avon free of dependencies: one flat
+directory rather than one per program, and a line-based manifest rather
+than JSON.
 
 ```
-avon/tests/conformance/<name>/
-  atoms.txt          the atom-name table (with the bird-name assertion, §4.3)
-  <term>.skit        one file per named term: container + bitstring
-  manifest.json      the targets and what each must produce
+avon/tests/conformance/
+  <target>.skit      the closed executable: container + bitstring (§4.2)
+  manifest.tsv       one line per target, tab-separated
 ```
 
-A manifest entry is: the term file, the strategy-independent expectations
-(decoded constructor and fields, rendered surface form, atom count,
-structural hash), and the `copy`-strategy expectations (contraction count,
-status). The paper's targets — T0, T1, T2, the T3 table, the scry tables,
-the `EXAMPLES.md` §4 fuel boundaries — are entries like any other.
+A target is a closed level-1 executable, `interp fuel <datum>` with the
+interpreter's parameters applied. A manifest line gives its host cap, the
+status and `copy` contraction count of reducing it to weak head normal
+form, the result type's and object type's constructors (`Name/arity`, `*`
+on the application constructor), and the constructor and rendered payload
+it peels and decodes to. The targets are every level-1 declaration of the
+compilable corpus, a policy declaration at the budget `run_policy`
+settles on; `EXAMPLES.md` §4's fuel boundary; and the T3 table, whose
+`CAP` is a `FUEL` status at host cap 400,000. The atom table is empty:
+every target is closed. Atom counts and structural hashes are stage 4's.
+
+The exporter writes the container itself, with a Python `jam`, so the
+wire format has two implementations that must agree; skijack's
+`tests/test_export.py` pins the codes Avon's `tests/test_wire.c` pins.
 
 This is the only change to the Python side the plan requires, and it is
 additive: no existing behaviour moves.
@@ -802,6 +813,43 @@ allocations in the reducer's hot paths (now asserted in the debug build).
   truncated image, a missing sidecar, and forged images with valid
   checksums but a root past the end, a cycle, a doubly interned leaf, an
   index out of range or a jet node are all refused (`tests/test_snap.c`).
+
+**Stage 3, done.** Probing, the harness, and the witness strategy:
+
+- **Every exported target conforms** (`tests/test_conformance.c`): 45
+  targets from skijack `5d335c0` plus `export.py`, each run in both
+  strategies. In `copy` mode every status and contraction count matches;
+  in both, every value peels to the exported constructor and decodes to the
+  exported payload, 86 values in all. That includes the paper's T3 table
+  (`Err` gives `RErr` in 127 under `wf5Abs` and host divergence under
+  `wf5Omg`; `K I Err` and `I K` give `RVal` in 574 and 438 under both;
+  `Ω` gives `RTime` in 10,130), the scry table's eleven rows, the
+  character table (16,150 / 62,199 / 47,257 / 16,739), the tower, and the
+  §4 boundary (fuel 0 and 1 time out, 2 and 5 give `RVal I`). Corrupting a
+  count, a constructor or a payload in the manifest fails the runner.
+- **The witness strategy** (`src/witness.c`) reproduces, byte for byte and
+  from their terms alone, all nine honest tables `ski-air` writes for
+  lean-ski's own corpus (`bench/plonky3/tables/`, generated, not
+  committed). On the 43 targets that reach weak head normal form
+  (`tests/witness_check.sh`, `make witness-check`): every witness contracts
+  exactly as often as `copy` mode; `ski-air` proves and verifies all 43 at
+  those counts, T2 at 1,203,249 rows padded to 2²¹ in 22 s; its tables are
+  byte-identical to Avon's; and `lake exe aircheck` accepts all 43, all at
+  lean-ski `0da9554`, in about two minutes. The two
+  `CAP` targets diverge and have no witness. On 300,000 random terms the
+  witness halts on copy mode's term, read back as `Mach.decode` reads it,
+  after copy mode's count.
+- Witness mode refuses terms with atoms for now: lean-ski numbers atom
+  cells by its statements' variables, and `aircheck`'s parser has no atom
+  cell yet (§17.3).
+- A durability review of the stage found the witness machine exact and
+  four gaps, all fixed with regression tests: probing assumed its markers'
+  leaf ids were consecutive, and nothing reserved their `@` names (the
+  parser, `cue` and the snapshot loader now refuse them, and a probe finds
+  a marker by its id); a prefix-form file led by a tab was read as one
+  atom (the printed form now refuses a backquote in a name, so the two
+  forms cannot overlap); a table of an empty run read out of bounds; and
+  witness budgets were unclamped.
 
 ## 12. What Avon must not do
 
