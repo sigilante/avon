@@ -1515,9 +1515,13 @@ lean-ski's: `check-probe` runs `Air.checkPA`, and `Air.checkPA_decodes`
 (axioms `propext` and `Quot.sound` only) gives `Decodes t o` for the term
 `t` on the table's first line. Avon's exit status proves nothing; its
 refusals are a convenience. `check-probe` certifies whatever term the
-table names, so a caller must bind that line to the corpus row, as
-`release/verify.sh` and this check do by comparing it; `ski-air
-probe-verify` binds the row by name.
+table names, so a caller binds that line to the corpus row. Since
+lean-ski `7031be9` (issue #2), `ACCEPT` names the term -- `corpus row
+NAME`, or a term outside the corpus -- and `check-probe --row NAME`
+refuses a table whose term is not that row's (`NOT THE TERM OF NAME`)
+before checking it; `jets check` takes `--row` the same way. Avon's
+checks run both with `--row` and require `ACCEPT` to name the row;
+`ski-air probe-verify` binds the row by name.
 
 **Checked** (`make probe-witness-check`, `tests/probe_witness_check.sh`):
 the 7 rows of lean-ski's corpus, a count the check pins, with outcomes
@@ -1528,9 +1532,12 @@ probe-prove`'s, and is accepted by `check-probe`. Per row, three wrong
 outcomes -- `err`, the value less one, and one whose plan has the right
 outcome's length (`val 3 0`, `val 2 1 1`), so `check-probe` must read
 the markers and not only count segments -- are refused by Avon as not
-decoding and REJECTed by `check-probe`: 21 of 21. Three forged tables
-from `3 sumto`'s -- another row's term spliced on, a start row moved, a
-field pointer moved -- are REJECTed. `3 sumto` takes 4,144 rows and
+decoding and REJECTed by `check-probe`: 21 of 21. Four tables offered
+as `3 sumto`'s are refused: another row's term spliced onto its body and
+`compiled_up`'s own true table (issue #2's case) as not `sumto_us`'s
+term; a start row moved and a field pointer moved as REJECT.
+`jet-witness-check` likewise requires `jets check --row` to name each
+row, and refuses each table offered as the next row's. `3 sumto` takes 4,144 rows and
 1,045 instantiations, the count lean-ski reports. The `--jet-table`
 output without a plan is unchanged, byte for byte, on every corpus row.
 

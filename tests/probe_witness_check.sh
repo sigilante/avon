@@ -10,18 +10,21 @@
 #   2. build/avon witness --jet-table --plan writes the probe table;
 #   3. `ski-air probe-prove` runs the same term, jet table and plan, proves
 #      and verifies it, and writes its table; Avon's must be byte-identical;
-#   4. `lake exe jets check-probe` must ACCEPT Avon's table for the outcome
-#      (Air.checkPA_decodes: the term decodes to it) and REJECT it for each
-#      wrong outcome;
+#   4. `lake exe jets check-probe --row NAME` must ACCEPT Avon's table for
+#      the outcome, naming the row (Air.checkPA_decodes: the term decodes
+#      to it), and REJECT it for each wrong outcome;
 #   5. for the wrong outcomes Avon must refuse the plan with "does not
 #      decode": `err`, the first number less one (a longer or shorter
 #      plan), and one whose plan has the right outcome's length, so that
 #      check-probe must read the markers, not only count segments;
-#   6. forged tables must be REJECTed: another row's term spliced onto the
-#      table, a start row moved, a field pointer moved.
+#   6. forged tables must be refused: another row's term spliced onto the
+#      table (NOT THE TERM OF the row), a start row moved and a field
+#      pointer moved (REJECT); and another row's true table offered as
+#      sumto_us's, lean-ski #2's case (NOT THE TERM OF sumto_us).
 #
 # check-probe certifies the term the table's first line names; this script
-# binds that term to the corpus row by comparing the line with it.
+# binds that term to the corpus row twice: by comparing the line with it,
+# and with check-probe's --row.
 #
 # Run from the repository root after `make`.  LEAN_SKI defaults to
 # ~/lean-ski.  Nothing here runs in parallel.
@@ -45,11 +48,16 @@ same_length_wrong() {
     esac
 }
 
-# check-probe's verdict on a table for an outcome: its first word, ACCEPT,
-# REJECT or another; it exits nonzero on anything but ACCEPT.
+# check-probe's first line on a table offered as a row, for an outcome; it
+# exits nonzero on anything but ACCEPT.
+verdict_line() {
+    local row=$1 table=$2; shift 2
+    (cd "$LEAN_SKI" && lake exe jets check-probe --row "$row" "$table" "$@" 2>&1 || true) | head -n 1
+}
+
+# its first word: ACCEPT, REJECT, NOT (THE TERM OF), or another
 verdict() {
-    local table=$1; shift
-    (cd "$LEAN_SKI" && lake exe jets check-probe "$table" "$@" 2>&1 || true) | head -n 1 | awk '{print $1}'
+    verdict_line "$@" | awk '{print $1}'
 }
 
 outcome_of() {
@@ -110,10 +118,11 @@ while read -r name _steps term <&3; do
         fail=1
     fi
 
-    if [ "$(verdict "$OUT/avon/$name.txt" $outcome)" = ACCEPT ]; then
+    line=$(verdict_line "$name" "$OUT/avon/$name.txt" $outcome)
+    if [ "$line" != "${line#"ACCEPT $OUT/avon/$name.txt: corpus row $name decodes to $outcome ("}" ]; then
         accepted=$((accepted + 1))
     else
-        echo "FAIL $name: check-probe does not accept Avon's table for $outcome"
+        echo "FAIL $name: check-probe on Avon's table for $outcome: $line"
         fail=1
     fi
 
@@ -131,7 +140,7 @@ while read -r name _steps term <&3; do
             echo "FAIL $name: Avon refused $wrong for another reason: $(cat "$OUT/avon/$name.wrong.err")"
             fail=1
         fi
-        if [ "$(verdict "$OUT/avon/$name.txt" $wrong)" = REJECT ]; then
+        if [ "$(verdict "$name" "$OUT/avon/$name.txt" $wrong)" = REJECT ]; then
             rejected=$((rejected + 1))
         else
             echo "FAIL $name: check-probe did not REJECT Avon's table for the wrong outcome $wrong"
@@ -140,12 +149,16 @@ while read -r name _steps term <&3; do
     done
 done 3< "$OUT/corpus.txt"
 
-# Forged tables, from sumto_us's: each must be REJECTed for its outcome.
+# Forged tables, from sumto_us's, each offered as sumto_us's for val 6: the
+# spliced term is not sumto_us's, the rest are REJECTed; and compiled_up's
+# true table offered as sumto_us's is refused.
 T="$OUT/avon/sumto_us.txt"
 forge() {                       # forge NAME: the forged table on stdout
     case "$1" in
         spliced)                # another row's term on sumto's body
             head -n 1 "$OUT/avon/compiled_up.txt"; tail -n +2 "$T" ;;
+        offered)                # compiled_up's own table, whole
+            cat "$OUT/avon/compiled_up.txt" ;;
         start)                  # segment 1's probe row moved by one
             awk 'f==1 && n==1 {print $1+1; n++; next} f==1 {n++} /^starts /{f=1; n=0} {print}' "$T" ;;
         field)                  # the first field pointer moved by one
@@ -153,16 +166,18 @@ forge() {                       # forge NAME: the forged table on stdout
     esac
 }
 if [ -f "$T" ] && [ -f "$OUT/avon/compiled_up.txt" ]; then
-    for f in spliced start field; do
+    for f in spliced offered start field; do
         forgeries=$((forgeries + 1))
         forge "$f" > "$OUT/avon/forged_$f.txt"
+        case $f in spliced|offered) want=NOT ;; *) want=REJECT ;; esac
+        got=$(verdict sumto_us "$OUT/avon/forged_$f.txt" val 6)
         if cmp -s "$OUT/avon/forged_$f.txt" "$T"; then
             echo "FAIL forged $f: the forgery changed nothing"
             fail=1
-        elif [ "$(verdict "$OUT/avon/forged_$f.txt" val 6)" = REJECT ]; then
+        elif [ "$got" = "$want" ]; then
             forged=$((forged + 1))
         else
-            echo "FAIL forged $f: check-probe did not REJECT it"
+            echo "FAIL forged $f: check-probe said $got, not $want"
             fail=1
         fi
     done
@@ -171,13 +186,13 @@ fi
 echo "$count corpus rows (expected $EXPECTED_ROWS); $bound tables name their row's term"
 echo "$same of $count identical to ski-air's; $accepted of $count accepted"
 echo "$refused of $wrongs wrong outcomes refused by Avon; $rejected of $wrongs rejected by check-probe"
-echo "$forged of $forgeries forged tables rejected"
+echo "$forged of $forgeries forged or misoffered tables refused"
 [ "$count" = "$EXPECTED_ROWS" ] && [ "$bound" = "$count" ] && [ "$same" = "$count" ] \
     && [ "$accepted" = "$count" ] && [ "$refused" = "$wrongs" ] && [ "$rejected" = "$wrongs" ] \
-    && [ "$forgeries" = 3 ] && [ "$forged" = "$forgeries" ] || fail=1
+    && [ "$forgeries" = 4 ] && [ "$forged" = "$forgeries" ] || fail=1
 
 if [ "$fail" != 0 ]; then
     echo "PROBE WITNESS CHECK FAILED"
     exit 1
 fi
-echo "probe witness check passed: $count probe tables identical and accepted; $wrongs wrong outcomes refused and rejected; $forgeries forgeries rejected"
+echo "probe witness check passed: $count probe tables identical and accepted, each naming its row; $wrongs wrong outcomes refused and rejected; $forgeries forged or misoffered tables refused"

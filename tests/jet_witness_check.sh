@@ -10,7 +10,9 @@
 #   3. lean-ski's prover, bench/plonky3's ski-air, runs the same terms with
 #      the same jet tables, proves and verifies each, and writes its own
 #      tables; Avon's must be byte-identical;
-#   4. lean-ski's `lake exe jets check` must ACCEPT Avon's table: it checks
+#   4. lean-ski's `lake exe jets check --row NAME` must ACCEPT Avon's table
+#      and name its row (a table certifies its own term; --row binds it to
+#      the row, lean-ski #2), and refuse it offered as another row: it checks
 #      Air.AcceptsJ with the roots recomputed from the term (sound:
 #      Air.checkJA_sound), so an accepted table proves the evaluation up to
 #      weak reduction of the value, with its head and arity
@@ -73,14 +75,28 @@ while read -r name _; do
 done < "$OUT/corpus.txt"
 echo "$same of $count identical"
 
-echo "--- lake exe jets check on Avon's tables"
-if ! (cd "$LEAN_SKI" && lake exe jets check "$OUT"/avon/*.txt) | tee "$OUT/jets-check.log"; then
-    echo "FAIL: jets check rejected a table"
-    fail=1
-fi
-accepted=$(grep -c '^ACCEPT' "$OUT/jets-check.log" || true)
-echo "$accepted of $count accepted"
-[ "$accepted" = "$count" ] || fail=1
+echo "--- lake exe jets check --row on Avon's tables"
+: > "$OUT/jets-check.log"
+accepted=0 misbound=0 prev=
+while read -r name _ <&3; do
+    line=$( (cd "$LEAN_SKI" && lake exe jets check --row "$name" "$OUT/avon/$name.txt" 2>&1 || true) | head -n 1)
+    echo "$line" >> "$OUT/jets-check.log"
+    case "$line" in
+        "ACCEPT $OUT/avon/$name.txt: corpus row $name ("*) accepted=$((accepted + 1)) ;;
+        *) echo "FAIL $name: $line"; fail=1 ;;
+    esac
+    # the previous row's table offered as this row's must be refused unchecked
+    if [ -n "$prev" ]; then
+        line=$( (cd "$LEAN_SKI" && lake exe jets check --row "$name" "$OUT/avon/$prev.txt" 2>&1 || true) | head -n 1)
+        case "$line" in
+            "NOT THE TERM OF $name "*) misbound=$((misbound + 1)) ;;
+            *) echo "FAIL $prev's table offered as $name: $line"; fail=1 ;;
+        esac
+    fi
+    prev=$name
+done 3< "$OUT/corpus.txt"
+echo "$accepted of $count accepted, each naming its row; $misbound of $((count - 1)) tables offered as another row refused"
+[ "$accepted" = "$count" ] && [ "$misbound" = "$((count - 1))" ] || fail=1
 
 echo "--- ski-air: Avon's tables proved, and each proof verified alone"
 while read -r name _; do
