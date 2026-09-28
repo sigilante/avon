@@ -61,7 +61,7 @@ const char *av_status_name(av_status s);
  *  names in a side table and one interned leaf node each.  A collection
  *  (§2, stop-and-copy) moves nodes, so an index the caller holds across a
  *  reduction is valid afterwards only if it was registered with
- *  av_root_push.
+ *  av_root_push.  A root may hold AV_NONE, and a collection leaves it so.
  */
 typedef struct {
     av_node   *nodes;
@@ -286,6 +286,7 @@ typedef struct {
                                    change counts, so off by default */
     uint64_t    jet_check;      /* check every Nth fire against the
                                    unjetted run (§6.6); 0 never */
+    struct av_census *census;   /* copy mode: record calls; NULL off */
 } av_opts;
 
 typedef struct {
@@ -577,5 +578,62 @@ typedef struct av_interp {
  *  node that is a constructor applied to its fields behaves as one. */
 long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
                      const char **err);
+
+/*  ----------------------------------------------------------------- census
+ *
+ *  Which terms a program calls, for choosing jets (docs/DESIGN.md §6.7).
+ *  In copy mode a contraction puts a term in function position: the x of
+ *  S x y z, K x y and I x; the run starts with the loaded term there.  The
+ *  census records every left-spine prefix of
+ *  it -- the nodes a jet could be matched on -- by a structural fingerprint,
+ *  with how many arguments were there to meet it.  A second pass captures
+ *  the chosen prefixes' terms into the census's own arena, and the analysis
+ *  registers each as a residual jet (§6.5), for its arity and cost; a third
+ *  pass measures what each alone would absorb, a call that falls inside a
+ *  fire's own window counting as absorbed rather than as another fire.
+ */
+typedef struct av_census av_census;
+
+typedef struct {
+    uint64_t  fp;               /* the census's fingerprint, not §5's hash */
+    uint64_t  calls;            /* times the prefix met the head           */
+    uint64_t  hist[10];         /* arguments there: 0 .. 8, and 9 or more  */
+    size_t    atoms;            /* its size, in leaves                     */
+    uint32_t  term;             /* captured, in av_census_arena; or AV_NONE */
+    unsigned  arity;            /* as a residual jet; 0 if it is not one   */
+    uint64_t  cost;             /* contractions one fire absorbs           */
+    uint64_t  fires, saved;     /* measured, this jet alone: a call inside
+                                   a fire's own window is absorbed, not a
+                                   fire (recursion re-enters its window)   */
+    char      hash[27];         /* §5's, when captured                     */
+    uint64_t  until, epoch;     /* the measuring pass's window             */
+    int64_t   family;           /* the higher-ranked row it is a subterm of
+                                   (or the reverse), met at the same calls:
+                                   one call's layers; -1 if it heads one   */
+    size_t    members;          /* a head's family, itself excluded        */
+} av_census_row;
+
+av_census     *av_census_new(void);
+void           av_census_free(av_census *c);
+
+/*  After the first pass: keep the n most-called prefixes of at least
+ *  min_atoms leaves, and capture their terms on the next pass. */
+void           av_census_select(av_census *c, size_t n, size_t min_atoms);
+
+/*  After the capture pass: register each captured term as a residual jet,
+ *  for its arity and cost, and measure on the next pass. */
+void           av_census_analyze(av_census *c);
+
+/*  Before each run, with the term it loaded: only a subterm of loaded code
+ *  can become a jet -- the matcher wraps loaded code, never what a run
+ *  builds -- so only those are counted.  A fire's window does not cross
+ *  from one run into the next. */
+bool           av_census_begin_run(av_census *c, const av_arena *a, uint32_t loaded);
+
+/*  After the measuring pass: the rows, most contractions saved first.
+ *  They stay the census's. */
+size_t         av_census_rows(av_census *c, av_census_row **rows);
+av_arena      *av_census_arena(av_census *c);
+uint64_t       av_census_calls(const av_census *c);
 
 #endif /* AVON_H */

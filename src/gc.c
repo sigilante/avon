@@ -33,6 +33,11 @@ uint32_t av_gc_forwarded(const av_gc *g, uint32_t i) {
     return g->fwd[i];
 }
 
+/*  A root may hold AV_NONE: a result slot rooted before it is filled. */
+static uint32_t evac_opt(av_gc *g, uint32_t i) {
+    return i == AV_NONE ? AV_NONE : av_gc_evac(g, i);
+}
+
 bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
                 av_roots_fn after, void *ctx) {
     av_gc g;
@@ -51,12 +56,12 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
     for (uint32_t id = 0; id < a->n_leaves; id++)
         a->atom_node[id] = av_gc_evac(&g, a->atom_node[id]);
     for (uint32_t k = 0; k < a->n_roots; k++)
-        *a->roots[k] = av_gc_evac(&g, *a->roots[k]);
+        *a->roots[k] = evac_opt(&g, *a->roots[k]);
     for (uint32_t k = 0; k < 8; k++)
         if (a->jet_mark[k]) a->jet_mark[k] = av_gc_evac(&g, a->jet_mark[k]);
     for (uint32_t k = 0; k < a->njets; k++) {          /* the dashboard */
         a->jets[k].fallback = av_gc_evac(&g, a->jets[k].fallback);
-        a->jets[k].residual = av_gc_evac(&g, a->jets[k].residual);
+        a->jets[k].residual = evac_opt(&g, a->jets[k].residual);
         for (uint32_t c = 0; c < a->jets[k].nconsts; c++)
             a->jets[k].consts[c] = av_gc_evac(&g, a->jets[k].consts[c]);
     }

@@ -295,6 +295,7 @@ static av_status run_copy(R *r) {
     const av_opts *o = r->o;
     r->top = r->base = 0;
     if (!decompose(r, r->root)) return AV_SIZE;
+    if (o->census) census_record(o->census, a, r->root, r->top - r->base);
 
     for (;;) {
         /* bring the current position to weak head normal form */
@@ -337,6 +338,7 @@ static av_status run_copy(R *r) {
             }
             if (!decompose(r, x)) return AV_SIZE;
             r->steps++;
+            if (o->census) census_record(o->census, a, x, r->top - r->base);
         }
 
         size_t n = r->top - r->base;
@@ -537,6 +539,7 @@ av_opts av_opts_default(void) {
         .jets      = true,
         .interp_jets = false,
         .jet_check = 0,
+        .census    = NULL,
     };
 }
 

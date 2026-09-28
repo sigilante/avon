@@ -51,4 +51,8 @@ int interp_fire(av_arena *a, uint32_t id, const uint32_t *argv,
 bool interp_check(av_arena *a, uint32_t id, uint32_t node, const uint32_t *argv,
                   uint32_t out);
 
+/*  The census's hook (census.c): x was put in function position with
+ *  `avail` arguments at the head. */
+void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail);
+
 #endif /* JETS_H */

@@ -586,6 +586,127 @@ A jet that cannot be validated this way is not registered.
 Testing is the admission rule for `share` mode only. Inside a proof the
 verifier cannot re-run the term, so a jet there needs a theorem (§18).
 
+### 6.7 The census: choosing jets by running
+
+**A jet is worth what it absorbs on real runs, so Avon ranks candidates by
+running the workloads.** SKIjack's static census (`RUNTIME-DESIGN.md` §8)
+counts where a subterm occurs; `avon census` counts how often a program
+calls it and how many contractions each call would absorb.
+
+    avon census [--select=N] [--top=N] [--min-atoms=N] [--all] [--names=FILE]... MANIFEST...
+
+It runs every manifest target in `copy` mode, jets off, three times, and
+checks each count against the manifest:
+
+1. **Count.** Every contraction puts a term in function position (the `x`
+   of `S x y z`, `K x y`, `I x`), and a run starts with the loaded term
+   there. The census fingerprints each left-spine prefix of that term,
+   the nodes a jet could wrap, and counts the call with the arguments
+   present. Only a subterm of loaded code counts: the matcher wraps
+   loaded code, never a term the run builds.
+2. **Capture.** The `--select` most-called prefixes of at least
+   `--min-atoms` leaves are copied into the census's own arena.
+3. **Measure.** Each captured term is registered as a residual jet (§6.5),
+   which gives its arity and cost. A call with at least that many
+   arguments is a fire and absorbs the next `cost` contractions; a call
+   inside that window belongs to the fire, so recursion does not count
+   twice.
+
+**One call reaches a supercombinator's layers in turn.** `step`'s 55
+prefixes are each called 589 times. The report folds each row into the
+best-ranked row it shares its calls with and is a subterm of, or contains,
+and ties go to the larger term. `--names` files (`kind\tname\thash`) name a
+row by §5's hash, and every name a file gives is shown; an unnamed head
+borrows its first named layer's name as `~name`. `--all` lists the layers
+under their head, and rows with no residual arity. `birds.tsv` holds
+aviary's 53 birds.
+
+**Results, 2026-09-28.** SKIjack's corpus (45 runs, 1,730,432
+contractions) and SKIlark's workloads (41 runs, 928,398: phase 1's runs,
+and phase 2's eight programs interpreted and compiled, fuelled and not):
+
+| # | saved | % | fires | ar | cost | atoms | name | as λ |
+|---|---:|---:|---:|---:|---:|---:|---|---|
+| 1 | 216,365 | 8.1 | 43,273 | 4 | 5 | 5 | -- | `λabcd. a b c` |
+| 2 | 188,005 | 7.1 | 9,895 | 4 | 19 | 22 | Cons | `λabcd. d a b` |
+| 3 | 166,656 | 6.3 | 23,808 | 3 | 7 | 8 | -- | `λabc. c a (b c)` |
+| 4 | 161,770 | 6.1 | 11,555 | 3 | 14 | 17 | pair | `λabc. c a b` |
+| 5 | 147,600 | 5.6 | 29,520 | 5 | 5 | 5 | -- | `λabcde. a b c e (d e)` |
+| 6 | 147,312 | 5.5 | 36,828 | 2 | 4 | 5 | T | `λab. b a` |
+| 7 | 141,088 | 5.3 | 8,818 | 6 | 16 | 17 | -- | `λabcdef. f (a b d)` |
+| 8 | 138,770 | 5.2 | 27,754 | 3 | 5 | 5 | -- | `λabc. b (a b c)` |
+| 9 | 122,530 | 4.6 | 12,253 | 4 | 10 | 11 | -- | `λabcd. d c (a b c d)` |
+| 10 | 111,321 | 4.2 | 589 | 4 | 189 | 2,428 | step | SKIlark's interpreter step |
+| 11 | 110,519 | 4.2 | 3,811 | 6 | 29 | 32 | App | `λabcdef. f a b` |
+| 12 | 104,510 | 3.9 | 20,902 | 2 | 5 | 9 | L | `λab. a (b b)` |
+| 23 | 80,402 | 3.0 | 11,486 | 3 | 7 | 8 | Suc | `λabc. c a` |
+
+Each row's saving is what that jet would absorb alone; rows overlap and
+do not add. The run takes a quarter of a second per corpus.
+
+**Three kinds of term lead, and the programs' own functions are the
+fewest.**
+
+- *Scott constructors:* Cons, pair, App, Suc, T. Each takes its fields,
+  then one continuation per constructor, and applies one continuation to
+  the fields. Every named row in the top 12 except `step` and `L` is one.
+- *Combinators under binders:* rows 1, 5 and 8 are `B (B K)`, `B (B S)`
+  and `S B`, the last Church's successor. Rows 3, 7 and 9 are
+  continuation plumbing of the same shape. They are what bracket
+  abstraction emits for a combinator used under *n* binders. The static
+  census found them by occurrence; the dynamic census finds they are
+  also where the time goes.
+- *Named supercombinators with large bodies:* `step` absorbs 189
+  contractions a call but is called 589 times; `eqNP`, the `r`/`u` runs
+  and `sumto` rank lower still. Of the combined top 30, 9 rows carry a
+  dictionary name.
+
+**Smullyan's birds are candidates by construction.** A compiler to SKI
+emits them, so they recur across programs; `birds.tsv` names aviary's
+encodings, and the census finds 14 of the 53 called, at any size
+(`--min-atoms=1 --all`, both corpora):
+
+| bird | term | saved | % | fires |
+|---|---|---:|---:|---:|
+| V (vireo; `pair`) | `S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K)` | 161,770 | 6.1 | 11,555 |
+| T (thrush) | `S (K (S I)) K` | 147,312 | 5.5 | 36,828 |
+| O (owl) | `S I` | 131,174 | 4.9 | 65,587 |
+| B (bluebird) | `S (K S) K` | 124,712 | 4.7 | 31,178 |
+| L (lark) | `S (S (K S) K) (K (S I I))` | 104,510 | 3.9 | 20,902 |
+| M (mockingbird) | `S I I` | 45,376 | 1.7 | 22,688 |
+| D (dove) | `S (K (S (K S))) (S (K K))` | 35,976 | 1.4 | 4,497 |
+| B1 (blackbird) | `S (K S) (S (K K) (S (K S) K))` | 34,240 | 1.3 | 3,424 |
+| Y | `S (K (S I I)) (S (S (K S) K) (K (S I I)))` | 20,682 | 0.8 | 2,298 |
+
+E, C, B2, KM and Ki follow below 0.4%. The default `--min-atoms=5`
+hides B, O and M, and O alone would absorb 4.9%; a bird list therefore
+seeds the jet set directly, beside the ranked candidates, whatever its
+size. A bird matches only in aviary's encoding: a compiler that emits
+another term for C or W is missed, and a bird dictionary should list each
+encoding a compiler in use produces.
+
+**What this means for the jet set.** Two tiers, in order:
+
+1. Constructors are a family, not a list: a constructor jet is fixed by
+   the constructor's field count, its index and the type's constructor
+   count. One parametric jet keyed on that triple covers every Scott
+   constructor the compiler emits, named or not; rows 2, 4, 6, 11 and 23
+   are five instances.
+2. The small combinators are Turner's case for an extended basis
+   (`B`, `C`, `S'`, `B'`, `C'`): four 5-atom terms would each absorb 5
+   to 8 per cent of the contractions. As residual jets they keep counts
+   (§6.5). As primitives in the compiler's output they would change the
+   counts, which §1.1 holds fixed for the artifact's workloads.
+
+**Limits.** The census sees copy-mode calls on these two corpora only. A
+row's saving assumes that jet alone; jetting the leaders together absorbs
+less than their sum, and the combined figure is not yet measured.
+Families fold only rows with equal call counts, so a layer also called
+from elsewhere stays a row of its own. Arity by running stops at 8
+(§6.5), so a constructor of a wider sum is not a jet: SKIlark's Joy
+words, nullary constructors of a 13-way sum, appear only under `--all`,
+and each is called 11 to 147 times.
+
 ## 7. The interpreter jet
 
 **It is Avon's level-1 interpreter, not an optimization of one.** Vere runs
@@ -681,9 +802,12 @@ jet must reproduce it.
 - **Nested reductions.** A fire's object run, and the probes and resolver
   runs inside it, are reductions nested in the one that fired. Each
   reduction registers its roots with the arena, and a collection
-  evacuates them all, so a nested one may collect.
+  evacuates them all, so a nested one may collect. A root may hold
+  `AV_NONE` -- a result slot rooted before it is filled -- and a
+  collection leaves it so; `test_interp` collects inside T2's fire.
 - **Fuel.** Interpreter jets are off inside an object run -- its fuel is
-  always bounded -- and residual jets are on, since they keep counts. A
+  always bounded -- and residual jets follow the host's setting: they
+  keep counts, and `--no-jets` means none anywhere. A
   fire charges every contraction it performs, object steps and probes
   together, and declines if that would pass the host's fuel, so the host
   cap still bounds real work. Interpreter jets change counts, so they are

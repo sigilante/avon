@@ -104,6 +104,38 @@ TEST(t2_costs_t0_plus_its_decoding) {
     av_arena_free(a);
 }
 
+/*  A fire's object run may collect: the arena is left with f free nodes
+ *  before T2 runs, for a sweep of f, so some run fills it inside the
+ *  fire.  Every run must still cost 342 and reach the value. */
+TEST(a_fire_survives_a_collection_inside_it) {
+    size_t len;
+    uint8_t *bytes = slurp(DIR "tower.t2.skit", &len);
+    CHECK(bytes != NULL);
+    if (!bytes) return;
+    unsigned collected = 0;
+    for (uint32_t f = 0; f < 4000; f += 25) {
+        av_arena *a = loaded();
+        uint32_t t = av_jets_match(a, av_cue(a, bytes, len, NULL));
+        av_root_push(a, &t);
+        while (a->cap - a->used > f) av_app(a, AV_NODE_I, AV_NODE_I);   /* garbage */
+        uint64_t c0 = a->collections;
+        av_opts o = av_opts_default();
+        o.strategy = AV_COPY;
+        o.whnf_only = true;
+        o.interp_jets = true;
+        av_result r = av_reduce(a, t, &o);
+        CHECK_EQ(r.status, AV_WHNF);
+        CHECK_EQ(r.steps, 342);
+        CHECK_EQ(r.interp_calls, 1);
+        collected += a->collections > c0;
+        av_root_pop(a);
+        av_arena_free(a);
+    }
+    free(bytes);
+    printf("  T2 from a full arena: %u of 160 runs collected\n", collected);
+    CHECK(collected > 0);
+}
+
 /*  ------------------------------------------------- the random differential */
 
 static uint64_t rng = 0x94d049bb133111ebu;
@@ -223,6 +255,7 @@ TEST(a_diverging_arm_declines_and_diverges) {
 TEST_MAIN(
     TEST_CASE(the_specs_load),
     TEST_CASE(t2_costs_t0_plus_its_decoding),
+    TEST_CASE(a_fire_survives_a_collection_inside_it),
     TEST_CASE(whnff_agrees_with_its_interpreter),
     TEST_CASE(an_error_arm_agrees),
     TEST_CASE(a_diverging_arm_declines_and_diverges),
