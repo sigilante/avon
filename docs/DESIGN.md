@@ -1195,69 +1195,96 @@ for `k` formals (`absN_beta_count`). A supercombinator jet replaces all of
 it with one instantiation of the body. That is the Reduceron's template
 instantiation, and its licence is one theorem, not one per jet.
 
-**In the circuit** a supercombinator jet is a row kind `INST(g)`:
+**The licence, proved in `lean-ski`** (`Ski/Inst.lean`). An instantiation
+pops the arguments' pointers and writes the body's cells at the counter
+(`Mach.instStepG`): a formal becomes its argument's pointer, and any other
+variable becomes a public address. When each public address holds its
+variable's meaning and the head reads back as `absN xs body`, the state
+after reads back as a weak reduct of the state before (`Mach.inst_sound_g`;
+`Mach.inst_sound` is the case with no public addresses). A run mixing
+machine transitions with instantiations and halting on a weak head normal
+form proves normal-order evaluation up to weak reduction of the value
+(`Mach.jet_run_eval`). Weak reduction from a WHNF keeps its head and arity
+(`small_lemma_whnf`), so a jetted run reads back the head and arity an
+unjetted one does (`jet_run_shape`). The value is the same; the
+contraction count is not. Carrying this to atom probes needs instantiation
+over terms with atoms, which the built rows do not have.
 
-- the head cell is a jet cell `J g`, which the loader places;
-- the row reads `arity(g)` stack cells;
-- it writes the body's cells at `ctr, ctr + 1, …`, each argument variable
-  replaced by the pointer its stack cell holds;
-- it sets the head to the body's root and the stack to the rest.
+**The circuit, built in `lean-ski`** (`Ski/AirJet.lean`,
+`bench/plonky3/src/jets.rs`, `bench/plonky3/DESIGN.md` §2). The CPU gains
+one row kind, `INST`, and five tables join the three of §17:
 
-The body's cells are fixed per supercombinator, so they form a preprocessed
-**template table**, one row per body cell, which the verifier builds from
-the public program. A witness **instantiation table**, one row per written
-cell, looks each cell up in the template and writes it to memory. The
-`INST` row joins the two by a bus message `(g, ctr, arguments)`. Arities
-above the row's width chain across rows.
+- **ROOTS, HDR and TMPL**, preprocessed from the public jet table below:
+  the licensed roots; each jet's arity, cell count and root; and its body
+  cells in `ibuild` order, each operand a cell this instantiation wrote, an
+  argument, or a public cell.
+- **POP**, one row per argument: it reads a stack cell below the
+  instantiation's counter and provides the argument's pointer.
+- **INSTW**, one row per cell written: it looks up its template row,
+  resolves the operands, and writes the cell at the counter.
+- **`INST`** itself looks up the root and the header, runs a POP chain over
+  the arity and an INSTW chain over the cell count, and sets the head to
+  the body's root, the stack to the rest, and the counter past the cells.
+  Both chains are keyed by `clk`, a row counter, so each instantiation's
+  chains are its own.
 
-**Soundness, proved in `lean-ski`** (`Ski/Inst.lean`). The instantiation
-step pops the arguments' pointers and writes the body with them
-(`Mach.instStep`). When the head reads back as `absN xs body` and the
-body's variables are among `xs`, the state after reads back as a weak
-reduct of the state before (`Mach.inst_sound`, from `absN_beta_close` and
-`WSteps.appT`, lifted through `decode`). A run mixing machine transitions
-with such steps, halting on a weak head normal form, proves normal-order
-evaluation up to weak reduction of the value (`Mach.jet_run_eval`, by
-`eval_of_wsteps`). Weak reduction from a WHNF keeps its head and arity
-(`small_lemma_whnf`, and `small_lemma` for a variable-headed spine), so a
-jetted run reads back the head and arity an unjetted one does
-(`jet_run_shape`). Carrying that to atom probes needs instantiation over
-open terms, which the built `INST` rows do not yet have. The contraction count changes; the value does not.
-Budgets count rows, `INST` rows included. The circuit's `INST` rows and
-template table are built in `lean-ski` (`Ski/AirJet.lean`,
-`bench/plonky3/src/jets.rs`, `bench/plonky3/DESIGN.md` §2). They depart
-from this section's plan in three ways:
+An `INST` row is `Air.instRow` at a licensed root, and a table the
+verifier accepts satisfies `Air.AcceptsJ`, so it proves the evaluation it
+ends on, up to weak reduction of the value (`Air.air_sound_jet`).
+`lake exe jets check` decides this on a concrete table
+(`Air.checkJA_sound`). Budgets count rows: `INST`, POP and INSTW rows all
+count.
 
-- **A roots table, not a `J g` cell.** The roots table lists the
-  addresses in the loaded heap where the compiled `absN` sits. It needs
-  no new cell and no change to `decode`.
-- **Globals.** A body names its closed subterms as public cells
-  (`Mach.inst_sound_g`). On the compiled corpus rows and `3 sumto`,
-  writing whole bodies costs 2.2–6.0× the plain run, and with globals a
-  jetted run takes 28–34% of its rows. On the interpreted rows jets do
-  not pay (110–112%).
-- **η-templates are never roots.** `λ xs. G xs` compiles to `G`, and
-  instantiating it makes no progress.
+**The public jet table** (`JetTable.jetTable`, written by
+`lake exe jets emit`) comes from the compiler's own templates: each
+equation, each lifted λ-chain, each constructor (`ctorO`). Each maximal
+closed subterm of a body becomes a *global*, a public cell in the loaded
+heap, so an instantiation writes only the body's open part. The roots are
+found by hash-consing the loaded heap, and each is kept only if
+`Air.rootOKB` licenses it. The verifier trusts none of this: before it
+builds its preprocessed tables it runs `lake exe jets statement`, which
+checks that each jet file is exactly Lean's for the term it will prove and
+that its roots pass `Air.rootsOKB`.
 
-For witness mode this means:
+**Identity is static, and a root is an address.** The first plan of this
+section put a jet cell `J g` at the head; the built circuit uses the roots
+table instead. It needs no new cell and no change to `decode`: `termAt`
+below the first counter never changes (`Air.termAt_take`), and `S` copies
+pointers, not cells, so a copy of a root is the root and stays jettable.
+No hash is trusted. The structural hash of §5 finds candidates; Lean's
+recomputation licenses them.
 
-- Avon's `witness` strategy should jet at the roots `lake exe jets emit`
-  lists.
-- It should write each body with its globals as pointers.
-- Its rows should carry a row counter, which keys the POP and INSTW
-  chains.
+**Two findings changed the plan.**
 
-**Identity is static.** The verifier checks every jet root in the public
-program: `termAt` there must read `absN (caps ++ ps) body` for the
-template the roots table names, which Lean recomputes from the template.
-No hash is trusted. The structural hash of §5 finds candidates at load
-time; the recomputation licenses them. `S` copies pointers, not cells, so
-a copy of a root is the root and stays jettable. (The superseded `J g`
-design needed a wrapper cell that a copy could lose.)
+- **Globals.** A compiled body inlines whole closed words, so writing
+  every cell of the body costs 2.2–6.0× the plain run's rows on the
+  compiled corpus rows and `3 sumto` (224% to 597%). With globals, a
+  jetted run takes 28–34% of the plain run's rows.
+- **η-templates are never roots.** `λ xs. G xs`, with `G` closed,
+  compiles to `G` itself; instantiating it rewrites `G xs` to `G xs`, and
+  a run jetted there loops.
+
+On the interpreted rows jets do not pay. Each instantiation there is
+short, and the POP rows it adds outnumber the CPU rows it saves: 110–112%
+of the plain run's rows with globals.
 
 **It cannot quote.** An instantiation moves argument pointers and never
 inspects what they point to. So the one rule the theorem does not give
 (§12: a jet never quotes for a running term) holds by construction.
+
+**These are not the jets of §6.5.** Avon's stage-4 jets are residual jets:
+found by running, keyed by the structural hash, charged their exact
+`copy`-mode cost, and licensed by testing. A proof jet instantiates a
+body, changes the count, and is licensed by `inst_sound_g` at a root Lean
+emitted. The two tables differ, and the `witness` strategy runs with
+residual jets off. When it gains proof jets, it should:
+
+- jet at the roots `lake exe jets emit` lists for the term, and nowhere
+  else;
+- write each body in `ibuild` order, its globals as pointers;
+- number its rows, since `clk` keys the POP and INSTW chains;
+- stay byte-identical to `ski-air`'s jetted tables, as its plain tables are
+  to `ski-air`'s plain ones (§11.1).
 
 ### 18.2 Data jets: native values at the boundary
 
@@ -1293,10 +1320,12 @@ allowed. It is the last tier and has the largest payoff.
   contraction count, in fewer rows and with a different memory table. It
   needs the genericity theorem §15 lists and an `INST` row that writes the
   residual rather than the body; `inst_sound` does not cover it.
-- §11: stage 4 should build the supercombinator jets first. They need no
-  per-jet proof, and they already cover the Scott constructors, which
-  compile to `absN` like any lifted chain (`ctorO`). Numeral arithmetic is
-  recursive, not one template, and waits for 18.2's word cells.
+- §11: stage 4 built §6.5's residual jets, which keep `copy`-mode counts
+  and need no proof outside a witness. The proof jets of 18.1 come with
+  the `witness` strategy's jetted tables. They need no per-jet proof, and
+  they cover the Scott constructors, which compile to `absN` like any
+  lifted chain (`ctorO`). Numeral arithmetic is recursive, not one
+  template, and waits for 18.2's word cells.
 
 ## 19. Lessons from Nockchain's persistent memory arena
 
