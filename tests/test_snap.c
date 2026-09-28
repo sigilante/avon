@@ -62,15 +62,14 @@ TEST(a_reduced_state_survives_save_and_load) {
     CHECK_EQ(r.status, AV_FUEL);
     uint32_t root = r.term;
     const char *err = NULL;
-    CHECK(av_snapshot_save(a, &root, PATH, &err));
+    CHECK(av_snapshot_save(a, root, PATH, &err));
     char *before = printed(a, root);
 
     uint32_t root2;
     av_arena *b = av_snapshot_load(PATH, &root2, &err);
     CHECK(b != NULL);
     if (!b) { free(before); av_arena_free(a); free(src); return; }
-    CHECK_EQ(b->used, a->used);
-    CHECK(memcmp(b->nodes, a->nodes, a->used * sizeof *a->nodes) == 0);
+    CHECK(b->used < a->used);           /* the graph below root, and no more */
     char *after = printed(b, root2);
     CHECK(before && after && strcmp(before, after) == 0);
 
@@ -93,7 +92,7 @@ TEST(a_reduced_state_survives_save_and_load) {
 TEST(atoms_survive_and_birds_are_refused) {
     av_arena *a = av_arena_new(0);
     uint32_t t = av_parse(a, "X1 (K X2) X1", 12, NULL);
-    CHECK(av_snapshot_save(a, &t, PATH, NULL));
+    CHECK(av_snapshot_save(a, t, PATH, NULL));
     uint32_t r;
     av_arena *b = av_snapshot_load(PATH, &r, NULL);
     char *s = b ? printed(b, r) : NULL;
@@ -103,7 +102,7 @@ TEST(atoms_survive_and_birds_are_refused) {
 
     a->allow_bird_atoms = true;
     t = av_parse(a, "K W", 3, NULL);
-    CHECK(av_snapshot_save(a, &t, PATH, NULL));
+    CHECK(av_snapshot_save(a, t, PATH, NULL));
     const char *e = load_err();
     CHECK(e && strstr(e, "aviary"));
     av_arena_free(a);
@@ -112,7 +111,7 @@ TEST(atoms_survive_and_birds_are_refused) {
 static void save_small(void) {
     av_arena *a = av_arena_new(0);
     uint32_t t = av_parse(a, "S (K X) (S I I)", 15, NULL);
-    av_snapshot_save(a, &t, PATH, NULL);
+    av_snapshot_save(a, t, PATH, NULL);
     av_arena_free(a);
 }
 
@@ -218,9 +217,64 @@ TEST(valid_checksums_on_bad_structure_are_refused) {
     CHECK(load_err() != NULL);
 }
 
+/*  An image of a term with one atom leaf, with a valid checksum: nodes
+ *  as forge() takes them, leaves 0..2 S K I and 3 the atom. */
+static void forge_atom(const char *atom, const uint32_t *nodes, uint32_t used,
+                       uint32_t root) {
+    size_t alen = strlen(atom), n = 16 + 4 + alen + 8 * (size_t)used;
+    uint8_t *img = calloc(1, n);
+    memcpy(img, "AVIM\x01\0\0\0", 8);
+    uint32_t leaves = 4, len32 = (uint32_t)alen;
+    memcpy(img + 8, &used, 4);
+    memcpy(img + 12, &leaves, 4);
+    memcpy(img + 16, &len32, 4);
+    memcpy(img + 20, atom, alen);
+    memcpy(img + 20 + alen, nodes, 8 * (size_t)used);
+    uint8_t side[48], tail[8];
+    memcpy(side, "AVSM\x01\0\0\0", 8);
+    memcpy(side + 8, &root, 4);
+    memcpy(side + 12, &used, 4);
+    memcpy(tail, &root, 4);
+    memcpy(tail + 4, &used, 4);
+    av_sha256_ctx c;
+    av_sha256_init(&c);
+    av_sha256_update(&c, img, n);
+    av_sha256_update(&c, tail, 8);
+    av_sha256_final(&c, side + 16);
+    spit(PATH, img, n);
+    spit(PATH ".sum", side, sizeof side);
+    free(img);
+}
+
+/*  No term in an image carries a probe or jet marker: save refuses such a
+ *  graph, and the loader refuses a forged image in which any node or the
+ *  root points at a marker leaf -- though it may hold one, since an arena
+ *  that has probed or loaded jets interns them (a stage 4 review's
+ *  finding: a planted "@x3" would alias the dashboard's marker). */
+TEST(no_term_in_an_image_carries_a_marker) {
+    av_arena *a = av_arena_new(0);
+    uint32_t marker = av_leaf(a, "@x3", 3);
+    uint32_t t = av_app(a, av_parse(a, "K X", 3, NULL), marker);
+    const char *err = NULL;
+    CHECK(!av_snapshot_save(a, t, PATH, &err) && err && strstr(err, "marker"));
+    av_arena_free(a);
+
+    uint32_t points[] = { LEAF(0), LEAF(1), LEAF(2), LEAF(3), 1, 3 };  /* K @x3 */
+    forge_atom("@x3", points, 5, 4);
+    const char *e = load_err();
+    CHECK(e && strstr(e, "marker"));
+    forge_atom("@x3", points, 5, 3);                  /* the root itself */
+    e = load_err();
+    CHECK(e && strstr(e, "marker"));
+    uint32_t holds[] = { LEAF(0), LEAF(1), LEAF(2), LEAF(3), 1, 0 };   /* K S */
+    forge_atom("@x3", holds, 5, 4);
+    CHECK(load_err() == NULL);
+}
+
 TEST_MAIN(
     TEST_CASE(a_reduced_state_survives_save_and_load),
     TEST_CASE(atoms_survive_and_birds_are_refused),
     TEST_CASE(damage_is_refused),
     TEST_CASE(valid_checksums_on_bad_structure_are_refused),
+    TEST_CASE(no_term_in_an_image_carries_a_marker),
 )

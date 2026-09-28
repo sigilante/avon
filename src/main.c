@@ -17,7 +17,10 @@
  *  A FILE may be in the printed form, a SKIT container (docs/DESIGN.md
  *  §4.2), or the prefix form, told apart by a magic or a leading `.  Options: --strategy=copy|share
  *  (default share), --whnf, --fuel=N, --max-nodes=N, --budget=N (nodes
- *  printed or jammed; default 1000000), --allow-bird-atoms (§4.3).
+ *  printed or jammed; default 1000000), --allow-bird-atoms (§4.3),
+ *  --jets=DICT (a dictionary.tsv export: register it and match the term
+ *  against it, §6), --jet-floor=N (atoms, default 8), --jet-check=N (check
+ *  every Nth fire against the unjetted run, §6.6), --no-jets.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -37,6 +40,8 @@ typedef struct {
     size_t      budget;
     bool        birds;
     uint64_t    rows, cells;      /* witness budgets */
+    const char *jets;             /* a dictionary export, or NULL */
+    uint64_t    jet_floor;
     const char *file;
 } args;
 
@@ -49,7 +54,8 @@ static int usage(void) {
         "       avon cue    [--budget=N] [FILE]\n"
         "       avon prefix [FILE]\n"
         "       avon witness [--rows=N] [--cells=N] [FILE]\n"
-        "       (all accept --allow-bird-atoms)\n"
+        "       (all accept --allow-bird-atoms; reduce and batch accept\n"
+        "        --jets=DICT --jet-floor=N --jet-check=N --no-jets)\n"
         "       avon --version\n");
     return 2;
 }
@@ -67,6 +73,8 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->o = av_opts_default();
     g->budget = 1000000;
     g->birds = false;
+    g->jets = NULL;
+    g->jet_floor = 8;
     g->rows = 1u << 21;          /* bench/plonky3's MAX_LOG_HEIGHT */
     g->cells = 1u << 21;
     g->file = NULL;
@@ -77,6 +85,12 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--strategy=share") == 0) g->o.strategy = AV_SHARE;
         else if (strcmp(s, "--whnf") == 0)           g->o.whnf_only = true;
         else if (strcmp(s, "--allow-bird-atoms") == 0) g->birds = true;
+        else if (strncmp(s, "--jets=", 7) == 0 && s[7]) g->jets = s + 7;
+        else if (strcmp(s, "--no-jets") == 0)        g->o.jets = false;
+        else if (strncmp(s, "--jet-floor=", 12) == 0 && number(s + 12, &v))
+            g->jet_floor = v;
+        else if (strncmp(s, "--jet-check=", 12) == 0 && number(s + 12, &v))
+            g->o.jet_check = v;
         else if (strncmp(s, "--fuel=", 7) == 0 && number(s + 7, &v))
             g->o.max_steps = v;
         else if (strncmp(s, "--max-nodes=", 12) == 0 && number(s + 12, &v)
@@ -138,8 +152,16 @@ static uint32_t load(av_arena *a, const char *src, size_t len) {
 
 static av_arena *new_arena(const args *g, uint32_t cap) {
     av_arena *a = av_arena_new(cap);
-    if (!a) fprintf(stderr, "avon: out of memory\n");
-    else a->allow_bird_atoms = g->birds;
+    if (!a) { fprintf(stderr, "avon: out of memory\n"); return NULL; }
+    a->allow_bird_atoms = g->birds;
+    if (g->jets) {
+        const char *err = NULL;
+        if (av_jets_load(a, g->jets, (size_t)g->jet_floor, &err) < 0) {
+            fprintf(stderr, "avon: %s: %s\n", g->jets, err);
+            av_arena_free(a);
+            return NULL;
+        }
+    }
     return a;
 }
 
@@ -148,11 +170,16 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     av_arena *a = new_arena(g, 1u << 16);
     if (!a) return 1;
     uint32_t t = load(a, src, len);
+    if (t != AV_NONE && g->jets) t = av_jets_match(a, t);
     if (t == AV_NONE) {
         av_arena_free(a);
         return 1;
     }
     av_result r = av_reduce(a, t, &g->o);
+    if (g->jets)
+        fprintf(stderr, "jets: %u registered, %llu fired%s\n", a->njets,
+                (unsigned long long)r.jet_calls,
+                r.jet_fault ? ", A CHECK FAILED" : "");
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE && av_print(a, r.term, g->budget, &b);
     printf("%s %" PRIu64 "%c%s%s\n", av_status_name(r.status), r.steps, sep,

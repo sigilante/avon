@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "avon.h"
+#include "jets.h"
 
 /*  -------------------------------------------------------------- writing */
 
@@ -113,12 +114,70 @@ static char *sum_path(const char *path) {
     return s;
 }
 
-bool av_snapshot_save(av_arena *a, uint32_t *root, const char *path,
+/*  Copy the graph below root into a fresh arena: sharing kept, indirections
+ *  resolved, jet nodes seen through, and nothing else -- not the caller's
+ *  other terms, not the dashboard (§19: never persisted).  A marker leaf
+ *  in the graph is refused. */
+static av_arena *copy_out(const av_arena *a, uint32_t root, uint32_t *broot,
+                          const char **msg) {
+    av_arena *b = av_arena_new(64);
+    nmap m = { 0 };
+    typedef struct { uint32_t node; bool done; } item;
+    size_t cap = 256, top = 0;
+    item *todo = malloc(cap * sizeof *todo);
+    *msg = NULL;
+    if (!b || !todo) { *msg = "out of memory"; goto done; }
+    b->allow_bird_atoms = true;             /* names already in an arena */
+    todo[top++] = (item){ av_view(a, root), false };
+    while (top) {
+        item it = todo[--top];
+        uint64_t v;
+        if (!it.done && nmap_get(&m, it.node, &v)) continue;
+        uint32_t built;
+        if (av_tag(a, it.node) == AV_LEAF) {
+            const char *nm = av_leaf_name(a, av_right(a, it.node));
+            if (nm[0] == '@') { *msg = "the term carries a probe marker"; goto done; }
+            built = av_leaf(b, nm, strlen(nm));
+        } else if (!it.done) {
+            if (top + 3 > cap) {
+                item *q = realloc(todo, (cap *= 2) * sizeof *q);
+                if (!q) { *msg = "out of memory"; goto done; }
+                todo = q;
+            }
+            todo[top++] = (item){ it.node, true };
+            todo[top++] = (item){ av_view(a, av_right(a, it.node)), false };
+            todo[top++] = (item){ av_view(a, av_left(a, it.node)), false };
+            continue;
+        } else {
+            uint64_t l, r;
+            nmap_get(&m, av_view(a, av_left(a, it.node)), &l);
+            nmap_get(&m, av_view(a, av_right(a, it.node)), &r);
+            built = av_app(b, (uint32_t)l, (uint32_t)r);
+        }
+        if (built == AV_NONE || !nmap_put(&m, it.node, built)) {
+            *msg = "out of memory";
+            goto done;
+        }
+    }
+    {
+        uint64_t r;
+        if (!nmap_get(&m, av_view(a, root), &r)) *msg = "out of memory";
+        else *broot = (uint32_t)r;
+    }
+done:
+    free(todo);
+    nmap_free(&m);
+    if (*msg) { av_arena_free(b); return NULL; }
+    return b;
+}
+
+bool av_snapshot_save(const av_arena *live, uint32_t root, const char *path,
                       const char **err) {
-    av_root_push(a, root);
-    bool collected = av_collect(a, 0, NULL, NULL, NULL);
-    av_root_pop(a);
-    if (!collected) { if (err) *err = "out of memory"; return false; }
+    const char *why = NULL;
+    uint32_t r0;
+    av_arena *a = copy_out(live, root, &r0, &why);
+    if (!a) { if (err) *err = why; return false; }
+    uint32_t *broot = &r0;
 
     out img = { { 0 }, true };
     put(&img, "AVIM\x01\0\0\0", 8);
@@ -131,16 +190,16 @@ bool av_snapshot_save(av_arena *a, uint32_t *root, const char *path,
         put(&img, nm, len);
     }
     for (uint32_t i = 0; i < a->used; i++) {
-        put32(&img, a->nodes[i].l);
+        put32(&img, a->nodes[i].l);         /* a copy: no jets, no indirections */
         put32(&img, a->nodes[i].r);
     }
 
     out side = { { 0 }, true };
     uint8_t sum[32];
     put(&side, "AVSM\x01\0\0\0", 8);
-    put32(&side, *root);
+    put32(&side, *broot);
     put32(&side, a->used);
-    if (img.ok) checksum(&img.b, *root, a->used, sum);
+    if (img.ok) checksum(&img.b, *broot, a->used, sum);
     put(&side, sum, 32);
 
     char *sp = sum_path(path);
@@ -151,6 +210,7 @@ bool av_snapshot_save(av_arena *a, uint32_t *root, const char *path,
     free(sp);
     av_buf_free(&img.b);
     av_buf_free(&side.b);
+    av_arena_free(a);
     return ok;
 }
 
@@ -178,17 +238,31 @@ static uint32_t get32(const uint8_t *p) {
            (uint32_t)p[3] << 24;
 }
 
-/* Every node well formed, every leaf interned once, and no cycle. */
-static const char *verify(const av_arena *a) {
+/* A leaf named like a probe or jet marker ("@..."): an image may hold one,
+ * since an arena that has probed or loaded jets interns them, but no node
+ * may point at one, so no term in an image carries a marker. */
+static bool reserved(const av_arena *a, uint32_t i) {
+    if (a->nodes[i].l >> AV_TAG_SHIFT != AV_LEAF) return false;
+    uint32_t id = a->nodes[i].r;
+    return id >= SKI_ATOM_FIRST && id < a->n_leaves && a->atom_name[id][0] == '@';
+}
+
+/* Every node well formed, every leaf interned once, no term carrying a
+ * marker, and no cycle. */
+static const char *verify(const av_arena *a, uint32_t root) {
     uint32_t n = a->used;
+    if (reserved(a, root)) return "the root is a probe marker";
     for (uint32_t i = 0; i < n; i++) {
         av_node x = a->nodes[i];
         switch (x.l >> AV_TAG_SHIFT) {
         case AV_APP:
             if ((x.l & AV_PAYLOAD) >= n || x.r >= n) return "index out of range";
+            if (reserved(a, x.l & AV_PAYLOAD) || reserved(a, x.r))
+                return "a term carries a probe marker";
             break;
         case AV_IND:
             if ((x.l & AV_PAYLOAD) >= n || x.r) return "malformed indirection";
+            if (reserved(a, x.l & AV_PAYLOAD)) return "a term carries a probe marker";
             break;
         case AV_LEAF:
             if ((x.l & AV_PAYLOAD) || x.r >= a->n_leaves) return "malformed leaf";
@@ -272,7 +346,6 @@ av_arena *av_snapshot_load(const char *path, uint32_t *root, const char **err) {
         if (len == 0 || len > n - pos) { msg = "truncated atom table"; goto done; }
         const char *nm = (const char *)img + pos;
         if (memchr(nm, 0, len)) { msg = "NUL in atom name"; goto done; }
-        if (nm[0] == '@') { msg = "atom named like a probe marker"; goto done; }
         if (!a->allow_bird_atoms && av_is_bird(nm, len)) {
             msg = "atom named like a live aviary combinator (§4.3)";
             goto done;
@@ -303,7 +376,7 @@ av_arena *av_snapshot_load(const char *path, uint32_t *root, const char **err) {
         msg = "S, K, I not at 0, 1, 2";
         goto done;
     }
-    msg = verify(a);
+    msg = verify(a, r);
     if (!msg) *root = r;
 
 done:

@@ -60,7 +60,7 @@ static const char *build(const av_arena *a, uint32_t t, av_witness *w,
     todo[top++] = (item){ t, false };
     while (top) {
         item it = todo[--top];
-        uint32_t n = av_res(a, it.node);
+        uint32_t n = av_view(a, it.node);
         if (w->nmem >= max_cells) { msg = "the loaded heap exceeds the cell budget"; goto done; }
         if (nout + 1 > ocap) {
             uint32_t *o = realloc(out, (ocap *= 2) * sizeof *o);
@@ -217,7 +217,7 @@ bool av_prefix(const av_arena *a, uint32_t t, size_t budget, av_buf *out) {
     bool ok = stk != NULL;
     if (ok) stk[top++] = t;
     while (ok && top) {
-        uint32_t n = av_res(a, stk[--top]);
+        uint32_t n = av_view(a, stk[--top]);
         if (++visited > budget) { ok = false; break; }
         if (av_tag(a, n) == AV_APP) {
             if (top + 2 > cap) {

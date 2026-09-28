@@ -48,7 +48,7 @@ bool av_print(const av_arena *a, uint32_t t, size_t budget, av_buf *b) {
         if (w == W_CLOSE) { ok = put(b, ")", 1); continue; }
         if (++visited > budget) { ok = false; break; }
 
-        w = av_res(a, w);
+        w = av_view(a, w);
         if (av_tag(a, w) == AV_LEAF) {
             const char *nm = av_leaf_name(a, av_right(a, w));
             ok = put(b, nm, strlen(nm));
@@ -61,7 +61,7 @@ bool av_print(const av_arena *a, uint32_t t, size_t budget, av_buf *b) {
             work = p;
         }
         /* fn, then " ", then arg, parenthesized if it is an application */
-        uint32_t arg = av_res(a, av_right(a, w));
+        uint32_t arg = av_view(a, av_right(a, w));
         bool paren = av_tag(a, arg) == AV_APP;
         if (paren) work[top++] = W_CLOSE;
         work[top++] = arg;

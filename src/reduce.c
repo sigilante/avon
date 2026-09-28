@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "avon.h"
+#include "jets.h"
 
 /*  An allocation that ensure() has already reserved room for.  It cannot
  *  fail unless a `need` count is wrong, which the debug build catches.
@@ -50,6 +51,10 @@ typedef struct {
 
     uint64_t      *marks;       /* share: nodes already normalized        */
     size_t         nmarks;      /* words                                  */
+
+    uint64_t       jet_calls;
+    bool           jet_fault;
+    uint32_t       jnode;       /* share: a jet node being demoted        */
 } R;
 
 /*  ---------------------------------------------------------------- memory */
@@ -59,6 +64,7 @@ static void roots(av_gc *g, void *ctx) {
     r->root = av_gc_evac(g, r->root);
     if (r->head != AV_NONE) r->head = av_gc_evac(g, r->head);
     if (r->cur != AV_NONE) r->cur = av_gc_evac(g, r->cur);
+    if (r->jnode != AV_NONE) r->jnode = av_gc_evac(g, r->jnode);
     for (size_t i = 0; i < r->top; i++) r->stk[i] = av_gc_evac(g, r->stk[i]);
     for (size_t i = 0; i < r->nfr; i++)
         r->fr[i].head = av_gc_evac(g, r->fr[i].head);
@@ -175,6 +181,68 @@ static uint32_t copy_state(R *r) {
     return t;
 }
 
+/*  ------------------------------------------------------------------ jets */
+
+/*  Whether a jet node at a position with `have` arguments fires: jets on,
+ *  enough arguments, and the fuel left covers the charge, so that stepping
+ *  instead would not have stopped part way (§6.5). */
+static bool fires(const R *r, uint32_t id, size_t have) {
+    const av_jet *j = &r->a->jets[id];
+    return r->o->jets && have >= j->arity &&
+           r->o->max_steps - r->steps >= j->cost;
+}
+
+/*  --jet-check (§6.6): run the jet node's own term over the arguments in
+ *  copy mode, jets off, for exactly the charge, and compare the state it
+ *  reaches with an instance.  Allocates without collecting.  False only on
+ *  a definite disagreement; a check that runs out of memory or of its
+ *  comparison budget is inconclusive, not a fault. */
+static bool check_fire(R *r, uint32_t node, uint32_t id, const uint32_t *args) {
+    av_arena *a = r->a;
+    const av_jet *j = &a->jets[id];
+    uint32_t t = av_right(a, node);
+    for (unsigned i = 0; i < j->arity && t != AV_NONE; i++) t = av_app(a, t, args[i]);
+    if (t == AV_NONE) return true;                  /* out of memory */
+    av_opts co = av_opts_default();
+    co.strategy = AV_COPY;
+    co.whnf_only = true;
+    co.max_steps = j->cost;
+    co.no_collect = true;
+    co.jets = false;
+    av_result cr = av_reduce(a, t, &co);
+    if (cr.status == AV_SIZE) return true;          /* out of memory */
+    if (cr.status != AV_FUEL || cr.steps != j->cost) return false;
+    uint32_t inst = jet_instance(a, id, args, false);
+    if (inst == AV_NONE) return true;               /* out of memory */
+    return av_equal(a, cr.term, inst, 100000000) != 0;   /* -1: too large */
+}
+
+/*  Fire the jet at the head of the copy-mode position: its arity's
+ *  arguments are replaced by an instance of its residual. */
+static av_status fire_copy(R *r) {
+    av_arena *a = r->a;
+    uint32_t id = AV_JET_ID(av_left(a, r->head));
+    unsigned k = a->jets[id].arity;
+    uint32_t args[8];
+    if (r->o->jet_check && (r->jet_calls + 1) % r->o->jet_check == 0) {
+        for (unsigned i = 0; i < k; i++) args[i] = r->stk[r->top - 1 - i];
+        if (!check_fire(r, r->head, id, args)) {
+            r->jet_fault = true;
+            return AV_INTERRUPTED;
+        }
+    }
+    if (!ensure(r, a->jets[id].nodes)) return AV_SIZE;
+    for (unsigned i = 0; i < k; i++) args[i] = r->stk[r->top - 1 - i];
+    uint32_t inst = jet_instance(a, id, args, false);   /* copy mode writes nothing */
+    assert(inst != AV_NONE && "allocation past what ensure() reserved");
+    if (inst == AV_NONE) return AV_SIZE;
+    r->top -= k;
+    if (!decompose(r, inst)) return AV_SIZE;
+    r->steps += a->jets[id].cost;
+    r->jet_calls++;
+    return AV_WHNF;
+}
+
 static av_status run_copy(R *r) {
     av_arena *a = r->a;
     const av_opts *o = r->o;
@@ -186,6 +254,15 @@ static av_status run_copy(R *r) {
         for (;;) {
             if (interrupted(r)) return AV_INTERRUPTED;
             if (r->steps >= o->max_steps) return AV_FUEL;
+            if (av_tag(a, r->head) == AV_JET) {
+                if (fires(r, AV_JET_ID(av_left(a, r->head)), r->top - r->base)) {
+                    av_status js = fire_copy(r);
+                    if (js != AV_WHNF) return js;
+                } else if (!decompose(r, av_right(a, r->head))) {
+                    return AV_SIZE;             /* unwrapped: the term itself */
+                }
+                continue;
+            }
             ski_leaf c = av_right(a, r->head);
             unsigned k = ski_arity(c);
             if (k == 0 || r->top - r->base < k) break;
@@ -274,6 +351,52 @@ static av_status whnf_share(R *r) {
         }
         if (interrupted(r)) return AV_INTERRUPTED;
         if (r->steps >= o->max_steps) return AV_FUEL;
+        if (av_tag(a, cur) == AV_JET) {
+            uint32_t id = AV_JET_ID(av_left(a, cur));
+            if (!fires(r, id, r->top - bottom)) {
+                /* Unwrapped, and demoted: this run may write inside the
+                 * term from here on, so the jet node becomes an
+                 * indirection to a term it owns -- a private copy when
+                 * the term is the dashboard's -- and no jet node's term
+                 * is ever written (§6.5). */
+                uint32_t inner = av_right(a, cur);
+                if (av_left(a, cur) & AV_JET_SHARED) {
+                    r->jnode = cur;
+                    if (!ensure(r, a->jets[id].term_nodes)) return AV_SIZE;
+                    cur = r->jnode;
+                    r->jnode = AV_NONE;
+                    inner = jet_term_copy(a, id);
+                    assert(inner != AV_NONE && "allocation past what ensure() reserved");
+                    if (inner == AV_NONE) return AV_SIZE;
+                }
+                a->nodes[cur] = (av_node){ (AV_IND << AV_TAG_SHIFT) | inner, 0 };
+                cur = inner;
+                continue;
+            }
+            unsigned k = a->jets[id].arity;
+            uint32_t args[8];
+            if (o->jet_check && (r->jet_calls + 1) % o->jet_check == 0) {
+                for (unsigned i = 0; i < k; i++)
+                    args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
+                if (!check_fire(r, cur, id, args)) {
+                    r->jet_fault = true;
+                    return AV_INTERRUPTED;
+                }
+            }
+            if (!ensure(r, a->jets[id].nodes)) return AV_SIZE;
+            for (unsigned i = 0; i < k; i++)
+                args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
+            uint32_t inst = jet_instance(a, id, args, true);
+            assert(inst != AV_NONE && "allocation past what ensure() reserved");
+            if (inst == AV_NONE) return AV_SIZE;
+            uint32_t n = r->stk[r->top - k];    /* the redex root */
+            a->nodes[n] = (av_node){ (AV_IND << AV_TAG_SHIFT) | inst, 0 };
+            r->top -= k;
+            cur = n;
+            r->steps += a->jets[id].cost;
+            r->jet_calls++;
+            continue;
+        }
         ski_leaf c = av_right(a, cur);
         unsigned k = ski_arity(c);
         if (k == 0 || r->top - bottom < k) break;
@@ -315,10 +438,10 @@ static av_status run_share(R *r) {
     r->work[r->nwork++] = r->root;
     while (r->nwork) {
         r->cur = r->work[--r->nwork];
-        if (mark_get(r, av_res(a, r->cur))) continue;
+        if (mark_get(r, av_view(a, r->cur))) continue;
         s = whnf_share(r);
         if (s != AV_WHNF) return s;
-        uint32_t t = av_res(a, r->cur);
+        uint32_t t = av_view(a, r->cur);        /* jet nodes are their terms */
         if (!mark_set(r, t)) return AV_SIZE;
         /* push the last argument first, so the first pops first */
         while (av_tag(a, t) == AV_APP) {
@@ -326,7 +449,7 @@ static av_status run_share(R *r) {
                 !grow(&r->work, &r->workcap, r->nwork + 1))
                 return AV_SIZE;
             r->work[r->nwork++] = av_right(a, t);
-            t = av_res(a, av_left(a, t));
+            t = av_view(a, av_left(a, t));
         }
     }
     return AV_NORMAL;
@@ -342,11 +465,14 @@ av_opts av_opts_default(void) {
         .max_nodes = AV_MAX_NODES,
         .interrupt = NULL,
         .no_collect = false,
+        .jets      = true,
+        .jet_check = 0,
     };
 }
 
 av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
-    R r = { .a = a, .o = o, .root = t, .head = AV_NONE, .cur = AV_NONE };
+    R r = { .a = a, .o = o, .root = t, .head = AV_NONE, .cur = AV_NONE,
+            .jnode = AV_NONE };
     av_status s = o->strategy == AV_COPY ? run_copy(&r) : run_share(&r);
 
     uint32_t term = r.root;
@@ -363,5 +489,5 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.fr);
     free(r.work);
     free(r.marks);
-    return (av_result){ term, r.steps, s };
+    return (av_result){ term, r.steps, s, r.jet_calls, r.jet_fault };
 }

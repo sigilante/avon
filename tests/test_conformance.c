@@ -59,26 +59,38 @@ typedef struct {
 } target;
 
 static size_t targets_checked, values_checked;
+static uint64_t jets_fired;
 
-static void check_target(const target *t, av_strategy st) {
+/*  With `shared` an arena holding the dictionary's jets: the target is
+ *  matched against them, run with every fire checked (§6.6), and must give
+ *  exactly what it gives without them. */
+static void check_target(const target *t, av_strategy st, av_arena *shared) {
     char path[512];
     snprintf(path, sizeof path, DIR "%s", t->file);
     size_t len;
     uint8_t *bytes = slurp(path, &len);
     CHECK(bytes != NULL);
     if (!bytes) return;
-    av_arena *a = av_arena_new(1u << 16);
+    av_arena *a = shared ? shared : av_arena_new(1u << 16);
     const char *err = NULL;
     uint32_t term = av_cue(a, bytes, len, &err);
     free(bytes);
     CHECK(term != AV_NONE);
-    if (term == AV_NONE) { av_arena_free(a); return; }
+    if (term == AV_NONE) { if (!shared) av_arena_free(a); return; }
+    if (shared) {
+        term = av_jets_match(a, term);
+        CHECK(term != AV_NONE);
+    }
 
     av_opts o = av_opts_default();
     o.strategy = st;
     o.whnf_only = true;
     o.max_steps = t->max_steps;
+    o.jets = shared != NULL;
+    o.jet_check = shared ? 1 : 0;
     av_result r = av_reduce(a, term, &o);
+    CHECK(!r.jet_fault);
+    jets_fired += r.jet_calls;
     const char *sname = st == AV_COPY ? "copy" : "share";
     if (strcmp(av_status_name(r.status), t->status) != 0) {
         fprintf(stderr, "  %s (%s): status %s, want %s\n", t->id, sname,
@@ -129,14 +141,16 @@ static void check_target(const target *t, av_strategy st) {
             values_checked++;
         }
     }
-    av_arena_free(a);
+    if (!shared) av_arena_free(a);
 }
 
-TEST(every_exported_target_conforms) {
+typedef void (*visit_fn)(const target *t, void *ctx);
+
+static size_t each_target(visit_fn fn, void *ctx) {
     size_t len;
     char *text = (char *)slurp(DIR "manifest.tsv", &len);
     CHECK(text != NULL);
-    if (!text) return;
+    if (!text) return 0;
     text[len] = '\0';
     size_t lines = 0;
     for (char *line = text, *next; *line; line = next) {
@@ -156,16 +170,52 @@ TEST(every_exported_target_conforms) {
         if (k != 9) continue;
         target t = { f[0], f[1], f[3], f[5], f[6], f[7], f[8],
                      strtoull(f[2], NULL, 10), strtoull(f[4], NULL, 10) };
-        check_target(&t, AV_COPY);
-        check_target(&t, AV_SHARE);
+        fn(&t, ctx);
         lines++;
     }
+    free(text);
+    return lines;
+}
+
+static void plain(const target *t, void *ctx) {
+    (void)ctx;
+    check_target(t, AV_COPY, NULL);
+    check_target(t, AV_SHARE, NULL);
+}
+
+static void jetted(const target *t, void *ctx) {
+    check_target(t, AV_COPY, ctx);
+    check_target(t, AV_SHARE, ctx);
+}
+
+TEST(every_exported_target_conforms) {
+    targets_checked = values_checked = 0;
+    size_t lines = each_target(plain, NULL);
     CHECK_EQ(lines, 45);
     printf("  %zu targets, %zu runs, %zu values decoded\n", lines,
            targets_checked, values_checked);
-    free(text);
+}
+
+/*  Stage 4 (§6.5, §11): the same targets with the corpus dictionary's
+ *  residual jets, in one arena for all of them, so the dashboard outlives
+ *  collections and both strategies' runs. */
+TEST(every_target_conforms_with_jets) {
+    av_arena *a = av_arena_new(1u << 16);
+    const char *err = NULL;
+    CHECK_EQ(av_jets_load(a, DIR "dictionary.tsv", 8, &err), 135);
+    targets_checked = values_checked = 0;
+    jets_fired = 0;
+    size_t lines = each_target(jetted, a);
+    CHECK_EQ(lines, 45);
+    CHECK_EQ(values_checked, 86);
+    CHECK(jets_fired > 0);
+    printf("  jets on: %zu runs, %zu values decoded, %llu jets fired, %llu collections\n",
+           targets_checked, values_checked, (unsigned long long)jets_fired,
+           (unsigned long long)a->collections);
+    av_arena_free(a);
 }
 
 TEST_MAIN(
     TEST_CASE(every_exported_target_conforms),
+    TEST_CASE(every_target_conforms_with_jets),
 )

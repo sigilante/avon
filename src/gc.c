@@ -52,6 +52,14 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
         a->atom_node[id] = av_gc_evac(&g, a->atom_node[id]);
     for (uint32_t k = 0; k < a->n_roots; k++)
         *a->roots[k] = av_gc_evac(&g, *a->roots[k]);
+    for (uint32_t k = 0; k < 8; k++)
+        if (a->jet_mark[k]) a->jet_mark[k] = av_gc_evac(&g, a->jet_mark[k]);
+    for (uint32_t k = 0; k < a->njets; k++) {          /* the dashboard */
+        a->jets[k].fallback = av_gc_evac(&g, a->jets[k].fallback);
+        a->jets[k].residual = av_gc_evac(&g, a->jets[k].residual);
+        for (uint32_t c = 0; c < a->jets[k].nconsts; c++)
+            a->jets[k].consts[c] = av_gc_evac(&g, a->jets[k].consts[c]);
+    }
     if (roots) roots(&g, ctx);
 
     for (uint32_t s = 0; s < g.top; s++) {

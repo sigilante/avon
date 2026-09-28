@@ -45,7 +45,7 @@ static bool probe(av_arena *a, uint32_t t, unsigned nmarks, const av_opts *o,
     /* the spine: head, then arguments, collected last first */
     uint32_t spine[AV_PEEL_MAX + 1];
     unsigned n = 0;
-    uint32_t h = av_res(a, r.term);
+    uint32_t h = av_view(a, r.term);
     while (av_tag(a, h) == AV_APP) {
         if (n == maxargs) {
             free(ids);
@@ -53,7 +53,7 @@ static bool probe(av_arena *a, uint32_t t, unsigned nmarks, const av_opts *o,
             return false;
         }
         spine[n++] = av_right(a, h);
-        h = av_res(a, av_left(a, h));
+        h = av_view(a, av_left(a, h));
     }
     /* which marker, by its leaf id: no order among the ids is assumed */
     ski_leaf id = av_tag(a, h) == AV_LEAF ? av_right(a, h) : AV_NONE;

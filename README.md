@@ -25,6 +25,14 @@ and prints the status, the contraction count, and the term reached.
 `--strategy=share` (the default) reduces in place. `docs/DESIGN.md` is the
 design and the build plan.
 
+`--jets=tests/conformance/dictionary.tsv` loads skijack's dictionary as jets
+(`docs/DESIGN.md` §6): residual jets, which leave every `copy`-mode count
+exactly as it is without them. `--jet-check=1` checks every fire against the
+unjetted run.
+
 `tests/diff_aviary.py` checks `copy` mode against `aviary_kernel` on random
 terms, and `tests/fixtures/export.py` regenerates the paper's targets. Both
-need `aviary-kernel` installed.
+need `aviary-kernel` installed. `make witness-check` proves the corpus's
+witnesses with lean-ski's checker and prover (`docs/DESIGN.md` §17). The
+conformance corpus under `tests/conformance/` is written by skijack's
+`python3 -m skijack.export`.

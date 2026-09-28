@@ -89,7 +89,7 @@ bool av_jam(const av_arena *a, uint32_t t, size_t budget, av_buf *out,
 
     stk[top++] = t;
     while (top) {
-        uint32_t n = av_res(a, stk[--top]);
+        uint32_t n = av_view(a, stk[--top]);
         if (++visited > budget) { msg = "node budget exceeded"; goto done; }
         if (av_tag(a, n) == AV_LEAF) {
             ski_leaf id = av_right(a, n);
@@ -128,7 +128,7 @@ bool av_jam(const av_arena *a, uint32_t t, size_t budget, av_buf *out,
     top = 0;
     stk[top++] = t;
     while (top && w.ok) {
-        uint32_t n = av_res(a, stk[--top]);
+        uint32_t n = av_view(a, stk[--top]);
         if (av_tag(a, n) == AV_APP) {
             put_bit(&w, 1);
             put_bit(&w, 1);

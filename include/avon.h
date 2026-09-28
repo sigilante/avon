@@ -28,6 +28,12 @@ typedef struct { uint32_t l, r; } av_node;
 #define AV_LEAF 2u   /* l = tag only,     r = ski_leaf               */
 #define AV_JET  3u   /* l = jet id,       r = fallback term index    */
 
+/*  A jet node's id field: the jet id, and whether its term is the
+ *  dashboard's (shared, never to be written) or its own (docs/DESIGN.md
+ *  §6.5: share mode writes only nodes its run created). */
+#define AV_JET_SHARED (1u << 29)
+#define AV_JET_ID(l)  ((l) & (AV_JET_SHARED - 1))
+
 /*  The leaf nodes of S, K, I are interned at indices 0, 1, 2. */
 #define AV_NODE_S 0u
 #define AV_NODE_K 1u
@@ -70,6 +76,15 @@ typedef struct {
 
     uint64_t   collections;
     bool       allow_bird_atoms;   /* §4.3: off unless asked for */
+
+    struct av_jet *jets;        /* the dashboard (§6): its terms are roots */
+    uint32_t   njets, jetcap;
+    uint32_t  *jet_index;       /* open addressing, hash -> jet id */
+    uint32_t   jet_index_cap;
+    uint32_t   jet_mark[8];     /* the atoms residuals are computed over */
+    uint32_t  *jet_scratch;     /* an instance's intermediate results    */
+    uint32_t   jet_scratch_cap;
+    bool       jet_scratch_busy;   /* instances do not nest */
 } av_arena;
 
 av_arena *av_arena_new(uint32_t cap);
@@ -105,6 +120,18 @@ static inline uint32_t av_right(const av_arena *a, uint32_t i) {
 static inline uint32_t av_res(const av_arena *a, uint32_t i) {
     while (av_tag(a, i) == AV_IND) i = av_left(a, i);
     return i;
+}
+
+/*  Follow indirections and jet wrappers: the term a node denotes.  Every
+ *  reader but the reducers sees a jet node as the term it stands for.
+ */
+static inline uint32_t av_view(const av_arena *a, uint32_t i) {
+    for (;;) {
+        uint32_t tag = av_tag(a, i);
+        if (tag == AV_IND) i = av_left(a, i);
+        else if (tag == AV_JET) i = av_right(a, i);
+        else return i;
+    }
 }
 
 /*  ----------------------------------------------------------------- collect
@@ -206,15 +233,18 @@ uint32_t av_cue(av_arena *a, const uint8_t *p, size_t n, const char **err);
 
 /*  ------------------------------------------------------------- snapshots
  *
- *  An arena image, preserving sharing (§4.2, §19).  Save collects first,
- *  so the image holds the live graph only, and updates *root.  It writes
- *  the image, syncs it, then writes the sidecar PATH.sum -- the root, the
- *  node count, and the SHA-256 of image and root -- and syncs that, each
- *  through a temporary file and a rename.  Load verifies the checksum
- *  before reading anything else, then every node: tags, indices, interned
- *  leaves, and that the graph is acyclic.
+ *  An image of one term's graph, preserving sharing (§4.2, §19).  Save
+ *  copies the graph below root out of the live arena, which it does not
+ *  change -- indirections resolved, jet nodes seen through, and nothing
+ *  else, so neither the caller's other terms nor the jet dashboard (never
+ *  persisted, §19) reach the image -- and refuses a graph that carries a
+ *  probe marker.  It writes the image, syncs it, then writes the sidecar
+ *  PATH.sum -- the root, the node count, and the SHA-256 of image and root
+ *  -- and syncs that, each through a temporary file and a rename.  Load
+ *  verifies the checksum before reading anything else, then every node:
+ *  tags, indices, interned leaves, no marker pointed at, and no cycle.
  */
-bool     av_snapshot_save(av_arena *a, uint32_t *root, const char *path,
+bool     av_snapshot_save(const av_arena *a, uint32_t root, const char *path,
                           const char **err);
 av_arena *av_snapshot_load(const char *path, uint32_t *root, const char **err);
 
@@ -233,12 +263,18 @@ typedef struct {
     volatile sig_atomic_t *interrupt;   /* polled with fuel; may be NULL */
     bool        no_collect;     /* grow instead of collecting, so every
                                    index the caller holds stays valid */
+    bool        jets;           /* fire residual jets (§6.5); off, a jet
+                                   node is only the term it stands for */
+    uint64_t    jet_check;      /* check every Nth fire against the
+                                   unjetted run (§6.6); 0 never */
 } av_opts;
 
 typedef struct {
     uint32_t  term;     /* the state reached: the value, or where it stopped */
-    uint64_t  steps;    /* host contractions                               */
+    uint64_t  steps;    /* host contractions, a jet's charge included       */
     av_status status;
+    uint64_t  jet_calls;    /* jets fired, reported beside steps (§6.5)   */
+    bool      jet_fault;    /* a jet check disagreed: status INTERRUPTED  */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -252,10 +288,12 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o);
  *  DESIGN.md §0, python/skijack/run.py): a Scott datum of an n-constructor
  *  type, applied to n fresh marker atoms and reduced to weak head normal
  *  form, returns the marker of its own constructor applied to its fields.
- *  Markers are atoms named "@" and a number.  The parser, cue and the
- *  snapshot loader refuse any atom name beginning with "@", so a loaded
- *  term cannot carry one; a caller building atoms with av_leaf must not
- *  either.
+ *  Markers are atoms named "@" and a number.  The parser and cue refuse
+ *  any atom name beginning with "@", so a term read from outside cannot
+ *  carry one; a caller building atoms with av_leaf must not either.  A
+ *  snapshot may hold such leaves -- an arena that has probed or loaded
+ *  jets interns them -- but the loader refuses an image in which any node
+ *  or the root points at one.
  *  Probes reduce with the caller's options but never collect, so the
  *  fields and memo keys they hand back stay valid.
  */
@@ -340,5 +378,83 @@ bool av_prefix(const av_arena *a, uint32_t t, size_t budget, av_buf *out);
  */
 uint32_t av_parse_prefix(av_arena *a, const char *src, size_t len,
                          const char **err);
+
+/*  ------------------------------------------------------ structural hash
+ *
+ *  skijack's dictionary hash (python/skijack/dictionary.py, docs/DESIGN.md
+ *  §5): a Merkle hash over the tree, a leaf hashing its name and an
+ *  application "(" + h(fn) + " " + h(arg) + ")", each SHA-256 truncated to
+ *  16 hex digits, published as "skijack-1:" and the digits.  For dispatch,
+ *  never for commitment.  A digest is the hash's first 8 bytes.
+ */
+#define AV_HASH_VERSION "skijack-1"
+
+/*  The published hash, "skijack-1:" and 16 hex digits, into out[27]. */
+bool av_structural_hash(const av_arena *a, uint32_t t, char out[27]);
+
+/*  Parse a published hash back to its digest. */
+bool av_hash_parse(const char *s, uint64_t *digest);
+
+/*  --------------------------------------------------------------- jets
+ *
+ *  The dashboard (docs/DESIGN.md §6): digest -> jet.  A jet is a residual
+ *  jet (§6.5): its term g is reduced in copy mode, jets off, applied to k
+ *  fresh atoms, until an atom reaches the head or the run halts; the
+ *  state reached is the residual and the contractions its cost.  k is the
+ *  least in 1..8 for which an atom reaches the head -- the genericity
+ *  argument of §6.5 holds for any k, so this is a choice of how much work
+ *  one fire does, not of correctness.  A jet fires when its node is at the
+ *  head with at least k arguments and the fuel left covers the cost: the
+ *  residual is instantiated over the arguments and the cost charged, so a
+ *  copy-mode count is the unjetted count, contraction for contraction.
+ */
+typedef struct av_jet {
+    uint64_t  digest;
+    uint32_t  fallback;         /* the term g, its inner jets wrapped      */
+    uint32_t  residual;         /* over jet_mark[0 .. arity-1]             */
+    unsigned  arity;
+    uint64_t  cost;             /* copy-mode contractions a fire replaces  */
+    uint32_t  nodes;            /* nodes an instance allocates, at most    */
+    uint32_t  term_nodes;       /* nodes a private copy of the term takes  */
+    size_t    atoms;            /* the term's size, in leaves              */
+
+    /*  The residual compiled (docs/DESIGN.md §6.5): one instruction per
+     *  node an instance builds, in post-order, two operands each; an
+     *  operand names a constant, an argument, or an earlier result.  The
+     *  constants are node indices, and roots. */
+    uint32_t *ops;
+    uint32_t  nops;
+    uint32_t *consts;
+    uint32_t  nconsts;
+    uint32_t  root;             /* the operand the instance is            */
+} av_jet;
+
+/*  Register the term t as a jet unless it has fewer than min_atoms leaves,
+ *  no arity up to 8 at which an atom reaches the head within max_steps, or
+ *  a residual of cost 0.  Returns the jet id, or AV_NONE with *why.  A
+ *  term already registered returns its id.
+ */
+uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
+                         uint64_t max_steps, const char **why);
+
+/*  Load a dictionary export (dictionary.tsv: hash, atoms, printed term per
+ *  line), checking every hash against the term, and register each row;
+ *  then wrap the inner jets of every fallback and residual.  Returns the
+ *  number registered, or -1 with *err.
+ */
+long av_jets_load(av_arena *a, const char *path, size_t min_atoms,
+                  const char **err);
+
+/*  The loader's match (§6.3): a fresh copy of t -- no node of t is reused,
+ *  so the result shares nothing with the dashboard -- in which every
+ *  subterm whose hash is a jet's is wrapped in a jet node.  AV_NONE if out
+ *  of memory.
+ */
+uint32_t av_jets_match(av_arena *a, uint32_t t);
+
+/*  Whether two terms are the same tree, looking through indirections and
+ *  jets: 1 same, 0 different, -1 past the node budget.
+ */
+int av_equal(const av_arena *a, uint32_t x, uint32_t y, size_t budget);
 
 #endif /* AVON_H */

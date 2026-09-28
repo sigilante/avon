@@ -70,6 +70,13 @@ void av_arena_free(av_arena *a) {
     free(a->atom_name);
     free(a->atom_node);
     free(a->roots);
+    for (uint32_t k = 0; k < a->njets; k++) {
+        free(a->jets[k].ops);
+        free(a->jets[k].consts);
+    }
+    free(a->jets);
+    free(a->jet_scratch);
+    free(a->jet_index);
     free(a->nodes);
     free(a);
 }

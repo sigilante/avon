@@ -301,10 +301,12 @@ this plan closes as decisions to take rather than leaving implicit:
 The bitstring does not preserve sharing. For snapshots of reduced states
 Avon writes its own image — the arena and the root — which is a `write(2)`
 of a flat array, and uses the bitstring only for interchange. **Built in
-stage 2** (`src/snap.c`), with §19's rules: save collects first, so the
-image holds the live graph; it writes the image, syncs it, and only then
-writes a sidecar holding the root, the node count and a SHA-256 over image
-and root. Load checks that checksum before reading anything, then every
+stage 2** (`src/snap.c`), with §19's rules: save copies one term's graph
+out of the live arena (as of stage 4; stage 2 collected the arena in
+place, which also wrote the jet dashboard into the image), so the image
+holds that graph and nothing else; it writes the image, syncs it, and only
+then writes a sidecar holding the root, the node count and a SHA-256 over
+image and root. Load checks that checksum before reading anything, then every
 node — tags, indices, one interned leaf per atom, S, K, I at 0, 1, 2 — and
 that the graph is acyclic, since a cycle would hang the reducer. An image
 carrying a valid checksum and a bad structure is still refused. A snapshot is
@@ -337,6 +339,9 @@ vendored public-domain `sha256.c` (~200 lines, no dependency).
 It is computed **at load time only** — once per dictionary entry and once
 per candidate node in the loaded program — and never on the reduction hot
 path. §6 is why that suffices.
+
+**Built in stage 4** (`src/jets.c`): it matches skijack's string on all
+282 rows of the corpus dictionary (`tests/test_jets.c`).
 
 The hash is for **dispatch, not commitment**. Sixty-four bits admit a
 collision after about 2³² work, which is harmless when a wrong match only
@@ -421,6 +426,10 @@ one pass over the DAG, so 348 hashes for the 618-atom interpreter, not
 > once, wraps each match in an `AV_JET` node, and from then on jet dispatch
 > is a tag test on the head node. No hashing during reduction at all.
 
+As built (stage 4), the match returns a fresh copy of the program with the
+wrappers in it, sharing no node with its input or the dashboard, which is
+what lets share mode's rule of §6.5 hold.
+
 Under §20 code also arrives mid-run, when the running compiler emits it.
 Each install is a load in this sense: it hashes the new term and wraps its
 matches before the term runs. The rule becomes *no hashing except at load
@@ -504,15 +513,66 @@ values. Body-instantiating jets and native-code jets change counts: they
 are off in `copy` mode, and a run using them reports
 `(contractions, jet calls)` as two numbers.
 
+**Built in stage 4** (`src/jets.c`, `src/reduce.c`), with these rules the
+plan left open:
+
+- **Arity by running, not by the compiler.** The genericity argument
+  holds for any `k`, so `k` is the least in 1 to 8 whose atom run halts
+  with an atom at the head; a root with none, or a residual of cost 0, is
+  not a jet. The registration bound is 10⁶ contractions.
+- **Where the dashboard comes from.** `export.py` writes the corpus
+  dictionary, `dictionary.tsv`; `avon --jets=` loads it, recomputes every
+  row's hash from its term and refuses a mismatch, registers the rows at
+  or above a size floor (default 8 atoms: 135 of 282), and wraps each
+  jet's inner jets in its term and residual.
+- **Compiled residuals.** At registration a residual becomes a list of
+  instructions, one per node an instance builds, over constants,
+  arguments and earlier results. A fire is that loop and nothing else; a
+  first version that walked the template through a hash map per fire made
+  jets *slower* than the contractions they replaced, at 4 ns a
+  contraction.
+- **Share mode never writes a jet's term.** It updates in place, and a jet
+  node's term -- the dashboard's, or reached through a residual's inner
+  jets -- is what its hash and residual describe. Writing it would leave a
+  later `copy` run charging a registered cost against a different tree:
+  the first build did exactly that, and `--jet-check` caught it. So the
+  matcher returns a fresh copy of the program sharing no node with its
+  input or the dashboard; a share-mode instance copies the template's jet
+  nodes; a jet node carries a bit saying whether its term is the
+  dashboard's; and when a jet does not fire, share mode demotes its node
+  to an indirection -- to a private copy when the term is the dashboard's
+  -- before entering the term. Copy mode writes nothing and needs none of
+  this.
+- **Share mode charges a fire the copy cost.** A residual's cost is a
+  copy-mode count, so a share-mode run with jets reports more
+  contractions than without (T2: 412,300 against 314,309). Share counts
+  are reported, never asserted (§1.1).
+- **Jets are transparent to every reader but the reducers.** Printing,
+  `jam`, the prefix form, probing, hashing and the witness strategy look
+  through a jet node to its term (`av_view`); the witness runs jets off
+  (§18); a snapshot never holds one (§4.2).
+
+Measured (`tests/test_jets.c`, `tests/test_conformance.c`, release build,
+reduction alone): T2 in `copy` mode 2.03 ms without jets and 1.41 ms with
+them, 12,801 fires, 504,930 contractions either way; T1 0.38 and 0.27 ms.
+Residual jets skip a supercombinator's head phase and nothing more, so the
+gain is modest; the interpreter jet (§7) is where the large one is.
+
 ### 6.6 Admitting a jet
 
 A jet is a claim, and the claim is checked three ways, all of which the
 artifact already does in Python:
 
 1. **Probe tests.** Every entry ships fresh-marker probes, the same ones
-   `python/skijack/probe.py` runs.
+   `python/skijack/probe.py` runs. For a residual jet the registration run
+   is itself the probe: the term applied to fresh atoms.
 2. **Differential.** `--jet-check=N` runs the unjetted term alongside every
-   *N*-th fire and compares the decoded results; `N=1` in the test build.
+   *N*-th fire; `N=1` in the test build. As built, it runs the jet node's
+   own term over the fire's arguments in `copy` mode, jets off, for
+   exactly the charge, and compares the state reached with an instance as
+   graphs -- stronger than comparing decoded values. Only a definite
+   disagreement is a fault; a check that runs out of memory or of its
+   comparison budget is inconclusive.
 3. **Corpus.** The whole conformance suite runs jets on and jets off, and
    the values must agree.
 
@@ -845,11 +905,44 @@ allocations in the reducer's hot paths (now asserted in the debug build).
 - A durability review of the stage found the witness machine exact and
   four gaps, all fixed with regression tests: probing assumed its markers'
   leaf ids were consecutive, and nothing reserved their `@` names (the
-  parser, `cue` and the snapshot loader now refuse them, and a probe finds
-  a marker by its id); a prefix-form file led by a tab was read as one
+  parser and `cue` now refuse them, the snapshot loader refuses an image
+  in which any node points at one, and a probe finds a marker by its id); a prefix-form file led by a tab was read as one
   atom (the printed form now refuses a backquote in a name, so the two
   forms cannot overlap); a table of an empty run read out of bounds; and
   witness budgets were unclamped.
+
+**Stage 4, done.** The structural hash, the dashboard and residual jets:
+
+- **Hashes match skijack's strings** on all 282 rows of the corpus
+  dictionary, recomputed from each printed term, and on seven hand-checked
+  terms (`tests/test_jets.c`). The loader finds inside `whnfF`, `wfN`, `UQ`
+  and `wf5Abs` exactly the dictionary rows skijack's `hash_all` finds: 28,
+  38, 6 and 36 of 147, 224, 33 and 177 distinct subterms.
+- **The corpus is unchanged by jets.** All 45 targets, both strategies,
+  135 jets registered in one arena shared by every run: every copy-mode
+  status and count is the manifest's, all 86 values decode the same, and
+  all 50,298 fires pass `--jet-check=1` (`tests/test_conformance.c`).
+- **Every jet over random arguments** -- one to three extra, random fuel
+  including the boundary, weak head and full normal form: copy mode stops
+  at the same state after the same count jets on and off, share mode
+  reaches the same normal form, every fire checked. 200 rounds, 27,000
+  runs, under ASan and UBSan.
+- **Mixing strategies is safe.** After share runs over jetted terms,
+  every dashboard term hashes as before, and a graph a share run has
+  reduced still counts the same jets on and off. `--jet-check` catches a
+  jet whose cost is off by one.
+- **Jets survive collection** (an arena of 64 nodes) and never reach a
+  snapshot. The witness check still passes at lean-ski `4f78405`: 43 of
+  43 proved, identical, accepted.
+
+The stage's own build had three defects its tests or a durability review
+caught, all fixed with regression tests: share mode wrote inside jets'
+terms (§6.5); instances first walked templates through a hash map per fire
+and made jets slower than no jets; and snapshot save collected the arena
+in place, writing the dashboard -- with its `@x` markers -- into every
+image, which also reopened the marker hole stage 3 had closed. The review
+also had `--jet-check` treat an out-of-memory check as inconclusive rather
+than a fault, and guarded the instance buffer against re-entry.
 
 ## 12. What Avon must not do
 
@@ -878,6 +971,11 @@ And three that proofs add (§17, §18):
   tier theorem is not proved;
 - **never choose a published budget from the run it bounds**;
 - **never let a structural hash stand where a proof needs a commitment.**
+
+And one that jets add (§6.5):
+
+- **never write a jet node's term, or anything the jet dashboard holds.**
+  A jet's charge is exact only for the tree its hash names.
 
 ## 13. Corrections this plan makes to `RUNTIME-DESIGN.md`
 
@@ -939,9 +1037,10 @@ a term. Avon exists to make that answer affordable, not to make it true.
 - Whether `copy` or `share` is the default strategy for a bare `avon run`.
   Recommended: `share`, with the strategy printed on every report.
   Decided: `share` as stated.
-- Jet id stability across dictionary versions, and whether a jetted snapshot
-  records the dashboard version it was taken under. Recommended: it does,
-  and a mismatch refuses to load.
+- ~~Whether a jetted snapshot records the dashboard version.~~ Settled in
+  stage 4: a snapshot holds no jets and no dashboard, so it has no version
+  to record; jets are matched again after a load. Jet ids are local to an
+  arena and never persisted.
   Decided: agreed.
 - ~~Whether Avon ever serves `peek` to a *level-0* program.~~ Settled
   (§7): no. The `Scry` leaf exists only in terms the interpreter jet
