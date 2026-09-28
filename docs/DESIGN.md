@@ -123,6 +123,8 @@ What is conformance, precisely:
 | claim | conformance target? |
 |---|---|
 | decoded value of every corpus target | yes, always, in both strategies |
+| full normal form, when one is reached | yes, in both strategies |
+| the weak head normal form reached | yes in `copy`; never in `share`, where update in place also reduces shared redexes inside the arguments, so the term differs while its normal form and decoded value do not |
 | object-level step counts (the fuel a term consumes) | yes — they are computed by the term, so every correct reducer agrees |
 | host contraction counts | yes in `copy`, never in `share` |
 | `SIZE` outcomes | no: the reference samples its size guard every 512 steps and measures a different quantity (see §3.3) |
@@ -213,7 +215,13 @@ says the initial stack can be small (64 K entries) and grow by doubling.
 arity `k` and at least `k` frames, overwrite the redex root — `I x` and
 `K x y` become `AV_IND` to `x`; `S f g x` becomes an `AV_APP` of two fresh
 nodes — pop `k` frames, continue from the root. Indirections are followed
-on every load and short-circuited when walked.
+on every load and short-circuited when walked. **The short-circuit is
+required, not an optimization.** Without it, `S f g x` reads an `x` that a
+previous contraction turned into an indirection, the new node points
+through it, and chains grow by one link per contraction: stage 1 measured
+`S I I (S I I)` going quadratic, 1 s for 10⁵ steps. Resolving each argument
+as a contraction reads it, and rewriting a spine node's left pointer past an
+indirection as the walk passes, restores 10⁸ steps in 0.4 s.
 
 `copy`: hold the position as a head plus a flat argument vector, contract by
 constructing the combinator body and re-decomposing it (`nargs + rest`,
@@ -240,12 +248,13 @@ different things from host fuel and are fixed by the caller in public
 ### 3.3 The size cap
 
 The reference computes a DAG node count of the whole term every 512
-contractions. Avon gets a cheaper and different quantity for free — arena
-occupancy, which includes garbage — so its cap fires at different moments.
-Therefore: the size cap is a resource guard, never a conformance target,
-and conformance runs set it out of reach (the harness uses 10⁹ today). If a
-run needs the cap to mean the same thing as the reference's, it must ask for
-live-node accounting after a collection, and pay for it.
+contractions. Avon measures live nodes after a collection: when an
+allocation finds the arena full, it collects, and reports `SIZE` if the
+survivors exceed `max_nodes`. That is close to the reference's quantity
+but sampled at different moments, so the size cap is a resource guard,
+never a conformance target, and conformance runs set it out of reach (the
+harness uses 10⁹ today). The collector grows the arena whenever the live
+set passes half of it, so memory stays within about twice the live set.
 
 ### 3.4 Status
 
@@ -274,18 +283,31 @@ Tromp's encoding, as §3d fixes it: `S̃ = 00`, `K̃ = 01`, application
 this plan closes as decisions to take rather than leaving implicit:
 
 - the third code for `I` versus expanding `I` to `S K K` is a **version
-  decision**; take it before stage 2 ships, because it is in the wire
-  format. Recommendation: the third code, `10` with applications moving to
-  `11`, since expanding `I` changes atom counts and the paper's counts are
-  about atoms.
+  decision**. **Taken in stage 2 (container version 1):** the third code,
+  `10`, with applications moving to `11`, since expanding `I` changes atom
+  counts and the paper's counts are about atoms.
 - opaque atoms have no encoding at all in Tromp's scheme. Since the
   conformance harness needs to ship probe markers, the term file format is
   a small container: a header with the atom-name table, then the bitstring
-  with atom ids in an extended leaf code.
+  with atom ids in an extended leaf code. **Taken in stage 2:** `10` is
+  followed by `w` bits, `w` the bit length of the atom count, where 0 is
+  `I` and `k` is the `k`-th atom. With no atoms `w` is 0, so a pure term
+  pays nothing and its code is exactly `00 / 01 / 10 / 11`. The table lists
+  atoms in the order a pre-order walk first meets them, and `cue` refuses
+  any other order, an unused or duplicate entry, nonzero padding, and bits
+  past the term, so `cue(x) = t` implies `jam(t) = x`. The layout is in
+  `include/avon.h`.
 
 The bitstring does not preserve sharing. For snapshots of reduced states
 Avon writes its own image — the arena and the root — which is a `write(2)`
-of a flat array, and uses the bitstring only for interchange. A snapshot is
+of a flat array, and uses the bitstring only for interchange. **Built in
+stage 2** (`src/snap.c`), with §19's rules: save collects first, so the
+image holds the live graph; it writes the image, syncs it, and only then
+writes a sidecar holding the root, the node count and a SHA-256 over image
+and root. Load checks that checksum before reading anything, then every
+node — tags, indices, one interned leaf per atom, S, K, I at 0, 1, 2 — and
+that the graph is acyclic, since a cycle would hang the reducer. An image
+carrying a valid checksum and a bad structure is still refused. A snapshot is
 not a proof witness: it carries indirections, jet nodes and the
 collector's moves, and the circuit's memory table has none of them
 (§17.1).
@@ -728,6 +750,59 @@ The order is deliberate about one thing in particular: **the harness comes
 before the jets.** A jet is a claim about agreement, and there is nothing
 to agree with until stage 3 exists.
 
+### 11.1 Status
+
+Measured on an Apple M4 Max, clang 21, against aviary-kernel 0.1.0 and
+skijack `5d335c0`.
+
+**Stage 0, done.** `make` builds `build/avon`; `make check` builds every
+`tests/test_*.c` under ASan and UBSan and runs it, and builds
+`build/dbg/avon` for the differential.
+
+**Stage 1, done.** Every acceptance criterion holds:
+
+- `copy` mode gives **340 / 91,556 / 504,930** on T0 / T1 / T2, and T0's
+  reduced term is byte-identical to the reference's
+  (`tests/test_tower.c`, fixtures from `tests/fixtures/export.py`).
+- `share` mode reaches the same normal forms on all three, in 325 / 63,522 /
+  324,362 contractions against `copy`'s 371 / 91,587 / 680,290. Its WHNF
+  counts on the printed fixtures are 323 / 63,520 / 314,309: they differ
+  from §1's 323 / 63,326 / 313,860 because a printed term carries no
+  sharing, which is §1's point about share counts.
+- **Differential against aviary:** a million random terms (atoms `X`, `Z`,
+  2% of leaves the divergent `S I I (S I I)`) at fuel 3, 17 and 400, each to
+  WHNF and to normal form: 6,000,000 runs, 0 mismatches in status, count or
+  the term reached, 949,462 of them stopped by fuel part way. 22 runs hit
+  the oracle's size cap and were skipped (§3.3). Sanitized binary, 29
+  minutes (`tests/diff_aviary.py`).
+- **copy against share:** a million random terms under ASan and UBSan, the
+  same normal form every time and never more steps in `share`.
+- **Throughput:** T2 at 63 M contractions/s in `share` and 107 M/s in
+  `copy`, parse and process start included; `S I I (S I I)` at 2.6 × 10⁸/s.
+
+Stage 1 found one requirement the note lacked, path compression (§3.1), and
+a durability review found three defects, all fixed with regression tests:
+a `FUEL` result that could arrive without its term under a tight node cap
+(now `SIZE`), NUL bytes in atom names (now refused), and unchecked
+allocations in the reducer's hot paths (now asserted in the debug build).
+
+**Stage 2, done.** The container, `jam` and `cue` (§4.2), the hygiene check
+(§4.3), and snapshots:
+
+- `print(parse(s)) = s` and `cue(jam(t)) = t`, with `jam` canonical, on all
+  281 distinct corpus terms (17 programs; 4 fail skijack's Stage A) and on
+  459 reduced states of them, each term run 200 steps in both strategies
+  and kept when its tree prints within 200,000 nodes (`tests/test_wire.c`,
+  `tests/fixtures/corpus.tsv`).
+- The `cue` fuzzer: 2,000,000 hostile inputs, mutated containers and noise
+  behind a valid header, under ASan and UBSan. Every one is refused with a
+  message or decodes to a term that jams back to the same bytes.
+- Snapshots round-trip a part-reduced `share` state node for node and
+  resume to the same normal form; any flipped bit in image or sidecar, a
+  truncated image, a missing sidecar, and forged images with valid
+  checksums but a root past the end, a cycle, a doubly interned leaf, an
+  index out of range or a jet node are all refused (`tests/test_snap.c`).
+
 ## 12. What Avon must not do
 
 Inherited from `RUNTIME-DESIGN.md` §5, still binding:
@@ -810,8 +885,8 @@ a term. Avon exists to make that answer affordable, not to make it true.
 
 ## 15. Decisions still to take
 
-- `I` as a third bitstring leaf code versus expansion to `S K K` (§4.2).
-  Recommended: the third code. Needed before stage 2 ships.
+- ~~`I` as a third bitstring leaf code versus expansion to `S K K`.~~
+  Settled in stage 2 (§4.2): the third code, and atoms after it.
   Decided: retain `I` as third code.
 - Whether `copy` or `share` is the default strategy for a bare `avon run`.
   Recommended: `share`, with the strategy printed on every report.
@@ -1000,14 +1075,30 @@ evaluation up to weak reduction of the value (`Mach.jet_run_eval`, by
 (`small_lemma_whnf`, and `small_lemma` for a variable-headed spine), so a
 jetted run reads back the head and arity an unjetted one does
 (`jet_run_shape`). Carrying that to atom probes needs instantiation over
-open terms, which comes with the circuit's `INST` rows. The contraction count changes; the value does not.
+open terms, which the built `INST` rows do not yet have. The contraction count changes; the value does not.
 Budgets count rows, `INST` rows included. The circuit's `INST` rows and
-template table are planned in `lean-ski`'s `bench/plonky3/DESIGN.md` §2,
-not yet built. That plan replaces the `J g` cell with a public roots table:
-the addresses in the loaded heap where the compiled `absN` sits. This
-matches `Mach.JStep.inst`'s hypothesis as it stands, with no new cell and
-no change to `decode`. It keeps the static identity check below, done in
-Lean over the loaded heap.
+template table are built in `lean-ski` (`Ski/AirJet.lean`,
+`bench/plonky3/src/jets.rs`, `bench/plonky3/DESIGN.md` §2). They depart
+from this section's plan in three ways:
+
+- **A roots table, not a `J g` cell.** The roots table lists the
+  addresses in the loaded heap where the compiled `absN` sits. It needs
+  no new cell and no change to `decode`.
+- **Globals.** A body names its closed subterms as public cells
+  (`Mach.inst_sound_g`). On the compiled corpus rows and `3 sumto`,
+  writing whole bodies costs 2.2–6.0× the plain run, and with globals a
+  jetted run takes 28–34% of its rows. On the interpreted rows jets do
+  not pay (110–112%).
+- **η-templates are never roots.** `λ xs. G xs` compiles to `G`, and
+  instantiating it makes no progress.
+
+For witness mode this means:
+
+- Avon's `witness` strategy should jet at the roots `lake exe jets emit`
+  lists.
+- It should write each body with its globals as pointers.
+- Its rows should carry a row counter, which keys the POP and INSTW
+  chains.
 
 **Identity is static.** The verifier checks every jet root in the public
 program: `termAt` there must read `absN (caps ++ ps) body` for the

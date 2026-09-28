@@ -1,12 +1,15 @@
 /**  avon.h
  *
  *  The runtime's public interface.  Representation follows docs/DESIGN.md
- *  §2; statuses follow §3.4.
+ *  §2; the reducer §3; statuses §3.4.
  */
 
 #ifndef AVON_H
 #define AVON_H
 
+#include <signal.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "ski.h"
@@ -18,6 +21,7 @@ typedef struct { uint32_t l, r; } av_node;
 
 #define AV_TAG_SHIFT 30u
 #define AV_TAG(n)    ((n).l >> AV_TAG_SHIFT)
+#define AV_PAYLOAD   ((1u << AV_TAG_SHIFT) - 1u)
 
 #define AV_APP  0u   /* l = left index,   r = right index            */
 #define AV_IND  1u   /* l = target index, r = unused   (share mode)  */
@@ -29,6 +33,12 @@ typedef struct { uint32_t l, r; } av_node;
 #define AV_NODE_K 1u
 #define AV_NODE_I 2u
 
+/*  No node: an allocation failure or an absent term. */
+#define AV_NONE   UINT32_MAX
+
+/*  The most nodes an arena can hold: indices must fit in 30 bits. */
+#define AV_MAX_NODES (1u << AV_TAG_SHIFT)
+
 typedef enum {
     AV_WHNF,
     AV_NORMAL,
@@ -36,5 +46,198 @@ typedef enum {
     AV_SIZE,
     AV_INTERRUPTED,
 } av_status;
+
+const char *av_status_name(av_status s);
+
+/*  ------------------------------------------------------------------ arena
+ *
+ *  One flat array of nodes, bump-allocated.  Atoms (leaf ids >= 3) have
+ *  names in a side table and one interned leaf node each.  A collection
+ *  (§2, stop-and-copy) moves nodes, so an index the caller holds across a
+ *  reduction is valid afterwards only if it was registered with
+ *  av_root_push.
+ */
+typedef struct {
+    av_node   *nodes;
+    uint32_t   used, cap;
+
+    char     **atom_name;   /* by ski_leaf id; NULL for S, K, I     */
+    uint32_t  *atom_node;   /* by ski_leaf id: its interned leaf     */
+    uint32_t   n_leaves, leaf_cap;
+
+    uint32_t **roots;       /* addresses of indices held by callers  */
+    uint32_t   n_roots, root_cap;
+
+    uint64_t   collections;
+    bool       allow_bird_atoms;   /* §4.3: off unless asked for */
+} av_arena;
+
+av_arena *av_arena_new(uint32_t cap);
+void      av_arena_free(av_arena *a);
+
+/*  Allocate an application, growing the arena if it is full.  Returns
+ *  AV_NONE if memory or index space runs out.  Never collects.
+ */
+uint32_t  av_app(av_arena *a, uint32_t f, uint32_t x);
+
+/*  The interned leaf node for a name: S, K, I, or an opaque atom. */
+uint32_t  av_leaf(av_arena *a, const char *name, size_t len);
+
+const char *av_leaf_name(const av_arena *a, ski_leaf id);
+
+void av_root_push(av_arena *a, uint32_t *idx);
+void av_root_pop(av_arena *a);
+
+static inline uint32_t av_tag(const av_arena *a, uint32_t i) {
+    return a->nodes[i].l >> AV_TAG_SHIFT;
+}
+static inline uint32_t av_left(const av_arena *a, uint32_t i) {
+    return a->nodes[i].l & AV_PAYLOAD;
+}
+static inline uint32_t av_right(const av_arena *a, uint32_t i) {
+    return a->nodes[i].r;
+}
+
+/*  Follow indirections to the node they stand for. */
+static inline uint32_t av_res(const av_arena *a, uint32_t i) {
+    while (av_tag(a, i) == AV_IND) i = av_left(a, i);
+    return i;
+}
+
+/*  ----------------------------------------------------------------- collect
+ *
+ *  Copy everything reachable from the roots into a fresh array, short-
+ *  circuiting indirections, and free the old one.  The caller's roots
+ *  function evacuates each index it holds with av_gc_evac.  Afterwards at
+ *  least `need` nodes are free, growing the arena if the live set is more
+ *  than half of it.  Returns false if that cannot be met.
+ */
+typedef struct av_gc av_gc;
+typedef void (*av_roots_fn)(av_gc *g, void *ctx);
+
+uint32_t av_gc_evac(av_gc *g, uint32_t i);
+
+/*  After the scan, where a from-space node went, or AV_NONE if it died.
+ *  For the `after` hook, which remaps side tables keyed by node index.
+ */
+uint32_t av_gc_forwarded(const av_gc *g, uint32_t i);
+
+bool     av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
+                    av_roots_fn after, void *ctx);
+
+/*  --------------------------------------------------------------- terms I/O
+ *
+ *  The printed form of aviary_kernel.terms.pretty: left-associative
+ *  juxtaposition, parentheses only around an application in argument
+ *  position.  Names are runs of characters other than space and parens.
+ */
+typedef struct { char *s; size_t len, cap; } av_buf;
+
+void av_buf_free(av_buf *b);
+
+typedef struct { size_t pos; const char *msg; } av_parse_error;
+
+/*  Parse a whole term.  Returns its root, or AV_NONE with *err filled.
+ *  A NUL byte anywhere is an error: atom names are C strings.  An atom
+ *  named like one of the reference host's live combinators is an error
+ *  unless a->allow_bird_atoms (§4.3).
+ */
+uint32_t av_parse(av_arena *a, const char *src, size_t len,
+                  av_parse_error *err);
+
+/*  Append the printed form of a term to b, visiting at most `budget`
+ *  nodes of its tree unfolding.  Returns false, leaving b holding a
+ *  prefix, if the budget runs out: a reduced state's unfolding can be
+ *  exponential in its size (§4.1).
+ */
+bool av_print(const av_arena *a, uint32_t t, size_t budget, av_buf *b);
+
+/*  ------------------------------------------------------------ hygiene
+ *
+ *  True if aviary_kernel 0.1.0 would contract an atom of this name: one of
+ *  its 52 live combinators other than S, K, I.  Avon holds such atoms
+ *  inert, so a term carrying one would diverge from the oracle (§4.3).
+ */
+bool av_is_bird(const char *name, size_t len);
+
+/*  -------------------------------------------------------------- sha-256 */
+
+typedef struct { uint32_t h[8]; uint64_t len; uint8_t buf[64]; size_t fill; } av_sha256_ctx;
+
+void av_sha256_init(av_sha256_ctx *s);
+void av_sha256_update(av_sha256_ctx *s, const void *data, size_t n);
+void av_sha256_final(av_sha256_ctx *s, uint8_t out[32]);
+void av_sha256(const void *data, size_t n, uint8_t out[32]);
+
+/*  ---------------------------------------------------------- wire format
+ *
+ *  A term at rest is a container (docs/DESIGN.md §4.2):
+ *
+ *      "SKIT"  u8 version = 1  u8[3] zero
+ *      u32 atom count n, then n atoms, each u32 length and its bytes
+ *      u64 bit count, then the bitstring, zero-padded to a whole byte
+ *
+ *  Integers are little-endian.  The bitstring is Tromp's encoding with a
+ *  third leaf, bits packed least significant first, codes read first bit
+ *  first:
+ *
+ *      00  S        01  K        11  application: function, then argument
+ *      10  I or an atom, followed by w bits (least significant first),
+ *          w the bit length of n: 0 is I, k is the k-th atom of the table
+ *
+ *  With no atoms w is 0 and the code is exactly 00 / 01 / 10 / 11.  The
+ *  bitstring does not preserve sharing: jam walks the tree unfolding under
+ *  a node budget, as the printer does.  Atoms are tabled in the order the
+ *  walk first meets them, so jam is a function of the term.
+ */
+bool     av_jam(const av_arena *a, uint32_t t, size_t budget, av_buf *out,
+                const char **err);
+
+/*  Decode a container.  Never trusts its input: every length, index,
+ *  and bit is checked, and anything malformed or non-canonical (padding
+ *  not zero, bytes past the end, an atom table with a duplicate, S, K, I,
+ *  or an empty name) returns AV_NONE with *err set.
+ */
+uint32_t av_cue(av_arena *a, const uint8_t *p, size_t n, const char **err);
+
+/*  ------------------------------------------------------------- snapshots
+ *
+ *  An arena image, preserving sharing (§4.2, §19).  Save collects first,
+ *  so the image holds the live graph only, and updates *root.  It writes
+ *  the image, syncs it, then writes the sidecar PATH.sum -- the root, the
+ *  node count, and the SHA-256 of image and root -- and syncs that, each
+ *  through a temporary file and a rename.  Load verifies the checksum
+ *  before reading anything else, then every node: tags, indices, interned
+ *  leaves, and that the graph is acyclic.
+ */
+bool     av_snapshot_save(av_arena *a, uint32_t *root, const char *path,
+                          const char **err);
+av_arena *av_snapshot_load(const char *path, uint32_t *root, const char **err);
+
+/*  ----------------------------------------------------------------- reduce */
+
+typedef enum {
+    AV_COPY,    /* no update in place: the reference host's counts (§1.1) */
+    AV_SHARE,   /* update in place: same values, fewer contractions      */
+} av_strategy;
+
+typedef struct {
+    av_strategy strategy;
+    bool        whnf_only;      /* stop at weak head normal form        */
+    uint64_t    max_steps;      /* fuel, checked before each attempt    */
+    uint32_t    max_nodes;      /* live nodes after a collection        */
+    volatile sig_atomic_t *interrupt;   /* polled with fuel; may be NULL */
+} av_opts;
+
+typedef struct {
+    uint32_t  term;     /* the state reached: the value, or where it stopped */
+    uint64_t  steps;    /* host contractions                               */
+    av_status status;
+} av_result;
+
+av_opts   av_opts_default(void);
+
+/*  Reduce `t` under normal order.  May collect: see av_root_push. */
+av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o);
 
 #endif /* AVON_H */

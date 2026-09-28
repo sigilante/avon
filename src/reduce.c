@@ -1,0 +1,364 @@
+/**  reduce.c
+ *
+ *  Normal-order reduction, two strategies (docs/DESIGN.md §1.1, §3).
+ *
+ *  copy   The reference host's algorithm, aviary_kernel.reduce, on nodes:
+ *         the position is a head leaf and a flat argument vector, a
+ *         contraction builds the combinator body fresh and re-decomposes
+ *         it, and nothing is ever mutated.  Its contraction counts are the
+ *         paper's.
+ *  share  Turner's machine: walk down the spine, overwrite the redex root
+ *         in place, so a duplicated redex is contracted once.
+ *
+ *  Neither recurses.  Fuel is checked before every attempt to contract,
+ *  the last of which finds no redex, so s contractions need fuel s + 1.
+ */
+
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "avon.h"
+
+/*  An allocation that ensure() has already reserved room for.  It cannot
+ *  fail unless a `need` count is wrong, which the debug build catches.
+ */
+static inline uint32_t reserved_app(av_arena *a, uint32_t f, uint32_t x) {
+    uint32_t i = av_app(a, f, x);
+    assert(i != AV_NONE && "allocation past what ensure() reserved");
+    return i;
+}
+
+typedef struct { uint32_t head; size_t base, n, i; } frame;
+
+typedef struct {
+    av_arena      *a;
+    const av_opts *o;
+    uint64_t       steps;
+
+    uint32_t      *stk;         /* copy: argument slots; share: the spine */
+    size_t         top, cap;
+    frame         *fr;          /* copy: normal-form frames               */
+    size_t         nfr, frcap;
+    uint32_t      *work;        /* share: nodes still to normalize        */
+    size_t         nwork, workcap;
+
+    uint32_t       head;        /* copy: the current position's head leaf */
+    size_t         base;        /* copy: its first argument slot          */
+    uint32_t       root;
+    uint32_t       cur;         /* share: the node being reduced          */
+
+    uint64_t      *marks;       /* share: nodes already normalized        */
+    size_t         nmarks;      /* words                                  */
+} R;
+
+/*  ---------------------------------------------------------------- memory */
+
+static void roots(av_gc *g, void *ctx) {
+    R *r = ctx;
+    r->root = av_gc_evac(g, r->root);
+    if (r->head != AV_NONE) r->head = av_gc_evac(g, r->head);
+    if (r->cur != AV_NONE) r->cur = av_gc_evac(g, r->cur);
+    for (size_t i = 0; i < r->top; i++) r->stk[i] = av_gc_evac(g, r->stk[i]);
+    for (size_t i = 0; i < r->nfr; i++)
+        r->fr[i].head = av_gc_evac(g, r->fr[i].head);
+    for (size_t i = 0; i < r->nwork; i++)
+        r->work[i] = av_gc_evac(g, r->work[i]);
+}
+
+static bool mark_get(const R *r, uint32_t i) {
+    size_t w = i / 64;
+    return w < r->nmarks && (r->marks[w] >> (i % 64) & 1u);
+}
+
+static bool mark_set(R *r, uint32_t i) {
+    size_t w = i / 64;
+    if (w >= r->nmarks) {
+        size_t n = r->nmarks ? r->nmarks : 1024;
+        while (n <= w) n *= 2;
+        uint64_t *m = realloc(r->marks, n * sizeof *m);
+        if (!m) return false;
+        memset(m + r->nmarks, 0, (n - r->nmarks) * sizeof *m);
+        r->marks = m;
+        r->nmarks = n;
+    }
+    r->marks[w] |= (uint64_t)1 << (i % 64);
+    return true;
+}
+
+static void remap_marks(av_gc *g, void *ctx) {
+    R *r = ctx;
+    if (!r->marks) return;
+    uint64_t *old = r->marks;
+    size_t nold = r->nmarks;
+    r->marks = NULL;
+    r->nmarks = 0;
+    for (size_t w = 0; w < nold; w++) {
+        for (uint64_t bits = old[w]; bits; bits &= bits - 1) {
+            uint32_t i = (uint32_t)(w * 64 + (size_t)__builtin_ctzll(bits));
+            uint32_t j = av_gc_forwarded(g, i);
+            if (j != AV_NONE) mark_set(r, j);
+        }
+    }
+    free(old);
+}
+
+/*  Make room for k allocations, collecting if the arena is full.  False
+ *  means the live set would exceed max_nodes, or memory ran out: SIZE.
+ */
+static bool ensure(R *r, size_t k) {
+    av_arena *a = r->a;
+    if (k > AV_MAX_NODES) return false;
+    if (a->cap - a->used >= k) return true;
+    if (!av_collect(a, (uint32_t)k, roots, remap_marks, r)) return false;
+    return a->used <= r->o->max_nodes;
+}
+
+static bool grow(uint32_t **v, size_t *cap, size_t need) {
+    if (need <= *cap) return true;
+    size_t c = *cap ? *cap : 1024;
+    while (c < need) c *= 2;
+    uint32_t *p = realloc(*v, c * sizeof *p);
+    if (!p) return false;
+    *v = p;
+    *cap = c;
+    return true;
+}
+
+static inline bool push(R *r, uint32_t x) {
+    if (r->top == r->cap && !grow(&r->stk, &r->cap, r->top + 1)) return false;
+    r->stk[r->top++] = x;
+    return true;
+}
+
+static bool interrupted(const R *r) {
+    return r->o->interrupt && *r->o->interrupt;
+}
+
+/*  ------------------------------------------------------------------ copy */
+
+/*  Push t's arguments, first argument on top, and make its head current. */
+static bool decompose(R *r, uint32_t t) {
+    const av_arena *a = r->a;
+    t = av_res(a, t);
+    while (av_tag(a, t) == AV_APP) {
+        if (!push(r, av_right(a, t))) return false;
+        t = av_res(a, av_left(a, t));
+    }
+    r->head = t;
+    return true;
+}
+
+/*  head applied to the n slots above base, first argument at the top. */
+static uint32_t apply_slots(R *r, uint32_t head, size_t base, size_t n) {
+    uint32_t t = head;
+    for (size_t j = 0; j < n; j++)
+        t = reserved_app(r->a, t, r->stk[base + n - 1 - j]);
+    return t;
+}
+
+/*  The whole state as a term, for FUEL, SIZE and INTERRUPTED: the current
+ *  position, placed into each enclosing frame's slot.
+ */
+static uint32_t copy_state(R *r) {
+    size_t need = r->top - r->base;
+    for (size_t k = 0; k < r->nfr; k++) need += r->fr[k].n;
+    if (!ensure(r, need)) return AV_NONE;
+    uint32_t t = apply_slots(r, r->head, r->base, r->top - r->base);
+    for (size_t k = r->nfr; k-- > 0;) {
+        frame *f = &r->fr[k];
+        r->stk[f->base + f->n - 1 - f->i] = t;
+        t = apply_slots(r, f->head, f->base, f->n);
+    }
+    return t;
+}
+
+static av_status run_copy(R *r) {
+    av_arena *a = r->a;
+    const av_opts *o = r->o;
+    r->top = r->base = 0;
+    if (!decompose(r, r->root)) return AV_SIZE;
+
+    for (;;) {
+        /* bring the current position to weak head normal form */
+        for (;;) {
+            if (interrupted(r)) return AV_INTERRUPTED;
+            if (r->steps >= o->max_steps) return AV_FUEL;
+            ski_leaf c = av_right(a, r->head);
+            unsigned k = ski_arity(c);
+            if (k == 0 || r->top - r->base < k) break;
+            uint32_t x;
+            if (c == SKI_S) {                   /* S x y z -> x z (y z) */
+                if (!ensure(r, 1)) return AV_SIZE;
+                x = r->stk[r->top - 1];
+                uint32_t y = r->stk[r->top - 2], z = r->stk[r->top - 3];
+                r->top -= 3;
+                r->stk[r->top++] = reserved_app(a, y, z);
+                r->stk[r->top++] = z;
+            } else {                            /* K x y -> x;  I x -> x */
+                x = r->stk[r->top - 1];
+                r->top -= k;
+            }
+            if (!decompose(r, x)) return AV_SIZE;
+            r->steps++;
+        }
+
+        size_t n = r->top - r->base;
+        if (o->whnf_only && r->nfr == 0) {
+            if (!ensure(r, n)) return AV_SIZE;
+            r->root = apply_slots(r, r->head, r->base, n);
+            return AV_WHNF;
+        }
+        if (n > 0) {                            /* normalize each argument */
+            if (r->nfr == r->frcap) {
+                size_t cap = r->frcap ? r->frcap * 2 : 64;
+                frame *f = realloc(r->fr, cap * sizeof *f);
+                if (!f) return AV_SIZE;
+                r->fr = f;
+                r->frcap = cap;
+            }
+            r->fr[r->nfr++] = (frame){ r->head, r->base, n, 0 };
+            uint32_t arg = r->stk[r->top - 1];
+            r->base = r->top;
+            if (!decompose(r, arg)) return AV_SIZE;
+            continue;
+        }
+
+        /* the position is normal: store it, and move to the next argument */
+        uint32_t res = r->head;
+        for (;;) {
+            if (r->nfr == 0) {
+                r->root = res;
+                return AV_NORMAL;
+            }
+            frame *f = &r->fr[r->nfr - 1];
+            r->stk[f->base + f->n - 1 - f->i] = res;
+            if (++f->i < f->n) {
+                r->top = r->base = f->base + f->n;
+                if (!decompose(r, r->stk[f->base + f->n - 1 - f->i]))
+                    return AV_SIZE;
+                break;
+            }
+            if (!ensure(r, f->n)) return AV_SIZE;
+            f = &r->fr[r->nfr - 1];
+            res = apply_slots(r, f->head, f->base, f->n);
+            r->top = r->base = f->base;
+            r->nfr--;
+        }
+    }
+}
+
+/*  ----------------------------------------------------------------- share */
+
+/*  Reduce r->cur to weak head normal form in place.  The spine lives on
+ *  r->stk above its entry height, which is restored on success.
+ */
+static av_status whnf_share(R *r) {
+    av_arena *a = r->a;
+    const av_opts *o = r->o;
+    size_t bottom = r->top;
+    uint32_t cur = r->cur;
+
+    for (;;) {
+        cur = av_res(a, cur);
+        if (av_tag(a, cur) == AV_APP) {
+            if (!push(r, cur)) return AV_SIZE;
+            /* path compression: point past an indirection for good, or
+             * chains grow by one per contraction and walks go quadratic */
+            uint32_t l = av_left(a, cur), rl = av_res(a, l);
+            if (rl != l) a->nodes[cur].l = rl;
+            cur = rl;
+            continue;
+        }
+        if (interrupted(r)) return AV_INTERRUPTED;
+        if (r->steps >= o->max_steps) return AV_FUEL;
+        ski_leaf c = av_right(a, cur);
+        unsigned k = ski_arity(c);
+        if (k == 0 || r->top - bottom < k) break;
+
+        uint32_t n;
+        if (c == SKI_S) {                       /* S f g x -> f x (g x) */
+            if (!ensure(r, 2)) return AV_SIZE;
+            n = r->stk[r->top - 3];
+            uint32_t f = av_res(a, av_right(a, r->stk[r->top - 1]));
+            uint32_t g = av_res(a, av_right(a, r->stk[r->top - 2]));
+            uint32_t x = av_res(a, av_right(a, n));
+            uint32_t fx = reserved_app(a, f, x);
+            uint32_t gx = reserved_app(a, g, x);
+            a->nodes[n] = (av_node){ fx, gx };
+        } else {                                /* K x y -> x;  I x -> x */
+            n = r->stk[r->top - k];
+            uint32_t x = av_res(a, av_right(a, r->stk[r->top - 1]));
+            a->nodes[n] = (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 };
+        }
+        r->top -= k;
+        cur = n;
+        r->steps++;
+    }
+    r->top = bottom;
+    return AV_WHNF;
+}
+
+static av_status run_share(R *r) {
+    const av_arena *a = r->a;
+    r->top = 0;
+    r->cur = r->root;
+    av_status s = whnf_share(r);
+    if (s != AV_WHNF || r->o->whnf_only) return s;
+
+    /* normalize every argument of every spine, left to right, each shared
+     * node once */
+    r->nwork = 0;
+    if (!grow(&r->work, &r->workcap, 1)) return AV_SIZE;
+    r->work[r->nwork++] = r->root;
+    while (r->nwork) {
+        r->cur = r->work[--r->nwork];
+        if (mark_get(r, av_res(a, r->cur))) continue;
+        s = whnf_share(r);
+        if (s != AV_WHNF) return s;
+        uint32_t t = av_res(a, r->cur);
+        if (!mark_set(r, t)) return AV_SIZE;
+        /* push the last argument first, so the first pops first */
+        while (av_tag(a, t) == AV_APP) {
+            if (r->nwork == r->workcap &&
+                !grow(&r->work, &r->workcap, r->nwork + 1))
+                return AV_SIZE;
+            r->work[r->nwork++] = av_right(a, t);
+            t = av_res(a, av_left(a, t));
+        }
+    }
+    return AV_NORMAL;
+}
+
+/*  --------------------------------------------------------------- driver */
+
+av_opts av_opts_default(void) {
+    return (av_opts){
+        .strategy  = AV_SHARE,
+        .whnf_only = false,
+        .max_steps = UINT64_MAX,
+        .max_nodes = AV_MAX_NODES,
+        .interrupt = NULL,
+    };
+}
+
+av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
+    R r = { .a = a, .o = o, .root = t, .head = AV_NONE, .cur = AV_NONE };
+    av_status s = o->strategy == AV_COPY ? run_copy(&r) : run_share(&r);
+
+    uint32_t term = r.root;
+    if (o->strategy == AV_COPY && s != AV_WHNF && s != AV_NORMAL) {
+        term = s == AV_SIZE ? AV_NONE : copy_state(&r);
+        /* a stopped state too large to rebuild is a SIZE outcome: never
+         * report FUEL or INTERRUPTED without the term it stopped on */
+        if (term == AV_NONE) s = AV_SIZE;
+    } else if (term != AV_NONE) {
+        term = av_res(a, term);
+    }
+
+    free(r.stk);
+    free(r.fr);
+    free(r.work);
+    free(r.marks);
+    return (av_result){ term, r.steps, s };
+}
