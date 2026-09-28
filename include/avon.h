@@ -436,6 +436,52 @@ av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *
                               size_t max_rows, size_t max_cells, av_witness *w,
                               uint64_t *insts, const char **err);
 
+/*  -------------------------------------------------------- probe segments
+ *
+ *  lean-ski's output bound (Ski/AirProbe.lean, Air.AcceptsP): a jetted run
+ *  proves a term halts; probe segments prove what it halts to.  A plan
+ *  (`lake exe jets plan OUTCOME`) has one segment per constructor of the
+ *  outcome, depth first.  Each segment probes a pointer -- the loaded
+ *  head, or a field its parent popped -- by writing k fresh markers and a
+ *  stack of them, running jetted to a halt, and requiring the marker
+ *  ctor + base at the head over exactly `arity` fields.
+ */
+typedef struct { uint32_t base, k, ctor, arity, parent, field; } av_seg;
+typedef struct { av_seg *segs; size_t n; } av_plan;
+
+/*  Read `plan n` and n lines `base k ctor arity parent field`.  False,
+ *  with *err, on anything malformed. */
+bool av_plan_read(const char *src, size_t len, av_plan *p, const char **err);
+void av_plan_free(av_plan *p);
+
+/*  What a probe run adds to its witness: each segment's probe row, and
+ *  the pointers each segment's end popped, top first. */
+typedef struct {
+    uint32_t *starts;           /* n: the probe rows' indices */
+    uint32_t *fields;           /* every segment's fields, in order */
+    size_t   *off;              /* n + 1: segment j's are fields[off[j] ..] */
+    size_t    n;
+} av_probe;
+
+/*  The probe run (bench/plonky3's run_probe): from the loaded term, per
+ *  segment a probe row, the markers, and a jetted run to a halt with every
+ *  row but the halted one; then the final state as the last row.  AV_WHNF
+ *  on success; AV_INTERRUPTED, with *err naming the segment, when one ends
+ *  anywhere but its marker over exactly its fields -- the term does not
+ *  decode to the plan's outcome; AV_SIZE on a budget.
+ */
+av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable *jt,
+                               const av_plan *plan, size_t max_rows, size_t max_cells,
+                               av_witness *w, av_probe *pr, uint64_t *insts,
+                               const char **err);
+void      av_probe_free(av_probe *pr);
+
+/*  The probe sections after av_witness_table's: `starts n+1`, each
+ *  segment's probe row then the padded table's last row; `fields n`, per
+ *  segment its count and pointers.  min_log as the table's. */
+bool av_probe_table(const av_witness *w, const av_probe *pr, unsigned min_log,
+                    av_buf *out);
+
 /*  The table in Ski/AirCheck.lean's format: the term in prefix form (`
  *  for application), the memory table, the rows.  Both are padded to a
  *  power of two at least 2^min_log, rows by repeating the halted row and

@@ -23,7 +23,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
-.PHONY: all check clean witness-check jet-witness-check
+.PHONY: all check clean witness-check jet-witness-check probe-witness-check
 .SECONDARY:
 
 all: $(BUILD)/avon
@@ -58,6 +58,9 @@ witness-check: $(BUILD)/avon
 
 jet-witness-check: $(BUILD)/avon
 	tests/jet_witness_check.sh
+
+probe-witness-check: $(BUILD)/avon
+	tests/probe_witness_check.sh
 
 clean:
 	rm -rf $(BUILD)

@@ -233,42 +233,18 @@ static uint32_t resolve(av_jop op, uint32_t c, const uint32_t *ps) {
     return op.kind == AV_JOP_LOCAL ? c + op.val : op.kind == AV_JOP_ARG ? ps[op.val] : op.val;
 }
 
-av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *jt,
-                              size_t max_rows, size_t max_cells, av_witness *w,
-                              uint64_t *insts, const char **err) {
-    memset(w, 0, sizeof *w);
-    if (insts) *insts = 0;
-    if (max_cells > AV_MAX_NODES) max_cells = AV_MAX_NODES;  /* 32-bit cells */
-    uint32_t *root_of = NULL;   /* jet + 1 at each root of the loaded heap */
-    uint32_t *ps = NULL;        /* the argument pointers an instantiation pops */
-    av_status st = AV_SIZE;
-    const char *msg = NULL;
-    uint32_t hd;
-    msg = build(a, t, w, max_cells, &hd);
-    if (msg) goto out;
-    uint32_t stk = (uint32_t)w->nmem;
-    if (!put_cell(w, AV_CELL_NIL, 0, 0)) { msg = "out of memory"; goto out; }
-    w->loaded = w->nmem;
-    w->hd0 = hd;
-    w->stk0 = stk;
-    if (jt) {
-        uint32_t maxk = 1;
-        for (size_t j = 0; j < jt->njets; j++)
-            if (jt->jets[j].k > maxk) maxk = jt->jets[j].k;
-        root_of = calloc(w->loaded, sizeof *root_of);
-        ps = calloc(maxk, sizeof *ps);
-        if (!root_of || !ps) { msg = "out of memory"; goto out; }
-        for (size_t i = 0; i < jt->nroots; i++) {
-            if (jt->root_addr[i] >= w->loaded) { msg = "a root outside the loaded heap"; goto out; }
-            root_of[jt->root_addr[i]] = jt->root_jet[i] + 1;
-        }
-    }
-
+/*  The jetted machine from (*hd, *stk) to a halt, one row per state: at a
+ *  licensed root with enough arguments an instantiation, else Air.stepG.
+ *  The halted state's row is the last.  False, with *msg, on a budget. */
+static bool run_to_halt(av_witness *w, const av_jettable *jt, const uint32_t *root_of,
+                        uint32_t *ps, uint32_t *hdp, uint32_t *stkp, size_t max_rows,
+                        size_t max_cells, uint64_t *insts, const char **msg) {
+    uint32_t hd = *hdp, stk = *stkp;
     for (;;) {
-        if (w->nrows >= max_rows) { msg = "the run exceeds the row budget"; goto out; }
-        if (w->nmem > UINT32_MAX - 3) { msg = "address space"; goto out; }
+        if (w->nrows >= max_rows) { *msg = "the run exceeds the row budget"; return false; }
+        if (w->nmem > UINT32_MAX - 3) { *msg = "address space"; return false; }
         uint32_t c = (uint32_t)w->nmem;
-        if (!put_row(w, hd, stk, c)) { msg = "out of memory"; goto out; }
+        if (!put_row(w, hd, stk, c)) { *msg = "out of memory"; return false; }
 
         /* An instantiation, at a licensed root with enough arguments. */
         if (root_of && hd < w->loaded && root_of[hd]) {
@@ -282,13 +258,13 @@ av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *
                 s = cc->b;
             }
             if (i == J->k) {
-                if (w->nmem + J->ncells > max_cells) { msg = "the run exceeds the cell budget"; goto out; }
+                if (w->nmem + J->ncells > max_cells) { *msg = "the run exceeds the cell budget"; return false; }
                 for (size_t q = 0; q < J->ncells; q++) {
                     const av_jcell *x = &J->cells[q];
                     bool ok = x->tag == 3
                         ? put_cell(w, AV_CELL_APP, resolve(x->a, c, ps), resolve(x->b, c, ps))
                         : put_cell(w, x->tag, 0, 0);   /* S, K, I share the mem bus's tags */
-                    if (!ok) { msg = "out of memory"; goto out; }
+                    if (!ok) { *msg = "out of memory"; return false; }
                 }
                 hd = resolve(J->root, c, ps);
                 stk = s;
@@ -332,23 +308,240 @@ av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *
             ws[writes++] = (av_cell){ AV_CELL_CONS, z, c + 1 };
             break;
         }
-        default:
+        default:                                /* an atom, a nil, a cons */
             goto halted;
         }
-        if (w->nmem + writes > max_cells) { msg = "the run exceeds the cell budget"; goto out; }
+        if (w->nmem + writes > max_cells) { *msg = "the run exceeds the cell budget"; return false; }
         if (h->tag != AV_CELL_APP) w->contractions++;
         for (size_t i = 0; i < writes; i++)
-            if (!put_cell(w, ws[i].tag, ws[i].a, ws[i].b)) { msg = "out of memory"; goto out; }
+            if (!put_cell(w, ws[i].tag, ws[i].a, ws[i].b)) { *msg = "out of memory"; return false; }
         hd = nhd;
         stk = nstk;
     }
 halted:
+    *hdp = hd;
+    *stkp = stk;
+    return true;
+}
+
+/*  Mach.load, and the jet table's roots over the loaded heap. */
+static const char *load_jetted(const av_arena *a, uint32_t t, const av_jettable *jt,
+                               size_t max_cells, av_witness *w, uint32_t **root_of,
+                               uint32_t **ps) {
+    uint32_t hd;
+    const char *msg = build(a, t, w, max_cells, &hd);
+    if (msg) return msg;
+    uint32_t stk = (uint32_t)w->nmem;
+    if (!put_cell(w, AV_CELL_NIL, 0, 0)) return "out of memory";
+    w->loaded = w->nmem;
+    w->hd0 = hd;
+    w->stk0 = stk;
+    if (!jt) return NULL;
+    uint32_t maxk = 1;
+    for (size_t j = 0; j < jt->njets; j++)
+        if (jt->jets[j].k > maxk) maxk = jt->jets[j].k;
+    *root_of = calloc(w->loaded, sizeof **root_of);
+    *ps = calloc(maxk, sizeof **ps);
+    if (!*root_of || !*ps) return "out of memory";
+    for (size_t i = 0; i < jt->nroots; i++) {
+        if (jt->root_addr[i] >= w->loaded) return "a root outside the loaded heap";
+        (*root_of)[jt->root_addr[i]] = jt->root_jet[i] + 1;
+    }
+    return NULL;
+}
+
+av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *jt,
+                              size_t max_rows, size_t max_cells, av_witness *w,
+                              uint64_t *insts, const char **err) {
+    memset(w, 0, sizeof *w);
+    if (insts) *insts = 0;
+    if (max_cells > AV_MAX_NODES) max_cells = AV_MAX_NODES;  /* 32-bit cells */
+    uint32_t *root_of = NULL;   /* jet + 1 at each root of the loaded heap */
+    uint32_t *ps = NULL;        /* the argument pointers an instantiation pops */
+    av_status st = AV_SIZE;
+    const char *msg = load_jetted(a, t, jt, max_cells, w, &root_of, &ps);
+    uint32_t hd = w->hd0, stk = w->stk0;
+    if (!msg && run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, &msg))
+        st = AV_WHNF;
+    free(root_of);
+    free(ps);
+    if (msg && err) *err = msg;
+    return st;
+}
+
+/*  --------------------------------------------------------- probe segments */
+
+static size_t pow2_at_least(size_t n, unsigned min_log);
+static bool out_str(av_buf *b, const char *s, size_t n);
+
+void av_plan_free(av_plan *p) {
+    free(p->segs);
+    memset(p, 0, sizeof *p);
+}
+
+bool av_plan_read(const char *src, size_t len, av_plan *p, const char **err) {
+    cursor c = { src, len, 0 };
+    uint32_t n;
+    memset(p, 0, sizeof *p);
+    if (!keyword(&c, "plan") || !nat32(&c, &n) || n == 0) { *err = "expected `plan N`, N > 0"; return false; }
+    if (n > (1u << 16)) { *err = "a plan past 65,536 segments"; return false; }
+    p->segs = calloc(n, sizeof *p->segs);
+    if (!p->segs) { *err = "out of memory"; return false; }
+    for (uint32_t j = 0; j < n; j++) {
+        av_seg *g = &p->segs[j];
+        if (!nat32(&c, &g->base) || !nat32(&c, &g->k) || !nat32(&c, &g->ctor) ||
+            !nat32(&c, &g->arity) || !nat32(&c, &g->parent) || !nat32(&c, &g->field)) {
+            av_plan_free(p);
+            *err = "a malformed segment line";
+            return false;
+        }
+    }
+    const char *rest;
+    size_t rn;
+    if (word(&c, &rest, &rn)) { av_plan_free(p); *err = "text after the plan"; return false; }
+    p->n = n;
+    return true;
+}
+
+void av_probe_free(av_probe *pr) {
+    free(pr->starts);
+    free(pr->fields);
+    free(pr->off);
+    memset(pr, 0, sizeof *pr);
+}
+
+av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable *jt,
+                               const av_plan *plan, size_t max_rows, size_t max_cells,
+                               av_witness *w, av_probe *pr, uint64_t *insts,
+                               const char **err) {
+    memset(w, 0, sizeof *w);
+    memset(pr, 0, sizeof *pr);
+    if (insts) *insts = 0;
+    if (max_cells > AV_MAX_NODES) max_cells = AV_MAX_NODES;
+    uint32_t *root_of = NULL, *ps = NULL;
+    av_status st = AV_SIZE;
+    static char why[160];
+    const char *msg = NULL;
+    size_t nfields = 0;
+    for (size_t j = 0; j < plan->n; j++) nfields += plan->segs[j].arity;
+    pr->starts = calloc(plan->n ? plan->n : 1, sizeof *pr->starts);
+    pr->fields = calloc(nfields ? nfields : 1, sizeof *pr->fields);
+    pr->off = calloc(plan->n + 1, sizeof *pr->off);
+    if (!pr->starts || !pr->fields || !pr->off) { msg = "out of memory"; goto out; }
+    pr->n = plan->n;
+    msg = load_jetted(a, t, jt, max_cells, w, &root_of, &ps);
+    if (msg) goto out;
+    uint32_t hd = w->hd0, stk = w->stk0;
+    for (size_t j = 0; j < plan->n; j++) {
+        const av_seg *g = &plan->segs[j];
+        uint32_t f = hd;                        /* segment 0 probes the head */
+        if (j > 0) {
+            if (g->parent >= j) {
+                snprintf(why, sizeof why, "segment %zu's parent is not before it", j);
+                msg = why;
+                st = AV_INTERRUPTED;
+                goto out;
+            }
+            const av_seg *pg = &plan->segs[g->parent];
+            if (g->field >= pg->arity) {
+                snprintf(why, sizeof why, "segment %zu reads a missing field", j);
+                msg = why;
+                st = AV_INTERRUPTED;
+                goto out;
+            }
+            f = pr->fields[pr->off[g->parent] + g->field];
+        }
+        /* the probe row, then the markers: atoms, a stack of them, a nil */
+        if (w->nrows >= max_rows) { msg = "the run exceeds the row budget"; goto out; }
+        uint64_t c = w->nmem;
+        if (c + 2ull * g->k + 1 > max_cells || c + 2ull * g->k + 1 > UINT32_MAX - 3) {
+            msg = "the run exceeds the cell budget";
+            goto out;
+        }
+        pr->starts[j] = (uint32_t)w->nrows;
+        if (!put_row(w, hd, stk, (uint32_t)c)) { msg = "out of memory"; goto out; }
+        for (uint32_t i = 0; i < g->k; i++)
+            if (!put_cell(w, AV_CELL_ATOM, g->base + i, 0)) { msg = "out of memory"; goto out; }
+        for (uint32_t i = 0; i < g->k; i++)
+            if (!put_cell(w, AV_CELL_CONS, (uint32_t)c + i, (uint32_t)c + g->k + i + 1)) {
+                msg = "out of memory";
+                goto out;
+            }
+        if (!put_cell(w, AV_CELL_NIL, 0, 0)) { msg = "out of memory"; goto out; }
+        hd = f;
+        stk = (uint32_t)c + g->k;
+        if (!run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, &msg))
+            goto out;
+        w->nrows--;                             /* the halted row is not pushed */
+        /* the end: the segment's marker at the head, exactly its fields */
+        const av_cell *h = get(w, hd);
+        if (!h || h->tag != AV_CELL_ATOM || h->a != g->ctor + g->base) {
+            if (h && h->tag == AV_CELL_ATOM)
+                snprintf(why, sizeof why, "segment %zu ends at marker %u, not its marker %u",
+                         j, h->a, g->ctor + g->base);
+            else
+                snprintf(why, sizeof why, "segment %zu ends at %s, not its marker %u", j,
+                         !h ? "no cell" : h->tag == AV_CELL_APP ? "an application"
+                         : "a combinator short of arguments", g->ctor + g->base);
+            msg = why;
+            st = AV_INTERRUPTED;
+            goto out;
+        }
+        pr->off[j + 1] = pr->off[j] + g->arity;
+        uint32_t s = stk;
+        for (uint32_t i = 0; i < g->arity; i++) {
+            const av_cell *cc = cons_at(w, s);
+            if (!cc) {
+                snprintf(why, sizeof why, "segment %zu has too few fields", j);
+                msg = why;
+                st = AV_INTERRUPTED;
+                goto out;
+            }
+            pr->fields[pr->off[j] + i] = cc->a;
+            s = cc->b;
+        }
+        const av_cell *nil = get(w, s);
+        if (!nil || nil->tag != AV_CELL_NIL) {
+            snprintf(why, sizeof why, "segment %zu has too many fields", j);
+            msg = why;
+            st = AV_INTERRUPTED;
+            goto out;
+        }
+    }
+    if (w->nrows >= max_rows) { msg = "the run exceeds the row budget"; goto out; }
+    if (!put_row(w, hd, stk, (uint32_t)w->nmem)) { msg = "out of memory"; goto out; }
     st = AV_WHNF;
 out:
     free(root_of);
     free(ps);
     if (msg && err) *err = msg;
     return st;
+}
+
+bool av_probe_table(const av_witness *w, const av_probe *pr, unsigned min_log,
+                    av_buf *out) {
+    char line[64];
+    size_t k = pow2_at_least(w->nrows, min_log);
+    int n = snprintf(line, sizeof line, "starts %zu\n", pr->n + 1);
+    if (!out_str(out, line, (size_t)n)) return false;
+    for (size_t j = 0; j < pr->n; j++) {
+        n = snprintf(line, sizeof line, "%u\n", pr->starts[j]);
+        if (!out_str(out, line, (size_t)n)) return false;
+    }
+    n = snprintf(line, sizeof line, "%zu\n", k - 1);   /* the padded last row */
+    if (!out_str(out, line, (size_t)n)) return false;
+    n = snprintf(line, sizeof line, "fields %zu\n", pr->n);
+    if (!out_str(out, line, (size_t)n)) return false;
+    for (size_t j = 0; j < pr->n; j++) {
+        n = snprintf(line, sizeof line, "%zu", pr->off[j + 1] - pr->off[j]);
+        if (!out_str(out, line, (size_t)n)) return false;
+        for (size_t i = pr->off[j]; i < pr->off[j + 1]; i++) {
+            n = snprintf(line, sizeof line, " %u", pr->fields[i]);
+            if (!out_str(out, line, (size_t)n)) return false;
+        }
+        if (!out_str(out, "\n", 1)) return false;
+    }
+    return true;
 }
 
 /*  --------------------------------------------------------------- tables */
@@ -420,6 +613,7 @@ bool av_witness_table(const av_arena *a, uint32_t t, const av_witness *w,
         case AV_CELL_APP:  n = snprintf(line, sizeof line, "A %u %u\n", c->a, c->b); break;
         case AV_CELL_NIL:  n = snprintf(line, sizeof line, "N\n"); break;
         case AV_CELL_CONS: n = snprintf(line, sizeof line, "C %u %u\n", c->a, c->b); break;
+        case AV_CELL_ATOM: n = snprintf(line, sizeof line, "X %u\n", c->a); break;
         default:           return false;
         }
         if (!out_str(out, line, (size_t)n)) return false;

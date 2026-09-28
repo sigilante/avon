@@ -1429,12 +1429,7 @@ one a proof uses.
 - **An output, except by probing.** The constraints fix the run, not the
   value it ends on. Probe decoding (§1, §7) binds it: `v X₁ … Xₙ` reaching
   `Xᵢ` at the head names the constructor, and the stack holds its fields.
-  `lean-ski` has the inert atom cell this needs, with a halting kind for an
-  atom at the head. A table started from a term applied to atom markers,
-  whose last row has the atom `i` at the head, proves that the term
-  reduces to `Xᵢ` applied to arguments (`Air.air_probe`). The Plonky3
-  tables carry atoms (tag 6), and an AIR may require its last row to read
-  a named accepting atom.
+  §17.4 builds it: probe segments, one per constructor of the outcome.
 - **Secrecy, except for statements.** The corpus proofs load the whole
   term in the clear under a non-hiding commitment. A statement `V x w`
   keeps `w` private: `lean-ski` proves a Sudoku solution in zero
@@ -1447,6 +1442,49 @@ one a proof uses.
   blinding. The zero-knowledge argument is informal.
 - **Scry.** Only a resume loop's final run is proved, with the final fact
   store as a committed private input (§8).
+
+### 17.4 Probe segments: the witness binds an output
+
+**Avon writes the table that proves what a term halts to.** A jetted
+witness proves `3 sumto` halts; a probe table proves it decodes to `[6]`.
+`lean-ski` specifies it (`Air.AcceptsP`, `Ski/AirProbe.lean`), checks it
+(`lake exe jets check-probe TABLE OUTCOME`, sound by
+`Air.checkPA_decodes`) and proves it (`ski-air probe-prove`).
+
+    avon witness --jet-table=JETS --plan=PLAN TERM
+
+The plan comes from `lake exe jets plan OUTCOME`: one segment per
+constructor of the outcome's probe tree, depth first, each
+`base k ctor arity parent field`. `[6]` takes 11: the result's `RVal`,
+the stack's `Push`, the item's `Num`, six `Suc`, `Zero`, and `Empty`.
+The run, per segment (`av_witness_run_probe`, lean-ski's `run_probe`):
+
+1. **A probe row**, the current state, with the pointer the segment
+   probes: the loaded head for segment 0, else field `field` of segment
+   `parent`'s end.
+2. **The markers**: atoms `base … base+k−1`, a stack of them, a nil; the
+   head becomes the probed pointer.
+3. **A jetted run** to a halt, exactly as `--jet-table` runs, with every
+   row but the halted one.
+4. **The end**: the head must be the atom `ctor + base` over exactly
+   `arity` fields and a nil. The fields are recorded for the segments
+   that probe them. Any other end means the term does not decode to the
+   outcome, and Avon exits nonzero naming the segment and the marker it
+   reached.
+
+The last state closes the table. After `av_witness_table`'s sections come
+`starts` (each segment's probe row, then the padded table's last row) and
+`fields` (per segment, its count and pointers); atom cells print as `X n`.
+
+**Checked** (`make probe-witness-check`, `tests/probe_witness_check.sh`):
+every row of lean-ski's corpus, with its outcome from its Joy program --
+`val 6` for `1 2 + dup +`, `3 [dup +] i` and `3 sumto`, `val 1 2 1` for
+`1 2 over`, in both compiled forms. All 7 tables are byte-identical to
+`ski-air probe-prove`'s and accepted by `check-probe`; for `err` and the
+value less one, Avon refuses all 14 plans and `check-probe` rejects its
+tables. `3 sumto` takes 4,144 rows and 1,045 instantiations, the count
+lean-ski reports. The `--jet-table` output without a plan is unchanged,
+byte for byte, on every corpus row.
 
 ## 18. Jets in a proof
 

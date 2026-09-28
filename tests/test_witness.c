@@ -252,6 +252,72 @@ TEST(an_instantiation_needs_its_arguments) {
     av_arena_free(a);
 }
 
+/*  ------------------------------------------------------- probe segments */
+
+static const char ZERO_PLAN[] = "plan 1\n0 2 0 0 0 0\n";   /* nat 0 = Zero */
+
+static bool probe_of(const char *term, const char *plan_src, av_buf *out,
+                     const char **err) {
+    av_arena *a = av_arena_new(0);
+    uint32_t t = av_parse(a, term, strlen(term), NULL);
+    av_plan plan;
+    av_witness w;
+    av_probe pr;
+    bool ok = false;
+    if (av_plan_read(plan_src, strlen(plan_src), &plan, err)) {
+        av_status st = av_witness_run_probe(a, t, NULL, &plan, 1000, 1000, &w, &pr, NULL, err);
+        ok = st == AV_WHNF && av_witness_table(a, t, &w, 4, out) &&
+             av_probe_table(&w, &pr, 4, out);
+        av_witness_free(&w);
+        av_probe_free(&pr);
+        av_plan_free(&plan);
+    }
+    av_arena_free(a);
+    return ok;
+}
+
+/*  K is Zero, a nat's first constructor: the probe writes markers X 0 and
+ *  X 1 and a stack of them, K selects X 0 over a nil. */
+TEST(a_probe_binds_k_as_zero) {
+    av_buf b = { 0 };
+    const char *err = NULL;
+    CHECK(probe_of("K", ZERO_PLAN, &b, &err));
+    static const char want_mem[] =
+        "K\n16\nK\nN\nX 0\nX 1\nC 2 5\nC 3 6\nN\nN\nN\nN\nN\nN\nN\nN\nN\nN\n16\n"
+        "0 1 2\n0 4 7\n2 6 7\n";
+    CHECK(b.s && strncmp(b.s, want_mem, strlen(want_mem)) == 0);
+    /* rows padded with the last; then the start rows and the fields */
+    CHECK(b.s && strstr(b.s, "2 6 7\nstarts 2\n0\n15\nfields 1\n0\n") != NULL);
+    av_buf_free(&b);
+}
+
+TEST(a_probe_refuses_another_outcome) {
+    av_buf b = { 0 };
+    const char *err = NULL;
+    /* Suc: marker 1 over one field -- K ends at marker 0 */
+    CHECK(!probe_of("K", "plan 1\n0 2 1 1 0 0\n", &b, &err));
+    CHECK(err && strstr(err, "segment 0 ends at marker 0, not its marker 1"));
+    /* one marker only: K stops short of its arguments */
+    CHECK(!probe_of("K", "plan 1\n0 1 0 0 0 0\n", &b, &err));
+    CHECK(err && strstr(err, "short of arguments"));
+    /* a field its parent never popped */
+    CHECK(!probe_of("K", "plan 2\n0 2 0 0 0 0\n2 2 0 0 0 0\n", &b, &err));
+    CHECK(err && strstr(err, "missing field"));
+    av_buf_free(&b);
+}
+
+TEST(a_malformed_plan_is_refused) {
+    av_plan p;
+    const char *err = NULL;
+    CHECK(!av_plan_read("plan 0\n", 7, &p, &err));
+    CHECK(!av_plan_read("plan 1\n0 2 0 0 0\n", 17, &p, &err));
+    CHECK(!av_plan_read("plan 1\n0 2 0 0 0 0 7\n", 21, &p, &err));
+    CHECK(!av_plan_read("segs 1\n0 2 0 0 0 0\n", 19, &p, &err));
+    CHECK(av_plan_read(ZERO_PLAN, strlen(ZERO_PLAN), &p, &err));
+    CHECK(p.n == 1 && p.segs[0].k == 2);
+    av_plan_free(&p);
+}
+
 TEST_MAIN(
     TEST_CASE(i_k_is_lean_skis_table),
     TEST_CASE(s_k_k_s_writes_three_cells_per_s),
@@ -262,4 +328,7 @@ TEST_MAIN(
     TEST_CASE(a_jet_file_is_read_and_its_errors_refused),
     TEST_CASE(a_jet_instantiates_at_its_root),
     TEST_CASE(an_instantiation_needs_its_arguments),
+    TEST_CASE(a_probe_binds_k_as_zero),
+    TEST_CASE(a_probe_refuses_another_outcome),
+    TEST_CASE(a_malformed_plan_is_refused),
 )

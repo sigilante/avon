@@ -9,7 +9,8 @@
  *      avon jam    [FILE]             printed form to a SKIT container
  *      avon cue    [FILE]             SKIT container to printed form
  *      avon prefix [FILE]             the term in prefix form (` for application)
- *      avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [FILE]
+ *      avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [--plan=PLAN]
+ *                   [FILE]
  *                                     the witness strategy's table, for
  *                                     lean-ski's aircheck and plonky3 (§17);
  *                                     with JETS, lean-ski's jet file for the
@@ -55,6 +56,7 @@ typedef struct {
     uint64_t    ctors;            /* --ctors: constructor jets up to N atoms */
     const char *interp;           /* interpreters.tsv, or NULL */
     const char *jet_table;        /* lean-ski's jet file, or NULL */
+    const char *plan;             /* lean-ski's probe plan, or NULL */
     uint64_t    jet_floor;
     const char *file;
 } args;
@@ -67,7 +69,8 @@ static int usage(void) {
         "       avon jam    [--budget=N] [FILE]\n"
         "       avon cue    [--budget=N] [FILE]\n"
         "       avon prefix [FILE]\n"
-        "       avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [FILE]\n"
+        "       avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [--plan=PLAN]\n"
+        "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
@@ -93,6 +96,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->ctors = 0;
     g->interp = NULL;
     g->jet_table = NULL;
+    g->plan = NULL;
     g->jet_floor = 8;
     g->rows = 1u << 21;          /* bench/plonky3's MAX_LOG_HEIGHT */
     g->cells = 1u << 21;
@@ -115,6 +119,7 @@ static bool parse_args(int argc, char **argv, args *g) {
             g->o.interp_jets = true;
         }
         else if (strncmp(s, "--jet-table=", 12) == 0 && s[12]) g->jet_table = s + 12;
+        else if (strncmp(s, "--plan=", 7) == 0 && s[7]) g->plan = s + 7;
         else if (strncmp(s, "--jet-floor=", 12) == 0 && number(s + 12, &v))
             g->jet_floor = v;
         else if (strncmp(s, "--jet-check=", 12) == 0 && number(s + 12, &v))
@@ -492,12 +497,34 @@ int main(int argc, char **argv) {
                 }
                 free(jsrc);
             }
+            av_plan plan = { NULL, 0 };
+            av_probe pr = { NULL, NULL, NULL, 0 };
+            if (t != AV_NONE && g.plan) {
+                FILE *pf = fopen(g.plan, "rb");
+                size_t plen = 0;
+                char *psrc = pf ? slurp(pf, &plen) : NULL;
+                if (pf) fclose(pf);
+                if (!psrc) {
+                    fprintf(stderr, "avon: cannot read %s\n", g.plan);
+                    t = AV_NONE;
+                } else if (!av_plan_read(psrc, plen, &plan, &msg)) {
+                    fprintf(stderr, "avon: %s: %s\n", g.plan, msg);
+                    t = AV_NONE;
+                }
+                free(psrc);
+            }
             if (t != AV_NONE) {
-                av_status st = av_witness_run_jets(a, t, have_jt ? &jt : NULL, (size_t)g.rows,
-                                                   (size_t)g.cells, &w, &insts, &msg);
-                if (st != AV_WHNF) {
+                av_status st = g.plan
+                    ? av_witness_run_probe(a, t, have_jt ? &jt : NULL, &plan, (size_t)g.rows,
+                                           (size_t)g.cells, &w, &pr, &insts, &msg)
+                    : av_witness_run_jets(a, t, have_jt ? &jt : NULL, (size_t)g.rows,
+                                          (size_t)g.cells, &w, &insts, &msg);
+                if (st == AV_INTERRUPTED) {
+                    fprintf(stderr, "avon: the term does not decode to the plan's outcome: %s\n", msg);
+                } else if (st != AV_WHNF) {
                     fprintf(stderr, "avon: no witness: %s\n", msg);
-                } else if (!av_witness_table(a, t, &w, 4, &b)) {
+                } else if (!av_witness_table(a, t, &w, 4, &b) ||
+                           (g.plan && !av_probe_table(&w, &pr, 4, &b))) {
                     fprintf(stderr, "avon: could not write the table\n");
                 } else {
                     fwrite(b.s, 1, b.len, stdout);
@@ -507,7 +534,9 @@ int main(int argc, char **argv) {
                     rc = 0;
                 }
                 av_witness_free(&w);
+                av_probe_free(&pr);
             }
+            av_plan_free(&plan);
             if (have_jt) av_jettable_free(&jt);
             av_buf_free(&b);
             av_arena_free(a);
