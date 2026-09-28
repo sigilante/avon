@@ -117,7 +117,7 @@ static bool ensure(R *r, size_t k) {
     av_arena *a = r->a;
     if (k > AV_MAX_NODES) return false;
     if (a->cap - a->used >= k) return true;
-    if (r->o->no_collect)
+    if (r->o->no_collect || r->o->census)   /* a census keys on node identity */
         return av_reserve(a, (uint32_t)k) && a->used <= r->o->max_nodes;
     /* every active reduction's roots, this one's among them */
     if (!av_collect(a, (uint32_t)k, NULL, NULL, NULL)) return false;
@@ -314,8 +314,11 @@ static av_status run_copy(R *r) {
                     if (!decompose(r, out)) return AV_SIZE;
                     continue;
                 }
+                /* A fire that cannot have its nodes steps instead: the node
+                 * cap then stops the run where stepping would, or later. */
                 if (a->jets[AV_JET_ID(av_left(a, r->head))].residual_ok &&
-                    fires(r, AV_JET_ID(av_left(a, r->head)), r->top - r->base)) {
+                    fires(r, AV_JET_ID(av_left(a, r->head)), r->top - r->base) &&
+                    ensure(r, a->jets[AV_JET_ID(av_left(a, r->head))].nodes)) {
                     av_status js = fire_copy(r);
                     if (js != AV_WHNF) return js;
                 } else if (!decompose(r, av_right(a, r->head))) {

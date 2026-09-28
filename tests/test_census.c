@@ -94,7 +94,7 @@ TEST(it_finds_b_with_its_arity_and_cost) {
     CHECK(bi != NULL);
     if (b && bi) {
         CHECK_EQ(bi->calls, K_LEVELS);
-        CHECK((bi->family >= 0) != (b->family >= 0));
+        CHECK((bi->folds_into >= 0) != (b->folds_into >= 0));
     }
     av_census_free(c);
 }

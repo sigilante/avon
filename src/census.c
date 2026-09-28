@@ -25,41 +25,16 @@ struct av_census {
     av_arena      *cap;             /* captured terms live here */
     uint64_t       calls;
     uint64_t       clock, epoch;    /* contractions recorded; runs begun */
-    uint64_t      *code;            /* fingerprints of loaded subterms */
-    size_t         ncode, codecap;
+    uint64_t      *until, *until_epoch;   /* per row: its fire's window */
+    nmap           loaded;          /* this run's loaded nodes: its code */
 };
 
-static bool is_code(const av_census *c, uint64_t fp) {
-    if (!c->codecap) return false;
-    uint64_t want = fp | 1;
-    for (size_t j = (size_t)(fp * 0x9e3779b97f4a7c15u >> 7) & (c->codecap - 1);;
-         j = (j + 1) & (c->codecap - 1)) {
-        if (!c->code[j]) return false;
-        if (c->code[j] == want) return true;
-    }
-}
-
-static bool add_code(av_census *c, uint64_t fp) {
-    if (is_code(c, fp)) return true;
-    if (2 * (c->ncode + 1) > c->codecap) {
-        size_t cap = c->codecap ? c->codecap * 2 : 4096;
-        uint64_t *k = calloc(cap, sizeof *k);
-        if (!k) return false;
-        for (size_t i = 0; i < c->codecap; i++) {
-            if (!c->code[i]) continue;
-            size_t j = (size_t)((c->code[i] & ~1ull) * 0x9e3779b97f4a7c15u >> 7) & (cap - 1);
-            while (k[j]) j = (j + 1) & (cap - 1);
-            k[j] = c->code[i];
-        }
-        free(c->code);
-        c->code = k;
-        c->codecap = cap;
-    }
-    size_t j = (size_t)(fp * 0x9e3779b97f4a7c15u >> 7) & (c->codecap - 1);
-    while (c->code[j]) j = (j + 1) & (c->codecap - 1);
-    c->code[j] = fp | 1;
-    c->ncode++;
-    return true;
+/*  Code is a node of the loaded term itself, not a copy the run built:
+ *  the matcher wraps loaded nodes only.  A census run never collects, so
+ *  node identity holds for the whole run. */
+static bool is_code(const av_census *c, uint32_t p) {
+    uint64_t v;
+    return nmap_get(&c->loaded, p, &v);
 }
 
 av_census *av_census_new(void) {
@@ -77,7 +52,9 @@ void av_census_free(av_census *c) {
     nmap_free(&c->fp);
     nmap_free(&c->atoms);
     av_arena_free(c->cap);
-    free(c->code);
+    nmap_free(&c->loaded);
+    free(c->until);
+    free(c->until_epoch);
     free(c);
 }
 
@@ -233,8 +210,6 @@ done:
     return out;
 }
 
-/*  From the reducer: x was put in function position, with `avail`
- *  arguments now at the head.  Every prefix of x's spine is recorded. */
 bool av_census_begin_run(av_census *c, const av_arena *a, uint32_t loaded) {
     c->epoch++;
     /* a new run's arena may reuse the last one's address: nothing the
@@ -243,19 +218,24 @@ bool av_census_begin_run(av_census *c, const av_arena *a, uint32_t loaded) {
     nmap_free(&c->atoms);
     c->seen = a;
     c->seen_gc = a->collections;
-    /* every subterm of the loaded term is code */
+    /* every node of the loaded term is code, and only those: the measure
+     * walks them all */
+    nmap_free(&c->loaded);
     uint64_t fp, atoms;
     if (!measure(c, a, loaded, &fp, &atoms)) return false;
     for (size_t i = 0; i < c->fp.cap; i++)
-        if (c->fp.key[i] != AV_NONE && !add_code(c, c->fp.val[i])) return false;
+        if (c->fp.key[i] != AV_NONE && !nmap_put(&c->loaded, c->fp.key[i], 1)) return false;
     return true;
 }
 
+/*  From the reducer: x was put in function position, with `avail`
+ *  arguments now at the head.  Every prefix of x's spine is recorded. */
 void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail) {
     c->clock++;                             /* one call per contraction */
     if (c->seen != a || c->seen_gc != a->collections) {   /* nodes moved */
         nmap_free(&c->fp);
         nmap_free(&c->atoms);
+        nmap_free(&c->loaded);              /* no node is known code now */
         c->seen = a;
         c->seen_gc = a->collections;
     }
@@ -267,9 +247,9 @@ void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail) {
         p = av_res(a, av_left(a, p));
     }
     for (p = x; av_tag(a, p) == AV_APP; p = av_res(a, av_left(a, p)), j--) {
+        if (!is_code(c, p)) continue;       /* built by the run: never jetted */
         uint64_t fp, atoms;
         if (!measure(c, a, p, &fp, &atoms)) return;
-        if (c->mode == COUNT && !is_code(c, fp)) continue;  /* built by the run */
         size_t i = row_for(c, fp, c->mode == COUNT);
         if (i == SIZE_MAX) continue;        /* in the capture pass: not chosen */
         av_census_row *r = &c->row[i];
@@ -281,14 +261,14 @@ void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail) {
             c->calls++;
         } else if (c->mode == CAPTURE) {
             if (r->term == AV_NONE) r->term = capture(c, a, p);
-        } else if (r->arity && extra >= r->arity &&
-                   (r->epoch != c->epoch || c->clock >= r->until)) {
+        } else if (c->until && r->arity && extra >= r->arity &&
+                   (c->until_epoch[i] != c->epoch || c->clock >= c->until[i])) {
             /* a fire: it absorbs the next `cost` contractions, the ones
              * this run is about to make (the genericity of §6.5) */
             r->fires++;
             r->saved += r->cost;
-            r->until = c->clock + r->cost;
-            r->epoch = c->epoch;
+            c->until[i] = c->clock + r->cost;
+            c->until_epoch[i] = c->epoch;
         }
     }
 }
@@ -360,6 +340,14 @@ void av_census_analyze(av_census *c) {
             uint32_t id = av_hash_parse(h, &d) ? jet_find(c->cap, d) : AV_NONE;
             if (id != AV_NONE) c->row[i].term = c->cap->jets[id].fallback;
         }
+    /* the windows, per row; the rows stay put until the report sorts them */
+    c->until = calloc(c->nrow ? c->nrow : 1, sizeof *c->until);
+    c->until_epoch = calloc(c->nrow ? c->nrow : 1, sizeof *c->until_epoch);
+    if (!c->until || !c->until_epoch) {     /* no memory: nothing measured */
+        free(c->until);
+        free(c->until_epoch);
+        c->until = c->until_epoch = NULL;
+    }
     c->mode = MEASURE;
 }
 
@@ -394,16 +382,16 @@ size_t av_census_rows(av_census *c, av_census_row **rows) {
     for (size_t i = 0; sub && nsub && i < c->nrow; i++)
         if (c->row[i].term != AV_NONE) sub[i] = subterms(c->cap, c->row[i].term, &nsub[i]);
     for (size_t i = 0; i < c->nrow; i++) {
-        c->row[i].family = -1;
-        c->row[i].members = 0;
+        c->row[i].folds_into = -1;
+        c->row[i].folded = 0;
         if (!sub || !sub[i]) continue;
         for (size_t h = 0; h < i; h++) {
-            if (c->row[h].family >= 0 || !sub[h] || c->row[h].calls != c->row[i].calls)
+            if (c->row[h].folds_into >= 0 || !sub[h] || c->row[h].calls != c->row[i].calls)
                 continue;
             if (bsearch(&c->row[i].fp, sub[h], nsub[h], sizeof *sub[h], u64cmp) ||
                 bsearch(&c->row[h].fp, sub[i], nsub[i], sizeof *sub[i], u64cmp)) {
-                c->row[i].family = (int64_t)h;
-                c->row[h].members++;
+                c->row[i].folds_into = (int64_t)h;
+                c->row[h].folded++;
                 break;
             }
         }

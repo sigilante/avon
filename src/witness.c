@@ -399,6 +399,47 @@ bool av_plan_read(const char *src, size_t len, av_plan *p, const char **err) {
     const char *rest;
     size_t rn;
     if (word(&c, &rest, &rn)) { av_plan_free(p); *err = "text after the plan"; return false; }
+    /* The shape Air.planOf gives: consecutive marker ranges, a constructor
+     * among its type's, and each field of each segment probed by exactly
+     * one later segment, depth first, the last a leaf. */
+    uint64_t base = 0, fields = 0;
+    uint8_t *probed = NULL;
+    for (uint32_t j = 0; j < n; j++) {
+        const av_seg *g = &p->segs[j];
+        const char *why = NULL;
+        if (g->base != base) why = "a segment's markers do not follow the last's";
+        else if (g->ctor >= g->k) why = "a constructor past its type's count";
+        else if (base + g->k > UINT32_MAX) why = "markers past 2^32";
+        else if (j == 0 ? g->parent != 0 || g->field != 0 : g->parent >= j)
+            why = "a segment's parent is not before it";
+        else if (j > 0 && g->field >= p->segs[g->parent].arity)
+            why = "a segment reads a field its parent does not have";
+        if (why) { av_plan_free(p); *err = why; return false; }
+        base += g->k;
+        fields += g->arity;
+    }
+    if (fields != (uint64_t)n - 1 || p->segs[n - 1].arity != 0) {
+        av_plan_free(p);
+        *err = "the fields are not each probed once";
+        return false;
+    }
+    /* each (parent, field) once: offsets of each segment's fields */
+    size_t *off = calloc(n + 1, sizeof *off);
+    probed = calloc(fields ? fields : 1, 1);
+    if (!off || !probed) { free(off); free(probed); av_plan_free(p); *err = "out of memory"; return false; }
+    for (uint32_t j = 0; j < n; j++) off[j + 1] = off[j] + p->segs[j].arity;
+    for (uint32_t j = 1; j < n; j++) {
+        size_t at = off[p->segs[j].parent] + p->segs[j].field;
+        if (probed[at]++) {
+            free(off);
+            free(probed);
+            av_plan_free(p);
+            *err = "a field probed twice";
+            return false;
+        }
+    }
+    free(off);
+    free(probed);
     p->n = n;
     return true;
 }
@@ -406,7 +447,7 @@ bool av_plan_read(const char *src, size_t len, av_plan *p, const char **err) {
 void av_probe_free(av_probe *pr) {
     free(pr->starts);
     free(pr->fields);
-    free(pr->off);
+    free(pr->field_off);
     memset(pr, 0, sizeof *pr);
 }
 
@@ -419,15 +460,21 @@ av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable 
     if (insts) *insts = 0;
     if (max_cells > AV_MAX_NODES) max_cells = AV_MAX_NODES;
     uint32_t *root_of = NULL, *ps = NULL;
+    for (size_t j = 0; j < plan->n; j++)    /* fields past the cells: no run */
+        if (plan->segs[j].arity > max_cells) {
+            if (err) *err = "a segment with more fields than the cell budget";
+            return AV_SIZE;
+        }
     av_status st = AV_SIZE;
-    static char why[160];
+    char *why = pr->why;                    /* the caller's: valid until av_probe_free */
+    const size_t whyn = sizeof pr->why;
     const char *msg = NULL;
     size_t nfields = 0;
     for (size_t j = 0; j < plan->n; j++) nfields += plan->segs[j].arity;
     pr->starts = calloc(plan->n ? plan->n : 1, sizeof *pr->starts);
     pr->fields = calloc(nfields ? nfields : 1, sizeof *pr->fields);
-    pr->off = calloc(plan->n + 1, sizeof *pr->off);
-    if (!pr->starts || !pr->fields || !pr->off) { msg = "out of memory"; goto out; }
+    pr->field_off = calloc(plan->n + 1, sizeof *pr->field_off);
+    if (!pr->starts || !pr->fields || !pr->field_off) { msg = "out of memory"; goto out; }
     pr->n = plan->n;
     msg = load_jetted(a, t, jt, max_cells, w, &root_of, &ps);
     if (msg) goto out;
@@ -436,20 +483,13 @@ av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable 
         const av_seg *g = &plan->segs[j];
         uint32_t f = hd;                        /* segment 0 probes the head */
         if (j > 0) {
-            if (g->parent >= j) {
-                snprintf(why, sizeof why, "segment %zu's parent is not before it", j);
+            /* av_plan_read refuses these; a plan built by hand may not */
+            if (g->parent >= j || g->field >= plan->segs[g->parent].arity) {
+                snprintf(why, whyn, "a malformed plan: segment %zu reads no earlier field", j);
                 msg = why;
-                st = AV_INTERRUPTED;
                 goto out;
             }
-            const av_seg *pg = &plan->segs[g->parent];
-            if (g->field >= pg->arity) {
-                snprintf(why, sizeof why, "segment %zu reads a missing field", j);
-                msg = why;
-                st = AV_INTERRUPTED;
-                goto out;
-            }
-            f = pr->fields[pr->off[g->parent] + g->field];
+            f = pr->fields[pr->field_off[g->parent] + g->field];
         }
         /* the probe row, then the markers: atoms, a stack of them, a nil */
         if (w->nrows >= max_rows) { msg = "the run exceeds the row budget"; goto out; }
@@ -477,32 +517,32 @@ av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable 
         const av_cell *h = get(w, hd);
         if (!h || h->tag != AV_CELL_ATOM || h->a != g->ctor + g->base) {
             if (h && h->tag == AV_CELL_ATOM)
-                snprintf(why, sizeof why, "segment %zu ends at marker %u, not its marker %u",
+                snprintf(why, whyn, "segment %zu ends at marker %u, not its marker %u",
                          j, h->a, g->ctor + g->base);
             else
-                snprintf(why, sizeof why, "segment %zu ends at %s, not its marker %u", j,
+                snprintf(why, whyn, "segment %zu ends at %s, not its marker %u", j,
                          !h ? "no cell" : h->tag == AV_CELL_APP ? "an application"
                          : "a combinator short of arguments", g->ctor + g->base);
             msg = why;
             st = AV_INTERRUPTED;
             goto out;
         }
-        pr->off[j + 1] = pr->off[j] + g->arity;
+        pr->field_off[j + 1] = pr->field_off[j] + g->arity;
         uint32_t s = stk;
         for (uint32_t i = 0; i < g->arity; i++) {
             const av_cell *cc = cons_at(w, s);
             if (!cc) {
-                snprintf(why, sizeof why, "segment %zu has too few fields", j);
+                snprintf(why, whyn, "segment %zu has too few fields", j);
                 msg = why;
                 st = AV_INTERRUPTED;
                 goto out;
             }
-            pr->fields[pr->off[j] + i] = cc->a;
+            pr->fields[pr->field_off[j] + i] = cc->a;
             s = cc->b;
         }
         const av_cell *nil = get(w, s);
         if (!nil || nil->tag != AV_CELL_NIL) {
-            snprintf(why, sizeof why, "segment %zu has too many fields", j);
+            snprintf(why, whyn, "segment %zu has too many fields", j);
             msg = why;
             st = AV_INTERRUPTED;
             goto out;
@@ -533,9 +573,9 @@ bool av_probe_table(const av_witness *w, const av_probe *pr, unsigned min_log,
     n = snprintf(line, sizeof line, "fields %zu\n", pr->n);
     if (!out_str(out, line, (size_t)n)) return false;
     for (size_t j = 0; j < pr->n; j++) {
-        n = snprintf(line, sizeof line, "%zu", pr->off[j + 1] - pr->off[j]);
+        n = snprintf(line, sizeof line, "%zu", pr->field_off[j + 1] - pr->field_off[j]);
         if (!out_str(out, line, (size_t)n)) return false;
-        for (size_t i = pr->off[j]; i < pr->off[j + 1]; i++) {
+        for (size_t i = pr->field_off[j]; i < pr->field_off[j + 1]; i++) {
             n = snprintf(line, sizeof line, " %u", pr->fields[i]);
             if (!out_str(out, line, (size_t)n)) return false;
         }

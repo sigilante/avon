@@ -2,7 +2,8 @@
 # under ASan and UBSan and builds build/dbg/avon, a sanitized binary for
 # tests/diff_aviary.py, `make witness-check` runs tests/witness_check.sh,
 # `make jet-witness-check` runs tests/jet_witness_check.sh,
-# `make clean` removes build/.  Requires GNU Make 3.81+.
+# `make probe-witness-check` runs tests/probe_witness_check.sh (the last
+# three need a lean-ski checkout), `make clean` removes build/.  Requires GNU Make 3.81+.
 
 CC      := clang
 CSTD    := -std=c11

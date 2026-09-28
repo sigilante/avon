@@ -512,7 +512,13 @@ of the term. Vere never needs a jet's cost, because Nock has no fuel.
 Avon's object programs have fuel, and a residual jet can pay it exactly.
 
 **Counts, restated.** Residual jets preserve `copy` counts, so they may
-run in `copy` mode and inside any fueled run. The conformance suite runs
+run in `copy` mode and inside any fueled run. The node cap is not
+count-exact: a fire builds its residual's closed subterms afresh where
+stepping shares them, so a jetted run can hold more nodes than the
+unjetted one. A copy-mode fire that cannot have its nodes steps instead,
+so a cap stepping fits does not stop a jetted run early
+(`a_fire_short_of_nodes_steps`); the retained results of earlier fires
+can still reach the cap at another count. The conformance suite runs
 them on and off and asserts equal counts, a stronger check than equal
 values. Body-instantiating jets and native-code jets change counts: they
 are off in `copy` mode, and a run using them reports
@@ -603,8 +609,12 @@ checks each count against the manifest:
    of `S x y z`, `K x y`, `I x`), and a run starts with the loaded term
    there. The census fingerprints each left-spine prefix of that term,
    the nodes a jet could wrap, and counts the call with the arguments
-   present. Only a subterm of loaded code counts: the matcher wraps
-   loaded code, never a term the run builds.
+   present. Only a node of the loaded term itself counts: the matcher
+   wraps loaded nodes, never a copy the run builds, however alike. A
+   census run never collects, so node identity holds through it. (The
+   first census matched loaded code by fingerprint, and so counted
+   structural copies too, and let one run's code count in the next; the
+   order of the manifests then changed the report.)
 2. **Capture.** The `--select` most-called prefixes of at least
    `--min-atoms` leaves are copied into the census's own arena.
 3. **Measure.** Each captured term is registered as a residual jet (§6.5),
@@ -615,8 +625,10 @@ checks each count against the manifest:
 
 **One call reaches a supercombinator's layers in turn.** `step`'s 55
 prefixes are each called 589 times. The report folds each row into the
-best-ranked row it shares its calls with and is a subterm of, or contains,
-and ties go to the larger term. `--names` files (`kind\tname\thash`) name a
+best-ranked row that is called exactly as often and is a subterm of it,
+or contains it; ties go to the larger term. Equal counts stand in for
+shared calls, so two unrelated rows with equal counts can fold together:
+the report's grouping, never its measurements. `--names` files (`kind\tname\thash`) name a
 row by §5's hash, and every name a file gives is shown; an unnamed head
 borrows its first named layer's name as `~name`. `--all` lists the layers
 under their head, and rows with no residual arity.
@@ -624,7 +636,9 @@ under their head, and rows with no residual arity.
 
 **Results, 2026-09-28.** SKIjack's corpus (45 runs, 1,730,432
 contractions) and SKIlark's workloads (41 runs, 928,398: phase 1's runs,
-and phase 2's eight programs interpreted and compiled, fuelled and not):
+and phase 2's eight programs interpreted and compiled, fuelled and not).
+The names are from `jets/birds_names.tsv` and both corpora's
+`dictionary_names.tsv`, one of each term's names shown:
 
 | # | saved | % | fires | ar | cost | atoms | name | as λ |
 |---|---:|---:|---:|---:|---:|---:|---|---|
@@ -640,7 +654,7 @@ and phase 2's eight programs interpreted and compiled, fuelled and not):
 | 10 | 111,321 | 4.2 | 589 | 4 | 189 | 2,428 | step | SKIlark's interpreter step |
 | 11 | 110,519 | 4.2 | 3,811 | 6 | 29 | 32 | App | `λabcdef. f a b` |
 | 12 | 104,510 | 3.9 | 20,902 | 2 | 5 | 9 | L | `λab. a (b b)` |
-| 23 | 80,402 | 3.0 | 11,486 | 3 | 7 | 8 | Suc | `λabc. c a` |
+| 22 | 80,402 | 3.0 | 11,486 | 3 | 7 | 8 | Suc | `λabc. c a` |
 
 Each row's saving is what that jet would absorb alone; rows overlap and
 do not add. The run takes a quarter of a second per corpus.
@@ -680,7 +694,9 @@ present only in Curry's η-free form `S (K K) I` and called 266 times:
 | B1 (blackbird) | `S (K S) (S (K K) (S (K S) K))` | 34,240 | 1.3 | 3,424 |
 | Y | `S (K (S I I)) (S (S (K S) K) (K (S I I)))` | 20,682 | 0.8 | 2,298 |
 
-E, C, B2, KM and Ki follow below 0.4%. The default `--min-atoms=5`
+KM, `K (S I I)`, would absorb 62,706 (2.4%) alone, but it is L's layer,
+called exactly as often, and L's jet absorbs it; E, C, B2 and Ki follow
+below 0.4%. The default `--min-atoms=5`
 hides B, O and M, and O alone would absorb 4.9%; a bird list therefore
 seeds the jet set directly, beside the ranked candidates, whatever its
 size. A bird matches only in aviary's encoding: a compiler that emits
@@ -727,6 +743,16 @@ Suc `(1, 1, 2)`.
   normalization is bounded at 4,096 contractions, since Y's residual has
   no normal form. Every jet carries its shape (`av_jet.ctor`), and the
   census names an unnamed constructor row by it (`ctor f/i/n`).
+- **Exact up to weak equality.** An accepted shape gives
+  `C a⃗ k⃗ =_w k_i a⃗` for all arguments, since weak reduction commutes
+  with substitution; and every C with that equation has least arity
+  `f + n`, so the least-k run finds it. Missed: a constructor only up to
+  η (an η-expanded field, `λa k. k (λz. a z)`), one whose fields take
+  more than 4,096 contractions to normalize, and one past 32 arguments.
+  A shape feeds the scan's filter and the census's label only; firing is
+  the residual, so a wrong shape changes which jets exist, never counts
+  or values. I, `S K` and Church false satisfy the equation: they are
+  constructors by it, whatever they were written as.
 - **The fire is still the residual.** A constructor jet cannot build
   `k_i a₁ … a_f` directly: Suc's residual is `X₂ (K X₀ X₂)`, not
   `X₂ X₀`, and the pending `K` costs a contraction later or never. Only
@@ -734,9 +760,10 @@ Suc `(1, 1, 2)`.
   -- one rule for every encoding -- not a new fire.
 - **The scan.** `av_jets_ctors` registers each distinct subterm of the
   loaded term, from 2 to 64 atoms, that classifies as a constructor
-  (`avon reduce --ctors[=N]`). It finds 55 to 86 constructors in a
+  (`avon reduce --ctors[=N]`). It finds 46 to 86 constructors in a
   SKIlark program, 15 in T2, and the whole run with the scan stays near
-  10 ms.
+  10 ms. Each candidate is run once, its shape and residual derived
+  together.
 - **The arity cap is 32**, up from 8: Joy's `word` has 12 constructors,
   so `Lit` and `Quote` take 13 arguments.
 
@@ -797,7 +824,7 @@ It:
   does not arise);
 - builds the live term it encodes, as install does (§20.2);
 - reduces that term with Avon's own reducer, in `copy` counting, with
-  residual jets on (§6.5);
+  residual jets as the host has them (§6.5; `--no-jets` means none);
 - re-encodes the outcome as the declared result type's datum.
 
 **Avon's own reducer, not a second interpreter.** A native interpreter over
@@ -1468,23 +1495,50 @@ The run, per segment (`av_witness_run_probe`, lean-ski's `run_probe`):
    row but the halted one.
 4. **The end**: the head must be the atom `ctor + base` over exactly
    `arity` fields and a nil. The fields are recorded for the segments
-   that probe them. Any other end means the term does not decode to the
-   outcome, and Avon exits nonzero naming the segment and the marker it
-   reached.
+   that probe them. Any other end, for a plan from `jets plan` and a
+   licensed jet table, means the term does not decode to the outcome,
+   and Avon exits nonzero naming the segment and the marker it reached.
+
+The plan reader takes only the shape `Air.planOf` gives: each segment's
+markers follow the last's from 0, `ctor < k`, every segment after the
+first reads a field of an earlier one, each field is read exactly once,
+and the last segment has none. A plan with shifted or overlapping bases
+is refused, though a run under it could reach its markers: `check-probe`
+rebuilds the plan from the outcome and would reject that table.
 
 The last state closes the table. After `av_witness_table`'s sections come
 `starts` (each segment's probe row, then the padded table's last row) and
 `fields` (per segment, its count and pointers); atom cells print as `X n`.
 
+**What an accepted table proves, and for which term.** The theorem is
+lean-ski's: `check-probe` runs `Air.checkPA`, and `Air.checkPA_decodes`
+(axioms `propext` and `Quot.sound` only) gives `Decodes t o` for the term
+`t` on the table's first line. Avon's exit status proves nothing; its
+refusals are a convenience. `check-probe` certifies whatever term the
+table names, so a caller must bind that line to the corpus row, as
+`release/verify.sh` and this check do by comparing it; `ski-air
+probe-verify` binds the row by name.
+
 **Checked** (`make probe-witness-check`, `tests/probe_witness_check.sh`):
-every row of lean-ski's corpus, with its outcome from its Joy program --
-`val 6` for `1 2 + dup +`, `3 [dup +] i` and `3 sumto`, `val 1 2 1` for
-`1 2 over`, in both compiled forms. All 7 tables are byte-identical to
-`ski-air probe-prove`'s and accepted by `check-probe`; for `err` and the
-value less one, Avon refuses all 14 plans and `check-probe` rejects its
-tables. `3 sumto` takes 4,144 rows and 1,045 instantiations, the count
-lean-ski reports. The `--jet-table` output without a plan is unchanged,
-byte for byte, on every corpus row.
+the 7 rows of lean-ski's corpus, a count the check pins, with outcomes
+from their Joy programs -- `val 6` for `1 2 + dup +`, `3 [dup +] i` and
+`3 sumto`, `val 1 2 1` for `1 2 over`, in both compiled forms. Every
+table names its row's term, is byte-identical to `ski-air
+probe-prove`'s, and is accepted by `check-probe`. Per row, three wrong
+outcomes -- `err`, the value less one, and one whose plan has the right
+outcome's length (`val 3 0`, `val 2 1 1`), so `check-probe` must read
+the markers and not only count segments -- are refused by Avon as not
+decoding and REJECTed by `check-probe`: 21 of 21. Three forged tables
+from `3 sumto`'s -- another row's term spliced on, a start row moved, a
+field pointer moved -- are REJECTed. `3 sumto` takes 4,144 rows and
+1,045 instantiations, the count lean-ski reports. The `--jet-table`
+output without a plan is unchanged, byte for byte, on every corpus row.
+
+**Where Avon and ski-air differ.** Avon's row budget defaults to 2²¹
+(`--rows`), ski-air's run to 2²⁰ rows, so Avon can write a table past
+what `probe-prove` would; Avon refuses a jet table with a root outside
+the loaded heap, which `rootsOKB` refuses anyway; and `--plan` runs
+without `--jet-table` too, on the plain machine.
 
 ## 18. Jets in a proof
 

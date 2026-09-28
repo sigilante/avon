@@ -442,6 +442,45 @@ TEST(share_mode_never_writes_the_dashboard) {
     av_arena_free(a);
 }
 
+/*  A fire rebuilds its residual's closed subterms, where stepping shares
+ *  them.  Under a node cap that stepping fits, a fire that cannot have its
+ *  nodes steps instead (docs/DESIGN.md §6.5): S I (K B), B 2,001 nodes. */
+TEST(a_fire_short_of_nodes_steps) {
+    size_t n = 2000, len = 1;
+    char *b = malloc(4 * n + 64);
+    strcpy(b, "S");
+    for (size_t i = 0; i < n; i++) {                  /* S (S (... S)) */
+        memmove(b + 3, b, len + 1);
+        memcpy(b, "S (", 3);
+        len += 3;
+        b[len++] = ')';
+        b[len] = '\0';
+    }
+    char *g = malloc(len + 32), *src = malloc(len + 64);
+    snprintf(g, len + 32, "S I (K (%s))", b);
+    snprintf(src, len + 64, "(%s) I", g);
+    for (int on = 0; on < 2; on++) {
+        av_arena *a = av_arena_new(256);
+        uint32_t j = av_parse(a, g, strlen(g), NULL);
+        av_root_push(a, &j);
+        CHECK(av_jet_register(a, j, 0, 1000000, NULL) != AV_NONE);
+        uint32_t t = av_jets_match(a, av_parse(a, src, strlen(src), NULL));
+        av_root_push(a, &t);
+        av_opts o = av_opts_default();
+        o.strategy = AV_COPY;
+        o.whnf_only = true;
+        o.jets = on;
+        o.max_nodes = 6000;
+        av_result r = av_reduce(a, t, &o);
+        CHECK_EQ(r.status, AV_WHNF);
+        CHECK_EQ(r.steps, 4);
+        av_arena_free(a);
+    }
+    free(b);
+    free(g);
+    free(src);
+}
+
 TEST_MAIN(
     TEST_CASE(the_hash_is_skijacks),
     TEST_CASE(every_dictionary_hash_matches),
@@ -453,4 +492,5 @@ TEST_MAIN(
     TEST_CASE(share_mode_never_writes_the_dashboard),
     TEST_CASE(jets_survive_collection),
     TEST_CASE(a_snapshot_holds_no_jets),
+    TEST_CASE(a_fire_short_of_nodes_steps),
 )

@@ -421,8 +421,10 @@ av_ctor av_ctor_of(av_arena *a, uint32_t t, uint64_t max_steps) {
     return c;
 }
 
-uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
-                         uint64_t max_steps, const char **why) {
+/*  Register t, deriving its arity, residual, cost and shape once; with
+ *  ctors_only, only if the shape is a constructor's (the scan's filter). */
+static uint32_t register_term(av_arena *a, uint32_t t, size_t min_atoms,
+                              uint64_t max_steps, bool ctors_only, const char **why) {
     const char *msg = NULL;
     t = av_view(a, t);
     size_t atoms = tree_atoms(a, t);
@@ -446,6 +448,7 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
     av_ctor shape = classify(a, res, k, max_steps);
     av_root_pop(a);
     av_root_pop(a);
+    if (ctors_only && !av_ctor_is(shape)) { msg = "not a constructor"; goto done; }
 
     if (a->njets == a->jetcap) {
         uint32_t cap = a->jetcap ? a->jetcap * 2 : 64;
@@ -455,9 +458,10 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
         a->jetcap = cap;
     }
     uint32_t id = a->njets;
-    a->jets[id] = (av_jet){ digest, t, res, k, steps,
-                            0, template_nodes(a, t), atoms,
-                            NULL, 0, NULL, 0, 0, true, -1, shape };
+    a->jets[id] = (av_jet){ .digest = digest, .fallback = t, .residual = res,
+                            .arity = k, .cost = steps, .term_nodes = template_nodes(a, t),
+                            .atoms = atoms, .residual_ok = true, .interp = -1,
+                            .ctor = shape };
     a->njets++;
     if (a->jets[id].term_nodes == AV_NONE || !compile_template(a, id) ||
         !index_put(a, id)) {
@@ -473,6 +477,11 @@ done:
     return AV_NONE;
 }
 
+uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
+                         uint64_t max_steps, const char **why) {
+    return register_term(a, t, min_atoms, max_steps, false, why);
+}
+
 uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t) {
     uint32_t have = jet_find(a, digest);
     if (have != AV_NONE) return have;
@@ -486,8 +495,9 @@ uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t) {
     uint32_t id = a->njets;
     uint32_t tn = template_nodes(a, t);
     if (tn == AV_NONE) return AV_NONE;
-    a->jets[id] = (av_jet){ digest, t, t, 0, 0, 0, tn, tree_atoms(a, t),
-                            NULL, 0, NULL, 0, 0, false, -1, { 0, 0, 0 } };
+    a->jets[id] = (av_jet){ .digest = digest, .fallback = t, .residual = t,
+                            .term_nodes = tn, .atoms = tree_atoms(a, t),
+                            .residual_ok = false, .interp = -1 };
     a->njets++;
     if (!index_put(a, id)) { a->njets--; return AV_NONE; }
     return id;
@@ -595,9 +605,8 @@ long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
     /* rooted: the runs collect */
     for (size_t i = 0; ok && i < n; i++) av_root_push(a, &cand[i]);
     for (size_t i = 0; ok && i < n; i++) {
-        if (av_ctor_of(a, cand[i], 1000000).count == 0) continue;
         uint32_t before = a->njets;
-        if (av_jet_register(a, cand[i], 0, 1000000, NULL) != AV_NONE &&
+        if (register_term(a, cand[i], 0, 1000000, true, NULL) != AV_NONE &&
             a->njets > before) added++;
     }
     for (size_t i = 0; ok && i < n; i++) av_root_pop(a);

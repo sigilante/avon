@@ -31,7 +31,8 @@
  *  constructor of up to N atoms, default 64, in the term, §6.8),
  *  --jet-floor=N (atoms, default 8), --jet-check=N (check
  *  every Nth fire against the unjetted run, §6.6), --no-jets,
- *  --interp=FILE (interpreters.tsv: interpreter jets, §7; needs --jets).
+ *  --interp=FILE (interpreters.tsv: interpreter jets, §7; needs --jets, and
+ *  takes the constructors' terms from the first --jets= dictionary).
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -108,11 +109,21 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--strategy=share") == 0) g->o.strategy = AV_SHARE;
         else if (strcmp(s, "--whnf") == 0)           g->o.whnf_only = true;
         else if (strcmp(s, "--allow-bird-atoms") == 0) g->birds = true;
-        else if (strncmp(s, "--jets=", 7) == 0 && s[7] && g->njets < 16)
+        else if (strncmp(s, "--jets=", 7) == 0 && s[7]) {
+            if (g->njets == 16) {
+                fprintf(stderr, "avon: at most 16 --jets= dictionaries\n");
+                return false;
+            }
             g->jets[g->njets++] = s + 7;
+        }
         else if (strcmp(s, "--ctors") == 0)          g->ctors = 64;
-        else if (strncmp(s, "--ctors=", 8) == 0 && number(s + 8, &v) && v >= 2)
+        else if (strncmp(s, "--ctors=", 8) == 0 && number(s + 8, &v)) {
+            if (v < 2) {                /* a constructor is an application */
+                fprintf(stderr, "avon: --ctors=N needs N >= 2 atoms\n");
+                return false;
+            }
             g->ctors = v;
+        }
         else if (strcmp(s, "--no-jets") == 0)        g->o.jets = false;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
@@ -335,7 +346,7 @@ static void census_line(av_census *c, uint64_t total, const char *rank,
            rank, (unsigned long long)r->saved,
            total ? 100.0 * (double)r->saved / (double)total : 0.0,
            (unsigned long long)r->fires, (unsigned long long)r->calls,
-           r->arity, (unsigned long long)r->cost, r->atoms, r->members,
+           r->arity, (unsigned long long)r->cost, r->atoms, r->folded,
            name ? name : "-", b.s ? b.s : "", whole ? "" : " ...");
     av_buf_free(&b);
 }
@@ -420,26 +431,26 @@ static int census_main(int argc, char **argv) {
     size_t shown = 0;
     for (size_t i = 0; i < n && shown < top; i++) {
         av_census_row *r = &rows[i];
-        if (r->family >= 0) continue;                /* a layer of a row above */
+        if (r->folds_into >= 0) continue;            /* a layer of a row above */
         if (!r->arity && !all) continue;             /* no residual jet: arity > 8 */
         char rank[16];
         snprintf(rank, sizeof rank, "%zu", ++shown);
         /* unnamed, a head borrows its first named layer's name: ~name */
         const char *name = name_of(names, nnames, r);
         char borrowed[64], shape[48];
-        if (!name && r->ctor.count) {       /* a constructor: its shape */
+        if (!name && av_ctor_is(r->ctor)) {  /* a constructor: its shape */
             snprintf(shape, sizeof shape, "ctor %u/%u/%u", r->ctor.fields,
                      r->ctor.index, r->ctor.count);
             name = shape;
         }
         for (size_t j = i + 1; !name && j < n; j++)
-            if (rows[j].family == (int64_t)i && name_of(names, nnames, &rows[j])) {
+            if (rows[j].folds_into == (int64_t)i && name_of(names, nnames, &rows[j])) {
                 snprintf(borrowed, sizeof borrowed, "~%s", name_of(names, nnames, &rows[j]));
                 name = borrowed;
             }
         census_line(c, total, rank, r, name);
         for (size_t j = i + 1; all && j < n; j++)    /* --all: the layers too */
-            if (rows[j].family == (int64_t)i)
+            if (rows[j].folds_into == (int64_t)i)
                 census_line(c, total, "  ^", &rows[j], name_of(names, nnames, &rows[j]));
     }
     for (size_t i = 0; i < nnames; i++) { free(names[i].hash); free(names[i].name); }
@@ -498,7 +509,7 @@ int main(int argc, char **argv) {
                 free(jsrc);
             }
             av_plan plan = { NULL, 0 };
-            av_probe pr = { NULL, NULL, NULL, 0 };
+            av_probe pr = { .n = 0 };
             if (t != AV_NONE && g.plan) {
                 FILE *pf = fopen(g.plan, "rb");
                 size_t plen = 0;

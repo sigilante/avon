@@ -34,8 +34,8 @@ typedef struct { uint32_t l, r; } av_node;
 #define AV_JET_SHARED (1u << 29)
 #define AV_JET_ID(l)  ((l) & (AV_JET_SHARED - 1))
 
-/*  The most arguments a residual jet takes (§6.5).  Joy's words, nullary
- *  constructors of a 13-way sum, need more than 8. */
+/*  The most arguments a residual jet takes (§6.5).  Joy's words are
+ *  constructors of a 12-way sum; Lit and Quote carry a field, so take 13. */
 #define AV_JET_ARITY_MAX 32u
 
 /*  The leaf nodes of S, K, I are interned at indices 0, 1, 2. */
@@ -114,6 +114,9 @@ uint32_t  av_leaf(av_arena *a, const char *name, size_t len);
 
 const char *av_leaf_name(const av_arena *a, ski_leaf id);
 
+/*  Register *idx as a root: a collection updates it in place.  Aborts the
+ *  process if the root stack cannot grow -- a lost root would corrupt the
+ *  heap silently.  Pop in reverse order. */
 void av_root_push(av_arena *a, uint32_t *idx);
 void av_root_pop(av_arena *a);
 
@@ -450,16 +453,22 @@ typedef struct { uint32_t base, k, ctor, arity, parent, field; } av_seg;
 typedef struct { av_seg *segs; size_t n; } av_plan;
 
 /*  Read `plan n` and n lines `base k ctor arity parent field`.  False,
- *  with *err, on anything malformed. */
+ *  with *err, on anything malformed or of a shape Air.planOf never gives:
+ *  each segment's markers follow the last's, from 0; ctor < k; segment 0
+ *  has parent 0, field 0, and every other reads a field of an earlier
+ *  one; each field is read exactly once, so n - 1 in all; the last
+ *  segment has none. */
 bool av_plan_read(const char *src, size_t len, av_plan *p, const char **err);
 void av_plan_free(av_plan *p);
 
 /*  What a probe run adds to its witness: each segment's probe row, and
  *  the pointers each segment's end popped, top first. */
 typedef struct {
+    char      why[160];         /* a failure's message, which *err names */
     uint32_t *starts;           /* n: the probe rows' indices */
     uint32_t *fields;           /* every segment's fields, in order */
-    size_t   *off;              /* n + 1: segment j's are fields[off[j] ..] */
+    size_t   *field_off;        /* n + 1: segment j's fields are
+                                   fields[field_off[j] .. field_off[j+1]) */
     size_t    n;
 } av_probe;
 
@@ -467,8 +476,11 @@ typedef struct {
  *  segment a probe row, the markers, and a jetted run to a halt with every
  *  row but the halted one; then the final state as the last row.  AV_WHNF
  *  on success; AV_INTERRUPTED, with *err naming the segment, when one ends
- *  anywhere but its marker over exactly its fields -- the term does not
- *  decode to the plan's outcome; AV_SIZE on a budget.
+ *  anywhere but its marker over exactly its fields -- for a plan from
+ *  `jets plan` and a licensed jet table, the term does not decode to the
+ *  plan's outcome; AV_SIZE on a budget or a malformed plan.  *err may
+ *  point into pr, valid until av_probe_free.  An accepted table's meaning
+ *  is lean-ski's check-probe's (Air.checkPA_decodes), not Avon's exit.
  */
 av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable *jt,
                                const av_plan *plan, size_t max_rows, size_t max_cells,
@@ -536,6 +548,8 @@ bool av_hash_parse(const char *s, uint64_t *digest);
  *  (0, 0, 2), K I (0, 1, 2), T (1, 0, 1), V (2, 0, 1).  count 0: not one.
  */
 typedef struct { unsigned fields, index, count; } av_ctor;
+
+static inline bool av_ctor_is(av_ctor c) { return c.count != 0; }
 
 typedef struct av_jet {
     uint64_t  digest;
@@ -610,7 +624,7 @@ int av_equal(const av_arena *a, uint32_t x, uint32_t y, size_t budget);
  *  loop, `loop params fuel <t>`, run natively.  The datum is decoded to a
  *  live object term by probing, reduced in copy mode with object fuel --
  *  so the fuel boundary is the interpreter's, attempt for attempt -- with
- *  residual jets on and interpreter jets off inside, and the outcome
+ *  residual jets as the host has them and interpreter jets off inside, and the outcome
  *  encoded with the program's own constructors.  The spec comes from
  *  skijack's interpreters.tsv, each arm classified there by running it; the
  *  constructor terms from its dictionary.tsv.  A `diverge` arm reached at
@@ -680,11 +694,11 @@ typedef struct {
                                    fire (recursion re-enters its window)   */
     char      hash[27];         /* §5's, when captured                     */
     av_ctor   ctor;             /* its constructor shape (§6.8), if one    */
-    uint64_t  until, epoch;     /* the measuring pass's window             */
-    int64_t   family;           /* the higher-ranked row it is a subterm of
-                                   (or the reverse), met at the same calls:
-                                   one call's layers; -1 if it heads one   */
-    size_t    members;          /* a head's family, itself excluded        */
+    int64_t   folds_into;       /* the higher-ranked row it folds into: a
+                                   subterm of it (or the reverse), with as
+                                   many calls -- one call's layers; -1 if
+                                   rows fold into it instead               */
+    size_t    folded;           /* rows folded into it, when it heads      */
 } av_census_row;
 
 av_census     *av_census_new(void);

@@ -268,6 +268,11 @@ static bool probe_of(const char *term, const char *plan_src, av_buf *out,
         av_status st = av_witness_run_probe(a, t, NULL, &plan, 1000, 1000, &w, &pr, NULL, err);
         ok = st == AV_WHNF && av_witness_table(a, t, &w, 4, out) &&
              av_probe_table(&w, &pr, 4, out);
+        static char kept[160];              /* *err may point into pr */
+        if (*err) {
+            snprintf(kept, sizeof kept, "%s", *err);
+            *err = kept;
+        }
         av_witness_free(&w);
         av_probe_free(&pr);
         av_plan_free(&plan);
@@ -294,15 +299,24 @@ TEST(a_probe_binds_k_as_zero) {
 TEST(a_probe_refuses_another_outcome) {
     av_buf b = { 0 };
     const char *err = NULL;
-    /* Suc: marker 1 over one field -- K ends at marker 0 */
-    CHECK(!probe_of("K", "plan 1\n0 2 1 1 0 0\n", &b, &err));
+    /* Suc Zero: marker 1 over one field -- K ends at marker 0 */
+    CHECK(!probe_of("K", "plan 2\n0 2 1 1 0 0\n2 2 0 0 0 0\n", &b, &err));
     CHECK(err && strstr(err, "segment 0 ends at marker 0, not its marker 1"));
     /* one marker only: K stops short of its arguments */
     CHECK(!probe_of("K", "plan 1\n0 1 0 0 0 0\n", &b, &err));
     CHECK(err && strstr(err, "short of arguments"));
-    /* a field its parent never popped */
-    CHECK(!probe_of("K", "plan 2\n0 2 0 0 0 0\n2 2 0 0 0 0\n", &b, &err));
-    CHECK(err && strstr(err, "missing field"));
+    /* a hand-built plan whose segment reads a field never popped */
+    av_arena *a = av_arena_new(0);
+    uint32_t k = av_parse(a, "K", 1, NULL);
+    av_seg segs[2] = { { 0, 2, 0, 0, 0, 0 }, { 2, 2, 0, 0, 0, 0 } };
+    av_plan hand = { segs, 2 };
+    av_witness w;
+    av_probe pr;
+    CHECK_EQ(av_witness_run_probe(a, k, NULL, &hand, 1000, 1000, &w, &pr, NULL, &err), AV_SIZE);
+    CHECK(err && strstr(err, "malformed plan"));
+    av_witness_free(&w);
+    av_probe_free(&pr);
+    av_arena_free(a);
     av_buf_free(&b);
 }
 
@@ -313,6 +327,22 @@ TEST(a_malformed_plan_is_refused) {
     CHECK(!av_plan_read("plan 1\n0 2 0 0 0\n", 17, &p, &err));
     CHECK(!av_plan_read("plan 1\n0 2 0 0 0 0 7\n", 21, &p, &err));
     CHECK(!av_plan_read("segs 1\n0 2 0 0 0 0\n", 19, &p, &err));
+    /* shapes Air.planOf never gives */
+    static const char *const bad[] = {
+        "plan 1\n1 2 0 0 0 0\n",                  /* markers not from 0 */
+        "plan 1\n0 2 2 0 0 0\n",                  /* ctor past k */
+        "plan 1\n0 2 0 1 0 0\n",                  /* a field nobody reads */
+        "plan 2\n0 2 1 1 0 0\n0 2 0 0 0 0\n",    /* overlapping markers */
+        "plan 2\n0 2 1 1 0 0\n2 2 0 0 1 0\n",    /* parent not before */
+        "plan 2\n0 2 1 1 0 0\n2 2 0 0 0 1\n",    /* no such field */
+        "plan 3\n0 2 1 2 0 0\n2 2 0 0 0 0\n4 2 0 0 0 0\n",   /* read twice */
+        "plan 1\n4294967295 2 0 0 0 0\n",         /* past 2^32 */
+    };
+    for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+        err = NULL;
+        CHECK(!av_plan_read(bad[i], strlen(bad[i]), &p, &err));
+        if (!err) fprintf(stderr, "  accepted: %s", bad[i]);
+    }
     CHECK(av_plan_read(ZERO_PLAN, strlen(ZERO_PLAN), &p, &err));
     CHECK(p.n == 1 && p.segs[0].k == 2);
     av_plan_free(&p);
