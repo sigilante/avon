@@ -348,6 +348,7 @@ void av_census_analyze(av_census *c) {
         if (id == AV_NONE) continue;
         r->arity = c->cap->jets[id].arity;
         r->cost = c->cap->jets[id].cost;
+        r->ctor = c->cap->jets[id].ctor;
     }
     for (size_t i = 0; i < rooted; i++) av_root_pop(c->cap);
     /* The jets hold theirs now.  Nothing allocates in the census's arena

@@ -522,9 +522,10 @@ are off in `copy` mode, and a run using them reports
 plan left open:
 
 - **Arity by running, not by the compiler.** The genericity argument
-  holds for any `k`, so `k` is the least in 1 to 8 whose atom run halts
+  holds for any `k`, so `k` is the least in 1 to 32 whose atom run halts
   with an atom at the head; a root with none, or a residual of cost 0, is
-  not a jet. The registration bound is 10⁶ contractions.
+  not a jet. The registration bound is 10⁶ contractions. The cap was 8
+  until Joy's words, constructors of a 12-way sum, needed 13 (§6.8).
 - **Where the dashboard comes from.** `export.py` writes the corpus
   dictionary, `dictionary.tsv`; `avon --jets=` loads it, recomputes every
   row's hash from its term and refuses a mismatch, registers the rows at
@@ -618,8 +619,8 @@ best-ranked row it shares its calls with and is a subterm of, or contains,
 and ties go to the larger term. `--names` files (`kind\tname\thash`) name a
 row by §5's hash, and every name a file gives is shown; an unnamed head
 borrows its first named layer's name as `~name`. `--all` lists the layers
-under their head, and rows with no residual arity. `birds.tsv` holds
-aviary's 53 birds.
+under their head, and rows with no residual arity.
+`jets/birds_names.tsv` names the birds in every encoding (§6.8).
 
 **Results, 2026-09-28.** SKIjack's corpus (45 runs, 1,730,432
 contractions) and SKIlark's workloads (41 runs, 928,398: phase 1's runs,
@@ -662,9 +663,10 @@ fewest.**
   dictionary name.
 
 **Smullyan's birds are candidates by construction.** A compiler to SKI
-emits them, so they recur across programs; `birds.tsv` names aviary's
-encodings, and the census finds 14 of the 53 called, at any size
-(`--min-atoms=1 --all`, both corpora):
+emits them, so they recur across programs. Under aviary's encodings
+alone the census finds 14 of the 50 birds called, at any size
+(`--min-atoms=1 --all`, both corpora); §6.8's names add a fifteenth, K,
+present only in Curry's η-free form `S (K K) I` and called 266 times:
 
 | bird | term | saved | % | fires |
 |---|---|---:|---:|---:|
@@ -691,7 +693,7 @@ encoding a compiler in use produces.
    the constructor's field count, its index and the type's constructor
    count. One parametric jet keyed on that triple covers every Scott
    constructor the compiler emits, named or not; rows 2, 4, 6, 11 and 23
-   are five instances.
+   are five instances. §6.8 builds it.
 2. The small combinators are Turner's case for an extended basis
    (`B`, `C`, `S'`, `B'`, `C'`): four 5-atom terms would each absorb 5
    to 8 per cent of the contractions. As residual jets they keep counts
@@ -702,10 +704,75 @@ encoding a compiler in use produces.
 row's saving assumes that jet alone; jetting the leaders together absorbs
 less than their sum, and the combined figure is not yet measured.
 Families fold only rows with equal call counts, so a layer also called
-from elsewhere stays a row of its own. Arity by running stops at 8
-(§6.5), so a constructor of a wider sum is not a jet: SKIlark's Joy
-words, nullary constructors of a 13-way sum, appear only under `--all`,
-and each is called 11 to 147 times.
+from elsewhere stays a row of its own. The first census stopped arity by
+running at 8, so Joy's words, constructors of a 12-way sum, appeared only
+under `--all`, each called 11 to 147 times; §6.8 raised the cap. A small
+corpus under-ranks what it happens not to call, which is why §6.8 jets
+Joy's word list whatever its rank.
+
+### 6.8 Constructor jets and the jet dictionaries
+
+**Avon recognizes a Scott constructor by running it, and jets every one
+in loaded code, dictionary or not.** A constructor with `f` fields, of a
+type with `n` constructors, takes its fields and then one continuation
+per constructor, and applies continuation `i` to the fields:
+`C a₁ … a_f k₀ … k_(n-1) = k_i a₁ … a_f`. The triple `(f, i, n)` is its
+shape: K is `(0, 0, 2)`, K I `(0, 1, 2)`, T `(1, 0, 1)`, V `(2, 0, 1)`,
+Suc `(1, 1, 2)`.
+
+- **Classification rides on the residual.** Registration already runs a
+  term on fresh atoms `X₀ … X_(k-1)` for its arity (§6.5). The residual is
+  a constructor's when its normal form is `X_h X₀ … X_(f-1)` with
+  `h ≥ f`: then `f` fields, `k − f` constructors, index `h − f`. The
+  normalization is bounded at 4,096 contractions, since Y's residual has
+  no normal form. Every jet carries its shape (`av_jet.ctor`), and the
+  census names an unnamed constructor row by it (`ctor f/i/n`).
+- **The fire is still the residual.** A constructor jet cannot build
+  `k_i a₁ … a_f` directly: Suc's residual is `X₂ (K X₀ X₂)`, not
+  `X₂ X₀`, and the pending `K` costs a contraction later or never. Only
+  the residual keeps `copy` counts, so the parametric part is recognition
+  -- one rule for every encoding -- not a new fire.
+- **The scan.** `av_jets_ctors` registers each distinct subterm of the
+  loaded term, from 2 to 64 atoms, that classifies as a constructor
+  (`avon reduce --ctors[=N]`). It finds 55 to 86 constructors in a
+  SKIlark program, 15 in T2, and the whole run with the scan stays near
+  10 ms.
+- **The arity cap is 32**, up from 8: Joy's `word` has 12 constructors,
+  so `Lit` and `Quote` take 13 arguments.
+
+**Two dictionaries sit beside the corpus's**, generated by scripts in
+`jets/` and loaded with `--jets=` (repeatable, `--jet-floor=2`):
+
+- `jets/birds.tsv`: Smullyan's birds, 50 of them in 197 encodings and 153
+  distinct terms (`jets/birds.py`). A jet matches one encoding, so each
+  bird is listed as aviary abstracts it with and without η, in strict
+  S/K, as Rathman's chart expands it and as combinatorylogic.com's
+  composites expand; every encoding is checked by reduction against the
+  bird's rule. `birds_names.tsv` names each by family.
+- `jets/joy.tsv`: Joy's word list from every SKIlark form, 35 terms
+  (`jets/joy.py`): the 12 word constructors, their compiled bodies
+  `wDup` … `wAdd`, the primitives `add`, `mul`, `cat`, `wordOf`, and the
+  derived words `over`, `nip`, `tuck`, `rot`, `sip`, `kComb`, `yComb`.
+  They are jetted whatever the census says, because eight programs are
+  too few to rank them.
+
+**Measured** (`tests/test_workloads.c`): every run of SKIjack's corpus
+and SKIlark's workloads, `copy` mode, every fire checked against the
+unjetted run, gives the manifest's count. The share of contractions the
+fires absorb:
+
+| jets | SKIjack (1,730,432) | SKIlark (928,398) |
+|---|---:|---:|
+| birds | 18.8% | 24.9% |
+| Joy's words | 0.0% | 4.1% |
+| constructors found | 21.5% | 24.6% |
+| constructors and birds | 30.8% | 36.9% |
+| all three | 30.8% | 37.5% |
+
+Constructors and birds overlap -- V, T, K and K I are both -- and
+together absorb about a third of the work. Joy's words add 0.6 points on
+this corpus. The absorption counts contractions a fire replaces; each
+fire still builds its residual, so the wall-clock gain is smaller.
 
 ## 7. The interpreter jet
 

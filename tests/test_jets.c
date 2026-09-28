@@ -185,10 +185,13 @@ TEST(registration_follows_the_rules) {
     /* pair a b c = c a b: arity 3, the third argument at the head */
     const char *pair = "S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K)";
     uint32_t p = av_parse(a, pair, strlen(pair), NULL);
+    av_root_push(a, &p);                            /* registration collects */
     uint32_t id = av_jet_register(a, p, 3, 1000, &why);
     CHECK(id != AV_NONE);
     if (id != AV_NONE) {
         CHECK_EQ(a->jets[id].arity, 3);
+        CHECK(a->jets[id].ctor.fields == 2 && a->jets[id].ctor.index == 0 &&
+              a->jets[id].ctor.count == 1);         /* V: a constructor */
         /* the state when an atom first reaches the head: normal order has
          * not reduced the arguments, which are c's a and b unevaluated */
         av_buf b = { 0 };
@@ -198,10 +201,11 @@ TEST(registration_follows_the_rules) {
         av_buf_free(&b);
         CHECK_EQ(av_jet_register(a, p, 3, 1000, NULL), id);   /* once */
     }
-    /* nine nested K discard eight arguments: no arity up to 8 exposes one
-     * (K K alone does: K K a b c is b) */
-    const char *k9 = "K (K (K (K (K (K (K (K (K K))))))))";
-    uint32_t kk = av_parse(a, k9, strlen(k9), NULL);
+    av_root_pop(a);
+    /* 33 nested K discard 32 arguments: no arity up to AV_JET_ARITY_MAX
+     * exposes one (K K alone does: K K a b c is b) */
+    uint32_t kk = AV_NODE_K;
+    for (unsigned i = 0; i < AV_JET_ARITY_MAX + 1; i++) kk = av_app(a, AV_NODE_K, kk);
     CHECK(av_jet_register(a, kk, 2, 1000, &why) == AV_NONE && strstr(why, "arity"));
     uint32_t k2 = av_parse(a, "K K", 3, NULL);
     uint32_t id2 = av_jet_register(a, k2, 2, 1000, NULL);
@@ -310,12 +314,15 @@ TEST(the_check_catches_a_corrupted_jet) {
     av_arena *a = av_arena_new(0);
     const char *pair = "S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K)";
     uint32_t p = av_parse(a, pair, strlen(pair), NULL);
+    av_root_push(a, &p);                            /* registration collects */
     uint32_t id = av_jet_register(a, p, 3, 1000, NULL);
+    av_root_pop(a);
     CHECK(id != AV_NONE);
     uint32_t t = av_parse(a, "X Z A", 5, NULL);     /* arguments, as atoms */
     uint32_t prog = av_app(a, av_app(a, av_app(a, p, av_left(a, av_left(a, t))),
                                      av_right(a, av_left(a, t))), av_right(a, t));
     prog = av_jets_match(a, prog);
+    av_root_push(a, &prog);                         /* the runs collect */
     run_out good = run(a, prog, AV_COPY, true, 1000, true);
     CHECK(!good.fault && good.calls == 1 && good.steps == 14 && good.text &&
           strcmp(good.text, "A (K X A) (K K X Z A)") == 0);
@@ -327,6 +334,7 @@ TEST(the_check_catches_a_corrupted_jet) {
     run_out bad = run(a, prog, AV_COPY, true, 1000, true);
     CHECK(bad.fault && bad.s == AV_INTERRUPTED);
     free(bad.text);
+    av_root_pop(a);
     av_arena_free(a);
 }
 

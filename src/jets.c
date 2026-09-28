@@ -175,7 +175,7 @@ static bool index_put(av_arena *a, uint32_t id) {
 }
 
 static bool marks(av_arena *a) {
-    for (unsigned i = 0; i < 8; i++) {
+    for (unsigned i = 0; i < AV_JET_ARITY_MAX; i++) {
         char nm[8];
         int n = snprintf(nm, sizeof nm, "@x%u", i);
         a->jet_mark[i] = av_leaf(a, nm, (size_t)n);
@@ -339,6 +339,88 @@ static bool compile_template(av_arena *a, uint32_t id) {
     return ok;
 }
 
+#define CTOR_NF_STEPS 4096u
+
+/*  The least k in 1..AV_JET_ARITY_MAX at which *tp applied to k markers
+ *  reaches an atom at the head, in copy mode, jets off: the state reached
+ *  and its contractions.  *tp must be rooted, and is read again after each
+ *  run: the runs may collect. */
+static bool arity_by_running(av_arena *a, const uint32_t *tp, uint64_t max_steps,
+                             unsigned *kout, uint32_t *res, uint64_t *steps,
+                             const char **msg) {
+    if (!a->jet_mark[0] && !marks(a)) { *msg = "out of memory"; return false; }
+    for (unsigned k = 1; k <= AV_JET_ARITY_MAX; k++) {
+        uint32_t run = *tp;
+        for (unsigned i = 0; i < k && run != AV_NONE; i++) run = av_app(a, run, a->jet_mark[i]);
+        if (run == AV_NONE) { *msg = "out of memory"; return false; }
+        av_opts o = av_opts_default();
+        o.strategy = AV_COPY;
+        o.whnf_only = true;
+        o.max_steps = max_steps;
+        o.jets = false;
+        av_result r = av_reduce(a, run, &o);
+        if (r.status != AV_WHNF) { *msg = "does not halt within the bound"; return false; }
+        uint32_t hd = av_view(a, r.term);
+        while (av_tag(a, hd) == AV_APP) hd = av_view(a, av_left(a, hd));
+        for (unsigned i = 0; i < k; i++)
+            if (hd == a->jet_mark[i]) {
+                *kout = k;
+                *res = r.term;
+                *steps = r.steps;
+                return true;
+            }
+        /* a combinator short of arguments: one more */
+    }
+    *msg = "no arity up to 32 exposes an argument";
+    return false;
+}
+
+/*  A residual over k markers is a constructor's when its normal form is
+ *  @x_h @x_0 .. @x_(f-1), h >= f: f fields, then k - f continuations, of
+ *  which the (h - f)th is applied (§6.8).  res must be rooted. */
+static av_ctor classify(av_arena *a, uint32_t res, unsigned k, uint64_t max_steps) {
+    av_ctor none = { 0, 0, 0 };
+    av_opts o = av_opts_default();
+    o.strategy = AV_COPY;
+    /* a constructor's fields normalize in a few steps; Y's residual never */
+    o.max_steps = max_steps < CTOR_NF_STEPS ? max_steps : CTOR_NF_STEPS;
+    o.jets = false;
+    av_result r = av_reduce(a, res, &o);
+    if (r.status != AV_NORMAL) return none;
+    uint32_t spine[AV_JET_ARITY_MAX];
+    unsigned n = 0;
+    uint32_t x = av_view(a, r.term);
+    while (av_tag(a, x) == AV_APP) {
+        if (n == AV_JET_ARITY_MAX) return none;
+        spine[n++] = av_view(a, av_right(a, x));
+        x = av_view(a, av_left(a, x));
+    }
+    unsigned h = k;
+    for (unsigned i = 0; i < k; i++)
+        if (x == a->jet_mark[i]) h = i;
+    if (h == k || h < n) return none;           /* no marker; or a field */
+    for (unsigned i = 0; i < n; i++)            /* spine[n-1] is the first */
+        if (spine[n - 1 - i] != a->jet_mark[i]) return none;
+    return (av_ctor){ n, h - n, k - n };
+}
+
+av_ctor av_ctor_of(av_arena *a, uint32_t t, uint64_t max_steps) {
+    av_ctor none = { 0, 0, 0 };
+    unsigned k;
+    uint32_t res;
+    uint64_t steps;
+    const char *msg;
+    t = av_view(a, t);
+    av_root_push(a, &t);
+    bool found = arity_by_running(a, &t, max_steps, &k, &res, &steps, &msg);
+    av_root_pop(a);
+    if (!found) return none;
+    av_root_push(a, &res);
+    av_ctor c = classify(a, res, k, max_steps);
+    av_root_pop(a);
+    return c;
+}
+
 uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
                          uint64_t max_steps, const char **why) {
     const char *msg = NULL;
@@ -350,53 +432,42 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
     if (!av_structural_hash(a, t, h) || !av_hash_parse(h, &digest)) { msg = "out of memory"; goto done; }
     uint32_t have = jet_find(a, digest);
     if (have != AV_NONE) return have;
-    if (!a->jet_mark[0] && !marks(a)) { msg = "out of memory"; goto done; }
 
+    unsigned k;
+    uint32_t res;
+    uint64_t steps;
     av_root_push(a, &t);            /* the runs below may collect */
-    for (unsigned k = 1; k <= 8; k++) {
-        uint32_t run = t;
-        for (unsigned i = 0; i < k && run != AV_NONE; i++) run = av_app(a, run, a->jet_mark[i]);
-        if (run == AV_NONE) { av_root_pop(a); msg = "out of memory"; goto done; }
-        av_opts o = av_opts_default();
-        o.strategy = AV_COPY;
-        o.whnf_only = true;
-        o.max_steps = max_steps;
-        o.jets = false;
-        av_result r = av_reduce(a, run, &o);
-        if (r.status != AV_WHNF) av_root_pop(a);
-        if (r.status != AV_WHNF) { msg = "does not halt within the bound"; goto done; }
-        uint32_t hd = av_view(a, r.term);
-        while (av_tag(a, hd) == AV_APP) hd = av_view(a, av_left(a, hd));
-        bool marker = false;
-        for (unsigned i = 0; i < k; i++) marker |= hd == a->jet_mark[i];
-        if (!marker) continue;              /* a combinator short of arguments */
-        av_root_pop(a);
-        if (r.steps == 0) { msg = "a residual of cost 0"; goto done; }
-
-        if (a->njets == a->jetcap) {
-            uint32_t cap = a->jetcap ? a->jetcap * 2 : 64;
-            av_jet *j = realloc(a->jets, cap * sizeof *j);
-            if (!j) { msg = "out of memory"; goto done; }
-            a->jets = j;
-            a->jetcap = cap;
-        }
-        uint32_t id = a->njets;
-        a->jets[id] = (av_jet){ digest, t, r.term, k, r.steps,
-                                0, template_nodes(a, t), atoms,
-                                NULL, 0, NULL, 0, 0, true, -1 };
-        a->njets++;
-        if (a->jets[id].term_nodes == AV_NONE || !compile_template(a, id) ||
-            !index_put(a, id)) {
-            free(a->jets[id].ops);
-            free(a->jets[id].consts);
-            a->njets--;
-            msg = "out of memory";
-            goto done;
-        }
-        return id;
-    }
+    bool found = arity_by_running(a, &t, max_steps, &k, &res, &steps, &msg);
     av_root_pop(a);
-    msg = "no arity up to 8 exposes an argument";
+    if (!found) goto done;
+    if (steps == 0) { msg = "a residual of cost 0"; goto done; }
+    av_root_push(a, &t);
+    av_root_push(a, &res);
+    av_ctor shape = classify(a, res, k, max_steps);
+    av_root_pop(a);
+    av_root_pop(a);
+
+    if (a->njets == a->jetcap) {
+        uint32_t cap = a->jetcap ? a->jetcap * 2 : 64;
+        av_jet *j = realloc(a->jets, cap * sizeof *j);
+        if (!j) { msg = "out of memory"; goto done; }
+        a->jets = j;
+        a->jetcap = cap;
+    }
+    uint32_t id = a->njets;
+    a->jets[id] = (av_jet){ digest, t, res, k, steps,
+                            0, template_nodes(a, t), atoms,
+                            NULL, 0, NULL, 0, 0, true, -1, shape };
+    a->njets++;
+    if (a->jets[id].term_nodes == AV_NONE || !compile_template(a, id) ||
+        !index_put(a, id)) {
+        free(a->jets[id].ops);
+        free(a->jets[id].consts);
+        a->njets--;
+        msg = "out of memory";
+        goto done;
+    }
+    return id;
 done:
     if (why) *why = msg;
     return AV_NONE;
@@ -416,7 +487,7 @@ uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t) {
     uint32_t tn = template_nodes(a, t);
     if (tn == AV_NONE) return AV_NONE;
     a->jets[id] = (av_jet){ digest, t, t, 0, 0, 0, tn, tree_atoms(a, t),
-                            NULL, 0, NULL, 0, 0, false, -1 };
+                            NULL, 0, NULL, 0, 0, false, -1, { 0, 0, 0 } };
     a->njets++;
     if (!index_put(a, id)) { a->njets--; return AV_NONE; }
     return id;
@@ -488,6 +559,51 @@ done:
 
 uint32_t av_jets_match(av_arena *a, uint32_t t) {
     return match(a, t, false, false);
+}
+
+static bool wrap_insides(av_arena *a);
+
+typedef struct { uint64_t digest; uint32_t node; } dnode;
+
+static int by_digest(const void *x, const void *y) {
+    uint64_t a = ((const dnode *)x)->digest, b = ((const dnode *)y)->digest;
+    return (a > b) - (a < b);
+}
+
+long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
+    /* the distinct subterms, by digest */
+    nmap dig = { 0 };
+    dnode *all = NULL;
+    uint32_t *cand = NULL;
+    size_t n = 0, m = 0;
+    long added = 0;
+    bool ok = hash_all(a, av_view(a, t), &dig) &&
+              (all = malloc((dig.n ? dig.n : 1) * sizeof *all)) != NULL;
+    for (size_t i = 0; ok && i < dig.cap; i++)
+        if (dig.key[i] != AV_NONE && av_tag(a, dig.key[i]) == AV_APP)
+            all[m++] = (dnode){ dig.val[i], dig.key[i] };
+    nmap_free(&dig);
+    if (ok) qsort(all, m, sizeof *all, by_digest);
+    ok = ok && (cand = malloc((m ? m : 1) * sizeof *cand)) != NULL;
+    for (size_t i = 0; ok && i < m; i++) {
+        if (i && all[i].digest == all[i - 1].digest) continue;
+        if (jet_find(a, all[i].digest) != AV_NONE) continue;
+        size_t atoms = tree_atoms(a, all[i].node);
+        if (atoms >= 2 && atoms <= max_atoms) cand[n++] = all[i].node;
+    }
+    free(all);
+    /* rooted: the runs collect */
+    for (size_t i = 0; ok && i < n; i++) av_root_push(a, &cand[i]);
+    for (size_t i = 0; ok && i < n; i++) {
+        if (av_ctor_of(a, cand[i], 1000000).count == 0) continue;
+        uint32_t before = a->njets;
+        if (av_jet_register(a, cand[i], 0, 1000000, NULL) != AV_NONE &&
+            a->njets > before) added++;
+    }
+    for (size_t i = 0; ok && i < n; i++) av_root_pop(a);
+    free(cand);
+    if (ok && added && !wrap_insides(a)) ok = false;
+    return ok ? added : -1;
 }
 
 /*  After a dictionary is registered: wrap each jet's inner jets, in its

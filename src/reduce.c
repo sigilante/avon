@@ -52,7 +52,7 @@ typedef struct {
     uint64_t      *marks;       /* share: nodes already normalized        */
     size_t         nmarks;      /* words                                  */
 
-    uint64_t       jet_calls;
+    uint64_t       jet_calls, jet_steps;
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
@@ -225,7 +225,7 @@ static av_status fire_copy(R *r) {
     av_arena *a = r->a;
     uint32_t id = AV_JET_ID(av_left(a, r->head));
     unsigned k = a->jets[id].arity;
-    uint32_t args[8];
+    uint32_t args[AV_JET_ARITY_MAX];
     if (r->o->jet_check && (r->jet_calls + 1) % r->o->jet_check == 0) {
         for (unsigned i = 0; i < k; i++) args[i] = r->stk[r->top - 1 - i];
         if (!check_fire(r, r->head, id, args)) {
@@ -241,6 +241,7 @@ static av_status fire_copy(R *r) {
     r->top -= k;
     if (!decompose(r, inst)) return AV_SIZE;
     r->steps += a->jets[id].cost;
+    r->jet_steps += a->jets[id].cost;
     r->jet_calls++;
     return AV_WHNF;
 }
@@ -284,6 +285,7 @@ static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
         if (!same) { r->jet_fault = true; *st = AV_INTERRUPTED; return -1; }
     }
     r->steps += charge;
+    r->jet_steps += charge;
     r->jet_calls++;
     r->interp_calls++;
     *outp = out;
@@ -445,7 +447,7 @@ static av_status whnf_share(R *r) {
                 continue;
             }
             unsigned k = a->jets[id].arity;
-            uint32_t args[8];
+            uint32_t args[AV_JET_ARITY_MAX];
             if (o->jet_check && (r->jet_calls + 1) % o->jet_check == 0) {
                 for (unsigned i = 0; i < k; i++)
                     args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
@@ -465,6 +467,7 @@ static av_status whnf_share(R *r) {
             r->top -= k;
             cur = n;
             r->steps += a->jets[id].cost;
+            r->jet_steps += a->jets[id].cost;
             r->jet_calls++;
             continue;
         }
@@ -565,5 +568,6 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.fr);
     free(r.work);
     free(r.marks);
-    return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls, r.jet_fault };
+    return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls,
+                        r.jet_steps, r.jet_fault };
 }

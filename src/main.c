@@ -26,7 +26,9 @@
  *  (default share), --whnf, --fuel=N, --max-nodes=N, --budget=N (nodes
  *  printed or jammed; default 1000000), --allow-bird-atoms (§4.3),
  *  --jets=DICT (a dictionary.tsv export: register it and match the term
- *  against it, §6), --jet-floor=N (atoms, default 8), --jet-check=N (check
+ *  against it, §6; repeatable), --ctors[=N] (register every Scott
+ *  constructor of up to N atoms, default 64, in the term, §6.8),
+ *  --jet-floor=N (atoms, default 8), --jet-check=N (check
  *  every Nth fire against the unjetted run, §6.6), --no-jets,
  *  --interp=FILE (interpreters.tsv: interpreter jets, §7; needs --jets).
  */
@@ -48,7 +50,9 @@ typedef struct {
     size_t      budget;
     bool        birds;
     uint64_t    rows, cells;      /* witness budgets */
-    const char *jets;             /* a dictionary export, or NULL */
+    const char *jets[16];         /* dictionary exports, --jets= each */
+    int         njets;
+    uint64_t    ctors;            /* --ctors: constructor jets up to N atoms */
     const char *interp;           /* interpreters.tsv, or NULL */
     const char *jet_table;        /* lean-ski's jet file, or NULL */
     uint64_t    jet_floor;
@@ -65,7 +69,7 @@ static int usage(void) {
         "       avon prefix [FILE]\n"
         "       avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
-        "        --jets=DICT --jet-floor=N --jet-check=N --no-jets)\n"
+        "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... MANIFEST...\n"
         "       avon --version\n");
@@ -85,7 +89,8 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->o = av_opts_default();
     g->budget = 1000000;
     g->birds = false;
-    g->jets = NULL;
+    g->njets = 0;
+    g->ctors = 0;
     g->interp = NULL;
     g->jet_table = NULL;
     g->jet_floor = 8;
@@ -99,7 +104,11 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--strategy=share") == 0) g->o.strategy = AV_SHARE;
         else if (strcmp(s, "--whnf") == 0)           g->o.whnf_only = true;
         else if (strcmp(s, "--allow-bird-atoms") == 0) g->birds = true;
-        else if (strncmp(s, "--jets=", 7) == 0 && s[7]) g->jets = s + 7;
+        else if (strncmp(s, "--jets=", 7) == 0 && s[7] && g->njets < 16)
+            g->jets[g->njets++] = s + 7;
+        else if (strcmp(s, "--ctors") == 0)          g->ctors = 64;
+        else if (strncmp(s, "--ctors=", 8) == 0 && number(s + 8, &v) && v >= 2)
+            g->ctors = v;
         else if (strcmp(s, "--no-jets") == 0)        g->o.jets = false;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
@@ -173,14 +182,17 @@ static av_arena *new_arena(const args *g, uint32_t cap) {
     av_arena *a = av_arena_new(cap);
     if (!a) { fprintf(stderr, "avon: out of memory\n"); return NULL; }
     a->allow_bird_atoms = g->birds;
-    if (g->jets) {
+    for (int i = 0; i < g->njets; i++) {
         const char *err = NULL;
-        if (av_jets_load(a, g->jets, (size_t)g->jet_floor, &err) < 0) {
-            fprintf(stderr, "avon: %s: %s\n", g->jets, err);
+        if (av_jets_load(a, g->jets[i], (size_t)g->jet_floor, &err) < 0) {
+            fprintf(stderr, "avon: %s: %s\n", g->jets[i], err);
             av_arena_free(a);
             return NULL;
         }
-        if (g->interp && av_interps_load(a, g->interp, g->jets, &err) < 0) {
+    }
+    if (g->njets) {
+        const char *err = NULL;
+        if (g->interp && av_interps_load(a, g->interp, g->jets[0], &err) < 0) {
             fprintf(stderr, "avon: %s: %s\n", g->interp, err);
             av_arena_free(a);
             return NULL;
@@ -198,15 +210,23 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     av_arena *a = new_arena(g, 1u << 16);
     if (!a) return 1;
     uint32_t t = load(a, src, len);
-    if (t != AV_NONE && g->jets) t = av_jets_match(a, t);
+    long ctors = 0;
+    if (t != AV_NONE && g->ctors) {
+        av_root_push(a, &t);                /* the scan's runs collect */
+        ctors = av_jets_ctors(a, t, (size_t)g->ctors);
+        av_root_pop(a);
+        if (ctors < 0) t = AV_NONE;
+    }
+    if (t != AV_NONE && (g->njets || g->ctors)) t = av_jets_match(a, t);
     if (t == AV_NONE) {
         av_arena_free(a);
         return 1;
     }
     av_result r = av_reduce(a, t, &g->o);
-    if (g->jets)
-        fprintf(stderr, "jets: %u registered, %llu fired (%llu interpreter)%s\n",
-                a->njets, (unsigned long long)r.jet_calls,
+    if (g->njets || g->ctors)
+        fprintf(stderr, "jets: %u registered (%ld constructors found), %llu fired "
+                "(%llu interpreter)%s\n",
+                a->njets, ctors, (unsigned long long)r.jet_calls,
                 (unsigned long long)r.interp_calls,
                 r.jet_fault ? ", A CHECK FAILED" : "");
     av_buf b = { 0 };
@@ -401,7 +421,12 @@ static int census_main(int argc, char **argv) {
         snprintf(rank, sizeof rank, "%zu", ++shown);
         /* unnamed, a head borrows its first named layer's name: ~name */
         const char *name = name_of(names, nnames, r);
-        char borrowed[64];
+        char borrowed[64], shape[48];
+        if (!name && r->ctor.count) {       /* a constructor: its shape */
+            snprintf(shape, sizeof shape, "ctor %u/%u/%u", r->ctor.fields,
+                     r->ctor.index, r->ctor.count);
+            name = shape;
+        }
         for (size_t j = i + 1; !name && j < n; j++)
             if (rows[j].family == (int64_t)i && name_of(names, nnames, &rows[j])) {
                 snprintf(borrowed, sizeof borrowed, "~%s", name_of(names, nnames, &rows[j]));

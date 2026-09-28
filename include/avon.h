@@ -34,6 +34,10 @@ typedef struct { uint32_t l, r; } av_node;
 #define AV_JET_SHARED (1u << 29)
 #define AV_JET_ID(l)  ((l) & (AV_JET_SHARED - 1))
 
+/*  The most arguments a residual jet takes (§6.5).  Joy's words, nullary
+ *  constructors of a 13-way sum, need more than 8. */
+#define AV_JET_ARITY_MAX 32u
+
 /*  The leaf nodes of S, K, I are interned at indices 0, 1, 2. */
 #define AV_NODE_S 0u
 #define AV_NODE_K 1u
@@ -81,7 +85,7 @@ typedef struct {
     uint32_t   njets, jetcap;
     uint32_t  *jet_index;       /* open addressing, hash -> jet id */
     uint32_t   jet_index_cap;
-    uint32_t   jet_mark[8];     /* the atoms residuals are computed over */
+    uint32_t   jet_mark[AV_JET_ARITY_MAX];  /* residuals' atoms: @x0 .. */
     uint32_t  *jet_scratch;     /* an instance's intermediate results    */
     uint32_t   jet_scratch_cap;
     bool       jet_scratch_busy;   /* instances do not nest */
@@ -295,6 +299,7 @@ typedef struct {
     av_status status;
     uint64_t  jet_calls;    /* jets fired, reported beside steps (§6.5)   */
     uint64_t  interp_calls; /* interpreter jets fired, among jet_calls    */
+    uint64_t  jet_steps;    /* contractions the fires charged, among steps */
     bool      jet_fault;    /* a jet check disagreed: status INTERRUPTED  */
 } av_result;
 
@@ -471,13 +476,21 @@ bool av_hash_parse(const char *s, uint64_t *digest);
  *  jet (§6.5): its term g is reduced in copy mode, jets off, applied to k
  *  fresh atoms, until an atom reaches the head or the run halts; the
  *  state reached is the residual and the contractions its cost.  k is the
- *  least in 1..8 for which an atom reaches the head -- the genericity
+ *  least in 1..AV_JET_ARITY_MAX for which an atom reaches the head -- the
+ *  genericity
  *  argument of §6.5 holds for any k, so this is a choice of how much work
  *  one fire does, not of correctness.  A jet fires when its node is at the
  *  head with at least k arguments and the fuel left covers the cost: the
  *  residual is instantiated over the arguments and the cost charged, so a
  *  copy-mode count is the unjetted count, contraction for contraction.
  */
+/*  A Scott constructor (docs/DESIGN.md §6.8): the term takes `fields`
+ *  fields, then `count` continuations, and applies continuation `index` to
+ *  the fields, in order: C a1 .. af k0 .. k(n-1) = k_index a1 .. af.  K is
+ *  (0, 0, 2), K I (0, 1, 2), T (1, 0, 1), V (2, 0, 1).  count 0: not one.
+ */
+typedef struct { unsigned fields, index, count; } av_ctor;
+
 typedef struct av_jet {
     uint64_t  digest;
     uint32_t  fallback;         /* the term g, its inner jets wrapped      */
@@ -501,12 +514,14 @@ typedef struct av_jet {
     bool      residual_ok;      /* a residual jet (§6.5); else only an
                                    interpreter jet's key                   */
     int32_t   interp;           /* its interpreter jet (§7), or -1         */
+    av_ctor   ctor;             /* its constructor shape (§6.8), if any    */
 } av_jet;
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
- *  no arity up to 8 at which an atom reaches the head within max_steps, or
+ *  no arity up to AV_JET_ARITY_MAX at which an atom reaches the head within max_steps, or
  *  a residual of cost 0.  Returns the jet id, or AV_NONE with *why.  A
- *  term already registered returns its id.
+ *  term already registered returns its id.  The runs may collect: root
+ *  every index held across the call.
  */
 uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
                          uint64_t max_steps, const char **why);
@@ -518,6 +533,18 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
  */
 long av_jets_load(av_arena *a, const char *path, size_t min_atoms,
                   const char **err);
+
+/*  The constructor jets (docs/DESIGN.md §6.8): register every distinct
+ *  subterm of t, of 2 to max_atoms leaves, that is a Scott constructor --
+ *  whatever its encoding, in a dictionary or not -- and wrap the inner
+ *  jets.  Match t afterwards, as for a dictionary.  Returns the number of
+ *  new jets, or -1 when out of memory.
+ */
+long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms);
+
+/*  t's constructor shape, by running it on fresh atoms (§6.8); count 0 if
+ *  t is not a constructor within max_steps a run. */
+av_ctor av_ctor_of(av_arena *a, uint32_t t, uint64_t max_steps);
 
 /*  The loader's match (§6.3): a fresh copy of t -- no node of t is reused,
  *  so the result shares nothing with the dashboard -- in which every
@@ -606,6 +633,7 @@ typedef struct {
                                    a fire's own window is absorbed, not a
                                    fire (recursion re-enters its window)   */
     char      hash[27];         /* §5's, when captured                     */
+    av_ctor   ctor;             /* its constructor shape (§6.8), if one    */
     uint64_t  until, epoch;     /* the measuring pass's window             */
     int64_t   family;           /* the higher-ranked row it is a subterm of
                                    (or the reverse), met at the same calls:
