@@ -53,6 +53,7 @@ typedef struct {
     size_t         nmarks;      /* words                                  */
 
     uint64_t       jet_calls;
+    uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
 } R;
@@ -118,7 +119,8 @@ static bool ensure(R *r, size_t k) {
     if (a->cap - a->used >= k) return true;
     if (r->o->no_collect)
         return av_reserve(a, (uint32_t)k) && a->used <= r->o->max_nodes;
-    if (!av_collect(a, (uint32_t)k, roots, remap_marks, r)) return false;
+    /* every active reduction's roots, this one's among them */
+    if (!av_collect(a, (uint32_t)k, NULL, NULL, NULL)) return false;
     return a->used <= r->o->max_nodes;
 }
 
@@ -243,6 +245,51 @@ static av_status fire_copy(R *r) {
     return AV_WHNF;
 }
 
+/*  An interpreter jet at the head of a position with `have` arguments:
+ *  1 fired (the arguments replaced by the outcome and its charge added),
+ *  0 declined, -1 stop with *st.  The arguments are read again after the
+ *  fire, which may collect. */
+static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
+                      uint32_t *outp) {
+    av_arena *a = r->a;
+    uint32_t node = *nodep;
+    uint32_t id = AV_JET_ID(av_left(a, node));
+    if (!r->o->interp_jets || a->jets[id].interp < 0) return 0;
+    unsigned nargs = a->interps[a->jets[id].interp].nparams + 2;
+    if (have < nargs || r->steps >= r->o->max_steps) return 0;
+    uint32_t argv[AV_INTERP_CTORS + 2];
+    for (unsigned i = 0; i < nargs; i++)
+        argv[i] = av_res(a, r->o->strategy == AV_COPY
+                                ? r->stk[r->top - 1 - i]
+                                : av_right(a, r->stk[r->top - 1 - i]));
+    uint32_t out;
+    uint64_t charge;
+    bool fault;
+    r->jnode = node;
+    int rc = interp_fire(a, id, argv, r->o, r->o->max_steps - r->steps,
+                         &out, &charge, st, &fault);
+    node = r->jnode;                    /* where the node is now */
+    r->jnode = AV_NONE;
+    *nodep = node;
+    if (rc < 0) { r->jet_fault |= fault; return -1; }
+    if (rc == 0) return 0;
+    if (r->o->jet_check && (r->jet_calls + 1) % r->o->jet_check == 0) {
+        for (unsigned i = 0; i < nargs; i++)           /* reread: may have moved */
+            argv[i] = av_res(a, r->o->strategy == AV_COPY
+                                    ? r->stk[r->top - 1 - i]
+                                    : av_right(a, r->stk[r->top - 1 - i]));
+        av_root_push(a, &out);
+        bool same = interp_check(a, id, node, argv, out);
+        av_root_pop(a);
+        if (!same) { r->jet_fault = true; *st = AV_INTERRUPTED; return -1; }
+    }
+    r->steps += charge;
+    r->jet_calls++;
+    r->interp_calls++;
+    *outp = out;
+    return 1;
+}
+
 static av_status run_copy(R *r) {
     av_arena *a = r->a;
     const av_opts *o = r->o;
@@ -255,7 +302,17 @@ static av_status run_copy(R *r) {
             if (interrupted(r)) return AV_INTERRUPTED;
             if (r->steps >= o->max_steps) return AV_FUEL;
             if (av_tag(a, r->head) == AV_JET) {
-                if (fires(r, AV_JET_ID(av_left(a, r->head)), r->top - r->base)) {
+                av_status ist;
+                uint32_t out;
+                int ir = try_interp(r, &r->head, r->top - r->base, &ist, &out);
+                if (ir < 0) return ist;
+                if (ir > 0) {
+                    r->top -= a->interps[a->jets[AV_JET_ID(av_left(a, r->head))].interp].nparams + 2;
+                    if (!decompose(r, out)) return AV_SIZE;
+                    continue;
+                }
+                if (a->jets[AV_JET_ID(av_left(a, r->head))].residual_ok &&
+                    fires(r, AV_JET_ID(av_left(a, r->head)), r->top - r->base)) {
                     av_status js = fire_copy(r);
                     if (js != AV_WHNF) return js;
                 } else if (!decompose(r, av_right(a, r->head))) {
@@ -353,7 +410,19 @@ static av_status whnf_share(R *r) {
         if (r->steps >= o->max_steps) return AV_FUEL;
         if (av_tag(a, cur) == AV_JET) {
             uint32_t id = AV_JET_ID(av_left(a, cur));
-            if (!fires(r, id, r->top - bottom)) {
+            av_status ist;
+            uint32_t iout;
+            int ir = try_interp(r, &cur, r->top - bottom, &ist, &iout);
+            if (ir < 0) return ist;
+            if (ir > 0) {                       /* the redex root becomes it */
+                unsigned k = a->interps[a->jets[id].interp].nparams + 2;
+                uint32_t n = r->stk[r->top - k];     /* reread: the fire may collect */
+                a->nodes[n] = (av_node){ (AV_IND << AV_TAG_SHIFT) | iout, 0 };
+                r->top -= k;
+                cur = n;
+                continue;
+            }
+            if (!(a->jets[id].residual_ok && fires(r, id, r->top - bottom))) {
                 /* Unwrapped, and demoted: this run may write inside the
                  * term from here on, so the jet node becomes an
                  * indirection to a term it owns -- a private copy when
@@ -466,6 +535,7 @@ av_opts av_opts_default(void) {
         .interrupt = NULL,
         .no_collect = false,
         .jets      = true,
+        .interp_jets = false,
         .jet_check = 0,
     };
 }
@@ -473,6 +543,8 @@ av_opts av_opts_default(void) {
 av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     R r = { .a = a, .o = o, .root = t, .head = AV_NONE, .cur = AV_NONE,
             .jnode = AV_NONE };
+    av_active me = { roots, remap_marks, &r, a->active };
+    a->active = &me;
     av_status s = o->strategy == AV_COPY ? run_copy(&r) : run_share(&r);
 
     uint32_t term = r.root;
@@ -485,9 +557,10 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
         term = av_res(a, term);
     }
 
+    a->active = me.next;
     free(r.stk);
     free(r.fr);
     free(r.work);
     free(r.marks);
-    return (av_result){ term, r.steps, s, r.jet_calls, r.jet_fault };
+    return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls, r.jet_fault };
 }

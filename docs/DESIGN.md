@@ -177,6 +177,11 @@ cannot create a cycle — so refcounting *would* be sound; it is a fallback,
 not the plan. (Hash-consing during reduction breaks that acyclicity
 argument: see §2.1.)
 
+**Nested reductions** (stage 5). A reduction in progress registers its
+roots with the arena, and a collection evacuates every registered one, so
+a reduction nested in another -- a probe, an interpreter jet's object run
+-- may collect without invalidating the outer one's indices.
+
 **Sharing on load.** The loader preserves the DAG when the input format
 carries it (§4.2). It changes no `copy`-mode count and lowers `share`-mode
 counts, which is the point.
@@ -647,6 +652,51 @@ This is where Avon departs from Vere. `+mock` has no fuel, so its jet has
 nothing to charge. `wfN` exposes a timeout outcome to the program, and the
 jet must reproduce it.
 
+**Built in stage 5** (`src/interp.c`), with these rules:
+
+- **Which interpreters.** skijack's `export.py` writes `interpreters.tsv`:
+  each generated interpreter core, keyed by its loop term's hash, with its
+  object, result and answer types' constructors and what each non-S/K/I
+  leaf's arm does -- an error outcome, divergence, or the scry arm. The
+  exporter decides that by running each arm on marker atoms, never by
+  name, and leaves out a core with a hand-written walker, loop or S/K/I
+  arm unless it compiles to the generated one. The corpus gives five:
+  `whnfF`, `wf5Abs`, `wf5Omg`, `wfQ`, `wfN`.
+- **What a fire does.** It reads the fuel, decodes the datum to a live
+  object term, matches residual jets in it, and reduces it in copy mode
+  with the fuel as `max_steps`. That is the generated loop attempt for
+  attempt: an iteration per unit, an S, K or I redex contracted, a
+  combinator short of arguments the value, and any other leaf inert until
+  its arm runs. An error arm returns its outcome; a scry arm spends one
+  step, asks the resolver, and splices in a hit, returns the miss outcome,
+  or blocks with the path; a diverging arm makes the jet decline, and the
+  unjetted interpreter diverges as it would. The outcome is encoded with
+  the program's own constructors.
+- **Reading by structure first.** A datum node that is one of the object
+  type's constructor terms, or its application constructor over two
+  fields, decodes at once; so does a fuel numeral in an encoding the
+  export names. Anything else is probed, as `run.decode` probes. The
+  runtime may recognize structure (§3 of `RUNTIME-DESIGN.md`), and a node
+  that is a constructor applied to its fields behaves as one.
+- **Nested reductions.** A fire's object run, and the probes and resolver
+  runs inside it, are reductions nested in the one that fired. Each
+  reduction registers its roots with the arena, and a collection
+  evacuates them all, so a nested one may collect.
+- **Fuel.** Interpreter jets are off inside an object run -- its fuel is
+  always bounded -- and residual jets are on, since they keep counts. A
+  fire charges every contraction it performs, object steps and probes
+  together, and declines if that would pass the host's fuel, so the host
+  cap still bounds real work. Interpreter jets change counts, so they are
+  off by default (`--interp`).
+- **The resolver** is the program's own term, reduced; §8's native lookup
+  needs stage 6's fact store.
+
+Measured: T2 falls from 504,930 host contractions to 342 -- the object
+run, which is T0 exactly (340), and 2 that bring the outcome datum,
+`Just` over the encoded value, to weak head normal form. With every datum
+read by probing instead, T2 costs 30,088, almost all of it decoding the
+quoted interpreter; the structural path removes that.
+
 The payoff is the one Nock gets from `+mock`: the paper measures level 1 at
 340 contractions per object step and level 2 at ~1,485× on top of that, and
 a correct interpreter jet collapses both to roughly the cost of the object
@@ -663,7 +713,9 @@ transcribes it:
 - `make_resolver`: build the resolver term from `EQ5`, the answer type's
   hit and not-yet constructors, and the facts learned so far. Under the
   interpreter jet (§7) the `Scry` leaf looks paths up natively, keyed by
-  the path datum's structure. The resolver term stays the specification,
+  the path datum's structure. (Stage 5 built the jet with the resolver
+  term reduced by the host instead; the native lookup comes with stage 6's
+  fact store.) The resolver term stays the specification,
   and the native lookup must agree with it: comparison is syntactic on
   encodings, as `EQ5`'s is, so `Scry (I K)` does not match the path `K`;
   and fact order cannot matter, because the store is append-only with
@@ -943,6 +995,35 @@ in place, writing the dashboard -- with its `@x` markers -- into every
 image, which also reopened the marker hole stage 3 had closed. The review
 also had `--jet-check` treat an out-of-memory check as inconclusive rather
 than a fault, and guarded the instance buffer against re-entry.
+
+**Stage 5, done.** The interpreter jet (§7):
+
+- **The corpus conforms with interpreter jets.** All 45 targets in both
+  strategies, residual and interpreter jets on, every one of the 86
+  interpreter fires checked against the unjetted interpreter by
+  `--jet-check`: every status and every value is the manifest's
+  (`tests/test_conformance.c`). That includes the `EXAMPLES.md` §4
+  boundary -- fuel 0 and 1 time out, 2 and 5 give `RVal I` -- the T3
+  table, where `wf5Omg`'s diverging arm declines and both runs pass the
+  host cap, and every scry single run: the scry table's eleven rows,
+  `scry-block`'s blocks with their paths, and the character table.
+- **T2's cost falls to T0's.** 504,930 host contractions become 342: the
+  object run, T0's 340, and 2 for the outcome (`tests/test_interp.c`).
+  T1 falls from 91,556 to 109, T0 from 340 to 3. The scry programs barely
+  move -- the character table's `apply` from 62,199 to 60,683 -- because
+  their cost is the resolver term comparing paths, which a fire still
+  reduces; that is the case for §8's native lookup.
+- **Random object terms** for `whnfF`, `wf5Abs` and `wf5Omg`, at random
+  fuel, with one datum node or numeral level in five disguised as `I x`
+  so that probing is exercised too: the jet gives the unjetted
+  interpreter's constructor and decoded payload in copy and share mode,
+  and `wf5Omg`'s Err terms run out of host fuel both ways. 4,501 cases
+  under ASan and UBSan.
+- The jet declines, and the interpreter runs, when an arm diverges, when
+  a datum or a numeral cannot be read, or when the fire would pass the
+  host's fuel.
+- lean-ski's jetted-witness check (`tests/jet_witness_check.sh`) and the
+  witness check still pass, at lean-ski `0b2fbcf`.
 
 ## 12. What Avon must not do
 

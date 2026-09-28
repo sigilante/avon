@@ -36,6 +36,7 @@ static bool probe(av_arena *a, uint32_t t, unsigned nmarks, const av_opts *o,
     po.whnf_only = true;
     po.no_collect = true;
     av_result r = av_reduce(a, t, &po);
+    a->probe_steps += r.steps;
     if (r.status != AV_WHNF && r.status != AV_NORMAL) {
         free(ids);
         *err = "probing did not reach weak head normal form";

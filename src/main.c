@@ -22,7 +22,8 @@
  *  printed or jammed; default 1000000), --allow-bird-atoms (§4.3),
  *  --jets=DICT (a dictionary.tsv export: register it and match the term
  *  against it, §6), --jet-floor=N (atoms, default 8), --jet-check=N (check
- *  every Nth fire against the unjetted run, §6.6), --no-jets.
+ *  every Nth fire against the unjetted run, §6.6), --no-jets,
+ *  --interp=FILE (interpreters.tsv: interpreter jets, §7; needs --jets).
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -43,6 +44,7 @@ typedef struct {
     bool        birds;
     uint64_t    rows, cells;      /* witness budgets */
     const char *jets;             /* a dictionary export, or NULL */
+    const char *interp;           /* interpreters.tsv, or NULL */
     const char *jet_table;        /* lean-ski's jet file, or NULL */
     uint64_t    jet_floor;
     const char *file;
@@ -77,6 +79,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->budget = 1000000;
     g->birds = false;
     g->jets = NULL;
+    g->interp = NULL;
     g->jet_table = NULL;
     g->jet_floor = 8;
     g->rows = 1u << 21;          /* bench/plonky3's MAX_LOG_HEIGHT */
@@ -91,6 +94,10 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--allow-bird-atoms") == 0) g->birds = true;
         else if (strncmp(s, "--jets=", 7) == 0 && s[7]) g->jets = s + 7;
         else if (strcmp(s, "--no-jets") == 0)        g->o.jets = false;
+        else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
+            g->interp = s + 9;
+            g->o.interp_jets = true;
+        }
         else if (strncmp(s, "--jet-table=", 12) == 0 && s[12]) g->jet_table = s + 12;
         else if (strncmp(s, "--jet-floor=", 12) == 0 && number(s + 12, &v))
             g->jet_floor = v;
@@ -166,6 +173,15 @@ static av_arena *new_arena(const args *g, uint32_t cap) {
             av_arena_free(a);
             return NULL;
         }
+        if (g->interp && av_interps_load(a, g->interp, g->jets, &err) < 0) {
+            fprintf(stderr, "avon: %s: %s\n", g->interp, err);
+            av_arena_free(a);
+            return NULL;
+        }
+    } else if (g->interp) {
+        fprintf(stderr, "avon: --interp needs --jets, for the constructors' terms\n");
+        av_arena_free(a);
+        return NULL;
     }
     return a;
 }
@@ -182,8 +198,9 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     }
     av_result r = av_reduce(a, t, &g->o);
     if (g->jets)
-        fprintf(stderr, "jets: %u registered, %llu fired%s\n", a->njets,
-                (unsigned long long)r.jet_calls,
+        fprintf(stderr, "jets: %u registered, %llu fired (%llu interpreter)%s\n",
+                a->njets, (unsigned long long)r.jet_calls,
+                (unsigned long long)r.interp_calls,
                 r.jet_fault ? ", A CHECK FAILED" : "");
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE && av_print(a, r.term, g->budget, &b);

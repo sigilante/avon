@@ -76,6 +76,8 @@ void av_arena_free(av_arena *a) {
     }
     free(a->jets);
     free(a->jet_scratch);
+    free(a->interps);
+    free(a->nats);
     free(a->jet_index);
     free(a->nodes);
     free(a);

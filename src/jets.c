@@ -383,7 +383,7 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
         uint32_t id = a->njets;
         a->jets[id] = (av_jet){ digest, t, r.term, k, r.steps,
                                 0, template_nodes(a, t), atoms,
-                                NULL, 0, NULL, 0, 0 };
+                                NULL, 0, NULL, 0, 0, true, -1 };
         a->njets++;
         if (a->jets[id].term_nodes == AV_NONE || !compile_template(a, id) ||
             !index_put(a, id)) {
@@ -400,6 +400,26 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
 done:
     if (why) *why = msg;
     return AV_NONE;
+}
+
+uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t) {
+    uint32_t have = jet_find(a, digest);
+    if (have != AV_NONE) return have;
+    if (a->njets == a->jetcap) {
+        uint32_t cap = a->jetcap ? a->jetcap * 2 : 64;
+        av_jet *j = realloc(a->jets, cap * sizeof *j);
+        if (!j) return AV_NONE;
+        a->jets = j;
+        a->jetcap = cap;
+    }
+    uint32_t id = a->njets;
+    uint32_t tn = template_nodes(a, t);
+    if (tn == AV_NONE) return AV_NONE;
+    a->jets[id] = (av_jet){ digest, t, t, 0, 0, 0, tn, tree_atoms(a, t),
+                            NULL, 0, NULL, 0, 0, false, -1 };
+    a->njets++;
+    if (!index_put(a, id)) { a->njets--; return AV_NONE; }
+    return id;
 }
 
 /*  ------------------------------------------------------------- matching */
@@ -474,6 +494,7 @@ uint32_t av_jets_match(av_arena *a, uint32_t t) {
  *  term and in its residual, so a fire or an unwrap keeps them. */
 static bool wrap_insides(av_arena *a) {
     for (uint32_t id = 0; id < a->njets; id++) {
+        if (!a->jets[id].residual_ok) continue;
         uint32_t f = match(a, a->jets[id].fallback, true, true);
         uint32_t r = match(a, a->jets[id].residual, true, true);
         if (f == AV_NONE || r == AV_NONE) return false;

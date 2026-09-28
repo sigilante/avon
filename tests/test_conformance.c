@@ -59,7 +59,8 @@ typedef struct {
 } target;
 
 static size_t targets_checked, values_checked;
-static uint64_t jets_fired;
+static uint64_t jets_fired, interps_fired;
+static bool interp_pass;           /* interpreter jets on: counts change */
 
 /*  With `shared` an arena holding the dictionary's jets: the target is
  *  matched against them, run with every fire checked (§6.6), and must give
@@ -87,17 +88,19 @@ static void check_target(const target *t, av_strategy st, av_arena *shared) {
     o.whnf_only = true;
     o.max_steps = t->max_steps;
     o.jets = shared != NULL;
+    o.interp_jets = interp_pass;
     o.jet_check = shared ? 1 : 0;
     av_result r = av_reduce(a, term, &o);
     CHECK(!r.jet_fault);
     jets_fired += r.jet_calls;
+    interps_fired += r.interp_calls;
     const char *sname = st == AV_COPY ? "copy" : "share";
     if (strcmp(av_status_name(r.status), t->status) != 0) {
         fprintf(stderr, "  %s (%s): status %s, want %s\n", t->id, sname,
                 av_status_name(r.status), t->status);
         CHECK(0);
     }
-    if (st == AV_COPY && r.steps != t->steps) {
+    if (st == AV_COPY && !interp_pass && r.steps != t->steps) {
         fprintf(stderr, "  %s: %llu contractions, want %llu\n", t->id,
                 (unsigned long long)r.steps, (unsigned long long)t->steps);
         CHECK(0);
@@ -215,7 +218,29 @@ TEST(every_target_conforms_with_jets) {
     av_arena_free(a);
 }
 
+/*  Stage 5 (§7, §11): the same targets with interpreter jets too.  They
+ *  change counts, so only statuses and values are compared -- and every
+ *  fire is checked against the unjetted interpreter. */
+TEST(every_target_conforms_with_interpreter_jets) {
+    av_arena *a = av_arena_new(1u << 16);
+    const char *err = NULL;
+    CHECK_EQ(av_jets_load(a, DIR "dictionary.tsv", 8, &err), 135);
+    CHECK_EQ(av_interps_load(a, DIR "interpreters.tsv", DIR "dictionary.tsv", &err), 5);
+    targets_checked = values_checked = 0;
+    jets_fired = interps_fired = 0;
+    interp_pass = true;
+    size_t lines = each_target(jetted, a);
+    interp_pass = false;
+    CHECK_EQ(lines, 45);
+    CHECK_EQ(values_checked, 86);
+    CHECK(interps_fired > 0);
+    printf("  interpreter jets on: %zu runs, %zu values decoded, %llu interpreter fires\n",
+           targets_checked, values_checked, (unsigned long long)interps_fired);
+    av_arena_free(a);
+}
+
 TEST_MAIN(
     TEST_CASE(every_exported_target_conforms),
     TEST_CASE(every_target_conforms_with_jets),
+    TEST_CASE(every_target_conforms_with_interpreter_jets),
 )

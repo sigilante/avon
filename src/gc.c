@@ -60,7 +60,20 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
         for (uint32_t c = 0; c < a->jets[k].nconsts; c++)
             a->jets[k].consts[c] = av_gc_evac(&g, a->jets[k].consts[c]);
     }
+    for (uint32_t k = 0; k < 2 * a->nnats; k++)          /* known numerals */
+        a->nats[k] = av_gc_evac(&g, a->nats[k]);
+    for (uint32_t k = 0; k < a->ninterps; k++) {        /* interpreter specs */
+        av_interp *p = &a->interps[k];
+        for (unsigned c = 0; c < p->nobj; c++) {
+            p->octor[c] = av_gc_evac(&g, p->octor[c]);
+            p->oleaf[c] = av_gc_evac(&g, p->oleaf[c]);
+        }
+        for (unsigned c = 0; c < p->nres; c++)
+            p->rctor[c] = av_gc_evac(&g, p->rctor[c]);
+    }
     if (roots) roots(&g, ctx);
+    for (av_active *r = a->active; r; r = r->next)
+        if (r->roots) r->roots(&g, r->ctx);
 
     for (uint32_t s = 0; s < g.top; s++) {
         av_node *n = &g.to[s];
@@ -77,6 +90,8 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
     }
 
     if (after) after(&g, ctx);
+    for (av_active *r = a->active; r; r = r->next)
+        if (r->after) r->after(&g, r->ctx);
     free(g.fwd);
     free(a->nodes);
     a->nodes = g.to;

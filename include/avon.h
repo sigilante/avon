@@ -85,6 +85,13 @@ typedef struct {
     uint32_t  *jet_scratch;     /* an instance's intermediate results    */
     uint32_t   jet_scratch_cap;
     bool       jet_scratch_busy;   /* instances do not nest */
+
+    struct av_active *active;   /* reductions in progress, innermost first */
+    struct av_interp *interps;  /* interpreter jets (§7) */
+    uint32_t   ninterps;
+    uint64_t   probe_steps;     /* contractions probes have spent, all told */
+    uint32_t  *nats;            /* known numerals: zero, suc pairs: roots  */
+    uint32_t   nnats;
 } av_arena;
 
 av_arena *av_arena_new(uint32_t cap);
@@ -146,6 +153,16 @@ typedef struct av_gc av_gc;
 typedef void (*av_roots_fn)(av_gc *g, void *ctx);
 
 uint32_t av_gc_evac(av_gc *g, uint32_t i);
+
+/*  A reduction in progress registers its roots, so a reduction nested in
+ *  another -- a probe, or an interpreter jet's object run -- may collect
+ *  without invalidating the outer one's indices.  av_collect evacuates
+ *  every registered reduction's roots, and runs every `after` hook. */
+typedef struct av_active {
+    av_roots_fn        roots, after;
+    void              *ctx;
+    struct av_active  *next;
+} av_active;
 
 /*  After the scan, where a from-space node went, or AV_NONE if it died.
  *  For the `after` hook, which remaps side tables keyed by node index.
@@ -265,6 +282,8 @@ typedef struct {
                                    index the caller holds stays valid */
     bool        jets;           /* fire residual jets (§6.5); off, a jet
                                    node is only the term it stands for */
+    bool        interp_jets;    /* fire interpreter jets (§7): these
+                                   change counts, so off by default */
     uint64_t    jet_check;      /* check every Nth fire against the
                                    unjetted run (§6.6); 0 never */
 } av_opts;
@@ -274,6 +293,7 @@ typedef struct {
     uint64_t  steps;    /* host contractions, a jet's charge included       */
     av_status status;
     uint64_t  jet_calls;    /* jets fired, reported beside steps (§6.5)   */
+    uint64_t  interp_calls; /* interpreter jets fired, among jet_calls    */
     bool      jet_fault;    /* a jet check disagreed: status INTERRUPTED  */
 } av_result;
 
@@ -476,6 +496,10 @@ typedef struct av_jet {
     uint32_t *consts;
     uint32_t  nconsts;
     uint32_t  root;             /* the operand the instance is            */
+
+    bool      residual_ok;      /* a residual jet (§6.5); else only an
+                                   interpreter jet's key                   */
+    int32_t   interp;           /* its interpreter jet (§7), or -1         */
 } av_jet;
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
@@ -505,5 +529,53 @@ uint32_t av_jets_match(av_arena *a, uint32_t t);
  *  jets: 1 same, 0 different, -1 past the node budget.
  */
 int av_equal(const av_arena *a, uint32_t x, uint32_t y, size_t budget);
+
+/*  ------------------------------------------------------- interpreter jets
+ *
+ *  The interpreter jet (docs/DESIGN.md §7): a generated interpreter's fuel
+ *  loop, `loop params fuel <t>`, run natively.  The datum is decoded to a
+ *  live object term by probing, reduced in copy mode with object fuel --
+ *  so the fuel boundary is the interpreter's, attempt for attempt -- with
+ *  residual jets on and interpreter jets off inside, and the outcome
+ *  encoded with the program's own constructors.  The spec comes from
+ *  skijack's interpreters.tsv, each arm classified there by running it; the
+ *  constructor terms from its dictionary.tsv.  A `diverge` arm reached at
+ *  the head makes the jet decline, so the unjetted interpreter diverges as
+ *  it would.  These jets change counts: a fire charges the contractions it
+ *  performs, object steps and probes together.
+ */
+enum { AV_OROLE_S, AV_OROLE_K, AV_OROLE_I, AV_OROLE_APP, AV_OROLE_ERR,
+       AV_OROLE_DIVERGE, AV_OROLE_SCRY };
+enum { AV_RROLE_VALUE, AV_RROLE_TIMEOUT, AV_RROLE_OTHER };
+enum { AV_AROLE_HIT, AV_AROLE_MISS, AV_AROLE_NOTYET };
+#define AV_INTERP_CTORS 16
+
+typedef struct av_interp {
+    uint64_t  digest;           /* the loop term's                         */
+    uint32_t  jet;              /* its dashboard entry                     */
+    unsigned  nparams;
+    unsigned  nobj, nres, nans;
+    uint8_t   orole[AV_INTERP_CTORS], oarg[AV_INTERP_CTORS];
+    uint32_t  octor[AV_INTERP_CTORS];   /* constructor terms: roots        */
+    uint32_t  oleaf[AV_INTERP_CTORS];   /* a leaf's live node: roots       */
+    uint8_t   rrole[AV_INTERP_CTORS];
+    uint32_t  rctor[AV_INTERP_CTORS];
+    uint8_t   arole[AV_INTERP_CTORS], aarg[AV_INTERP_CTORS];
+    unsigned  value, timeout;   /* result constructor indices              */
+} av_interp;
+
+/*  Load interpreters.tsv, taking constructor and loop terms from
+ *  dictionary.tsv, and attach each to its loop's dashboard entry (made if
+ *  the loop is not a residual jet).  Its `nat` lines name known numeral
+ *  encodings.  Returns the number of interpreters loaded, or -1.
+ *
+ *  A fire reads what it can by structure before it probes: a datum node
+ *  that is one of the object type's constructor terms, or the application
+ *  constructor over two fields, and a fuel numeral that is a known zero or
+ *  a known suc over a numeral, decode at once; anything else is probed.
+ *  The runtime may recognize structure (§3 of RUNTIME-DESIGN.md), and a
+ *  node that is a constructor applied to its fields behaves as one. */
+long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
+                     const char **err);
 
 #endif /* AVON_H */

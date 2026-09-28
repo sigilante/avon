@@ -28,7 +28,10 @@ design and the build plan.
 `--jets=tests/conformance/dictionary.tsv` loads skijack's dictionary as jets
 (`docs/DESIGN.md` §6): residual jets, which leave every `copy`-mode count
 exactly as it is without them. `--jet-check=1` checks every fire against the
-unjetted run.
+unjetted run. `--interp=tests/conformance/interpreters.tsv` (with `--jets`)
+adds the interpreter jet (`docs/DESIGN.md` §7), which runs a generated
+interpreter's fuel loop natively: T2 falls from 504,930 contractions to 342.
+It changes counts, so it is off unless asked for.
 
 `tests/diff_aviary.py` checks `copy` mode against `aviary_kernel` on random
 terms, and `tests/fixtures/export.py` regenerates the paper's targets. Both
