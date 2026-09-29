@@ -508,7 +508,7 @@ uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t) {
 static uint32_t jet_node(av_arena *a, uint32_t idbits, uint32_t inner) {
     uint32_t n = av_app(a, inner, inner);
     if (n == AV_NONE) return AV_NONE;
-    a->nodes[n] = (av_node){ (AV_JET << AV_TAG_SHIFT) | idbits, inner };
+    arena_set(a, n, (av_node){ (AV_JET << AV_TAG_SHIFT) | idbits, inner });
     return n;
 }
 

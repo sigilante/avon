@@ -27,7 +27,7 @@
  *                                     events and attempts, checked against
  *                                     the reference host's; --log keeps each
  *                                     run's facts in DIR/ID.facts
- *      avon boot [--pier=DIR] [--subject=FILE] PILL
+ *      avon boot [--pier=DIR [--pma]] [--subject=FILE] PILL
  *      avon poke --pier=DIR [--snapshot] EVENT...
  *      avon peek --pier=DIR PATH...
  *      avon load --pier=DIR [--subject=FILE] [--snapshot] PILL
@@ -36,8 +36,10 @@
  *                                     subject (default I: skijack's standard
  *                                     subject is unbuilt), and with --pier
  *                                     makes a pier -- an event log and
- *                                     snapshots -- that poke, peek and load
- *                                     reopen; share mode by default
+ *                                     snapshots, or with --pma a persistent
+ *                                     arena committed every event -- that
+ *                                     poke, peek and load reopen; share mode
+ *                                     by default
  *      avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS
  *                                     the compiler's core as a term
  *                                     (docs/DESIGN.md §20.3): every call of a
@@ -101,7 +103,7 @@ static int usage(void) {
         "                   [--names=FILE]... MANIFEST...\n"
         "       avon scry [--log=DIR] [--jets=DICT [--interp=FILE]] [--jet-check=N]\n"
         "                 NAMESPACES\n"
-        "       avon boot [--pier=DIR] [--subject=FILE] PILL\n"
+        "       avon boot [--pier=DIR [--pma]] [--subject=FILE] PILL\n"
         "       avon poke --pier=DIR [--snapshot] EVENT...\n"
         "       avon peek --pier=DIR PATH...\n"
         "       avon load --pier=DIR [--subject=FILE] [--snapshot] PILL\n"
@@ -430,7 +432,7 @@ static int kernel_main(int argc, char **argv) {
     const char *cmd = argv[1], *pier = NULL, *subject_file = NULL;
     const char *files[256];
     int nf = 0;
-    bool snap = false;
+    bool snap = false, pma = false;
     uint64_t budget = 100000, v;
     av_opts o = av_opts_default();
     o.strategy = AV_SHARE;                      /* §9: kernel loops share */
@@ -444,6 +446,7 @@ static int kernel_main(int argc, char **argv) {
         else if (strncmp(s, "--fuel=", 7) == 0 && number(s + 7, &v)) o.max_steps = v;
         else if (strncmp(s, "--budget=", 9) == 0 && number(s + 9, &v)) budget = v;
         else if (strcmp(s, "--snapshot") == 0) snap = true;
+        else if (strcmp(s, "--pma") == 0) pma = true;
         else if (s[0] != '-' && nf < 256) files[nf++] = s;
         else return usage();
     }
@@ -458,9 +461,13 @@ static int kernel_main(int argc, char **argv) {
         uint8_t *pill = read_file(files[0], &np);
         if (!pill) { free(subject); return 1; }
         if (pier) {
-            av_pier *p = av_pier_new(pier, pill, np, subject, ns, &o, &err);
+            av_pier *p = pma ? av_pier_new_pma(pier, pill, np, subject, ns, &o, &err)
+                             : av_pier_new(pier, pill, np, subject, ns, &o, &err);
             if (!p) fprintf(stderr, "avon: %s: %s\n", pier, err);
-            else { printf("booted a kernel in %s\n", pier); rc = 0; }
+            else {
+                printf("booted a kernel in %s%s\n", pier, pma ? ", on a persistent arena" : "");
+                rc = 0;
+            }
             av_pier_free(p);
         } else {                                /* boot once, and show the value */
             av_arena *a = av_arena_new(1u << 16);

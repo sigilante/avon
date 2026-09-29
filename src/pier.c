@@ -23,6 +23,7 @@ struct av_pier {
     av_kernel  k;
     av_opts    o;
     FILE      *log;
+    bool       pma;             /* committed to a persistent arena (§19.1) */
 };
 
 static char *path_in(const char *dir, const char *name) {
@@ -115,9 +116,9 @@ static av_pier *pier_alloc(const char *dir, const av_opts *o) {
     return p;
 }
 
-av_pier *av_pier_new(const char *dir, const uint8_t *pill, size_t npill,
-                     const uint8_t *subject, size_t nsubject, const av_opts *o,
-                     const char **err) {
+static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
+                         const uint8_t *subject, size_t nsubject, const av_opts *o,
+                         bool pma, const char **err) {
     if (mkdir(dir, 0777) != 0 && errno != EEXIST) { *err = "cannot make the pier's directory"; return NULL; }
     char *logp = path_in(dir, "events.log");
     if (!logp) { *err = "out of memory"; return NULL; }
@@ -127,11 +128,34 @@ av_pier *av_pier_new(const char *dir, const uint8_t *pill, size_t npill,
     uint32_t k = boot_term(p->a, pill, npill, subject, nsubject, &p->o, err);
     if (k == AV_NONE) { free(logp); av_pier_free(p); return NULL; }
     av_kernel_adopt(&p->k, p->a, k, &p->o);
-    if (!snapshot(p, err)) { free(logp); av_pier_free(p); return NULL; }
-    p->log = fopen(logp, "ab");                 /* the snapshot first: an empty log */
+    if (pma) {                                  /* the arena moves into its image */
+        char *img = path_in(dir, "pma");
+        p->pma = true;
+        bool ok = img && av_pma_attach(p->a, img, err) &&
+                  av_pma_commit(p->a, p->k.k, 0, err);
+        free(img);
+        if (!ok) { free(logp); av_pier_free(p); return NULL; }
+    } else if (!snapshot(p, err)) {
+        free(logp);
+        av_pier_free(p);
+        return NULL;
+    }
+    p->log = fopen(logp, "ab");                 /* the image first: an empty log */
     free(logp);
     if (!p->log) { *err = "cannot open the event log"; av_pier_free(p); return NULL; }
     return p;
+}
+
+av_pier *av_pier_new(const char *dir, const uint8_t *pill, size_t npill,
+                     const uint8_t *subject, size_t nsubject, const av_opts *o,
+                     const char **err) {
+    return pier_new(dir, pill, npill, subject, nsubject, o, false, err);
+}
+
+av_pier *av_pier_new_pma(const char *dir, const uint8_t *pill, size_t npill,
+                         const uint8_t *subject, size_t nsubject, const av_opts *o,
+                         const char **err) {
+    return pier_new(dir, pill, npill, subject, nsubject, o, true, err);
 }
 
 /*  The newest snapshot that verifies, and its event count. */
@@ -175,8 +199,20 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     if (!p) { *err = "out of memory"; return NULL; }
     uint32_t root;
     uint64_t at = 0;
-    p->a = newest_snapshot(dir, &root, &at);
-    if (!p->a) { *err = "no snapshot verifies"; av_pier_free(p); return NULL; }
+    char *img = path_in(dir, "pma"), *imgnodes = path_in(dir, "pma/nodes");
+    if (!img || !imgnodes) { free(img); free(imgnodes); *err = "out of memory"; av_pier_free(p); return NULL; }
+    p->pma = access(imgnodes, F_OK) == 0;
+    free(imgnodes);
+    if (p->pma) {
+        const char *perr = NULL;
+        p->a = av_pma_open(img, &root, &at, &perr);
+        if (!p->a) { free(img); *err = perr; av_pier_free(p); return NULL; }
+        if (root == AV_NONE) { free(img); *err = "the image holds no kernel"; av_pier_free(p); return NULL; }
+    } else {
+        p->a = newest_snapshot(dir, &root, &at);
+        if (!p->a) { free(img); *err = "no snapshot verifies"; av_pier_free(p); return NULL; }
+    }
+    free(img);
     av_kernel_adopt(&p->k, p->a, root, &p->o);
     p->k.events = at;
 
@@ -237,6 +273,11 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     fclose(in);
     if (msg) { free(logp); *err = msg; av_pier_free(p); return NULL; }
     if (truncate(logp, good) != 0) { free(logp); *err = "cannot drop a torn record"; av_pier_free(p); return NULL; }
+    if (p->pma && p->k.events != at && !av_pma_commit(p->a, p->k.k, p->k.events, err)) {
+        free(logp);                             /* the replayed events, committed */
+        av_pier_free(p);
+        return NULL;
+    }
     p->log = fopen(logp, "ab");
     free(logp);
     if (!p->log) { *err = "cannot open the event log"; av_pier_free(p); return NULL; }
@@ -254,6 +295,10 @@ av_status av_pier_poke(av_pier *p, const uint8_t *event, size_t n, uint32_t *eff
         return AV_SIZE;
     }
     av_status st = av_kernel_poke(&p->k, ev, effects, r);
+    if (st == AV_WHNF && p->pma && !av_pma_commit(p->a, p->k.k, p->k.events, err)) {
+        /* applied and logged, not committed: a reopen replays it */
+        return AV_SIZE;
+    }
     if (st != AV_WHNF) {
         /* it did not apply: it leaves the log */
         *err = "the event did not reach weak head normal form, and is not kept";
@@ -273,5 +318,6 @@ bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *
     av_root_pop(p->a);
     if (!ok) { *err = "the event log cannot be written"; return false; }
     if (!av_kernel_load(&p->k, nk)) { *err = "out of memory"; return false; }
+    if (p->pma && !av_pma_commit(p->a, p->k.k, p->k.events, err)) return false;
     return true;
 }

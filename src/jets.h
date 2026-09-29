@@ -68,6 +68,20 @@ bool compile_check(av_arena *a, uint32_t node, const uint32_t *argv, uint32_t ou
  *  `avail` arguments at the head. */
 void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail);
 
+/*  The persistent arena (pma.c): an in-place write of node i marks its
+ *  chunk; growth maps more of the reservation; a collection copies back
+ *  into the mapping and marks everything; freeing unmaps. */
+void pma_touch(av_arena *a, uint32_t i);
+bool pma_grow(av_arena *a, uint64_t nodes);
+void pma_collected(av_arena *a, const av_node *to, uint32_t used);
+void pma_release(av_arena *a);
+
+/*  Every in-place write of an existing node goes through here. */
+static inline void arena_set(av_arena *a, uint32_t i, av_node n) {
+    if (a->pma) pma_touch(a, i);
+    a->nodes[i] = n;
+}
+
 /*  The fact store, for the interpreter jet's native lookup (src/scry.c):
  *  which of the first n facts has path `path` (leaves leaf[i]): 1 with
  *  *which, 0 none, -1 unprintable; fact i's answer copied into a; whether

@@ -1175,6 +1175,7 @@ tests.
 | 6 | scry | fact store as an append-only log (§19), resolver term as the lookup's specification, resume loop, `@[]` policy | `scry-*` corpus entries reproduce their traces, round for round, including `STUCK` | 400 |
 | 7 | boot | pill loader, subject loader, `poke`/`peek`, effects, snapshots, install (§20) | a kernel survives a `poke`, answers a `peek`, and reloads from a snapshot to the same state; `load` moves a state onto a new battery; a kernel installs code its compiler emitted and runs it; per-poke cost in `share` mode stays flat over a thousand events | 700 |
 | 8 | self-hosting (§20.3) | the compiler as a term in the pill; the compiler jet, licensed by differential | the compiler term compiles its own source to the term Python produced; the corpus compiles in Avon to Python's terms, hash for hash | 600 |
+| 9 | the persistent arena (§19.1) | the node array in a mapped image file; dirty tracking; a journaled commit per event; recovery; the pier on it | a kernel's arena reopens without reading its nodes, in time independent of its size; each commit writes the pages the event changed, not the arena; a crash at any point of a commit reopens to the state before it or after it, and the log replays the rest to the same kernel | 700 |
 
 Stages 1 to 3 are the runtime proper and are worth doing on their own; a
 correct, fast, conformant reducer with a harness is the thing everything
@@ -1392,6 +1393,22 @@ in stage 8"):
 - What remains is the front end in SKIjack (skijack DESIDERATA §6, item
   5); until then Python parses and desugars, and the core is what Avon
   runs.
+
+**Stage 9, done.** The persistent arena (§19.1, "Built in stage 9"):
+
+- **A kernel's arena reopens without reading its nodes**: 32 MB in
+  0.3 ms, against 160 ms from a snapshot.
+- **Each commit writes the pages the event changed, not the arena**: a
+  Tick in 1.5 to 6.8 KB, a thousand times over; after a collection, the
+  live arena.
+- **A crash at any of a commit's four points reopens to the state before
+  it or after it**, and a pier's log replays the rest to the same kernel.
+- **The image is the arena, byte for byte**, after in-place share-mode
+  updates alone and after collections; the test fails if dirty tracking
+  is disabled.
+- `make check`, the witness, jetted-witness and probe-witness checks and
+  the selfhost check pass; the CLI's pier on the arena runs the events
+  kernel as the snapshot pier does, leak-free.
 
 ## 12. What Avon must not do
 
@@ -1929,6 +1946,89 @@ witness mode is the first runtime path that must produce one.
 - Checking tag and location on every dereference cost them 1.13× to 4×.
   This favours Avon's single index space, with no location bits in a
   node.
+
+### 19.1 The persistent arena
+
+**A kernel's arena is a file mapped into memory, and an event's commit
+writes only what the event changed.** Stage 7's pier recovers by loading a
+copied-out snapshot and replaying the log, so a reopen reads every node and
+a snapshot rewrites every node. The persistent arena (PMA) removes both
+costs, as Vere's loom and Nockchain's PMA do, and keeps the durability
+order above.
+
+- **The image.** A directory holds `nodes` -- a header page, then the node
+  array, node `i` at `header + 8i` -- and `atoms`, the leaf names. The
+  header carries the node count, the leaf count, the root, the events
+  applied and a SHA-256 of the atoms, and a SHA-256 of itself. Indices are
+  positions, so the image needs no relocation (§2).
+- **The mapping.** The arena reserves address space for the most nodes it
+  can hold and maps the image's node array at its base, copy-on-write
+  (`MAP_PRIVATE`): opening reads the header and the leaf names and nothing
+  else, and a page of nodes is read when it is first touched. Growth past
+  the image maps anonymous pages in the reservation; the base never moves.
+- **Dirty tracking.** Every in-place write of a node -- the share-mode
+  update, path compression, a jet node -- goes through one helper that
+  marks its 4 KiB chunk. Nodes allocated since the last commit are dirty
+  by position; a collection rewrites the arena, and marks it all.
+- **The commit** is a redo journal. The dirty chunks, the new header and
+  the leaf names if they changed are written to `journal.tmp` with a
+  SHA-256 over all of it, synced, and renamed to `journal`; then applied
+  to the image and synced; then the journal is removed. A crash before the
+  rename leaves the old image; after it, opening applies the journal
+  again, which is idempotent. Only a commit advances the persisted node
+  count and root, §19's first pitfall; and a collection happens in memory,
+  so the image on disk is always a committed one, its second.
+- **The pier on it.** An event is logged and synced, then applied, then
+  committed with the kernel as root and the event count. Reopening
+  recovers the image and replays only the log records after its event
+  count.
+- **Not persisted: the jet dashboard** (§19, "Jets"). A jet node carries a
+  dashboard id, so an arena with jets is refused a commit; so, until jets
+  are rebuilt at load, is a PMA kernel run with jets.
+- **Trust.** The image is local state, not an interchange form: opening
+  checks the header, the leaf names and the journal, not every node, which
+  is what makes it cheap. `av_pma_verify` checks every node on demand, and
+  a snapshot (§4.2), verified in full on load, stays the form to move a
+  kernel between machines.
+
+**Built in stage 9** (`src/pma.c`; the pier's `av_pier_new_pma`; `avon
+boot --pma`), with these rules the design left open:
+
+- **The header is one page**, the system's (16 KiB on Apple silicon), so
+  the node array maps page-aligned; a commit writes only its 108 bytes of
+  fields. The nodes file never shrinks after a collection: a private
+  mapping must not end beneath pages it maps.
+- **One process at a time.** Attaching or opening an image takes an
+  exclusive lock on it, held until the arena is freed, before a journal
+  is recovered; a second opener is refused.
+- **Probe markers are leaves like any other** in an image: probing
+  interns `@N` in the arena, and the image records it. A snapshot, the
+  interchange form, still refuses a graph that reaches one.
+
+**Measured** (`tests/test_pma.c`, Apple M4 Max):
+
+- **It reopens to what it committed.** After four rounds of share-mode
+  reduction over a committed root -- the first two with no collection,
+  196,736 contractions rewriting committed nodes in place, the last two
+  with collections -- the image equals the arena byte for byte after
+  each commit, read from the file. With dirty marking disabled, that
+  test fails.
+- **An open reads nothing it need not.** A 4,000,000-node arena (32 MB)
+  reopens in 0.3 ms; the same state loads from a snapshot in 160 ms.
+- **A commit writes what changed.** The first commit of that arena
+  carries 7,813 chunks; one node later, one chunk and 2,290 bytes. A
+  pier on the arena commits a Tick of the events kernel in 1,498 to 6,839
+  bytes from the eleventh event to the thousandth, except the one commit
+  after a collection, which writes the live arena.
+- **A crash at each of the four points of a commit** -- after the
+  journal is written, after its rename, half way through applying it,
+  after applying it -- in a forked process, reopens to the state before
+  the commit at the first and after it at the other three, with no
+  journal left; a pier crashed between an event's log record and its
+  commit reopens with the event replayed and committed.
+- **Refused:** a commit of an arena with jets, a second opener, a header
+  that does not verify; a node pointing past the image fails
+  `av_pma_verify`.
 
 ## 20. Avon is to SKI as Vere is to Nock
 

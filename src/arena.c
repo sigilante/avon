@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "avon.h"
+#include "jets.h"
 
 static const char *const comb_name[SKI_ATOM_FIRST] = { "S", "K", "I" };
 
@@ -24,6 +25,7 @@ const char *av_status_name(av_status s) {
 static bool grow_nodes(av_arena *a) {
     if (a->cap >= AV_MAX_NODES) return false;
     uint64_t want = (uint64_t)a->cap * 2;
+    if (a->pma) return pma_grow(a, want);          /* the base never moves */
     uint32_t cap = want > AV_MAX_NODES ? AV_MAX_NODES : (uint32_t)want;
     av_node *n = realloc(a->nodes, (size_t)cap * sizeof *n);
     if (!n) return false;
@@ -79,7 +81,8 @@ void av_arena_free(av_arena *a) {
     free(a->interps);
     free(a->nats);
     free(a->jet_index);
-    free(a->nodes);
+    if (a->pma) pma_release(a);
+    else free(a->nodes);
     free(a);
 }
 

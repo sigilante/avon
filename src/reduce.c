@@ -425,7 +425,7 @@ static av_status whnf_share(R *r) {
             /* path compression: point past an indirection for good, or
              * chains grow by one per contraction and walks go quadratic */
             uint32_t l = av_left(a, cur), rl = av_res(a, l);
-            if (rl != l) a->nodes[cur].l = rl;
+            if (rl != l) arena_set(a, cur, (av_node){ rl, a->nodes[cur].r });
             cur = rl;
             continue;
         }
@@ -440,7 +440,7 @@ static av_status whnf_share(R *r) {
             if (ir > 0) {                       /* the redex root becomes it */
                 unsigned k = fire_nargs(r, id);
                 uint32_t n = r->stk[r->top - k];     /* reread: the fire may collect */
-                a->nodes[n] = (av_node){ (AV_IND << AV_TAG_SHIFT) | iout, 0 };
+                arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | iout, 0 });
                 r->top -= k;
                 cur = n;
                 continue;
@@ -461,7 +461,7 @@ static av_status whnf_share(R *r) {
                     assert(inner != AV_NONE && "allocation past what ensure() reserved");
                     if (inner == AV_NONE) return AV_SIZE;
                 }
-                a->nodes[cur] = (av_node){ (AV_IND << AV_TAG_SHIFT) | inner, 0 };
+                arena_set(a, cur, (av_node){ (AV_IND << AV_TAG_SHIFT) | inner, 0 });
                 cur = inner;
                 continue;
             }
@@ -482,7 +482,7 @@ static av_status whnf_share(R *r) {
             assert(inst != AV_NONE && "allocation past what ensure() reserved");
             if (inst == AV_NONE) return AV_SIZE;
             uint32_t n = r->stk[r->top - k];    /* the redex root */
-            a->nodes[n] = (av_node){ (AV_IND << AV_TAG_SHIFT) | inst, 0 };
+            arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | inst, 0 });
             r->top -= k;
             cur = n;
             r->steps += a->jets[id].cost;
@@ -503,11 +503,11 @@ static av_status whnf_share(R *r) {
             uint32_t x = av_res(a, av_right(a, n));
             uint32_t fx = reserved_app(a, f, x);
             uint32_t gx = reserved_app(a, g, x);
-            a->nodes[n] = (av_node){ fx, gx };
+            arena_set(a, n, (av_node){ fx, gx });
         } else {                                /* K x y -> x;  I x -> x */
             n = r->stk[r->top - k];
             uint32_t x = av_res(a, av_right(a, r->stk[r->top - 1]));
-            a->nodes[n] = (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 };
+            arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
         }
         r->top -= k;
         cur = n;

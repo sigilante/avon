@@ -9,6 +9,7 @@
 #include <stdlib.h>
 
 #include "avon.h"
+#include "jets.h"
 
 struct av_gc {
     const av_node *from;
@@ -100,8 +101,13 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
     for (av_active *r = a->active; r; r = r->next)
         if (r->after) r->after(&g, r->ctx);
     free(g.fwd);
-    free(a->nodes);
-    a->nodes = g.to;
+    if (a->pma) {                       /* back into the mapping: all of it dirty */
+        pma_collected(a, g.to, g.top);
+        free(g.to);
+    } else {
+        free(a->nodes);
+        a->nodes = g.to;
+    }
     a->used = g.top;
     a->collections++;
 
@@ -112,10 +118,14 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
         want *= 2;
     if (want > AV_MAX_NODES) want = AV_MAX_NODES;
     if (want > a->cap) {
-        av_node *n = realloc(a->nodes, (size_t)want * sizeof *n);
-        if (n) {
-            a->nodes = n;
-            a->cap = (uint32_t)want;
+        if (a->pma) {
+            pma_grow(a, want);
+        } else {
+            av_node *n = realloc(a->nodes, (size_t)want * sizeof *n);
+            if (n) {
+                a->nodes = n;
+                a->cap = (uint32_t)want;
+            }
         }
     }
     return a->cap - a->used >= need;

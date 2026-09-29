@@ -99,6 +99,7 @@ typedef struct {
     const struct av_facts *facts;   /* the store resolvers here read (§8) */
     uint32_t   compiler[9];     /* the compiler jet's terms (§20.3), roots:
                                    abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
+    struct av_pma *pma;         /* the persistent image (§19.1), or NULL  */
     uint64_t   lookups;         /* scries answered natively from it      */
 } av_arena;
 
@@ -944,7 +945,14 @@ typedef struct av_pier av_pier;
 av_pier *av_pier_new(const char *dir, const uint8_t *pill, size_t npill,
                      const uint8_t *subject, size_t nsubject, const av_opts *o,
                      const char **err);
-/*  Reopen: the newest verified snapshot, then the log after it. */
+/*  The same, on a persistent arena (§19.1) in dir/pma: every event is
+ *  committed to it after it is logged and applied, and a reopen maps it
+ *  and replays only the log after its last commit. */
+av_pier *av_pier_new_pma(const char *dir, const uint8_t *pill, size_t npill,
+                         const uint8_t *subject, size_t nsubject, const av_opts *o,
+                         const char **err);
+/*  Reopen: the persistent arena if the pier has one, else the newest
+ *  verified snapshot; then the log after it. */
 av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err);
 void     av_pier_free(av_pier *p);
 av_kernel *av_pier_kernel(av_pier *p);
@@ -987,5 +995,41 @@ uint32_t av_tm_nat(av_arena *a, const av_compiler *c, uint64_t n);
  *  probes' contractions; --jet-check compares a fire with the term's own
  *  reduction, decoded. */
 bool av_compiler_register(av_arena *a, const av_compiler *c, const char **err);
+
+/*  -------------------------------------------------------- persistent arena
+ *
+ *  §19.1: an arena whose node array is an image file mapped copy-on-write
+ *  into reserved address space.  Opening reads the header and the leaf
+ *  names, not the nodes; a commit writes the chunks changed since the last
+ *  one, through a redo journal, so a crash at any point leaves the image
+ *  as it was before the commit or after it.  An arena with a jet
+ *  dashboard is refused a commit: jet nodes carry dashboard ids, and the
+ *  dashboard is never persisted (§19).
+ */
+typedef struct av_pma av_pma;
+
+/*  Give the arena a persistent image in dir, which must hold none: its
+ *  nodes move into a mapping, and the first commit writes them all. */
+bool      av_pma_attach(av_arena *a, const char *dir, const char **err);
+
+/*  Reopen the image in dir: a journal left by a crash is applied first.
+ *  *root and *events are the last commit's. */
+av_arena *av_pma_open(const char *dir, uint32_t *root, uint64_t *events, const char **err);
+
+/*  Commit the arena as it stands, with root (AV_NONE for none) and the
+ *  number of events it reflects. */
+bool      av_pma_commit(av_arena *a, uint32_t root, uint64_t events, const char **err);
+
+/*  Check every node of the image: tags, indices, leaves, no jet nodes. */
+bool      av_pma_verify(const av_arena *a, uint32_t root, const char **err);
+
+/*  Bytes the last commit wrote to the journal, and chunks it carried. */
+uint64_t  av_pma_last_bytes(const av_arena *a);
+uint64_t  av_pma_last_chunks(const av_arena *a);
+
+/*  For tests: a commit stops the process (_exit) at this point: 1 after
+ *  the journal is written, before its rename; 2 after the rename; 3 half
+ *  way through applying it; 4 after applying it, before removing it. */
+extern int av_pma_crash_at;
 
 #endif /* AVON_H */
