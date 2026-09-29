@@ -255,6 +255,7 @@ static av_status fire_copy(R *r) {
 static unsigned fire_nargs(const R *r, uint32_t id) {
     const av_arena *a = r->a;
     if (a->jets[id].unquote && r->o->install_jets) return 1;
+    if (a->jets[id].compiler && r->o->compile_jets) return 2;
     return a->interps[a->jets[id].interp].nparams + 2;
 }
 
@@ -264,7 +265,8 @@ static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
     uint32_t node = *nodep;
     uint32_t id = AV_JET_ID(av_left(a, node));
     bool uq = a->jets[id].unquote && r->o->install_jets;    /* §20.2 */
-    if (!uq && (!r->o->interp_jets || a->jets[id].interp < 0)) return 0;
+    bool cj = !uq && a->jets[id].compiler && r->o->compile_jets;   /* §20.3 */
+    if (!uq && !cj && (!r->o->interp_jets || a->jets[id].interp < 0)) return 0;
     unsigned nargs = fire_nargs(r, id);
     if (have < nargs || r->steps >= r->o->max_steps) return 0;
     uint32_t argv[AV_INTERP_CTORS + 2];
@@ -278,6 +280,7 @@ static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
     r->jnode = node;
     fault = false;
     int rc = uq ? install_fire(a, argv[0], r->o, r->o->max_steps - r->steps, &out, &charge)
+           : cj ? compile_fire(a, argv, r->o, r->o->max_steps - r->steps, &out, &charge)
                 : interp_fire(a, id, argv, r->o, r->o->max_steps - r->steps,
                               &out, &charge, st, &fault);
     node = r->jnode;                    /* where the node is now */
@@ -292,6 +295,7 @@ static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
                                     : av_right(a, r->stk[r->top - 1 - i]));
         av_root_push(a, &out);
         bool same = uq ? install_check(a, node, argv[0], out)
+                  : cj ? compile_check(a, node, argv, out)
                        : interp_check(a, id, node, argv, out);
         av_root_pop(a);
         if (!same) { r->jet_fault = true; *st = AV_INTERRUPTED; return -1; }
@@ -299,7 +303,7 @@ static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
     r->steps += charge;
     r->jet_steps += charge;
     r->jet_calls++;
-    if (!uq) r->interp_calls++;
+    if (!uq && !cj) r->interp_calls++;
     *outp = out;
     return 1;
 }
@@ -557,6 +561,7 @@ av_opts av_opts_default(void) {
         .jets      = true,
         .interp_jets = false,
         .install_jets = false,
+        .compile_jets = false,
         .jet_check = 0,
         .census    = NULL,
     };

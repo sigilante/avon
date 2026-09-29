@@ -1,0 +1,32 @@
+-- The compiler's core in SKIjack (avon/docs/DESIGN.md §20.3, stage 8):
+-- bracket abstraction, aviary's algorithm with eta, over encoded terms.
+--   [x] x       = I
+--   [x] E       = K E            if x is not free in E
+--   [x] (E x)   = E              if x is not free in E
+--   [x] (E F)   = S [x]E [x]F    otherwise
+-- A term is S, K, I, a variable numbered by a nat, or an application,
+-- whose two fields sit in their own type: a type with a constructor of
+-- two fields of its own type would be the program's object type, whose
+-- other constructors must be leaves (SPEC section 7).  One recursive
+-- equation for the abstraction: the expander refuses mutual recursion.
+nat  === Zero | Suc nat
+bool === Yes | No
+tm   === TS | TK | TI | TV nat | TA ap
+ap   === Ap tm tm
+eqN m n = m |> { Zero (n |> { Zero Yes; Suc k No }); Suc j (n |> { Zero No; Suc k (eqN j k) }) }
+orB a b = a |> { Yes Yes; No b }
+andB a b = a |> { Yes b; No No }
+notB a = a |> { Yes No; No Yes }
+app e f = TA (Ap e f)
+free x t = t |> { TS No; TK No; TI No; TV n (eqN x n); TA p (p |> { Ap e f (orB (free x e) (free x f)) }) }
+isV x t = t |> { TS No; TK No; TI No; TV n (eqN x n); TA p No }
+abs x t = t |> { TS (app TK TS); TK (app TK TK); TI (app TK TI); TV n (eqN x n |> { Yes TI; No (app TK (TV n)) }); TA p (p |> { Ap e f (free x t |> { No (app TK t); Yes (andB (isV x f) (notB (free x e)) |> { Yes e; No (app (app TS (abs x e)) (abs x f)) }) }) }) }
+-- The compiler in a pill (section 20.1): a kernel whose event `Abs x t`
+-- asks for [vx] t, answered as the effect `Out ([vx] t)`.
+out    === Out tm
+outs   === Nil | Cons out outs
+event  === Abs nat tm
+poke k ev = ev |> { Abs x t [(Cons (Out (abs x t)) Nil) [(2@k) (3@k)]] }
+peek k p = 3@k
+load k old = [(2@k) old]
+kernel := [[poke [peek load]] Zero]

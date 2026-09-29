@@ -1376,6 +1376,23 @@ than a fault, and guarded the instance buffer against re-entry.
   kernel, hash for hash.
 - Leak-free (`leaks`) across boot, poke with a snapshot, and peek.
 
+**Stage 8, the compiler's core done; the front end open** (§20.3, "Built
+in stage 8"):
+
+- **The compiler term compiles its own source to the terms Python
+  produced**, for the part of compilation that is bracket abstraction:
+  all 87 distinct abstractions of compiling `abstract.ascii.ski`.
+- **The corpus compiles in Avon to Python's terms, hash for hash**, again
+  for abstraction: all 8,636 distinct abstractions of the 17 compilable
+  corpus programs, by the term (`make selfhost-check`).
+- **The compiler jet, licensed by differential**, agrees on every one,
+  every fire checked; a term that does not abstract as aviary does is
+  refused.
+- **The compiler is a term in a pill**, a kernel answering `Abs` events.
+- What remains is the front end in SKIjack (skijack DESIDERATA §6, item
+  5); until then Python parses and desugars, and the core is what Avon
+  runs.
+
 ## 12. What Avon must not do
 
 Inherited from `RUNTIME-DESIGN.md` §5, still binding:
@@ -2006,6 +2023,40 @@ compiled to and to the value that term reached.
 own source to the term Python produced for it. That is stage 8's
 acceptance test (§11), and a fixed point checked once per compiler version
 thereafter.
+
+**Built in stage 8, for the compiler's core** (`tests/selfhost/`,
+`src/compiler.c`, `avon selfhost`). skijack compiles every equation by
+bracket abstraction (aviary's `expand` abstracts each formal in turn),
+so a compilation is a sequence of calls `[x] body → result`. The core is
+that abstraction, written in SKIjack: `abs x t`, aviary's algorithm with
+η, over encoded terms `tm = TS | TK | TI | TV nat | TA ap`, `ap = Ap tm
+tm` (an application's fields have their own type, since a type with a
+two-field self-constructor would be the program's object type). It is
+one recursive equation, because skijack refuses mutual recursion.
+
+- **The fixed point.** skijack compiling `abstract.ascii.ski` performs
+  123 outermost abstractions, 87 distinct once variables are renamed;
+  the term, run in Avon, gives every one of them, text and hash, in
+  12,214,849 contractions.
+- **The corpus.** Compiling the 17 corpus programs that compile performs
+  19,301 abstractions, 8,636 distinct; the term gives every one, hash for
+  hash, in 523,815,334 contractions, ten seconds. Each definition's term
+  is the last abstraction of its chain, so every one is Python's.
+- **The compiler jet** answers `abs x t` natively (`av_abstract`), its
+  datum decoded by probing and its result encoded with the program's own
+  constructors. It is admitted only if the term agrees with it on sample
+  terms, and with `--jet-check=1` every fire is compared with the term's
+  reduction: 8,636 of 8,636 and 87 of 87 agree.
+- **The compiler in a pill.** The same source declares a kernel whose
+  event `Abs x t` has the effect `Out ([vx] t)`; booted from its pill and
+  poked with every call of its own compilation, it answers each with
+  Python's abstraction, by the term and with the jet.
+
+**Not yet self-hosted: the front end.** Parsing, name resolution, case
+and type compilation, axes, pairs and quotation still run in Python;
+they produce the bodies the core abstracts. Writing them in SKIjack is
+skijack's own open item (DESIDERATA §6, item 5), and when it lands the
+fixed point extends from abstraction to source text.
 
 ### 20.4 What else the analogy imports
 

@@ -58,6 +58,12 @@ int  install_fire(av_arena *a, uint32_t datum, const av_opts *o, uint64_t host_l
                   uint32_t *out, uint64_t *charge);
 bool install_check(av_arena *a, uint32_t node, uint32_t datum, uint32_t out);
 
+/*  The compiler jet (compiler.c): abs x t, argv[0] x and argv[1] t,
+ *  answered natively; and its check against the term's reduction. */
+int  compile_fire(av_arena *a, const uint32_t *argv, const av_opts *o, uint64_t host_left,
+                  uint32_t *out, uint64_t *charge);
+bool compile_check(av_arena *a, uint32_t node, const uint32_t *argv, uint32_t out);
+
 /*  The census's hook (census.c): x was put in function position with
  *  `avail` arguments at the head. */
 void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail);

@@ -3,7 +3,9 @@
 # tests/diff_aviary.py, `make witness-check` runs tests/witness_check.sh,
 # `make jet-witness-check` runs tests/jet_witness_check.sh,
 # `make probe-witness-check` runs tests/probe_witness_check.sh (the last
-# three need a lean-ski checkout), `make clean` removes build/.  Requires GNU Make 3.81+.
+# three need a lean-ski checkout), `make selfhost-check` runs
+# tests/selfhost_check.sh (it needs a skijack checkout), `make clean`
+# removes build/.  Requires GNU Make 3.81+.
 
 CC      := clang
 CSTD    := -std=c11
@@ -24,7 +26,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
-.PHONY: all check clean witness-check jet-witness-check probe-witness-check
+.PHONY: all check clean witness-check jet-witness-check probe-witness-check selfhost-check
 .SECONDARY:
 
 all: $(BUILD)/avon
@@ -62,6 +64,9 @@ jet-witness-check: $(BUILD)/avon
 
 probe-witness-check: $(BUILD)/avon
 	tests/probe_witness_check.sh
+
+selfhost-check: $(BUILD)/avon
+	tests/selfhost_check.sh
 
 clean:
 	rm -rf $(BUILD)

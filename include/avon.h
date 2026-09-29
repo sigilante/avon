@@ -97,6 +97,8 @@ typedef struct {
     uint32_t  *nats;            /* known numerals: zero, suc pairs: roots  */
     uint32_t   nnats;
     const struct av_facts *facts;   /* the store resolvers here read (§8) */
+    uint32_t   compiler[9];     /* the compiler jet's terms (§20.3), roots:
+                                   abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
     uint64_t   lookups;         /* scries answered natively from it      */
 } av_arena;
 
@@ -295,6 +297,8 @@ typedef struct {
                                    change counts, so off by default */
     bool        install_jets;   /* fire the unquoter's jet (§20.2):
                                    it changes counts too; off by default */
+    bool        compile_jets;   /* fire the compiler jet (§20.3): it
+                                   changes counts too; off by default */
     uint64_t    jet_check;      /* check every Nth fire against the
                                    unjetted run (§6.6); 0 never */
     struct av_census *census;   /* copy mode: record calls; NULL off */
@@ -584,6 +588,7 @@ typedef struct av_jet {
     uint8_t   admitted;         /* its native lookup: 0 unchecked, 1 agrees
                                    with the term, 2 refused               */
     bool      unquote;          /* the unquoter, UQ (§20.2): install      */
+    bool      compiler;         /* the compiler's abstraction (§20.3)     */
 } av_jet;
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
@@ -952,5 +957,35 @@ bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *
                   size_t nsubject, const char **err);
 /*  Snapshot the installed kernel at the current event count. */
 bool av_pier_snapshot(av_pier *p, const char **err);
+
+/*  ---------------------------------------------------------- the compiler
+ *
+ *  §20.3: the compiler's core as a term -- bracket abstraction written in
+ *  SKIjack (tests/selfhost/abstract.ascii.ski), `abs x t` over encoded
+ *  terms tm = TS | TK | TI | TV nat | TA ap, ap = Ap tm tm -- and its jet,
+ *  native abstraction (av_abstract), licensed by differential against the
+ *  term.  A term here is S, K, I and atoms `vN`, the variable numbered N.
+ */
+typedef struct {
+    uint32_t abs, ts, tk, ti, tv, ta, ap, zero, suc;   /* terms of one arena */
+} av_compiler;
+
+/*  t (S, K, I, atoms vN) as a tm datum with c's constructors; AV_NONE for
+ *  any other atom. */
+uint32_t av_tm_encode(av_arena *a, const av_compiler *c, uint32_t t);
+
+/*  A tm datum, read by probing, as a term; AV_NONE with *err if it is not
+ *  one.  Probes never collect. */
+uint32_t av_tm_decode(av_arena *a, uint32_t datum, const av_opts *o, const char **err);
+
+/*  The numeral n with c's Zero and Suc. */
+uint32_t av_tm_nat(av_arena *a, const av_compiler *c, uint64_t n);
+
+/*  Make c.abs the compiler jet's key: admitted only if, on sample terms,
+ *  abs x t -- reduced, decoded -- is native abstraction's [vx] t.  With
+ *  compile_jets, `abs x t` at the head is answered natively, charged its
+ *  probes' contractions; --jet-check compares a fire with the term's own
+ *  reduction, decoded. */
+bool av_compiler_register(av_arena *a, const av_compiler *c, const char **err);
 
 #endif /* AVON_H */
