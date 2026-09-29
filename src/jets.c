@@ -185,43 +185,48 @@ static bool marks(av_arena *a) {
 }
 
 /*  Leaves in the tree unfolding, saturating at SIZE_MAX. */
-static size_t tree_atoms(const av_arena *a, uint32_t t) {
-    nmap m = { 0 };
+/*  Every node's leaf count below t, saturating, into m keyed by viewed
+ *  node: one pass, each shared node once. */
+static bool atoms_all(const av_arena *a, uint32_t t, nmap *m) {
     typedef struct { uint32_t node; bool done; } item;
-    size_t cap = 256, top = 0, out = SIZE_MAX;
+    size_t cap = 256, top = 0;
     item *todo = malloc(cap * sizeof *todo);
-    if (!todo) return SIZE_MAX;
-    todo[top++] = (item){ av_view(a, t), false };
-    while (top) {
+    bool ok = todo != NULL;
+    if (ok) todo[top++] = (item){ av_view(a, t), false };
+    while (ok && top) {
         item it = todo[--top];
         uint64_t v;
-        if (nmap_get(&m, it.node, &v)) continue;
+        if (nmap_get(m, it.node, &v)) continue;
         if (av_tag(a, it.node) == AV_LEAF) {
-            if (!nmap_put(&m, it.node, 1)) goto done;
+            ok = nmap_put(m, it.node, 1);
             continue;
         }
         uint32_t f = av_view(a, av_left(a, it.node)), x = av_view(a, av_right(a, it.node));
         if (it.done) {
             uint64_t sf, sx;
-            nmap_get(&m, f, &sf);
-            nmap_get(&m, x, &sx);
-            uint64_t s = sf + sx < sf ? UINT64_MAX : sf + sx;
-            if (!nmap_put(&m, it.node, s)) goto done;
+            nmap_get(m, f, &sf);
+            nmap_get(m, x, &sx);
+            ok = nmap_put(m, it.node, sf + sx < sf ? UINT64_MAX : sf + sx);
             continue;
         }
         if (top + 3 > cap) {
             item *q = realloc(todo, (cap *= 2) * sizeof *q);
-            if (!q) goto done;
+            if (!q) { ok = false; break; }
             todo = q;
         }
         todo[top++] = (item){ it.node, true };
         todo[top++] = (item){ x, false };
         todo[top++] = (item){ f, false };
     }
-    uint64_t v;
-    if (nmap_get(&m, av_view(a, t), &v)) out = v > SIZE_MAX ? SIZE_MAX : (size_t)v;
-done:
     free(todo);
+    return ok;
+}
+
+static size_t tree_atoms(const av_arena *a, uint32_t t) {
+    nmap m = { 0 };
+    uint64_t v;
+    size_t out = atoms_all(a, t, &m) && nmap_get(&m, av_view(a, t), &v)
+                 ? (v > SIZE_MAX ? SIZE_MAX : (size_t)v) : SIZE_MAX;
     nmap_free(&m);
     return out;
 }
@@ -581,13 +586,14 @@ static int by_digest(const void *x, const void *y) {
 }
 
 long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
-    /* the distinct subterms, by digest */
-    nmap dig = { 0 };
+    /* the distinct subterms, by digest, and every node's size: one pass
+     * each, since sizing each subterm apart is quadratic in the term */
+    nmap dig = { 0 }, sizes = { 0 };
     dnode *all = NULL;
     uint32_t *cand = NULL;
     size_t n = 0, m = 0;
     long added = 0;
-    bool ok = hash_all(a, av_view(a, t), &dig) &&
+    bool ok = hash_all(a, av_view(a, t), &dig) && atoms_all(a, av_view(a, t), &sizes) &&
               (all = malloc((dig.n ? dig.n : 1) * sizeof *all)) != NULL;
     for (size_t i = 0; ok && i < dig.cap; i++)
         if (dig.key[i] != AV_NONE && av_tag(a, dig.key[i]) == AV_APP)
@@ -598,10 +604,12 @@ long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
     for (size_t i = 0; ok && i < m; i++) {
         if (i && all[i].digest == all[i - 1].digest) continue;
         if (jet_find(a, all[i].digest) != AV_NONE) continue;
-        size_t atoms = tree_atoms(a, all[i].node);
+        uint64_t atoms = 0;
+        nmap_get(&sizes, all[i].node, &atoms);
         if (atoms >= 2 && atoms <= max_atoms) cand[n++] = all[i].node;
     }
     free(all);
+    nmap_free(&sizes);
     /* rooted: the runs collect */
     for (size_t i = 0; ok && i < n; i++) av_root_push(a, &cand[i]);
     for (size_t i = 0; ok && i < n; i++) {
