@@ -823,6 +823,70 @@ its own walk -- which ran 20 minutes on this term before one pass
 replaced it. Dispatch on a two-constructor value is one or two
 contractions, which no jet beats; the way to fewer is fewer dispatches.
 
+**Which jets eat which, 2026-09-29.** The loader wraps every subterm
+whose §5 hash is a jet's, nested ones too, and the reducer fires the
+first jet node it meets walking down the spine if the arguments cover
+its arity, else enters the term, where the inner jets meet theirs. So a
+fire can take what an inner jet would have: *eat* it. `avon jetstat`
+measures this: per jet, its fires and the contractions they absorb,
+together with every candidate and, with `--alone`, registered by itself;
+its misses (reached with too few arguments) and share-mode demotions; and
+each fire's origin -- its jet node from the program as loaded, from an
+instance of another jet's residual (after that jet fired), or from
+another jet's term (after it missed). `src/jetstats.c` fixes a node's
+origin where the node is made and follows it through collections
+(`tests/test_jetstats.c`, hand-counted in both modes). The candidates are
+`census --top=40 --emit`, 201 rows with their layers, and the 153 bird
+encodings; `--halting` leaves out the two runs the fuel stops, 800,000
+of the 2.66 million contractions, whose counts measure the budget.
+
+    avon census --top=40 --emit=census40.tsv MANIFEST...
+    avon jetstat [--share] --halting --alone --jets=census40.tsv \
+        --jets=jets/birds.tsv --names=... MANIFEST...
+
+| 84 halting runs | copy | share |
+|---|---:|---:|
+| contractions, no jets | 1,858,830 | 1,169,837 |
+| absorbed by 348 jets together | 1,313,452 | 1,228,237 |
+| fires | 109,793 | 90,848 |
+| stepped, with jets | 545,378 | 202,448 |
+| each alone, summed | 11,329,207 | 10,886,105 |
+
+- **Eating is the rule.** The jets absorb 88% less together than their
+  alone figures summed. Small patterns lose most: `S (K (S (K K)))` absorbs
+  216,345 alone and 28,250 together, T 147,292 and 6,136, O 127,578 and
+  10,694, Cons 188,005 and 39,235. Two layers of 810 and 566 atoms absorb
+  45,353 each alone and nothing together: the head they belong to fires.
+- **Nested fires come from residuals.** An outer jet's residual carries
+  the inner jets its body calls, and they fire next: Y's residual fires L
+  14,793 times, L's fires KM 16,567. No fire in either mode came from a
+  term entered after a miss, and the corpora miss 61 times in all.
+- **Share mode can gain fires.** L fires 9,899 times together and 3,916
+  alone, Y 1,058 and 453: an instance builds afresh what sharing built
+  once, the fixpoint's unrolling here. The corpora still come out ahead:
+  202,448 contractions and 90,848 fires, against 1,169,837 contractions.
+
+**The front end compiling itself, with jets** (share mode, output
+identical in every case; work is contractions stepped plus fires; user
+time best of five, interleaved, on a loaded machine):
+
+| jets | work | time |
+|---|---:|---:|
+| none | 306,991,371 | 5.31 s |
+| birds | 271,732,988 (−11%) | 5.31 s |
+| constructors (`--ctors`) | 228,890,634 (−25%) | 5.12 s |
+| census and birds | 317,361,509 (+3%) | 7.58 s |
+| its own rules, 5 to 64 atoms | 353,526,862 (+15%) | 7.20 s |
+| all of these | 251,033,829 (−18%) | 7.41 s |
+
+Its own rules neither miss nor demote; they lose by instantiation, which
+copies what sharing would have reduced once, and a fire costs several
+contractions' time. The 587 rules over 64 atoms never miss and demote four
+times in the first 30 million contractions: the slowness of the first
+all-rules run was the fires, not the demotions. Only the constructor jets pay, barely. For this
+program the jets that work are the ones that do not copy: the case for a
+native extended basis over residual instances.
+
 **Interning and reading, 2026-09-29.** Two changes to that end. The front
 end interns each identifier to a binary number after lexing and keys its
 tables by the number's bits, so a lookup is a dispatch per bit and never

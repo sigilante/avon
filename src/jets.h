@@ -30,6 +30,15 @@ uint32_t jet_find(const av_arena *a, uint64_t digest);
  *  first; follow a collection. */
 void     profile_charge(av_profile *p, const uint32_t *spine, unsigned k, ski_leaf c);
 void     profile_remap(av_profile *p, const av_gc *g);
+/*  The jet stats' hooks (jetstats.c): a fire of jet id at jet node `node`;
+ *  a miss; a share-mode demotion, copied or not; a jet node made fresh
+ *  from jet owner's residual or term; a collection. */
+void     jetstats_fire(av_jetstats *s, uint32_t node, uint32_t id);
+void     jetstats_miss(av_jetstats *s, uint32_t id);
+void     jetstats_demote(av_jetstats *s, uint32_t id, bool copied);
+void     jetstats_made(av_jetstats *s, uint32_t node, uint32_t owner, unsigned kind);
+void     jetstats_remap(av_jetstats *s, const av_gc *g);
+
 /*  A redex root rewritten in place is no longer loaded code. */
 void     profile_rewrote(av_profile *p, uint32_t node);
 

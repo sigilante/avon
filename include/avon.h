@@ -98,6 +98,8 @@ typedef struct {
     uint32_t  *nats;            /* known numerals: zero, suc pairs: roots  */
     uint32_t   nnats;
     const struct av_facts *facts;   /* the store resolvers here read (§8) */
+    struct av_jetstats *jetstats;   /* set while a reduction counting jets
+                                       runs, for the jet-node makers */
     uint32_t   compiler[9];     /* the compiler jet's terms (§20.3), roots:
                                    abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
     struct av_pma *pma;         /* the persistent image (§19.1), or NULL  */
@@ -306,6 +308,9 @@ typedef struct {
     struct av_census *census;   /* copy mode: record calls; NULL off */
     struct av_profile *profile; /* share mode: charge each contraction to
                                    a named term (§6.7); NULL off */
+    struct av_jetstats *jetstats;   /* count each jet's fires, misses and
+                                   demotions, and each fire's origin
+                                   (§6.7); NULL off */
 } av_opts;
 
 typedef struct {
@@ -683,6 +688,48 @@ typedef struct av_interp {
  *  node that is a constructor applied to its fields behaves as one. */
 long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
                      const char **err);
+
+/*  ------------------------------------------------------------ jet stats
+ *
+ *  What each jet does on a run (docs/DESIGN.md §6.7): fires and the
+ *  contractions they absorb; misses, reached at the head with fewer
+ *  arguments than its arity; share-mode demotions, and those that copied
+ *  its term.  And each fire's origin: its jet node from the program as
+ *  loaded (top), from an instance of another jet's residual -- after that
+ *  jet fired -- or from another jet's term, entered because that jet did
+ *  not.  Keyed by §5 digest, across runs and arenas; av_jetstats_begin
+ *  once per loaded, matched program, before its reductions.
+ */
+typedef struct av_jetstats av_jetstats;
+
+enum { AV_FROM_RESIDUAL = 0, AV_FROM_TERM = 1 };
+
+typedef struct {
+    uint64_t fires, absorbed;       /* absorbed: fires times the cost      */
+    uint64_t top, in_residual, in_term;   /* the fires, by origin          */
+    uint64_t misses, demotions, copies;
+    av_ctor  ctor;                  /* its constructor shape, if one */
+    uint32_t nodes;                 /* nodes one fire's instance builds */
+} av_jetstat_row;
+
+typedef struct { size_t outer, inner; unsigned kind; uint64_t fires; } av_jetstat_pair;
+
+av_jetstats *av_jetstats_new(void);
+void         av_jetstats_free(av_jetstats *s);
+bool         av_jetstats_begin(av_jetstats *s, const av_arena *a, uint32_t t);
+size_t       av_jetstats_rows(const av_jetstats *s);
+void         av_jetstats_row(const av_jetstats *s, size_t i, char hash[27],
+                             unsigned *arity, uint64_t *cost, size_t *atoms,
+                             av_jetstat_row *counts);
+bool         av_jetstats_find(const av_jetstats *s, const char *hash, size_t *i);
+/*  The (outer, inner, origin) triples and their fires; *out is malloc'd. */
+size_t       av_jetstats_pairs(const av_jetstats *s, av_jetstat_pair **out);
+/*  Whether an origin was lost to memory, so counts undercount. */
+bool         av_jetstats_lost(const av_jetstats *s);
+
+/*  av_jets_load, registering only the row whose hash is `only`. */
+long av_jets_load_only(av_arena *a, const char *path, size_t min_atoms,
+                       uint64_t only, const char **err);
 
 /*  ------------------------------------------------------- the front end
  *

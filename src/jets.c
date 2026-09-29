@@ -652,8 +652,21 @@ static bool wrap_insides(av_arena *a) {
     return true;
 }
 
+static long load(av_arena *a, const char *path, size_t min_atoms, bool filter,
+                 uint64_t only, const char **err);
+
 long av_jets_load(av_arena *a, const char *path, size_t min_atoms,
                   const char **err) {
+    return load(a, path, min_atoms, false, 0, err);
+}
+
+long av_jets_load_only(av_arena *a, const char *path, size_t min_atoms,
+                       uint64_t only, const char **err) {
+    return load(a, path, min_atoms, true, only, err);
+}
+
+static long load(av_arena *a, const char *path, size_t min_atoms, bool filter,
+                 uint64_t only, const char **err) {
     FILE *f = fopen(path, "rb");
     if (!f) { if (err) *err = "cannot open the dictionary"; return -1; }
     char *line = NULL;
@@ -670,6 +683,7 @@ long av_jets_load(av_arena *a, const char *path, size_t min_atoms,
         size_t len = strcspn(term, "\n");
         uint64_t want;
         if (!av_hash_parse(h, &want)) { msg = "malformed hash"; break; }
+        if (filter && want != only) continue;
         av_parse_error pe;
         uint32_t t = av_parse(a, term, len, &pe);
         if (t == AV_NONE) { msg = "unparsable dictionary term"; break; }
@@ -716,6 +730,8 @@ static uint32_t copy_template(av_arena *a, uint32_t root, const av_jet *j,
                 ? jet_node(a, AV_JET_ID(av_left(a, x)) | AV_JET_SHARED, av_right(a, x))
                 : x;
             if (built == AV_NONE) goto done;
+            if (fresh_jets && a->jetstats)          /* a copy of j's term */
+                jetstats_made(a->jetstats, built, (uint32_t)(j - a->jets), AV_FROM_TERM);
         } else if (!it.done) {
             if (top + 3 > cap) {
                 item *q = realloc(todo, (cap *= 2) * sizeof *q);
@@ -766,6 +782,8 @@ uint32_t jet_instance(av_arena *a, uint32_t id, const uint32_t *args,
             n = fresh_jets
                 ? jet_node(a, AV_JET_ID(av_left(a, c)) | AV_JET_SHARED, av_right(a, c))
                 : c;
+            if (fresh_jets && n != AV_NONE && a->jetstats)   /* of id's residual */
+                jetstats_made(a->jetstats, n, id, AV_FROM_RESIDUAL);
         } else {
             n = av_app(a, OPERAND(p), OPERAND(q));
         }

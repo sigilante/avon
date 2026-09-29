@@ -96,6 +96,7 @@ static bool mark_set(R *r, uint32_t i) {
 static void remap_marks(av_gc *g, void *ctx) {
     R *r = ctx;
     if (r->o->profile) profile_remap(r->o->profile, g);
+    if (r->o->jetstats) jetstats_remap(r->o->jetstats, g);
     if (!r->marks) return;
     uint64_t *old = r->marks;
     size_t nold = r->nmarks;
@@ -236,6 +237,7 @@ static av_status fire_copy(R *r) {
     }
     if (!ensure(r, a->jets[id].nodes)) return AV_SIZE;
     for (unsigned i = 0; i < k; i++) args[i] = r->stk[r->top - 1 - i];
+    if (r->o->jetstats) jetstats_fire(r->o->jetstats, r->head, id);
     uint32_t inst = jet_instance(a, id, args, false);   /* copy mode writes nothing */
     assert(inst != AV_NONE && "allocation past what ensure() reserved");
     if (inst == AV_NONE) return AV_SIZE;
@@ -338,8 +340,13 @@ static av_status run_copy(R *r) {
                     ensure(r, a->jets[AV_JET_ID(av_left(a, r->head))].nodes)) {
                     av_status js = fire_copy(r);
                     if (js != AV_WHNF) return js;
-                } else if (!decompose(r, av_right(a, r->head))) {
-                    return AV_SIZE;             /* unwrapped: the term itself */
+                } else {
+                    uint32_t id = AV_JET_ID(av_left(a, r->head));
+                    if (o->jetstats && o->jets && a->jets[id].residual_ok &&
+                        r->top - r->base < a->jets[id].arity)
+                        jetstats_miss(o->jetstats, id);
+                    if (!decompose(r, av_right(a, r->head)))
+                        return AV_SIZE;         /* unwrapped: the term itself */
                 }
                 continue;
             }
@@ -447,6 +454,11 @@ static av_status whnf_share(R *r) {
                 continue;
             }
             if (!(a->jets[id].residual_ok && fires(r, id, r->top - bottom))) {
+                if (o->jetstats) {
+                    if (o->jets && a->jets[id].residual_ok && r->top - bottom < a->jets[id].arity)
+                        jetstats_miss(o->jetstats, id);
+                    jetstats_demote(o->jetstats, id, (av_left(a, cur) & AV_JET_SHARED) != 0);
+                }
                 /* Unwrapped, and demoted: this run may write inside the
                  * term from here on, so the jet node becomes an
                  * indirection to a term it owns -- a private copy when
@@ -479,6 +491,7 @@ static av_status whnf_share(R *r) {
             if (!ensure(r, a->jets[id].nodes)) return AV_SIZE;
             for (unsigned i = 0; i < k; i++)
                 args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
+            if (o->jetstats) jetstats_fire(o->jetstats, cur, id);
             uint32_t inst = jet_instance(a, id, args, true);
             assert(inst != AV_NONE && "allocation past what ensure() reserved");
             if (inst == AV_NONE) return AV_SIZE;
@@ -570,6 +583,7 @@ av_opts av_opts_default(void) {
         .jet_check = 0,
         .census    = NULL,
         .profile   = NULL,
+        .jetstats  = NULL,
     };
 }
 
@@ -578,7 +592,10 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
             .jnode = AV_NONE };
     av_active me = { roots, remap_marks, &r, a->active };
     a->active = &me;
+    struct av_jetstats *outer_stats = a->jetstats;  /* a nested run keeps its own */
+    a->jetstats = o->jetstats;
     av_status s = o->strategy == AV_COPY ? run_copy(&r) : run_share(&r);
+    a->jetstats = outer_stats;
 
     uint32_t term = r.root;
     if (o->strategy == AV_COPY && s != AV_WHNF && s != AV_NORMAL) {
