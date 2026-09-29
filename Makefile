@@ -4,7 +4,8 @@
 # `make jet-witness-check` runs tests/jet_witness_check.sh,
 # `make probe-witness-check` runs tests/probe_witness_check.sh (the last
 # three need a lean-ski checkout), `make selfhost-check` runs
-# tests/selfhost_check.sh (it needs a skijack checkout), `make clean`
+# tests/selfhost_check.sh and `make front0-check` runs
+# tests/front0_check.sh (both need a skijack checkout), `make clean`
 # removes build/.  Requires GNU Make 3.81+.
 
 CC      := clang
@@ -26,7 +27,8 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
-.PHONY: all check clean witness-check jet-witness-check probe-witness-check selfhost-check
+.PHONY: all check clean witness-check jet-witness-check probe-witness-check selfhost-check \
+	front0-check
 .SECONDARY:
 
 all: $(BUILD)/avon
@@ -67,6 +69,9 @@ probe-witness-check: $(BUILD)/avon
 
 selfhost-check: $(BUILD)/avon
 	tests/selfhost_check.sh
+
+front0-check: $(BUILD)/avon
+	tests/front0_check.sh
 
 clean:
 	rm -rf $(BUILD)

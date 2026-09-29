@@ -1390,9 +1390,9 @@ in stage 8"):
   every fire checked; a term that does not abstract as aviary does is
   refused.
 - **The compiler is a term in a pill**, a kernel answering `Abs` events.
-- What remains is the front end in SKIjack (skijack DESIDERATA §6, item
-  5); until then Python parses and desugars, and the core is what Avon
-  runs.
+- **The front end, for SKIjack-0, compiles its own source** (§20.3,
+  "Built for SKIjack-0"): all 375 of its names, from source text, hash for
+  hash (`make front0-check`). The full language's front end remains.
 
 **Stage 9, done.** The persistent arena (§19.1, "Built in stage 9"):
 
@@ -2132,7 +2132,8 @@ that abstraction, written in SKIjack: `abs x t`, aviary's algorithm with
 η, over encoded terms `tm = TS | TK | TI | TV nat | TA ap`, `ap = Ap tm
 tm` (an application's fields have their own type, since a type with a
 two-field self-constructor would be the program's object type). It is
-one recursive equation, because skijack refuses mutual recursion.
+one recursive equation, because skijack refused mutual recursion when it
+was written.
 
 - **The fixed point.** skijack compiling `abstract.ascii.ski` performs
   123 outermost abstractions, 87 distinct once variables are renamed;
@@ -2152,11 +2153,34 @@ one recursive equation, because skijack refuses mutual recursion.
   poked with every call of its own compilation, it answers each with
   Python's abstraction, by the term and with the jet.
 
-**Not yet self-hosted: the front end.** Parsing, name resolution, case
-and type compilation, axes, pairs and quotation still run in Python;
-they produce the bodies the core abstracts. Writing them in SKIjack is
-skijack's own open item (DESIDERATA §6, item 5), and when it lands the
-fixed point extends from abstraction to source text.
+**Built for SKIjack-0: the front end** (skijack's `selfhost-front-end`
+branch, `python/skijack/selfhost/`; `tests/front0_check.sh`). SKIjack-0
+is the subset of SKIjack with types, equations, definitions, cases,
+cells, picks and lambdas, and skijack's `docs/SKIJACK-0.md` specifies its
+compilation term for term. The front end is a SKIjack-0 program: it
+lexes, parses, desugars, lifts lambdas, ties recursion -- one fixpoint
+per group of mutually recursive equations, which skijack's expander
+learned on the same branch -- and abstracts with the core's `abs`. Python
+compiles it to one term, `front`; Avon runs it in share mode on a
+program's 7-bit character codes.
+
+- **The fixed point from source text.** `front` applied to its own
+  29,623-character source gives all 375 of its names their terms, hash
+  for hash with Python's, in 2,176,424,461 contractions, about 40
+  seconds.
+- **Agreement.** It compiles a thousand random SKIjack-0 programs as
+  skijack's specification does, and accepts or refuses 67 programs at
+  the subset's edges (duplicate names, cycles, newlines before a closing
+  bracket, shadowed recursion) as it does.
+- **Sharing is required.** `front` passes its tables and environment to
+  many callers; a reducer that copies recomputes each at every use, so
+  the check runs in share mode, and the non-sharing reference reducer
+  runs only the lexer (skijack's `tests/test_front0.py`).
+
+The full language's front end -- cores, macros, signatures, quotation,
+scries, namespace literals and the type checker -- still runs in Python.
+Next come the whole language's front end, checked on the corpus, and jets
+for the front end's hot equations.
 
 ### 20.4 What else the analogy imports
 
