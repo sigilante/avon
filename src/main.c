@@ -45,6 +45,11 @@
  *                                     (docs/DESIGN.md §20.3): every call of a
  *                                     calls file through DIR/abs.skit, or its
  *                                     jet, checked against Python's by hash
+ *      avon front0 [--profile=NAMES] [--fuel=N] [--max-nodes=N] DIR SOURCE
+ *                                     the SKIjack-0 front end (docs/DESIGN.md
+ *                                     §20.3) on SOURCE: DIR/front.skit and the
+ *                                     input's constructors; each name and its
+ *                                     term's hash, read by probing
  *      avon --version
  *
  *  A FILE may be in the printed form, a SKIT container (docs/DESIGN.md
@@ -113,6 +118,7 @@ static int usage(void) {
         "       avon load --pier=DIR [--subject=FILE] [--snapshot] PILL\n"
         "       (boot, poke, peek, load accept --strategy=, --fuel=, --budget=)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
+        "       avon front0 [--profile=NAMES] [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
         "       avon --version\n");
     return 2;
 }
@@ -599,6 +605,77 @@ static int kernel_main(int argc, char **argv) {
 /*  avon selfhost DIR CALLS: every call of a calls file (tests/selfhost/
  *  export.py) through the compiler term DIR/abs.skit -- or its jet, with
  *  --jets -- decoded and compared with Python's result by hash. */
+/*  avon front0 [--profile=NAMES] [--fuel=N] [--max-nodes=N] DIR SOURCE:
+ *  the SKIjack-0 front end (§20.3) on SOURCE, DIR holding its term and the
+ *  input's constructors as SKIT files; a line `name TAB hash` per name, or
+ *  `RErr`, and the contractions on stderr. */
+static int front0_main(int argc, char **argv) {
+    const char *dir = NULL, *source = NULL, *profile = NULL;
+    av_opts o = av_opts_default();
+    o.jets = false;
+    uint64_t v;
+    for (int i = 2; i < argc; i++) {
+        const char *s = argv[i];
+        if (strncmp(s, "--profile=", 10) == 0 && s[10]) profile = s + 10;
+        else if (strncmp(s, "--fuel=", 7) == 0 && number(s + 7, &v)) o.max_steps = v;
+        else if (strncmp(s, "--max-nodes=", 12) == 0 && number(s + 12, &v) && v <= AV_MAX_NODES)
+            o.max_nodes = (uint32_t)v;
+        else if (s[0] != '-' && !dir) dir = s;
+        else if (s[0] != '-' && !source) source = s;
+        else return usage();
+    }
+    if (!dir || !source) return usage();
+    FILE *sf = fopen(source, "rb");
+    if (!sf) { perror(source); return 1; }
+    size_t slen;
+    char *src = slurp(sf, &slen);
+    fclose(sf);
+    if (!src) return 1;
+    static const char *const names[6] = { "front", "SCons", "SNil", "Code", "Lo", "Hi" };
+    av_arena *a = av_arena_new(1u << 16);
+    uint32_t terms[6];
+    for (int i = 0; i < 6; i++) {
+        char path[1100];
+        snprintf(path, sizeof path, "%s/%s.skit", dir, names[i]);
+        FILE *tf = fopen(path, "rb");
+        size_t tl = 0;
+        char *tb = tf ? slurp(tf, &tl) : NULL;
+        if (tf) fclose(tf);
+        terms[i] = tb && a ? av_cue(a, (const uint8_t *)tb, tl, NULL) : AV_NONE;
+        free(tb);
+        if (terms[i] == AV_NONE) {
+            fprintf(stderr, "avon: %s: not a term\n", path);
+            free(src);
+            av_arena_free(a);
+            return 1;
+        }
+    }
+    av_front0 f;
+    _Static_assert(sizeof f == sizeof terms, "six terms");
+    memcpy(&f, terms, sizeof f);
+    uint32_t t = av_front0_input(a, &f, src, slen);
+    free(src);
+    if (t == AV_NONE) {
+        fprintf(stderr, "avon: %s: not ASCII, or out of memory\n", source);
+        av_arena_free(a);
+        return 1;
+    }
+    av_profile *prof = NULL;
+    if (profile && !(prof = profile_load(profile, a, t))) { av_arena_free(a); return 1; }
+    o.profile = prof;
+    uint64_t steps = 0;
+    const char *err = NULL;
+    int rc = av_front0_read(a, t, &o, stdout, &steps, &err);
+    fprintf(stderr, "contractions %llu\n", (unsigned long long)steps);
+    if (rc < 0) fprintf(stderr, "avon: the result does not read: %s\n", err ? err : "?");
+    if (prof) {
+        av_profile_report(prof, stderr, SIZE_MAX);
+        av_profile_free(prof);
+    }
+    av_arena_free(a);
+    return rc < 0 ? 1 : 0;
+}
+
 static int selfhost_main(int argc, char **argv) {
     const char *dir = NULL, *calls = NULL;
     bool jets = false;
@@ -1013,6 +1090,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "census") == 0) return census_main(argc, argv);
     if (strcmp(argv[1], "scry") == 0) return scry_main(argc, argv);
     if (strcmp(argv[1], "selfhost") == 0) return selfhost_main(argc, argv);
+    if (strcmp(argv[1], "front0") == 0) return front0_main(argc, argv);
     if (strcmp(argv[1], "boot") == 0 || strcmp(argv[1], "poke") == 0 ||
         strcmp(argv[1], "peek") == 0 || strcmp(argv[1], "load") == 0)
         return kernel_main(argc, argv);

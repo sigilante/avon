@@ -810,9 +810,27 @@ shows now:
 | everything else, no row above 5.2% | 21.5% |
 
 The run-time rows are now the most of the front end: Scott dispatch on
-the values its cases read. That is Turner's case for an extended basis
-(§6.7's two tiers) and for constructor jets (§6.8), not for the
-program's own functions.
+the values its cases read.
+
+**Jets, measured, 2026-09-29.** On the self-compile above (16.6 seconds
+unjetted), with output checked byte for byte: constructor jets (§6.8,
+`--ctors`) fire 232 million times and take 24.0 seconds, since a fire
+builds its residual in fresh nodes where share mode would have contracted
+a few in place; residual jets for all 747 of the front end's rules of
+eight atoms or more had not finished after 13.5 minutes. The measurement
+also found the constructor scan quadratic -- it sized every subterm with
+its own walk -- which ran 20 minutes on this term before one pass
+replaced it. Dispatch on a two-constructor value is one or two
+contractions, which no jet beats; the way to fewer is fewer dispatches.
+
+**Interning and reading, 2026-09-29.** Two changes to that end. The front
+end interns each identifier to a binary number after lexing and keys its
+tables by the number's bits, so a lookup is a dispatch per bit and never
+a comparison of names: the fixed point fell to 740,558,347 contractions
+for 492 names. And `avon front0` (§20.3) reads the result by probing
+instead of rendering it as a tree of atoms for a printer, which took
+another 58%: 306,991,371 contractions, eight seconds, against the first
+version's 2,176,424,461 and 40.
 
 ### 6.8 Constructor jets and the jet dictionaries
 
@@ -1479,7 +1497,7 @@ in stage 8"):
   refused.
 - **The compiler is a term in a pill**, a kernel answering `Abs` events.
 - **The front end, for SKIjack-0, compiles its own source** (§20.3,
-  "Built for SKIjack-0"): all 433 of its names, from source text, hash for
+  "Built for SKIjack-0"): all 492 of its names, from source text, hash for
   hash (`make front0-check`). The full language's front end remains.
 
 **Stage 9, done.** The persistent arena (§19.1, "Built in stage 9"):
@@ -2252,11 +2270,20 @@ learned on the same branch -- and abstracts with the core's `abs`. Python
 compiles it to one term, `front`; Avon runs it in share mode on a
 program's 7-bit character codes.
 
+`avon front0 DIR SOURCE` (`src/front0.c`) builds that input in the arena,
+each code's datum once, and reads the result by probing -- ROk, then each
+name and term -- into a line per name, the name and its term's §5 hash,
+computed bottom up with a memo of hashed nodes, so no term is rebuilt or
+printed. The front end's work happens inside those probes, lazily, so
+unlike av_peel's they collect: the reader registers as a reduction, and
+the collector evacuates its stack of held nodes, its marker leaves, and
+remaps its memo.
+
 - **The fixed point from source text.** `front` applied to its own
-  36,375-character source gives all 433 of its names their terms, hash
-  for hash with Python's, in 1,262,327,332 contractions, 16 seconds.
-  The first version took 2,176,424,461 for 375 names; §6.7's profile
-  found where.
+  39,622-character source gives all 492 of its names their terms, hash
+  for hash with Python's, in 306,991,371 contractions, eight seconds.
+  The first version took 2,176,424,461 for 375 names; §6.7 follows the
+  steps between.
 - **Agreement.** It compiles a thousand random SKIjack-0 programs as
   skijack's specification does, and accepts or refuses 67 programs at
   the subset's edges (duplicate names, cycles, newlines before a closing
@@ -2268,8 +2295,10 @@ program's 7-bit character codes.
 
 The full language's front end -- cores, macros, signatures, quotation,
 scries, namespace literals and the type checker -- still runs in Python.
-Next come the whole language's front end, checked on the corpus, and jets
-for the front end's hot equations.
+Next comes the whole language's front end, checked on the corpus. §6.7
+measured jets for this one: constructor jets and residual jets for its
+own equations both make it slower in share mode, so what remains of its
+cost is for the extended basis to try.
 
 ### 20.4 What else the analogy imports
 

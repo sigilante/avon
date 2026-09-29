@@ -15,6 +15,11 @@ bool     nmap_get(const nmap *m, uint32_t k, uint64_t *v);
 bool     nmap_put(nmap *m, uint32_t k, uint64_t v);
 void     nmap_free(nmap *m);
 
+/*  §5 digests: an atom's, from its name; an application's, from its
+ *  two parts'. */
+uint64_t digest_leaf(const char *name);
+uint64_t digest_app(uint64_t f, uint64_t x);
+
 /*  Every node's digest below t, keyed by viewed node. */
 bool     hash_all(const av_arena *a, uint32_t t, nmap *m);
 

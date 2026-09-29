@@ -70,6 +70,18 @@ static void hex16(uint64_t v, char out[16]) {
     for (int i = 15; i >= 0; i--) { out[i] = hx[v & 15]; v >>= 4; }
 }
 
+uint64_t digest_leaf(const char *name) { return digest_of(name, strlen(name)); }
+
+uint64_t digest_app(uint64_t f, uint64_t x) {
+    char text[35];
+    text[0] = '(';
+    hex16(f, text + 1);
+    text[17] = ' ';
+    hex16(x, text + 18);
+    text[34] = ')';
+    return digest_of(text, sizeof text);
+}
+
 /*  Every node's digest below t, into m keyed by viewed node. */
 bool hash_all(const av_arena *a, uint32_t t, nmap *m) {
     typedef struct { uint32_t node; bool done; } item;

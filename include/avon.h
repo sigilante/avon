@@ -684,6 +684,25 @@ typedef struct av_interp {
 long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
                      const char **err);
 
+/*  ------------------------------------------------------- the front end
+ *
+ *  The SKIjack-0 front end (docs/DESIGN.md §20.3): `front` applied to a
+ *  program's 7-bit character codes reduces to ROk (OCons name tm ..) or
+ *  RErr.  The terms are the front end's own: SCons, SNil and Code, Lo, Hi
+ *  build the input, each code's datum once.
+ */
+typedef struct { uint32_t front, scons, snil, code, lo, hi; } av_front0;
+
+/*  `front` applied to src; AV_NONE if src is not ASCII or out of memory. */
+uint32_t av_front0_input(av_arena *a, const av_front0 *f, const char *src, size_t len);
+
+/*  Reduce t, from av_front0_input, reading its result by probing with
+ *  collection on: a line `name TAB hash` per name, in its order, or
+ *  `RErr`.  0 for ROk, 1 for RErr, -1 with *err if it does not read.
+ *  *steps counts every probe's contractions. */
+int      av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
+                        uint64_t *steps, const char **err);
+
 /*  ---------------------------------------------------------------- profile
  *
  *  Which named terms a share-mode run executes (docs/DESIGN.md §6.7): at
