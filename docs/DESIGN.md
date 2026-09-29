@@ -793,6 +793,27 @@ runtime. A jet on name equality would take what remains, and it is the
 one candidate the profile names; it should wait until the algorithms
 stop calling it quadratically often.
 
+**After, 2026-09-29.** The front end now collects each body's free names
+once, finds its groups as Tarjan's components, and keeps its rules, memo,
+names and constructors in search trees ordered by name. The fixed point
+takes 1,262,327,332 contractions, 42% fewer, though the source grew from
+375 names to 433; without the renderer, whose output grew with it, the
+front end's own work fell from about 1.88 billion to 0.85 billion. Name
+comparison fell from 39.5% of the run to 11.4%. What the profile
+shows now:
+
+| row | share |
+|---|---:|
+| the renderer, `rTm` | 32.7% |
+| built at run time: I, K, S | 34.4% |
+| comparing names: `cmpCode`, `eqCode`, `cmpBit`, `cmpName`, `eqName` | 11.4% |
+| everything else, no row above 5.2% | 21.5% |
+
+The run-time rows are now the most of the front end: Scott dispatch on
+the values its cases read. That is Turner's case for an extended basis
+(§6.7's two tiers) and for constructor jets (§6.8), not for the
+program's own functions.
+
 ### 6.8 Constructor jets and the jet dictionaries
 
 **Avon recognizes a Scott constructor by running it, and jets every one
@@ -1458,7 +1479,7 @@ in stage 8"):
   refused.
 - **The compiler is a term in a pill**, a kernel answering `Abs` events.
 - **The front end, for SKIjack-0, compiles its own source** (§20.3,
-  "Built for SKIjack-0"): all 375 of its names, from source text, hash for
+  "Built for SKIjack-0"): all 433 of its names, from source text, hash for
   hash (`make front0-check`). The full language's front end remains.
 
 **Stage 9, done.** The persistent arena (§19.1, "Built in stage 9"):
@@ -2232,9 +2253,10 @@ compiles it to one term, `front`; Avon runs it in share mode on a
 program's 7-bit character codes.
 
 - **The fixed point from source text.** `front` applied to its own
-  29,623-character source gives all 375 of its names their terms, hash
-  for hash with Python's, in 2,176,424,461 contractions, about 40
-  seconds.
+  36,375-character source gives all 433 of its names their terms, hash
+  for hash with Python's, in 1,262,327,332 contractions, 16 seconds.
+  The first version took 2,176,424,461 for 375 names; §6.7's profile
+  found where.
 - **Agreement.** It compiles a thousand random SKIjack-0 programs as
   skijack's specification does, and accepts or refuses 67 programs at
   the subset's edges (duplicate names, cycles, newlines before a closing
