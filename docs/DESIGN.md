@@ -931,9 +931,8 @@ transcribes it:
 - `make_resolver`: build the resolver term from `EQ5`, the answer type's
   hit and not-yet constructors, and the facts learned so far. Under the
   interpreter jet (§7) the `Scry` leaf looks paths up natively, keyed by
-  the path datum's structure. (Stage 5 built the jet with the resolver
-  term reduced by the host instead; the native lookup comes with stage 6's
-  fact store.) The resolver term stays the specification,
+  the path datum's structure, when the resolver is one the fact store
+  built (stage 6, below). The resolver term stays the specification,
   and the native lookup must agree with it: comparison is syntactic on
   encodings, as `EQ5`'s is, so `Scry (I K)` does not match the path `K`;
   and fact order cannot matter, because the store is append-only with
@@ -962,6 +961,67 @@ budget-exact trace exists to hide. And the rounds of the resume loop run
 off-circuit; only the final run is proved, with the final fact store as
 its committed private input, so the fact store must be exportable, in the
 order its facts were learned, as that input.
+
+**Built in stage 6** (`src/scry.c`, the scry arm of `src/interp.c`,
+`avon scry`):
+
+- **The fact store** (`av_facts`) keeps its terms in its own arena, which
+  nothing reduces, so nothing in it moves. A fact is the key datum *as the
+  blocked run left it* -- `run.py` appends `fields[0]`, not a normal form,
+  and the next resolver compares against that very term, so the counts
+  depend on it -- with the answer datum and the key's path, decoded and
+  printed. Keys are unique by that print (`run.py`'s `known`); a second
+  append of a key is refused. `av_facts_open` backs the store with a log:
+  one record per fact, `fact <key SKIT> <answer SKIT>` in hex, written
+  and synced before the fact is used (§19's order), replayed on open. A
+  blocked field can hold probe markers, `@N`, in positions nothing reads;
+  a container refuses `@` names, so the log writes a name starting with
+  `@` or `~` with one more `~` and replay removes it.
+- **The resolver** is built each round in the round's arena, exactly as
+  `resolver_term` builds it: `[p] EQ5 p k₁ (hit a₁) (EQ5 p k₂ (hit a₂) (…
+  notyet))`, with aviary's abstraction, η included (`av_abstract`). It is
+  registered as a jet key that never fires, tagged with the number of
+  facts it encodes.
+- **The native lookup.** When the interpreter jet scries with a tagged
+  resolver, it prints the path the way the store prints keys and looks it
+  up among the facts the resolver encodes. The first use checks the
+  lookup against the term, as §6.6 asks: each fact's key, encoded, must
+  reduce under the resolver to a hit with that fact's answer, and a path
+  longer than every key to not-yet. A resolver that fails is reduced as
+  before, never looked up; the check's probes are not charged to the
+  fire. A native lookup assumes `EQ5` is syntactic equality on
+  encodings; the check is what admits that assumption per resolver.
+- **The resume loop** (`av_ns_run`) is `run_with_namespace`: every round
+  a fresh arena, the program rebuilt with the resolver over every fact
+  learned, run from scratch in `copy` mode to weak head normal form and
+  peeled. The block constructor is the result type's second one-field
+  constructor and the timeout its last terminal, as `run.py` picks them.
+  `@[]` deepens from `start`, doubling, to `cap`. The two properties §8
+  wants visible are: STUCK is its own event, and every attempt's fuel,
+  status and contraction count is reported, so a resumed run's second
+  payment of fuel shows.
+- **The export.** `skijack.export` writes `namespaces.tsv`: the twelve
+  resume-loop runs `tests/test_scry.py` pins, each with its program's
+  terms, its namespace, and `run_with_namespace`'s events and every
+  level-1 attempt it made.
+
+**Measured** (`tests/test_scry.c`, `avon scry`): all twelve runs replay
+event for event -- one block then a value, a chain of two, a compound
+path, a path told from its prefix, a wrong fact and an unresolvable path
+STUCK, fuel exhaustion, the policy, its cap, and the round limit -- and
+all 21 level-1 attempts give the reference host's fuel, status and count.
+With interpreter jets and every fire checked, the events are the same,
+and 9 scries are answered natively. A store reopened from its log
+resolves the chain in one round, at the reference's 1,250 contractions
+for its last round. With `EQ5` replaced by a comparison that is always
+false, the check refuses the resolver once it holds a fact, and the run
+is STUCK with jets on as off.
+
+**Not yet native:** a literal namespace (`ns{…}`) compiles to the same
+shape, but its facts are not the store's, so its resolver is reduced as a
+term -- the character table's case (§11.1, stage 5). Exporting a literal
+namespace's facts would let Avon build the same term, recognize it by its
+hash, and tag it.
 
 ## 9. Boot
 
@@ -1242,6 +1302,24 @@ than a fault, and guarded the instance buffer against re-entry.
   host's fuel.
 - lean-ski's jetted-witness check (`tests/jet_witness_check.sh`) and the
   witness check still pass, at lean-ski `0b2fbcf`.
+
+**Stage 6, done.** Scry (§8, "Built in stage 6"):
+
+- **The corpus's resume-loop runs replay round for round.** The twelve
+  runs of `namespaces.tsv` (skijack's `test_scry.py`), including two
+  STUCK, the `@[]` policy and its cap, and the round limit: every event,
+  and every one of the 21 level-1 attempts at the reference host's fuel,
+  status and contraction count (`tests/test_scry.c`, `avon scry`).
+- **The native lookup** answers 9 of those runs' scries under the
+  interpreter jet, every fire checked, with the same events; a resolver
+  whose term disagrees with it is refused and reduced instead.
+- **The fact store** is append-only, keyed as `run.py` keys it, and
+  logged before use; a store reopened from its log resumes a run in one
+  round.
+- skijack's 863 tests pass with the export added; lean-ski's witness,
+  jetted-witness and probe-witness checks still pass, at lean-ski
+  `8821b40` (built from its commit, with another session's uncommitted
+  work in the checkout: `SKI_AIR` names a built `ski-air`).
 
 ## 12. What Avon must not do
 

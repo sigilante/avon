@@ -31,7 +31,7 @@
 
 set -euo pipefail
 
-LEAN_SKI=${LEAN_SKI:-$HOME/lean-ski}
+export LEAN_SKI=${LEAN_SKI:-$HOME/lean-ski}   # ski-air finds Lean through it
 AVON=${AVON:-build/avon}
 OUT=${OUT:-build/probe-witness}
 ROOT=$(pwd)
@@ -78,8 +78,12 @@ fail=0
 echo "--- lean-ski: the corpus, its jet tables, the plans"
 (cd "$LEAN_SKI" && lake build jets > /dev/null && lake env lean --run bench/Dump.lean > "$OUT/corpus.txt" \
     && lake exe jets emit "$OUT/jets")
-(cd "$LEAN_SKI/bench/plonky3" && cargo build --release --quiet)
-SKI_AIR="$LEAN_SKI/bench/plonky3/target/release/ski-air"
+# SKI_AIR: a built ski-air to use instead of building lean-ski's own (a
+# binary outside the checkout finds the Lean project through $LEAN_SKI)
+if [ -z "${SKI_AIR:-}" ]; then
+    (cd "$LEAN_SKI/bench/plonky3" && cargo build --release --quiet)
+    SKI_AIR="$LEAN_SKI/bench/plonky3/target/release/ski-air"
+fi
 
 count=0 same=0 accepted=0 refused=0 rejected=0 wrongs=0 bound=0 forged=0 forgeries=0
 while read -r name _steps term <&3; do

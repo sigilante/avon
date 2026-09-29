@@ -55,4 +55,14 @@ bool interp_check(av_arena *a, uint32_t id, uint32_t node, const uint32_t *argv,
  *  `avail` arguments at the head. */
 void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail);
 
+/*  The fact store, for the interpreter jet's native lookup (src/scry.c):
+ *  which of the first n facts has path `path` (leaves leaf[i]): 1 with
+ *  *which, 0 none, -1 unprintable; fact i's answer copied into a; whether
+ *  t is fact i's answer; fact i's key path with the leaves leaf[i]. */
+int      facts_find(const av_facts *f, size_t n, av_arena *a, uint32_t path,
+                    const uint32_t *leaf, size_t *which);
+uint32_t facts_answer(const av_facts *f, size_t i, av_arena *a);
+bool     facts_same_answer(const av_facts *f, size_t i, const av_arena *a, uint32_t t);
+uint32_t facts_live_path(const av_facts *f, size_t i, av_arena *a, const uint32_t *leaf);
+
 #endif /* JETS_H */

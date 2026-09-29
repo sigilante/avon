@@ -96,6 +96,8 @@ typedef struct {
     uint64_t   probe_steps;     /* contractions probes have spent, all told */
     uint32_t  *nats;            /* known numerals: zero, suc pairs: roots  */
     uint32_t   nnats;
+    const struct av_facts *facts;   /* the store resolvers here read (§8) */
+    uint64_t   lookups;         /* scries answered natively from it      */
 } av_arena;
 
 av_arena *av_arena_new(uint32_t cap);
@@ -575,6 +577,10 @@ typedef struct av_jet {
                                    interpreter jet's key                   */
     int32_t   interp;           /* its interpreter jet (§7), or -1         */
     av_ctor   ctor;             /* its constructor shape (§6.8), if any    */
+    uint32_t  resolves;         /* a fact store's resolver (§8): 1 + the
+                                   facts it encodes; 0 if not one         */
+    uint8_t   admitted;         /* its native lookup: 0 unchecked, 1 agrees
+                                   with the term, 2 refused               */
 } av_jet;
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
@@ -723,5 +729,107 @@ bool           av_census_begin_run(av_census *c, const av_arena *a, uint32_t loa
 size_t         av_census_rows(av_census *c, av_census_row **rows);
 av_arena      *av_census_arena(av_census *c);
 uint64_t       av_census_calls(const av_census *c);
+
+/*  ------------------------------------------------------------------- scry
+ *
+ *  §8: the fact store, the resolver it specifies, and the resume loop, as
+ *  skijack's run.py has them (make_resolver, run_with_namespace).
+ *
+ *  A fact is (key datum, answer datum): the path a run blocked on, as the
+ *  run left it, and the answer the namespace gave.  The store is append-
+ *  only with unique keys -- keys compared as the object terms they decode
+ *  to, as EQ5 compares encodings -- and keeps its terms in its own arena,
+ *  which nothing reduces.  With a log, each fact is written and synced
+ *  before it is used (§19's order), and av_facts_open replays the log.
+ */
+typedef struct av_facts av_facts;   /* src/scry.c */
+
+/*  The object type a program's paths and values are data of: its
+ *  constructors' names in declaration order, the application's index. */
+typedef struct {
+    const char *const *names;
+    unsigned nctors, app;
+} av_objtype;
+
+/*  A store for paths of the object type obj, whose names it keeps by
+ *  pointer: they must outlive the store. */
+av_facts *av_facts_new(const av_objtype *obj);
+/*  A store backed by a log at path: its facts are replayed, and every
+ *  later fact appended and synced.  NULL, with *err, if it is unreadable. */
+av_facts *av_facts_open(const av_objtype *obj, const char *path, const char **err);
+void      av_facts_free(av_facts *f);
+size_t    av_facts_count(const av_facts *f);
+/*  Fact i's key as the path it decodes to, printed ("S K"). */
+const char *av_facts_key(const av_facts *f, size_t i);
+
+/*  Append (key datum, answer datum), both terms of arena a.  False, with
+ *  *err, if the key is already known -- the store is append-only -- or the
+ *  log cannot be written. */
+bool av_facts_append(av_facts *f, av_arena *a, uint32_t key, uint32_t answer,
+                     const char **err);
+
+/*  Aviary's bracket abstraction, with eta: [x]x = I, [x]E = K E when x is
+ *  not free in E, [x](E x) = E when x is not free in E, else S [x]E [x]F.
+ *  x is a leaf.  AV_NONE when out of memory. */
+uint32_t av_abstract(av_arena *a, uint32_t x, uint32_t body);
+
+/*  The resolver over the store's first n facts, in arena a: skijack's
+ *  resolver_term, [p] EQ5 p k1 (hit a1) (EQ5 p k2 (hit a2) (... notyet)),
+ *  eq, hit and notyet being terms of a.  It is registered as a jet key
+ *  tagged with n, so a matched program's interpreter jet may look paths up
+ *  natively (§8) once the lookup agrees with this term. */
+uint32_t av_facts_resolver(av_arena *a, const av_facts *f, size_t n,
+                           uint32_t eq, uint32_t hit, uint32_t notyet);
+
+/*  A level-1 program to resume: interp applied to the resolver, then
+ *  params, then a fuel numeral (zero, suc), then datum.  Its terms live in
+ *  arena `terms`, which the loop only copies from.  The result type has
+ *  nres constructors: `block` (its second one-field constructor) and
+ *  `timeout` (its last terminal), by index. */
+typedef struct {
+    av_arena *terms;
+    uint32_t  interp, datum, zero, suc, eq, hit, notyet;
+    uint32_t *params;           /* after the resolver */
+    unsigned  nparams;
+    unsigned  nres, block, timeout;
+    av_objtype obj;
+} av_nsprog;
+
+/*  Where facts come from: the answer datum, in a, for a blocked path
+ *  printed as `key`, or AV_NONE if the namespace has none. */
+typedef uint32_t (*av_resolve_fn)(void *ctx, av_arena *a, const char *key);
+
+/*  A fresh arena for one attempt, set up as the caller wants it (jets,
+ *  interpreters); NULL uses av_arena_new. */
+typedef av_arena *(*av_arena_fn)(void *ctx);
+
+/*  One level-1 run the loop made. */
+typedef struct { uint64_t fuel, steps, lookups; av_status status; } av_attempt;
+
+typedef struct {
+    char    **events;           /* run_with_namespace's trace */
+    size_t    nevents;
+    av_attempt *attempts;
+    size_t    nattempts;
+    int       ctor;             /* the final result constructor, or -1 */
+    char     *payload;          /* its field decoded and printed, or NULL */
+    unsigned  rounds;
+} av_nsrun;
+
+/*  The resume loop (§8; run_with_namespace): each round, build the
+ *  resolver from every fact learned so far, run the program from scratch
+ *  -- at `fuel`, or with fuel 0 deepening from start, doubling, to cap --
+ *  and peel it.  A value or any constructor but `block` ends the run; a
+ *  block decodes its path, and if the path is unknown to the store and the
+ *  namespace answers it, the fact is appended and the next round starts;
+ *  otherwise STUCK.  Events: "budget N", "BLOCK on P", "STUCK", a result
+ *  constructor's name, "status:fuel", "EXCEEDED MAX ROUNDS".  o is each
+ *  attempt's options (copy mode and WHNF are forced).  False only when out
+ *  of memory. */
+bool av_ns_run(const av_nsprog *p, av_facts *f, av_resolve_fn resolve, void *rctx,
+               av_arena_fn fresh, void *actx, uint64_t fuel, uint64_t start,
+               uint64_t cap, unsigned max_rounds, const av_opts *o,
+               const char *const *result_names, av_nsrun *out);
+void av_nsrun_free(av_nsrun *r);
 
 #endif /* AVON_H */

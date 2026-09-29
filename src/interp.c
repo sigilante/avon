@@ -368,6 +368,70 @@ done:
 
 /*  --------------------------------------------------------------- firing */
 
+/*  The native lookup (docs/DESIGN.md §8): when the resolver is a fact
+ *  store's (a jet key tagged by av_facts_resolver), find the path among
+ *  the facts it encodes instead of reducing it.  The first use checks the
+ *  lookup against the term -- every fact's key must hit with its answer,
+ *  and a path longer than every key must be not-yet -- and a resolver
+ *  that disagrees is never looked up natively.  1 a hit, *ans the answer
+ *  datum; 0 not yet; -1 no native answer: reduce the resolver.  *spent is
+ *  what the check's probes cost, not part of the fire's own work. */
+static int native_lookup(av_arena *a, const av_interp *in, uint32_t resolver,
+                         uint32_t path, const av_opts *po, uint32_t *ans,
+                         uint64_t *spent) {
+    *spent = 0;
+    const av_facts *f = a->facts;
+    if (!f || av_tag(a, resolver) != AV_JET) return -1;
+    av_jet *J = &a->jets[AV_JET_ID(av_left(a, resolver))];
+    if (!J->resolves || J->admitted == 2) return -1;
+    size_t n = J->resolves - 1;
+    int hit = -1, notyet = -1;
+    for (unsigned c = 0; c < in->nans; c++) {
+        if (in->arole[c] == AV_AROLE_HIT) hit = (int)c;
+        if (in->arole[c] == AV_AROLE_NOTYET) notyet = (int)c;
+    }
+    if (hit < 0 || notyet < 0) return -1;
+    if (J->admitted == 0) {
+        uint64_t p0 = a->probe_steps;
+        bool agrees = true;
+        size_t longest = 0;
+        uint32_t term = J->fallback;
+        for (size_t i = 0; i < n && agrees; i++) {
+            uint32_t live = facts_live_path(f, i, a, in->oleaf);
+            uint32_t pd = live == AV_NONE ? AV_NONE : encode(a, in, live);
+            uint32_t q = pd == AV_NONE ? AV_NONE : av_app(a, term, pd);
+            av_peeled pe;
+            agrees = q != AV_NONE && av_peel(a, q, in->nans, po, &pe, NULL) &&
+                     (int)pe.ctor == hit && pe.nfields == 1 &&
+                     facts_same_answer(f, i, a, pe.field[0]);
+            size_t len = strlen(av_facts_key(f, i));
+            if (len > longest) longest = len;
+        }
+        if (agrees) {                   /* a path no key can print as */
+            unsigned leaf0 = in->orole[0] == AV_OROLE_APP ? 1 : 0;
+            uint32_t absent = in->oleaf[leaf0];
+            for (size_t i = 0; i <= longest && absent != AV_NONE; i++)
+                absent = av_app(a, absent, in->oleaf[leaf0]);
+            uint32_t pd = absent == AV_NONE ? AV_NONE : encode(a, in, absent);
+            uint32_t q = pd == AV_NONE ? AV_NONE : av_app(a, term, pd);
+            av_peeled pe;
+            agrees = q != AV_NONE && av_peel(a, q, in->nans, po, &pe, NULL) &&
+                     (int)pe.ctor == notyet;
+        }
+        *spent = a->probe_steps - p0;
+        J = &a->jets[AV_JET_ID(av_left(a, resolver))];
+        J->admitted = agrees ? 1 : 2;
+        if (!agrees) return -1;
+    }
+    size_t which;
+    int found = facts_find(f, n, a, path, in->oleaf, &which);
+    if (found < 0) return -1;
+    a->lookups++;
+    if (found == 0) return 0;
+    *ans = facts_answer(f, which, a);
+    return *ans == AV_NONE ? -1 : 1;
+}
+
 int interp_fire(av_arena *a, uint32_t id, const uint32_t *argv,
                 const av_opts *o, uint64_t host_left, uint32_t *out,
                 uint64_t *charge, av_status *st, bool *fault) {
@@ -442,18 +506,33 @@ int interp_fire(av_arena *a, uint32_t id, const uint32_t *argv,
         if (role == AV_OROLE_ERR) { res = in->rctor[in->oarg[leaf]]; break; }
         if (role != AV_OROLE_SCRY || n > 64) goto out;   /* diverge: decline */
 
-        /* Scry p rest: one step, answered by the resolver */
+        /* Scry p rest: one step, answered natively or by the resolver */
         used += 1;
         objsteps += 1;
         uint32_t path = spine[n - 1];
         uint32_t pd = encode(a, in, path);
         if (pd == AV_NONE) goto out;
-        uint32_t q = av_app(a, loc[0], pd);
+        uint32_t natv = AV_NONE;
+        uint64_t checked;
+        int nat = native_lookup(a, in, loc[0], path, &po, &natv, &checked);
+        probe0 += checked;                      /* the check is not this fire's */
         av_peeled ans;
-        if (q == AV_NONE || !av_peel(a, q, in->nans, &po, &ans, NULL)) goto out;
-        uint8_t ar = in->arole[ans.ctor];
-        if (ar == AV_AROLE_MISS) { res = in->rctor[in->aarg[ans.ctor]]; break; }
-        if (ar == AV_AROLE_NOTYET) { res = av_app(a, in->rctor[in->aarg[ans.ctor]], pd); break; }
+        if (nat == 0) {
+            for (unsigned c = 0; c < in->nans; c++)
+                if (in->arole[c] == AV_AROLE_NOTYET) ans.ctor = c;
+            res = av_app(a, in->rctor[in->aarg[ans.ctor]], pd);
+            break;
+        }
+        if (nat == 1) {
+            ans.nfields = 1;
+            ans.field[0] = natv;
+        } else {
+            uint32_t q = av_app(a, loc[0], pd);
+            if (q == AV_NONE || !av_peel(a, q, in->nans, &po, &ans, NULL)) goto out;
+            uint8_t ar = in->arole[ans.ctor];
+            if (ar == AV_AROLE_MISS) { res = in->rctor[in->aarg[ans.ctor]]; break; }
+            if (ar == AV_AROLE_NOTYET) { res = av_app(a, in->rctor[in->aarg[ans.ctor]], pd); break; }
+        }
         if (ans.nfields != 1) goto out;
         uint32_t v = decode_live(a, in, ans.field[0], &po);
         if (v == AV_NONE) goto out;

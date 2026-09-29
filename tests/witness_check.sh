@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-LEAN_SKI=${LEAN_SKI:-$HOME/lean-ski}
+export LEAN_SKI=${LEAN_SKI:-$HOME/lean-ski}   # ski-air finds Lean through it
 AVON=${AVON:-build/avon}
 OUT=${OUT:-build/witness}
 ROOT=$(pwd)
@@ -51,8 +51,13 @@ done < tests/conformance/manifest.tsv
 echo "$count witnesses written"
 
 echo "--- ski-air: prove and verify"
-(cd "$LEAN_SKI/bench/plonky3" && cargo build --release --quiet)
-if ! "$LEAN_SKI/bench/plonky3/target/release/ski-air" "$OUT/corpus.txt" "$OUT/ski-air" \
+# SKI_AIR: a built ski-air to use instead of building lean-ski's own (a
+# binary outside the checkout finds the Lean project through $LEAN_SKI)
+if [ -z "${SKI_AIR:-}" ]; then
+    (cd "$LEAN_SKI/bench/plonky3" && cargo build --release --quiet)
+    SKI_AIR="$LEAN_SKI/bench/plonky3/target/release/ski-air"
+fi
+if ! "$SKI_AIR" "$OUT/corpus.txt" "$OUT/ski-air" \
         | tee "$OUT/ski-air.log"; then
     echo "FAIL: ski-air reported failures"
     fail=1
