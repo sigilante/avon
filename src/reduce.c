@@ -250,13 +250,22 @@ static av_status fire_copy(R *r) {
  *  1 fired (the arguments replaced by the outcome and its charge added),
  *  0 declined, -1 stop with *st.  The arguments are read again after the
  *  fire, which may collect. */
+/*  How many arguments a fire of jet id consumes: the unquoter's one, an
+ *  interpreter's parameters, fuel and datum. */
+static unsigned fire_nargs(const R *r, uint32_t id) {
+    const av_arena *a = r->a;
+    if (a->jets[id].unquote && r->o->install_jets) return 1;
+    return a->interps[a->jets[id].interp].nparams + 2;
+}
+
 static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
                       uint32_t *outp) {
     av_arena *a = r->a;
     uint32_t node = *nodep;
     uint32_t id = AV_JET_ID(av_left(a, node));
-    if (!r->o->interp_jets || a->jets[id].interp < 0) return 0;
-    unsigned nargs = a->interps[a->jets[id].interp].nparams + 2;
+    bool uq = a->jets[id].unquote && r->o->install_jets;    /* §20.2 */
+    if (!uq && (!r->o->interp_jets || a->jets[id].interp < 0)) return 0;
+    unsigned nargs = fire_nargs(r, id);
     if (have < nargs || r->steps >= r->o->max_steps) return 0;
     uint32_t argv[AV_INTERP_CTORS + 2];
     for (unsigned i = 0; i < nargs; i++)
@@ -267,8 +276,10 @@ static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
     uint64_t charge;
     bool fault;
     r->jnode = node;
-    int rc = interp_fire(a, id, argv, r->o, r->o->max_steps - r->steps,
-                         &out, &charge, st, &fault);
+    fault = false;
+    int rc = uq ? install_fire(a, argv[0], r->o, r->o->max_steps - r->steps, &out, &charge)
+                : interp_fire(a, id, argv, r->o, r->o->max_steps - r->steps,
+                              &out, &charge, st, &fault);
     node = r->jnode;                    /* where the node is now */
     r->jnode = AV_NONE;
     *nodep = node;
@@ -280,14 +291,15 @@ static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
                                     ? r->stk[r->top - 1 - i]
                                     : av_right(a, r->stk[r->top - 1 - i]));
         av_root_push(a, &out);
-        bool same = interp_check(a, id, node, argv, out);
+        bool same = uq ? install_check(a, node, argv[0], out)
+                       : interp_check(a, id, node, argv, out);
         av_root_pop(a);
         if (!same) { r->jet_fault = true; *st = AV_INTERRUPTED; return -1; }
     }
     r->steps += charge;
     r->jet_steps += charge;
     r->jet_calls++;
-    r->interp_calls++;
+    if (!uq) r->interp_calls++;
     *outp = out;
     return 1;
 }
@@ -310,7 +322,7 @@ static av_status run_copy(R *r) {
                 int ir = try_interp(r, &r->head, r->top - r->base, &ist, &out);
                 if (ir < 0) return ist;
                 if (ir > 0) {
-                    r->top -= a->interps[a->jets[AV_JET_ID(av_left(a, r->head))].interp].nparams + 2;
+                    r->top -= fire_nargs(r, AV_JET_ID(av_left(a, r->head)));
                     if (!decompose(r, out)) return AV_SIZE;
                     continue;
                 }
@@ -422,7 +434,7 @@ static av_status whnf_share(R *r) {
             int ir = try_interp(r, &cur, r->top - bottom, &ist, &iout);
             if (ir < 0) return ist;
             if (ir > 0) {                       /* the redex root becomes it */
-                unsigned k = a->interps[a->jets[id].interp].nparams + 2;
+                unsigned k = fire_nargs(r, id);
                 uint32_t n = r->stk[r->top - k];     /* reread: the fire may collect */
                 a->nodes[n] = (av_node){ (AV_IND << AV_TAG_SHIFT) | iout, 0 };
                 r->top -= k;
@@ -544,6 +556,7 @@ av_opts av_opts_default(void) {
         .no_collect = false,
         .jets      = true,
         .interp_jets = false,
+        .install_jets = false,
         .jet_check = 0,
         .census    = NULL,
     };

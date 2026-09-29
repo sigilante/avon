@@ -27,6 +27,17 @@
  *                                     events and attempts, checked against
  *                                     the reference host's; --log keeps each
  *                                     run's facts in DIR/ID.facts
+ *      avon boot [--pier=DIR] [--subject=FILE] PILL
+ *      avon poke --pier=DIR [--snapshot] EVENT...
+ *      avon peek --pier=DIR PATH...
+ *      avon load --pier=DIR [--subject=FILE] [--snapshot] PILL
+ *                                     a kernel (docs/DESIGN.md §9, §20): boot
+ *                                     applies a pill (SKIT) to the initial
+ *                                     subject (default I: skijack's standard
+ *                                     subject is unbuilt), and with --pier
+ *                                     makes a pier -- an event log and
+ *                                     snapshots -- that poke, peek and load
+ *                                     reopen; share mode by default
  *      avon --version
  *
  *  A FILE may be in the printed form, a SKIT container (docs/DESIGN.md
@@ -85,6 +96,11 @@ static int usage(void) {
         "                   [--names=FILE]... MANIFEST...\n"
         "       avon scry [--log=DIR] [--jets=DICT [--interp=FILE]] [--jet-check=N]\n"
         "                 NAMESPACES\n"
+        "       avon boot [--pier=DIR] [--subject=FILE] PILL\n"
+        "       avon poke --pier=DIR [--snapshot] EVENT...\n"
+        "       avon peek --pier=DIR PATH...\n"
+        "       avon load --pier=DIR [--subject=FILE] [--snapshot] PILL\n"
+        "       (boot, poke, peek, load accept --strategy=, --fuel=, --budget=)\n"
         "       avon --version\n");
     return 2;
 }
@@ -358,6 +374,162 @@ static void census_line(av_census *c, uint64_t total, const char *rank,
            r->arity, (unsigned long long)r->cost, r->atoms, r->folded,
            name ? name : "-", b.s ? b.s : "", whole ? "" : " ...");
     av_buf_free(&b);
+}
+
+/*  -------------------------------------------------------------- kernel */
+
+static uint8_t *read_file(const char *path, size_t *len) {
+    FILE *f = fopen(path, "rb");
+    if (!f) { perror(path); return NULL; }
+    char *b = slurp(f, len);
+    fclose(f);
+    return (uint8_t *)b;
+}
+
+/*  The default initial subject: skijack's standard subject is unbuilt
+ *  (SPEC.md §5), so until it is, a program is applied to I. */
+static uint8_t *default_subject(size_t *len) {
+    av_arena *a = av_arena_new(0);
+    av_buf b = { 0 };
+    const char *msg = NULL;
+    uint8_t *out = a && av_jam(a, AV_NODE_I, 100, &b, &msg) ? (uint8_t *)b.s : NULL;
+    if (out) *len = b.len;
+    av_arena_free(a);
+    return out;
+}
+
+static void print_term(av_arena *a, uint32_t t, size_t budget) {
+    av_buf b = { 0 };
+    bool whole = av_print(a, t, budget, &b);
+    printf("%s%s\n", b.s ? b.s : "", whole ? "" : " ...");
+    av_buf_free(&b);
+}
+
+/*  A value as data: its normal form, reduced in copy mode, which writes
+ *  nothing the kernel shares; the term as it stands if there is none
+ *  within a million contractions. */
+static void print_value(av_arena *a, uint32_t t, size_t budget) {
+    av_opts o = av_opts_default();
+    o.strategy = AV_COPY;
+    o.max_steps = 1000000;
+    av_root_push(a, &t);
+    av_result r = av_reduce(a, t, &o);
+    av_root_pop(a);
+    if (r.status == AV_NORMAL) print_term(a, r.term, budget);
+    else { printf("(no normal form within 1,000,000) "); print_term(a, t, budget); }
+}
+
+/*  avon boot | poke | peek | load: a kernel in a pier directory (§9, §20). */
+static int kernel_main(int argc, char **argv) {
+    const char *cmd = argv[1], *pier = NULL, *subject_file = NULL;
+    const char *files[256];
+    int nf = 0;
+    bool snap = false;
+    uint64_t budget = 100000, v;
+    av_opts o = av_opts_default();
+    o.strategy = AV_SHARE;                      /* §9: kernel loops share */
+    o.max_steps = 100000000;
+    for (int i = 2; i < argc; i++) {
+        const char *s = argv[i];
+        if (strncmp(s, "--pier=", 7) == 0 && s[7]) pier = s + 7;
+        else if (strncmp(s, "--subject=", 10) == 0 && s[10]) subject_file = s + 10;
+        else if (strcmp(s, "--strategy=copy") == 0) o.strategy = AV_COPY;
+        else if (strcmp(s, "--strategy=share") == 0) o.strategy = AV_SHARE;
+        else if (strncmp(s, "--fuel=", 7) == 0 && number(s + 7, &v)) o.max_steps = v;
+        else if (strncmp(s, "--budget=", 9) == 0 && number(s + 9, &v)) budget = v;
+        else if (strcmp(s, "--snapshot") == 0) snap = true;
+        else if (s[0] != '-' && nf < 256) files[nf++] = s;
+        else return usage();
+    }
+    const char *err = NULL;
+    size_t ns = 0;
+    uint8_t *subject = subject_file ? read_file(subject_file, &ns) : default_subject(&ns);
+    if (!subject) return 1;
+    int rc = 1;
+    if (strcmp(cmd, "boot") == 0) {
+        if (nf != 1) { free(subject); return usage(); }
+        size_t np;
+        uint8_t *pill = read_file(files[0], &np);
+        if (!pill) { free(subject); return 1; }
+        if (pier) {
+            av_pier *p = av_pier_new(pier, pill, np, subject, ns, &o, &err);
+            if (!p) fprintf(stderr, "avon: %s: %s\n", pier, err);
+            else { printf("booted a kernel in %s\n", pier); rc = 0; }
+            av_pier_free(p);
+        } else {                                /* boot once, and show the value */
+            av_arena *a = av_arena_new(1u << 16);
+            uint32_t pt = av_cue(a, pill, np, &err), st = av_cue(a, subject, ns, &err);
+            av_kernel k;
+            bool is_kernel;
+            uint32_t value;
+            av_result r;
+            if (pt == AV_NONE || st == AV_NONE) fprintf(stderr, "avon: %s\n", err);
+            else if (av_kernel_boot(&k, a, pt, st, &o, &is_kernel, &value, &r) != AV_WHNF)
+                fprintf(stderr, "avon: %s after %llu contractions\n", av_status_name(r.status),
+                        (unsigned long long)r.steps);
+            else {
+                printf("%s, %llu contractions\n", is_kernel ? "a kernel" : "not a kernel: the value",
+                       (unsigned long long)r.steps);
+                if (!is_kernel) print_term(a, value, budget);
+                else av_kernel_free(&k);
+                rc = 0;
+            }
+            av_arena_free(a);
+        }
+        free(pill);
+        free(subject);
+        return rc;
+    }
+    if (!pier || nf < 1) { free(subject); return usage(); }
+    av_pier *p = av_pier_open(pier, &o, &err);
+    if (!p) { fprintf(stderr, "avon: %s: %s\n", pier, err); free(subject); return 1; }
+    av_kernel *k = av_pier_kernel(p);
+    rc = 0;
+    for (int i = 0; i < nf && rc == 0; i++) {
+        size_t n;
+        uint8_t *b = read_file(files[i], &n);
+        if (!b) { rc = 1; break; }
+        if (strcmp(cmd, "poke") == 0) {
+            uint32_t eff;
+            av_result r;
+            if (av_pier_poke(p, b, n, &eff, &r, &err) != AV_WHNF) {
+                fprintf(stderr, "avon: %s: %s (%s)\n", files[i], err, av_status_name(r.status));
+                rc = 1;
+            } else {
+                printf("event %llu, %llu contractions; effects: ", (unsigned long long)k->events,
+                       (unsigned long long)r.steps);
+                print_value(k->a, eff, budget);
+            }
+        } else if (strcmp(cmd, "peek") == 0) {
+            uint32_t path = av_cue(k->a, b, n, &err), ans;
+            av_result r;
+            if (path == AV_NONE || av_kernel_peek(k, path, &ans, &r) != AV_WHNF) {
+                fprintf(stderr, "avon: %s: %s\n", files[i], path == AV_NONE ? err : "no answer");
+                rc = 1;
+            } else {
+                printf("%llu contractions: ", (unsigned long long)r.steps);
+                print_value(k->a, ans, budget);
+            }
+        } else if (strcmp(cmd, "load") == 0) {
+            if (!av_pier_load(p, b, n, subject, ns, &err)) {
+                fprintf(stderr, "avon: %s: %s\n", files[i], err);
+                rc = 1;
+            } else {
+                printf("event %llu: loaded the kernel %s boots to\n",
+                       (unsigned long long)k->events, files[i]);
+            }
+        } else {
+            rc = 2;
+        }
+        free(b);
+    }
+    if (rc == 0 && snap && !av_pier_snapshot(p, &err)) {
+        fprintf(stderr, "avon: snapshot: %s\n", err);
+        rc = 1;
+    }
+    av_pier_free(p);
+    free(subject);
+    return rc == 2 ? usage() : rc;
 }
 
 /*  ---------------------------------------------------------------- scry */
@@ -675,6 +847,9 @@ int main(int argc, char **argv) {
     if (argc < 2) return usage();
     if (strcmp(argv[1], "census") == 0) return census_main(argc, argv);
     if (strcmp(argv[1], "scry") == 0) return scry_main(argc, argv);
+    if (strcmp(argv[1], "boot") == 0 || strcmp(argv[1], "poke") == 0 ||
+        strcmp(argv[1], "peek") == 0 || strcmp(argv[1], "load") == 0)
+        return kernel_main(argc, argv);
     args g;
     if (!parse_args(argc, argv, &g)) return usage();
 

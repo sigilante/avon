@@ -1067,6 +1067,44 @@ history.
 
 Effects and events are terms. Avon does not invent a syntax for them.
 
+**Built in stage 7** (`src/kernel.c`, `src/pier.c`, `src/install.c`;
+`avon boot | poke | peek | load`):
+
+- **The door.** `av_axis` applies the ABI's selectors, `hd = S I (K K)`
+  and `tl = S I (K (K I))`, down the bits of an axis, which is how the
+  compiler compiles `n@k`; `av_pull` is `(n@k) k arg`. A poke's value is
+  reduced to weak head normal form, and the kernel installed is `tl` of
+  it, unreduced, the effects `hd` of it -- exactly the reference loop's
+  (skijack `test_examples`). A kernel is recognized by probing, never by
+  a name: a pair whose head is a pair whose tail is a pair.
+- **Boot** applies a pill's term to the initial subject and reduces it;
+  a kernel is installed, and a value that is not one is reported, as §9
+  says. skijack's standard subject is not built yet (SPEC §5), so the
+  default subject is `I` and `--subject` supplies another.
+- **The pier** is §19's durability order: an event is cued, then
+  appended to `events.log` and synced, then applied; a snapshot is
+  written image first and sidecar last (§4.2's `av_snapshot_save`).
+  Reopening loads the newest snapshot that verifies and replays the
+  later records -- pokes, and `load`s, which log the new pill and
+  subject. A record cut short by a crash is dropped; a poke that does
+  not reach weak head normal form never applied, so it leaves the log
+  when it fails, and a crash between the two leaves it last, where
+  replay drops it. Snapshots are not pruned yet, and the directory is
+  not synced after a rename.
+- **Upgrade** pulls `load` from the new kernel with the installed
+  kernel's state and installs the result, unreduced.
+
+**Measured** (`tests/test_kernel.c`, against `tests/kernel/export.py`'s
+record of the reference host): the events kernel's Tick, Poke 5, Tick
+cost 61, 108 and 135 contractions and leave 1, 6 and 7 with the
+reference's effects; peek answers 7 in 210; `load` puts the first
+battery over poke 2's state, 6, and a Tick then costs 143 and leaves 7.
+In `share` mode a Tick costs 61, 66, then 63 for every one of a thousand
+events, through eleven collections. A pier crashed after three events,
+with a torn fourth record, reopens from its snapshot at two to the same
+kernel hash by hash; after a failed event, an upgrade to the install
+kernel's battery and its `Run`, it reopens to the same kernel again.
+
 ## 10. The conformance harness
 
 ### 10.1 What Python must export
@@ -1320,6 +1358,23 @@ than a fault, and guarded the instance buffer against re-entry.
   jetted-witness and probe-witness checks still pass, at lean-ski
   `8821b40` (built from its commit, with another session's uncommitted
   work in the checkout: `SKI_AIR` names a built `ski-air`).
+
+**Stage 7, done.** Boot (§9, "Built in stage 7"; §20.2):
+
+- **A kernel survives pokes, answers a peek, and `load` moves a state
+  onto a new battery**, count for count with the reference host's loop in
+  `copy` mode: 61 / 108 / 135, peek 7 in 210, load 6 then 143
+  (`tests/test_kernel.c`, `tests/kernel/export.py`).
+- **A kernel installs code its compiler emitted and runs it**: `Run
+  <double>` and `Run <triple>` take the state 1 to 2 to 6, with `UQ`
+  reduced and with its jet; the jet's nine fires in `UQ <double> 7` are
+  each checked against `UQ`'s reduction.
+- **Per-poke cost in `share` mode stays flat**: 61, 66, then 63 for every
+  Tick of a thousand, §9's measurement, through eleven collections.
+- **A pier reloads from a snapshot to the same state**, after a crash and
+  a torn record, after a failed event, and after an upgrade: the same
+  kernel, hash for hash.
+- Leak-free (`leaks`) across boot, poke with a snapshot, and peek.
 
 ## 12. What Avon must not do
 
@@ -1909,6 +1964,22 @@ the calculus: the unjetted term defines what install does, and the native
 code is checked against it like any other jet (§6.6). §15 records the
 choice.
 
+**Built in stage 7.** `av_install` reads the datum by probing (`S | K |
+I | App`, in that order) and matches the live term's jets. A term is
+admitted as the unquoter (`av_unquote_register`) only if, on sample
+terms, its normal form applied to a datum Avon builds (Scott
+constructors by bracket abstraction, `av_encode`) is the term; the
+paper's 43-atom `UQ` is. With `install_jets` -- off by default, since
+a fire's charge is its probes' contractions, not `UQ`'s -- `UQ d` at the
+head is installed natively, and `--jet-check` compares a fire with
+`UQ`'s own reduction by normal form. The install kernel
+(`tests/kernel/install.ascii.ski`) takes `Run d`, `d` the compiler's
+quotation of `double` or `triple`, and runs it on its state: its pokes
+match the reference count for count, and with the jet `UQ <double> 7`
+normalizes in 20,284 contractions against 118,461, nine fires, each
+checked. The kernel is compiled without Stage B: a decoded term is
+untyped, as a formula run with `.*` is.
+
 ### 20.3 The compiler jet
 
 Bracket abstraction run as SKI reduction will be slow. Vere's answer for
@@ -1943,7 +2014,7 @@ follows, and each needs a decision before stage 7, not now.
 
 | Vere | Avon |
 |---|---|
-| event log, snapshot, replay | §19's durability order: log first, then heap, then a checksummed sidecar |
+| event log, snapshot, replay | §19's durability order: log first, then heap, then a checksummed sidecar; built as the pier (§9, stage 7) |
 | I/O drivers turning the world into events | drivers that build event terms and `poke` them (§9); effects are terms |
 | king and serf processes: the serf (`mars.c`) holds the loom and the event log, the king holds the I/O drivers | undecided (§15); Vere's split puts the log with the arena, so a worker that commits an event holds the state it produced |
 | the jet dashboard | derived at load and install, never persisted (§19) |

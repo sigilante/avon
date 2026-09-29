@@ -51,6 +51,13 @@ int interp_fire(av_arena *a, uint32_t id, const uint32_t *argv,
 bool interp_check(av_arena *a, uint32_t id, uint32_t node, const uint32_t *argv,
                   uint32_t out);
 
+/*  The unquoter's jet (install.c): UQ d, d the argument, installed
+ *  natively; the charge is the probes' contractions.  1 fired, 0
+ *  declined.  And its check against UQ's own reduction. */
+int  install_fire(av_arena *a, uint32_t datum, const av_opts *o, uint64_t host_left,
+                  uint32_t *out, uint64_t *charge);
+bool install_check(av_arena *a, uint32_t node, uint32_t datum, uint32_t out);
+
 /*  The census's hook (census.c): x was put in function position with
  *  `avail` arguments at the head. */
 void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail);

@@ -1,0 +1,21 @@
+-- A kernel that installs code its compiler emitted and runs it
+-- (avon/docs/DESIGN.md §20.2, stage 7).  A `Run d` event carries a
+-- quoted program d, a term5 datum; `UQ` -- the paper's unquoter, as in
+-- the tower -- makes it a live term, which the kernel applies to its
+-- state.  The Run event logs the result and keeps it as the new state.
+nat     === Zero | Suc nat
+term5   === S | K | I | App term5 term5
+event   === Tick | Run term5
+effect  === Log nat
+effects === Nil | Cons effect effects
+add m n = n |> { Zero m; Suc k (Suc (add m k)) }
+UQA f t u = f t (f u)
+UQ m = m S K I (UQA UQ)
+poke k ev = ev |> { Tick [Nil [(2@k) (Suc (3@k))]]; Run d [(Cons (Log (UQ d (3@k))) Nil) [(2@k) (UQ d (3@k))]] }
+peek k p = 3@k
+load k old = [(2@k) old]
+kernel := [[poke [peek load]] Zero]
+double n = add n n
+triple n = add n (add n n)
+qdouble := <double>
+qtriple := <triple>

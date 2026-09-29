@@ -293,6 +293,8 @@ typedef struct {
                                    node is only the term it stands for */
     bool        interp_jets;    /* fire interpreter jets (§7): these
                                    change counts, so off by default */
+    bool        install_jets;   /* fire the unquoter's jet (§20.2):
+                                   it changes counts too; off by default */
     uint64_t    jet_check;      /* check every Nth fire against the
                                    unjetted run (§6.6); 0 never */
     struct av_census *census;   /* copy mode: record calls; NULL off */
@@ -581,6 +583,7 @@ typedef struct av_jet {
                                    facts it encodes; 0 if not one         */
     uint8_t   admitted;         /* its native lookup: 0 unchecked, 1 agrees
                                    with the term, 2 refused               */
+    bool      unquote;          /* the unquoter, UQ (§20.2): install      */
 } av_jet;
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
@@ -831,5 +834,123 @@ bool av_ns_run(const av_nsprog *p, av_facts *f, av_resolve_fn resolve, void *rct
                uint64_t cap, unsigned max_rounds, const av_opts *o,
                const char *const *result_names, av_nsrun *out);
 void av_nsrun_free(av_nsrun *r);
+
+/*  ---------------------------------------------------------------- install
+ *
+ *  §20.2: an encoded term -- a Scott datum of S | K | I | App t u, the
+ *  constructors in that order -- becomes the live term it encodes.  This
+ *  runs from data to a live term, the direction Proposition 3.1 permits;
+ *  nothing here quotes a live term.  Install is where code arriving
+ *  mid-run has its jets matched, as the loader matches a program's.
+ */
+
+/*  The live term datum encodes, found by probing, its jets matched; the
+ *  probes' contractions are counted in a->probe_steps.  AV_NONE, with
+ *  *err, if it does not decode. */
+uint32_t av_install(av_arena *a, uint32_t datum, const av_opts *o, const char **err);
+
+/*  t's datum, with constructors Avon builds by bracket abstraction:
+ *  S = λs k i a. s, K = λs k i a. k, I = λs k i a. i, App t u = λs k i a.
+ *  a t u.  AV_NONE for a term with atoms. */
+uint32_t av_encode(av_arena *a, uint32_t t);
+
+/*  Make uq the unquoter's jet key (UQ m = m S K I (UQA UQ), the paper's):
+ *  admitted only if, on sample terms t, the normal form of uq applied to
+ *  t's datum is t.  With install_jets, UQ d at the head is installed
+ *  natively and charged the probes' contractions; --jet-check compares a
+ *  fire with UQ's own reduction, by normal form. */
+bool av_unquote_register(av_arena *a, uint32_t uq, const char **err);
+
+/*  ----------------------------------------------------------------- kernel
+ *
+ *  §9: a kernel is a door, [[poke [peek load]] state], read by axis and
+ *  never by name.  An arm is pulled Nock 9's way: (n@k) k arg, n@k the
+ *  ABI's Scott pair selectors, hd = S I (K K) and tl = S I (K (K I)),
+ *  applied down the bits of n after the leading 1.  A poke's value is
+ *  [effects kernel']: the kernel installed is tl of it, unreduced, as the
+ *  reference host's loop installs it, and the effects are hd of it.
+ */
+enum { AV_AXIS_POKE = 4, AV_AXIS_PEEK = 10, AV_AXIS_LOAD = 11, AV_AXIS_STATE = 3 };
+
+/*  n@t: t under the selectors for axis n (n >= 1). */
+uint32_t av_axis(av_arena *a, unsigned n, uint32_t t);
+
+/*  (n@k) k arg. */
+uint32_t av_pull(av_arena *a, unsigned n, uint32_t k, uint32_t arg);
+
+/*  Whether t is a kernel: probed, it is a pair whose head is a pair whose
+ *  tail is a pair.  Probing never collects and never writes. */
+bool av_is_kernel(av_arena *a, uint32_t t, const av_opts *o);
+
+typedef struct {
+    av_arena *a;
+    uint32_t  k;                /* the installed kernel; a root */
+    av_opts   o;                /* every pull's reduction */
+    uint64_t  events;           /* pokes and loads applied */
+} av_kernel;
+
+/*  Boot (§9, §20.1): apply the pill's term to the initial subject and
+ *  reduce to weak head normal form.  If the value is a kernel it is
+ *  installed and *is_kernel set; otherwise *value is it, reduced, as a
+ *  program that is not a kernel is applied once.  k->k is rooted in a
+ *  until av_kernel_free. */
+av_status av_kernel_boot(av_kernel *k, av_arena *a, uint32_t pill, uint32_t subject,
+                         const av_opts *o, bool *is_kernel, uint32_t *value,
+                         av_result *r);
+
+/*  Adopt an existing kernel term, as boot's value or a snapshot's. */
+void av_kernel_adopt(av_kernel *k, av_arena *a, uint32_t kernel, const av_opts *o);
+void av_kernel_free(av_kernel *k);
+
+/*  Pull poke with event: *effects is hd of the value, a term of the
+ *  program's effects type, valid until the arena next collects; the
+ *  kernel installed is tl of it.  The status is the reduction's; the
+ *  kernel is unchanged unless it is AV_WHNF. */
+av_status av_kernel_poke(av_kernel *k, uint32_t event, uint32_t *effects, av_result *r);
+
+/*  Pull peek with path: *answer is the value, reduced to WHNF. */
+av_status av_kernel_peek(av_kernel *k, uint32_t path, uint32_t *answer, av_result *r);
+
+/*  Upgrade: pull load from new_kernel with the installed kernel's state,
+ *  3@k, and install the result, unreduced; the new battery migrates the
+ *  state (§9, NockApp's rule). */
+bool av_kernel_load(av_kernel *k, uint32_t new_kernel);
+
+/*  3@k. */
+uint32_t av_kernel_state(av_kernel *k);
+
+/*  ------------------------------------------------------------------ pier
+ *
+ *  A kernel's durable home (§19, §20.4): a directory holding the event
+ *  log, `events.log`, and snapshots, `snap-N` with `snap-N.sum`, N the
+ *  events applied.  Each event is appended and synced before it is
+ *  applied, and a snapshot is written image first, sidecar last
+ *  (av_snapshot_save).  Opening a pier loads the newest snapshot that
+ *  verifies and replays the log's later events, so a pier reopened after
+ *  a crash holds the kernel the events it logged produce.  Log records:
+ *  `poke N <event SKIT, hex>` and `load N <new kernel's pill SKIT, hex>
+ *  <subject SKIT, hex>`; a record without its newline was cut short by a
+ *  crash, and is dropped.
+ */
+typedef struct av_pier av_pier;
+
+/*  A new pier at dir, which must not hold one: boot pill on subject (both
+ *  SKIT), which must give a kernel, and write snapshot 0. */
+av_pier *av_pier_new(const char *dir, const uint8_t *pill, size_t npill,
+                     const uint8_t *subject, size_t nsubject, const av_opts *o,
+                     const char **err);
+/*  Reopen: the newest verified snapshot, then the log after it. */
+av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err);
+void     av_pier_free(av_pier *p);
+av_kernel *av_pier_kernel(av_pier *p);
+
+/*  Log, sync, then poke with the SKIT event; *effects as av_kernel_poke. */
+av_status av_pier_poke(av_pier *p, const uint8_t *event, size_t n, uint32_t *effects,
+                       av_result *r, const char **err);
+/*  Log, sync, then upgrade to the kernel pill boots to on subject. */
+bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *subject,
+                  size_t nsubject, const char **err);
+/*  Snapshot the installed kernel at the current event count. */
+bool av_pier_snapshot(av_pier *p, const char **err);
 
 #endif /* AVON_H */
