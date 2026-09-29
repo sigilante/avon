@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "ski.h"
 
@@ -303,6 +304,8 @@ typedef struct {
     uint64_t    jet_check;      /* check every Nth fire against the
                                    unjetted run (§6.6); 0 never */
     struct av_census *census;   /* copy mode: record calls; NULL off */
+    struct av_profile *profile; /* share mode: charge each contraction to
+                                   a named term (§6.7); NULL off */
 } av_opts;
 
 typedef struct {
@@ -680,6 +683,32 @@ typedef struct av_interp {
  *  node that is a constructor applied to its fields behaves as one. */
 long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
                      const char **err);
+
+/*  ---------------------------------------------------------------- profile
+ *
+ *  Which named terms a share-mode run executes (docs/DESIGN.md §6.7): at
+ *  av_profile_begin every node of the loaded term belongs to the innermost
+ *  subterm a name's §5 hash matches, and each contraction is charged to the
+ *  owner of the first loaded node among its combinator's partial
+ *  applications (`S f`, `S f g`; `K x`; the redex `I x`), or to a row for
+ *  code the run built.
+ *  Ownership follows the nodes through collections.  Diagnostic only: it
+ *  changes no count and no result.
+ */
+typedef struct av_profile av_profile;
+
+av_profile *av_profile_new(void);
+void        av_profile_free(av_profile *p);
+/*  Name the term whose published hash is `hash`; a second name for one
+ *  hash joins the first with "/".  False on a bad hash or memory. */
+bool        av_profile_name(av_profile *p, const char *hash, const char *name);
+/*  Before the run, after every name: own the nodes of t. */
+bool        av_profile_begin(av_profile *p, const av_arena *a, uint32_t t);
+/*  The `top` rows with the most contractions, most first. */
+void        av_profile_report(const av_profile *p, FILE *out, size_t top);
+/*  The contractions charged to the row named exactly `name`, and to all. */
+uint64_t    av_profile_count(const av_profile *p, const char *name);
+uint64_t    av_profile_total(const av_profile *p);
 
 /*  ----------------------------------------------------------------- census
  *

@@ -726,6 +726,73 @@ under `--all`, each called 11 to 147 times; §6.8 raised the cap. A small
 corpus under-ranks what it happens not to call, which is why §6.8 jets
 Joy's word list whatever its rank.
 
+**The profile: which code a share-mode run executes.** The census runs
+in copy mode without collecting, which a program that must share -- the
+SKIjack-0 front end (§20.3), 2.2 billion contractions -- cannot afford.
+`avon reduce --profile=NAMES` (share mode) charges each contraction
+instead:
+
+- At load, every application node of the term belongs to the innermost
+  subterm whose §5 hash the names file lists (`kind TAB name TAB hash`,
+  as for `census --names`). Leaves are one node per atom, shared by every
+  term, and belong to no one.
+- A contraction is charged to the first loaded node among its
+  combinator's partial applications: `S f` then `S f g`, `K x`, the redex
+  `I x`. A loaded node the run rewrites in place holds the run's work
+  from then on and leaves the loaded term. When the run built all of
+  them -- a combinator passed as a value, a Scott boolean a case chose --
+  the contraction goes to a "built at run time" row for its combinator.
+- Ownership follows the nodes through collections. The profile changes
+  no count and no result (`tests/test_profile.c`).
+
+The profile is self time: a row counts the contractions its own code
+runs, not its callees'. A term too small to be distinctive (`K K` is a
+dozen case branches) would take code from the equation it is written in,
+so skijack's `run0 --profile` names only terms of six atoms or more,
+labels each lifted lambda and recursion body by its equation, and totals
+by equation.
+
+**Results, 2026-09-29: the front end compiling itself** (2,176,424,461
+contractions, the renderer that writes the result out included):
+
+| row | share |
+|---|---:|
+| name comparison: `eqCode`, `eqName`, `eqBit`, `andB`, `notB` | 39.5% |
+| built at run time: K, S, I | 32.2% |
+| the renderer, `rTm` (the harness, not the front end) | 13.8% |
+| everything else, no row above 2.7% | 14.5% |
+
+Comparison is the front end's cost, and the run-time rows are mostly its
+consequence: a comparison's result is a Scott boolean or bit, which the
+case that reads it applies as a combinator the run built. A second run
+splits comparison by call site. Each site gets its own copy of the
+comparison chain, made distinct by a constant that K discards, so every
+copy costs the same per call. The copies add one contraction per bit
+compared, 82.7 million, and the shares are of that run's 2,259,156,268:
+
+| call site | share |
+|---|---:|
+| dependencies: is each equation free in each body (`eqDeps`) | 10.3% |
+| grouping: mutual reachability (`grp`) | 6.3% |
+| the memo of finished terms (`findMe`) | 4.7% |
+| a dependency list by name (`depsOf`) | 4.7% |
+| reachability (`closure`) | 3.2% |
+| name resolution (`resolve`) | 2.7% |
+| constructor and type tables | 1.7% |
+| the rule table, duplicate names | 2.2% |
+
+**What this means.** The recursion analysis -- dependencies, grouping,
+the dependency lists and reachability, 24.5% -- is quadratic in the
+equations: every equation's name is
+tested against every body, and every pair's reachability is compared by
+list membership. One pass collecting each body's free names, and
+Tarjan's strongly connected components over them, make it linear in the
+program. The memo and rule table are linear scans a search tree keyed by
+name would make logarithmic. These are changes to the program, not the
+runtime. A jet on name equality would take what remains, and it is the
+one candidate the profile names; it should wait until the algorithms
+stop calling it quadratically often.
+
 ### 6.8 Constructor jets and the jet dictionaries
 
 **Avon recognizes a Scott constructor by running it, and jets every one

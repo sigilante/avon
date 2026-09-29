@@ -95,6 +95,7 @@ static bool mark_set(R *r, uint32_t i) {
 
 static void remap_marks(av_gc *g, void *ctx) {
     R *r = ctx;
+    if (r->o->profile) profile_remap(r->o->profile, g);
     if (!r->marks) return;
     uint64_t *old = r->marks;
     size_t nold = r->nmarks;
@@ -494,6 +495,8 @@ static av_status whnf_share(R *r) {
         unsigned k = ski_arity(c);
         if (k == 0 || r->top - bottom < k) break;
 
+        if (o->profile)                         /* S f, S f g; K x; I x */
+            profile_charge(o->profile, r->stk + r->top, c == SKI_S ? 2 : 1, c);
         uint32_t n;
         if (c == SKI_S) {                       /* S f g x -> f x (g x) */
             if (!ensure(r, 2)) return AV_SIZE;
@@ -503,10 +506,12 @@ static av_status whnf_share(R *r) {
             uint32_t x = av_res(a, av_right(a, n));
             uint32_t fx = reserved_app(a, f, x);
             uint32_t gx = reserved_app(a, g, x);
+            if (o->profile) profile_rewrote(o->profile, n);
             arena_set(a, n, (av_node){ fx, gx });
         } else {                                /* K x y -> x;  I x -> x */
             n = r->stk[r->top - k];
             uint32_t x = av_res(a, av_right(a, r->stk[r->top - 1]));
+            if (o->profile) profile_rewrote(o->profile, n);
             arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
         }
         r->top -= k;
@@ -564,6 +569,7 @@ av_opts av_opts_default(void) {
         .compile_jets = false,
         .jet_check = 0,
         .census    = NULL,
+        .profile   = NULL,
     };
 }
 
