@@ -100,6 +100,12 @@ typedef struct {
     const struct av_facts *facts;   /* the store resolvers here read (§8) */
     struct av_jetstats *jetstats;   /* set while a reduction counting jets
                                        runs, for the jet-node makers */
+    struct av_tmpl *tmpls;      /* supercombinator templates (§6.9)       */
+    uint32_t   ntmpls, tmplcap;
+    uint32_t  *tmpl_globals;    /* their bodies' closed parts: roots      */
+    uint32_t   nglobals, globcap;
+    uint32_t  *tmpl_scratch;    /* an instance's intermediate results    */
+    uint32_t   tmpl_scratch_cap;
     uint32_t   compiler[9];     /* the compiler jet's terms (§20.3), roots:
                                    abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
     struct av_pma *pma;         /* the persistent image (§19.1), or NULL  */
@@ -311,6 +317,8 @@ typedef struct {
     struct av_jetstats *jetstats;   /* count each jet's fires, misses and
                                    demotions, and each fire's origin
                                    (§6.7); NULL off */
+    bool        templates;      /* share mode: instantiate supercombinator
+                                   templates (§6.9); copy mode ignores it */
 } av_opts;
 
 typedef struct {
@@ -321,6 +329,8 @@ typedef struct {
     uint64_t  interp_calls; /* interpreter jets fired, among jet_calls    */
     uint64_t  jet_steps;    /* contractions the fires charged, among steps */
     bool      jet_fault;    /* a jet check disagreed: status INTERRUPTED  */
+    uint64_t  tmpl_calls;   /* template instantiations, one step each,
+                               among steps (§6.9)                         */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -598,6 +608,7 @@ typedef struct av_jet {
                                    with the term, 2 refused               */
     bool      unquote;          /* the unquoter, UQ (§20.2): install      */
     bool      compiler;         /* the compiler's abstraction (§20.3)     */
+    uint32_t  tmpl;             /* 1 + its template in a->tmpls (§6.9), or 0 */
 } av_jet;
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
@@ -689,6 +700,43 @@ typedef struct av_interp {
 long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
                      const char **err);
 
+/*  ------------------------------------------------------------ templates
+ *
+ *  Supercombinator templates (docs/DESIGN.md §6.9): each rule's formals and
+ *  open body, from skijack's templates.tsv and template_terms.tsv, keyed
+ *  by the §5 hash of the SKI term it compiles to.  Load them after every
+ *  dictionary and before av_jets_match, then bind them to the matched
+ *  term; nothing may collect between.  A template is kept only if its body
+ *  abstracts to its key, and fires only on a node whose term is that key,
+ *  compared as trees in a hash-consed table, never by hash alone.  With
+ *  av_opts.templates, share mode instantiates the body over the arguments
+ *  where the key meets them at the head: one step for the plumbing.
+ */
+typedef struct av_tmpl {
+    uint32_t  jet;              /* its dashboard entry                    */
+    unsigned  k;                /* formals: the arguments one fire takes  */
+    uint32_t *ops;              /* per open application, two operands    */
+    uint32_t  nops;
+    uint32_t *consts;           /* indices into a->tmpl_globals           */
+    uint32_t  nconsts;
+    uint32_t  root;             /* the operand the instance is            */
+    uint32_t  key;              /* its term, canonical at load            */
+    bool      globals_made;
+} av_tmpl;
+
+typedef struct av_tmplset av_tmplset;
+
+/*  Load DIR/templates.tsv and DIR/template_terms.tsv.  NULL, with *err, on
+ *  a malformed file or a term that does not match its hash; a template
+ *  whose body does not abstract to its key is counted as refused. */
+av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err);
+/*  After av_jets_match: unwrap every jet node of t for a template whose
+ *  term the node's is not.  False if a collection intervened, or memory. */
+bool        av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t);
+void        av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,
+                                long *skipped, long *unbound);
+void        av_templates_free(av_tmplset *ts);
+
 /*  ------------------------------------------------------------ jet stats
  *
  *  What each jet does on a run (docs/DESIGN.md §6.7): fires and the
@@ -746,9 +794,10 @@ uint32_t av_front0_input(av_arena *a, const av_front0 *f, const char *src, size_
 /*  Reduce t, from av_front0_input, reading its result by probing with
  *  collection on: a line `name TAB hash` per name, in its order, or
  *  `RErr`.  0 for ROk, 1 for RErr, -1 with *err if it does not read.
- *  *steps counts every probe's contractions. */
+ *  *steps counts every probe's contractions, and *tmpl_calls (if not
+ *  NULL) the template instantiations among them (§6.9). */
 int      av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
-                        uint64_t *steps, const char **err);
+                        uint64_t *steps, uint64_t *tmpl_calls, const char **err);
 
 /*  ---------------------------------------------------------------- profile
  *

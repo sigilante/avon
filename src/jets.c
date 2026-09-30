@@ -196,6 +196,8 @@ static bool marks(av_arena *a) {
     return true;
 }
 
+bool jet_marks(av_arena *a) { return a->jet_mark[0] || marks(a); }
+
 /*  Leaves in the tree unfolding, saturating at SIZE_MAX. */
 /*  Every node's leaf count below t, saturating, into m keyed by viewed
  *  node: one pass, each shared node once. */
@@ -527,6 +529,10 @@ static uint32_t jet_node(av_arena *a, uint32_t idbits, uint32_t inner) {
     if (n == AV_NONE) return AV_NONE;
     arena_set(a, n, (av_node){ (AV_JET << AV_TAG_SHIFT) | idbits, inner });
     return n;
+}
+
+uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner) {
+    return jet_node(a, id, inner);
 }
 
 /*  A fresh copy of t with jets wrapped; the root itself is not wrapped

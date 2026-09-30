@@ -30,6 +30,19 @@ uint32_t jet_find(const av_arena *a, uint64_t digest);
  *  first; follow a collection. */
 void     profile_charge(av_profile *p, const uint32_t *spine, unsigned k, ski_leaf c);
 void     profile_remap(av_profile *p, const av_gc *g);
+/*  Templates (tmpl.c): an instance program's operands, as for residuals; a
+ *  jet node wrapping inner for jet id (not the dashboard's term, so a run
+ *  may write it); an instance of T over args[0 .. T->k-1], allocating
+ *  T->nops nodes (reserve them first; it never collects). */
+#define TMPL_CONST 0u
+#define TMPL_ARG   1u
+#define TMPL_RES   2u
+#define TMPL_OPND(kind, i) ((kind) << 30 | (i))
+uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner);
+/*  The residual markers @x0 .. @x31, made if not yet: templates' formals. */
+bool     jet_marks(av_arena *a);
+uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args);
+
 /*  The jet stats' hooks (jetstats.c): a fire of jet id at jet node `node`;
  *  a miss; a share-mode demotion, copied or not; a jet node made fresh
  *  from jet owner's residual or term; a collection. */

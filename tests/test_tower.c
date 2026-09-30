@@ -38,7 +38,7 @@ static run_out run(const char *name, av_strategy st, bool whnf, size_t budget) {
     snprintf(path, sizeof path, "tests/fixtures/%s.ski", name);
     size_t len;
     char *src = slurp(path, &len);
-    run_out out = { { AV_NONE, 0, AV_FUEL, 0, 0, 0, false }, NULL };
+    run_out out = { { .term = AV_NONE, .status = AV_FUEL }, NULL };
     if (!src) {
         fprintf(stderr, "  missing %s (run from the repository root)\n", path);
         return out;

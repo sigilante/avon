@@ -78,6 +78,13 @@ void av_arena_free(av_arena *a) {
     }
     free(a->jets);
     free(a->jet_scratch);
+    for (uint32_t k = 0; k < a->ntmpls; k++) {
+        free(a->tmpls[k].ops);
+        free(a->tmpls[k].consts);
+    }
+    free(a->tmpls);
+    free(a->tmpl_globals);
+    free(a->tmpl_scratch);
     free(a->interps);
     free(a->nats);
     free(a->jet_index);

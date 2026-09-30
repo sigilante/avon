@@ -971,6 +971,85 @@ together absorb about a third of the work. Joy's words add 0.6 points on
 this corpus. The absorption counts contractions a fire replaces; each
 fire still builds its residual, so the wall-clock gain is smaller.
 
+### 6.9 Supercombinator templates: the compiler hands over its functions
+
+**Bracket abstraction erases the program's functions, and the compiler
+still has them.** Every SKIjack rule with formals -- equation, recursion
+body, group part, lifted lambda, constructor, prelude rule -- is also
+written as a template: its formals and open body, keyed by the §5 hash of
+the SKI term it compiles to (skijack's `templates.py`, `templates.tsv`
+and `template_terms.tsv`). Where that term meets its arguments at the
+head in `share` mode, Avon instantiates the body over them in one step,
+instead of running the abstraction's S/K plumbing (`src/tmpl.c`,
+`avon reduce|front0 --templates=DIR`). It is SKA's function recovery
+(Afonin's "Nock Compilation", USTJ 3.2), with the answer supplied by the
+compiler that knew it.
+
+**Pure SKI is untouched.** SKIjack emits the same terms and export files
+byte for byte; the templates are a separate file. Avon without
+`--templates`, or in `copy` mode, which refuses it, runs exactly as
+before, and `copy` counts stay the paper's (§1.1).
+
+**Nothing is trusted, not even the hash.**
+
+- *A template proves itself.* Avon abstracts its body over its formals,
+  the last first, and keeps it only if the result is its key; a body that
+  does not is refused and the term runs as SKI.
+- *Identity is structural.* Loading builds every closed term -- the
+  referenced terms, each checked against its hash, the globals, the
+  abstracted keys -- in one hash-consed table, so equal trees are one
+  node. After `av_jets_match`, each loaded jet node for a template is
+  interned in the same table and kept only if it is the template's term;
+  the hash only proposes. Wrapping a global's inner keys is node identity
+  too.
+- *The instance is weak reduction.* The body over the arguments is a weak
+  reduct of the key applied to them (lean-ski's `absN_beta_close`), so
+  the value and every normal form are the unjetted ones.
+
+**What a fire does.** It pops the key's arity of arguments, writes the
+body's open part -- its maximal closed subterms are globals, built once
+per arena and rooted -- in children-first order, points the redex root at
+it, and charges one step. The count is `share`'s own, reported with the
+instantiations among it. A miss -- the key reached with fewer arguments,
+as a partial application is -- enters the key's term without demoting the
+node, so the node fires on its next full application; a node whose term
+is the dashboard's keeps §6.5's rule. Left out, as lean-ski leaves them:
+rules without formals, open bodies, η-templates, and keys that are a
+bare S, K or I.
+
+**One object with §18.1's proof jets.** A template is lean-ski's
+`(formals, open body)`: the same exclusions, globals as maximal closed
+subterms leaves included, cells in `ibuild` order. The plan for the
+witness: lean-ski's `jets emit` takes skijack's templates as its template
+source, recomputes roots and globals, licenses the roots with `rootOKB`,
+and emits the jet file Avon's witness already reads (§18.1). Share mode's
+globals are per-arena nodes; the witness's are heap addresses, which
+lean-ski resolves itself.
+
+**Results, 2026-09-29.** The front end compiling itself, with its own
+993 templates (641 kept; 352 are duplicates, η-templates or bare-leaf
+keys; none refused, none unbound):
+
+| | contractions | of them instantiations | user time, best of 5 |
+|---|---:|---:|---:|
+| SKI, share mode | 306,991,371 | -- | 4.38 s |
+| with templates | 21,238,890 | 18,930,884 | 0.97 s |
+
+The output is the same, every name's hash. Loading and checking the
+templates -- 6 MB of printed terms, parsed, hash-consed and abstracted --
+is 0.39 s of the 0.97; the compile itself is 7.5× faster, and a compact
+template form would take most of the rest. The corpus's 43 halting runs in
+`share` mode reach the same normal forms in 63,774 steps, 36,616 of them
+instantiations, against 640,853. `make front0-check` runs the edges, a
+thousand random programs and the fixed point both ways.
+
+What is left of the self-compile is 18.9 million instantiations, each
+writing a template's open part in full, and 2.3 million S, K and I
+contractions outside any template, not yet profiled. The instantiations
+are the larger part, and what would shrink them is strictness: an
+argument a body forces evaluated where it is needed, not written as a
+cell (SKA's data requirements).
+
 ## 7. The interpreter jet
 
 **It is Avon's level-1 interpreter, not an optimization of one.** Vere runs
@@ -2345,7 +2424,8 @@ remaps its memo.
 
 - **The fixed point from source text.** `front` applied to its own
   39,622-character source gives all 492 of its names their terms, hash
-  for hash with Python's, in 306,991,371 contractions, eight seconds.
+  for hash with Python's, in 306,991,371 contractions, eight seconds;
+  with its supercombinator templates (§6.9), in 21,238,890, one second.
   The first version took 2,176,424,461 for 375 names; §6.7 follows the
   steps between.
 - **Agreement.** It compiles a thousand random SKIjack-0 programs as

@@ -53,6 +53,7 @@ typedef struct {
     size_t         nmarks;      /* words                                  */
 
     uint64_t       jet_calls, jet_steps;
+    uint64_t       tmpl_calls;
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
@@ -453,6 +454,35 @@ static av_status whnf_share(R *r) {
                 cur = n;
                 continue;
             }
+            if (o->templates && a->jets[id].tmpl) {
+                /* a supercombinator template (§6.9): its body over the
+                 * arguments, one step; short of them, its term, the node
+                 * left a root for the next full application */
+                const av_tmpl *T = &a->tmpls[a->jets[id].tmpl - 1];
+                if (r->top - bottom >= T->k) {
+                    if (o->jetstats) jetstats_fire(o->jetstats, cur, id);
+                    if (!ensure(r, T->nops)) return AV_SIZE;
+                    uint32_t args[AV_JET_ARITY_MAX];
+                    for (unsigned i = 0; i < T->k; i++)
+                        args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
+                    uint32_t inst = tmpl_instance(a, T, args);
+                    assert(inst != AV_NONE && "allocation past what ensure() reserved");
+                    if (inst == AV_NONE) return AV_SIZE;
+                    uint32_t n = r->stk[r->top - T->k];     /* the redex root */
+                    arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | inst, 0 });
+                    r->top -= T->k;
+                    cur = n;
+                    r->steps++;
+                    r->tmpl_calls++;
+                    continue;
+                }
+                if (!(av_left(a, cur) & AV_JET_SHARED) &&
+                    !(a->jets[id].residual_ok && fires(r, id, r->top - bottom))) {
+                    if (o->jetstats) jetstats_miss(o->jetstats, id);
+                    cur = av_right(a, cur);
+                    continue;
+                }
+            }
             if (!(a->jets[id].residual_ok && fires(r, id, r->top - bottom))) {
                 if (o->jetstats) {
                     if (o->jets && a->jets[id].residual_ok && r->top - bottom < a->jets[id].arity)
@@ -584,6 +614,7 @@ av_opts av_opts_default(void) {
         .census    = NULL,
         .profile   = NULL,
         .jetstats  = NULL,
+        .templates = false,
     };
 }
 
@@ -613,5 +644,5 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.work);
     free(r.marks);
     return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls,
-                        r.jet_steps, r.jet_fault };
+                        r.jet_steps, r.jet_fault, r.tmpl_calls };
 }
