@@ -1,0 +1,79 @@
+-- Reduceron's Taut (Naylor and Runciman, JFP 2012): is
+-- (q -> a) & .. & (q -> p)  ->  q -> a & .. & p  a tautology?  Variable
+-- names are five-bit codes where the original has characters, and the
+-- binary connectives hold a pair (a type has one binary self-reference).
+bool === False | True
+nat  === Zero | Suc nat
+bit  === Lo | Hi
+prop === Const bool | Var nat | Not prop | And pr | Implies pr
+pr   === Pr prop prop
+nms  === NNil | NCons nat nms
+ps   === PNil | PCons prop ps
+env  === ENil | ECons nat bool env
+envs === VNil | VCons env envs
+bl   === BNil | BCons bool bl
+bll  === LNil | LCons bl bll
+
+not b = b |> { False True ; True False }
+and2 a b = a |> { False False ; True b }
+eqBit a b = a |> { Lo (b |> { Lo True ; Hi False }) ; Hi (b |> { Lo False ; Hi True }) }
+eqNm x y = natIfEq x y True False
+neq x y = not (eqNm x y)
+
+find key s = s |> { ENil False ; ECons k v t (eqNm key k |> { True v ; False find key t }) }
+
+eval s p = p |> { Const b b ; Var x find x s ; Not q (eval s q |> { True False ; False True }) ; And qr (qr |> { Pr q r (eval s q |> { True eval s r ; False False }) }) ; Implies qr (qr |> { Pr q r (eval s q |> { True eval s r ; False True }) }) }
+
+vars p = p |> { Const b NNil ; Var x NCons x NNil ; Not q vars q ; And qr varsPr qr ; Implies qr varsPr qr }
+varsPr qr = qr |> { Pr q r append (vars q) (vars r) }
+
+consAll b xs = xs |> { LNil LNil ; LCons x r LCons (BCons b x) (consAll b r) }
+appendL xs ys = xs |> { LNil ys ; LCons x r LCons x (appendL r ys) }
+bools n = n |> { Zero LCons BNil LNil ; Suc m appendL (consAll False (bools m)) (consAll True (bools m)) }
+
+filter p xs = xs |> { NNil NNil ; NCons x r (p x |> { True NCons x (filter p r) ; False filter p r }) }
+rmdups xs = xs |> { NNil NNil ; NCons x r NCons x (rmdups (filter (neq x) r)) }
+
+zip xs ys = xs |> { NNil ENil ; NCons x r (ys |> { BNil ENil ; BCons y s ECons x y (zip r s) }) }
+mapZip vs bs = bs |> { LNil VNil ; LCons b r VCons (zip vs b) (mapZip vs r) }
+substs p = substs1 (rmdups (vars p))
+substs1 vs = mapZip vs (bools (length vs))
+
+mapEval p ss = ss |> { VNil BNil ; VCons s r BCons (flip eval p s) (mapEval p r) }
+isTaut p = and (mapEval p (substs p))
+flip f y x = f x y
+
+length xs = lengthAcc Zero xs
+lengthAcc acc xs = xs |> { NNil acc ; NCons x r lengthAcc (Suc acc) r }
+
+append xs ys = xs |> { NNil ys ; NCons x r NCons x (append r ys) }
+mapP f xs = xs |> { NNil PNil ; NCons x r PCons (f x) (mapP f r) }
+and xs = xs |> { BNil True ; BCons b r (b |> { True and r ; False False }) }
+null xs = xs |> { PNil True ; PCons x r False }
+foldr1 f xs = xs |> { PNil Const False ; PCons x r (null r |> { True x ; False f x (foldr1 f r) }) }
+
+va = Zero
+vb = Suc (Zero)
+vc = Suc (Suc (Zero))
+vd = Suc (Suc (Suc (Zero)))
+ve = Suc (Suc (Suc (Suc (Zero))))
+vf = Suc (Suc (Suc (Suc (Suc (Zero)))))
+vg = Suc (Suc (Suc (Suc (Suc (Suc (Zero))))))
+vh = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero)))))))
+vi = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero))))))))
+vj = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero)))))))))
+vk = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero))))))))))
+vl = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero)))))))))))
+vm = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero))))))))))))
+vn = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero)))))))))))))
+vo = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero))))))))))))))
+vp = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero)))))))))))))))
+vq = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Zero))))))))))))))))
+
+imp v = Implies (Pr (Var vq) (Var v))
+conj p q = And (Pr p q)
+names = (NCons va (NCons vb (NCons vc (NCons vd (NCons ve (NCons vf (NCons vg (NCons vh (NCons vi (NCons vj (NCons vk (NCons vl (NCons vm (NCons vn (NCons vo (NCons vp NNil))))))))))))))))
+
+testProp = Implies (Pr (foldr1 conj (mapP imp names)) (Implies (Pr (Var vq) (foldr1 conj (mapP Var names)))))
+
+main = isTaut testProp

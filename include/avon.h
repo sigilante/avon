@@ -805,6 +805,7 @@ void        av_templates_word_counts(const av_tmplset *ts, long *admitted, long 
 bool av_words_on(av_arena *a);
 long av_words_scan(av_arena *a, uint32_t t);    /* words made, or -1 */
 bool av_words_mark(av_arena *a);
+long av_knot_scan(av_arena *a, uint32_t t);     /* EXPERIMENT: Y g as n = g n */
 
 /*  ------------------------------------------------------------ jet stats
  *

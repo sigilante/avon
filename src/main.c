@@ -80,7 +80,10 @@
  *  templates checked against the terms and instantiated, §6.9), --data
  *  (with --templates: data jets, §6.10: constructor templates dispatched,
  *  fused into the branch's template, numerals held as words, and
- *  DIR/words.tsv's numeral operations run on them natively).
+ *  DIR/words.tsv's numeral operations run on them natively), --knot
+ *  (EXPERIMENT, branch experiment-knot: each Y g in the loaded term and
+ *  the templates' globals rewritten to the cycle n = g n; cyclic graphs
+ *  break hashing, printing and jam).
  *  docs/RUNTIME.md is the user's guide.
  */
 
@@ -111,6 +114,7 @@ typedef struct {
     const char *profile;          /* --profile: a names file, or NULL */
     const char *templates;        /* --templates: a directory, or NULL */
     bool        data;             /* --data: data jets (§6.10) */
+    bool        knot;             /* --knot: EXPERIMENT, Y g as a cycle */
     const char *file;
 } args;
 
@@ -165,6 +169,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->profile = NULL;
     g->templates = NULL;
     g->data = false;
+    g->knot = false;
     g->jet_table = NULL;
     g->plan = NULL;
     g->jet_floor = 8;
@@ -197,6 +202,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--profile=", 10) == 0 && s[10]) g->profile = s + 10;
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) g->templates = s + 12;
         else if (strcmp(s, "--data") == 0)           g->data = true;
+        else if (strcmp(s, "--knot") == 0)           g->knot = true;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
             g->o.interp_jets = true;
@@ -390,6 +396,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_arena_free(a);
         return 1;
     }
+    if (g->knot) fprintf(stderr, "knots: %ld\n", av_knot_scan(a, t));
     av_opts o = g->o;
     o.templates = g->templates != NULL;
     o.data = g->data;

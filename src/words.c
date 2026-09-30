@@ -227,3 +227,55 @@ bool word_admit(av_arena *a, uint32_t term, unsigned op) {
     }
     return true;
 }
+
+/*  ------------------------------------------------------ EXPERIMENT: knot */
+
+/*  Each application of the Y combinator below t and in the templates'
+ *  globals, Y g, rewritten in place to the cycle n = g n: the graph form of
+ *  the infinite unfolding Y g denotes, so a recursive call re-derives
+ *  nothing.  Experimental: cyclic graphs break hashing and printing. */
+long av_knot_scan(av_arena *a, uint32_t t) {
+    static const char Y[] = "S (K (S I I)) (S (S (K S) K) (K (S I I)))";
+    av_parse_error pe;
+    uint32_t y = av_parse(a, Y, sizeof Y - 1, &pe);
+    if (y == AV_NONE) return -1;
+    nmap seen = { 0 }, memo = { 0 };
+    long made = 0;
+    uint32_t roots_n = 1 + a->nglobals;
+    for (uint32_t k = 0; k < roots_n; k++) {
+        uint32_t root = k == 0 ? t : a->tmpl_globals[k - 1];
+        typedef struct { uint32_t node; bool done; } item;
+        size_t cap = 256, top = 0;
+        item *todo = malloc(cap * sizeof *todo);
+        if (!todo) return -1;
+        todo[top++] = (item){ root, false };
+        while (top) {
+            item it = todo[--top];
+            uint32_t x = av_res(a, it.node);
+            uint64_t v;
+            if (av_tag(a, x) != AV_APP) continue;
+            if (!it.done) {
+                if (nmap_get(&seen, x, &v)) continue;
+                nmap_put(&seen, x, 1);
+                if (top + 3 > cap) todo = realloc(todo, (cap *= 2) * sizeof *todo);
+                todo[top++] = (item){ x, true };
+                todo[top++] = (item){ av_right(a, x), false };
+                todo[top++] = (item){ av_left(a, x), false };
+                continue;
+            }
+            uint32_t f = av_view(a, av_left(a, x));
+            if (!nmap_get(&memo, f, &v)) {
+                v = av_tag(a, f) == AV_APP && av_equal(a, f, y, 64) == 1;
+                nmap_put(&memo, f, v);
+            }
+            if (!v) continue;
+            uint32_t g = av_res(a, av_right(a, x));
+            arena_set(a, x, (av_node){ g, x });
+            made++;
+        }
+        free(todo);
+    }
+    nmap_free(&seen);
+    nmap_free(&memo);
+    return made;
+}
