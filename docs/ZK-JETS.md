@@ -70,7 +70,7 @@ Its heights are the statement's (`log R M`, each in `[8, 20]`). It is
 proved:
 - sound, `compExportG_sound`, and complete, `comp_completeG_log`, for
   any evaluation statement;
-- zero knowledge, `transcript_zk` (`Ski/ZK/Transcript.lean`): a simulator
+- zero knowledge, `transcript_zk` (`Ski/ZK/TranscriptN.lean`): a simulator
   fixed by the statement matches the real transcript on every event
   within `P^2/P^4 + M/P^4 + ε/NR` of the draws, over a PCS assumed
   statistically hiding.
@@ -283,13 +283,13 @@ no `INST` step, so it refuses a jetted table; the new checker is to the
 composed one what `checkJA` is to `checkA`.
 
 *Obligations, zero knowledge:*
-- `tree_hides`: the blinding tree's terminals are uniform subject to
+- `tree_hides` (proved, milestone 2): the blinding tree's terminals are uniform subject to
   their sum, for a generic `β`. It generalizes `chain_hides`
   (`Ski/ZK/Chain.lean`), whose view is three terminals and whose count is
   over two tuples (`count2`), to a tree of `n` tables and `n − 1` tuples.
   The per-tuple shift lemmas (`shift_term`, `unshift_shift`) carry over.
-- `transcript_zkN`: `transcript_zk` over `n` terminals, with the
-  `n − 1`-fold count.
+- `transcript_zkN` (proved, milestone 2): `transcript_zk` over `n`
+  terminals, with the `n − 1`-fold count.
 - `compJ_transcript`: the instance.
 
 ## 7. The prover's side, and Avon's
@@ -347,9 +347,12 @@ the tree; its height is a public budget like POP's.
 1. **Measure.** *Done, 2026-09-29* (§1): 11,483 rows jetted against
    129,957 plain, from the source's own templates (`lake exe skilark
    jets`, `ski-air jets-measure`, `lake exe jets check-src`). §4–§7 pay.
-2. **The tree lemma.** `tree_hides` and `transcript_zkN` in lean-ski,
-   axiom-clean (`propext`, `Quot.sound`), with `comp_transcript`
-   re-derived as the three-table instance.
+2. **The tree lemma.** *Done, 2026-09-29:* `tree_hides`
+   (`Ski/ZK/Tree.lean`) and `transcript_zkN` (`Ski/ZK/TranscriptN.lean`)
+   in lean-ski, axiom-clean (`propext`, `Quot.sound`). `transcript_zk` is
+   now proved as the tree of three (`chain_viewT`, `tsum_tsumN`), so
+   `comp_transcript`, with its statement unchanged, is the three-table
+   instance.
 3. **Public closures.** The closure rule of §4: `firstAt` skipping private
    closures in `jets emit`, the decided check `publicB` in the verifier's
    statement check, and `termAt_public`. It comes before
