@@ -31,8 +31,17 @@ the clear, supercombinator jets (`DESIGN.md` §18.1) bring the compiled
 corpus rows to 28–34% of the plain run's. A SKIlark verifier is compiled
 SKIjack, the same kind of code: its hot functions (`seq`, `applyU`,
 `wIfz`, the Scott constructors) are equations and constructors, each a
-template the jet table licenses. How much jets save on a SKIlark
-predicate is not measured; milestone 1 (§9) measures it first.
+template the jet table licenses.
+
+**Measured (milestone 1, 2026-09-29), in the clear.** `split8`'s verifier,
+applied to its public `x` and the bits, runs in **11,483 rows jetted
+against 129,957 plain: 8.8%**, and 74,116 memory cells against 215,393
+(lean-ski `bench/plonky3/README.md`). The table comes from the SKIjack
+source's own templates: 178 templates, 130 jets, 21,049 licensed roots.
+Lean accepts the jetted table (`jets check-src`, `Air.checkJA_sound`).
+Dropping the 104 roots that reach the bits, as §4's closure rule would
+under hiding, leaves 11,571 rows. The padded CPU falls from `2^17` to
+`2^14` rows, with POP and INSTW at `2^14` each.
 
 **The goal.** A proof, in zero knowledge, that a public verifier accepts
 hidden literal bits (lean-ski's predicate statement, `Ski/Predicate.lean`)
@@ -335,12 +344,9 @@ the tree; its height is a public budget like POP's.
 
 ## 9. Milestones
 
-1. **Measure.** Jet the SKIlark predicate `split8` in the clear: emit a jet
-   table from its SKIjack source, run `ski-air jets`, and compare rows with
-   the 129,965 unjetted. *Obligation first:* `jets emit` for a Front-compiled
-   SKIjack source; today it emits the compiler's templates for a corpus
-   term. *Accept:* a measured row count, and the decision whether §4–§7
-   pay.
+1. **Measure.** *Done, 2026-09-29* (§1): 11,483 rows jetted against
+   129,957 plain, from the source's own templates (`lake exe skilark
+   jets`, `ski-air jets-measure`, `lake exe jets check-src`). §4–§7 pay.
 2. **The tree lemma.** `tree_hides` and `transcript_zkN` in lean-ski,
    axiom-clean (`propext`, `Quot.sound`), with `comp_transcript`
    re-derived as the three-table instance.
@@ -362,10 +368,10 @@ the tree; its height is a public budget like POP's.
 
 ## 10. Risks
 
-- **The saving may be small on SKIlark code.** Interpreted corpus rows ran
-  at 110–112% with jets (`DESIGN.md` §18.1): short instantiations add POP
-  rows that outnumber the CPU rows they save. Compiled SKIlark may sit
-  between the two. Milestone 1 decides before the rest is built.
+- **The saving was the risk, and it is measured:** 8.8% of the rows on
+  `split8`, far below the compiled corpus's 28–34%, since the kernel's
+  small equations fire thousands of times. Other predicates will differ;
+  the measurement is one statement.
 - **Eight blinded tables take seven tuples,** five more than the composed
   circuit's two, and ten more blocks, 50 columns. They are small beside
   POP and INSTW themselves.
@@ -374,10 +380,12 @@ the tree; its height is a public budget like POP's.
   not rows.
 - **The closure rule narrows the jets.** A template whose closed subterm
   occurs only in cells that reach private addresses gets no global, and a
-  root whose term reaches them is not licensed. How much that costs on
-  SKIlark code is part of milestone 1's measurement.
+  root whose term reaches them is not licensed. On `split8` in the clear
+  it drops 104 of 21,049 roots and no global, and the run grows from
+  11,483 rows to 11,571; the composed heap's layout differs, so milestone
+  3 measures it there.
 - **The jet table grows the statement.** Its check is Lean's recomputation,
-  as for the corpus; for a SKIlark source it needs milestone 1's
-  obligation.
+  as for the corpus, from the SKIjack source's templates
+  (`JetTable.fileTemplates`, as `jets check-src` uses them).
 - **Probes and data jets are not in this design's circuit.** A hidden
   computation with a public output, or a real commitment, waits for §8.
