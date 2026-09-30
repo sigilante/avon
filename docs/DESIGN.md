@@ -1882,7 +1882,10 @@ one a proof uses.
   the per-table lookup sums Plonky3 publishes, which otherwise let a
   verifier check a guessed witness. The verifier checks the statement file
   in Lean first. Other witness shapes need their own witness tables and
-  blinding. The zero-knowledge argument is informal.
+  blinding. lean-ski now proves honest-verifier zero knowledge for its
+  hiding circuits, assuming a statistically hiding PCS (`transcript_zk`,
+  `PCSClose`); Fiat–Shamir is assumed, not proved. Jets under hiding are
+  designed in `ZK-JETS.md`.
 - **Scry.** Only a resume loop's final run is proved, with the final fact
   store as a committed private input (§8).
 
@@ -2113,6 +2116,9 @@ allowed. It is the last tier and has the largest payoff.
   they cover the Scott constructors, which compile to `absN` like any
   lifted chain (`ctorO`). Numeral arithmetic is recursive, not one
   template, and waits for 18.2's word cells.
+- Under hiding: `ZK-JETS.md` designs a circuit that joins the jet tables
+  to lean-ski's composed statement in zero knowledge, with statement-fixed
+  heights and a blinding tree over the eight private tables.
 
 ## 19. Lessons from Nockchain's persistent memory arena
 
