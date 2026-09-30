@@ -29,7 +29,7 @@ size.
 | 3 | `8d80314` | `711d6c4` | identifiers interned; tries keyed by their bits | 492 | 740,558,347 | 10.5 s wall, Avon alone |
 | 4 | `eb054d8` | `e706d6e` | the result read by probing (`avon front0`), no renderer | 492 | 306,991,371 | 8.0 s wall; 4.38 s user, best of 5, at `a0fba14` without templates |
 | 5 | `a0fba14` | `5f81687` | supercombinator templates (§6.9) | 492 | 21,238,890 | 0.97 s user, best of 5 |
-| 6 | `data-jets`, over `5aee392` | `8b34529` | data jets (§6.10): constructors dispatched, fused into the branch | 492 | 17,389,998 | 0.92 s user, best of 5, against row 5's 0.96 s run beside it |
+| 6 | `f414272` | `8b34529` | data jets (§6.10): constructors dispatched, fused into the branch | 492 | 17,389,998 | 0.92 s user, best of 5, against row 5's 0.96 s run beside it |
 
 - Rows 1–3 wrote the result out through a renderer (`render0.ascii.ski`)
   as a tree of marker atoms for `avon reduce` to print; its contractions
@@ -257,7 +257,7 @@ call the prelude's numeral operations (`eqNat m n = natIfEq m n True
 False`), as the originals call integer primitives. That changes their SKI:
 the prelude's operations are `Y`-tied, and cost more as pure SKI than the
 hand-written recursions did. The table above keeps the ports as they were
-at `0c7682b`; this one is avon `data-jets` over `5aee392`, skijack
+at `0c7682b`; this one is avon `f414272`, skijack
 `8b34529`, every mode run beside the others, user CPU,
 best of five, load average about 2.5.
 
@@ -333,7 +333,7 @@ count and the best user time, and fails if an answer is not True.
 
 ## Data jets on the corpus
 
-Avon `data-jets` over `5aee392`, the corpus export used for "Templates on
+Avon `f414272`, the corpus export used for "Templates on
 the corpus": the 43 halting conformance runs, `share` mode, to weak head
 normal form, fuel ten times the manifest's. With templates they take
 43,348 steps; with data jets 33,244, of them 13,627 dispatches, 10,104

@@ -1131,7 +1131,7 @@ reported beside the contractions (`data:` on stderr), never folded into
 the instantiations. That a fused dispatch is one step and not two says
 how Avon counts, not that it does less; the claim rests on user time.
 
-**Results, 2026-09-29** (avon `data-jets` over `5aee392`, skijack
+**Results, 2026-09-29** (avon `f414272`, skijack
 `8b34529`; user CPU, best of five, interleaved). The
 front end compiling itself, all 492 names the same:
 
