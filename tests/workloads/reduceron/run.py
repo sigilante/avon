@@ -7,7 +7,8 @@ numeral operations, and reduces ``main Tt Ff`` to weak head normal form in
 share mode three ways -- as SKI, with ``--templates``, and with
 ``--templates --data`` (data jets) -- best of ``--reps`` user CPU,
 interleaved.  Every count is its own column: contractions and the
-instantiations, dispatches and numeral operations among them.  Every port's
+instantiations, dispatches and numeral operations among them.  With
+``--inline`` the ports are compiled with skijack's inlining pass.  Every port's
 main is a check that returns True, the second constructor of ``bool``, so
 the expected answer is ``Ff``.
 """
@@ -18,13 +19,13 @@ HERE = pathlib.Path(__file__).resolve().parent
 PROGS = ("ordlist", "queens2", "taut", "clausify", "permsort")
 
 
-def build(skijack: pathlib.Path, prog: str, out: pathlib.Path) -> None:
+def build(skijack: pathlib.Path, prog: str, out: pathlib.Path, inline: bool = False) -> None:
     sys.path.insert(0, str(skijack / "python"))
     sys.setrecursionlimit(1_000_000)
     import skijack as sj
     from aviary_kernel.terms import pretty
     from skijack.templates import templates, write, write_words
-    exp = sj.compile((HERE / f"{prog}.ascii.ski").read_text(), lexicon="ascii")
+    exp = sj.compile((HERE / f"{prog}.ascii.ski").read_text(), lexicon="ascii", inline=inline)
     out.mkdir(parents=True, exist_ok=True)
     (out / "main.ski").write_text(pretty(exp.terms["main"]) + " Tt Ff\n")
     write(templates(exp), out / "templates.tsv", out / "template_terms.tsv")
@@ -59,11 +60,13 @@ def main() -> int:
     ap.add_argument("--skijack", type=pathlib.Path, default=pathlib.Path.home() / "skijack")
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--only", default=",".join(PROGS))
+    ap.add_argument("--inline", action="store_true",
+                    help="compile with skijack's inlining pass (skijack RUNTIME-DESIGN.md §10)")
     a = ap.parse_args()
     progs = a.only.split(",")
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="reduceron-"))
     for p in progs:
-        build(a.skijack, p, tmp / p)
+        build(a.skijack, p, tmp / p, a.inline)
     best, seen, ok = {}, {}, True
     for _ in range(a.reps):
         for p in progs:

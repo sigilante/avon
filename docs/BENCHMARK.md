@@ -434,6 +434,36 @@ output pure SKI; numerals are words (§6.10, §18.2); a knot is a node
 written once with its own address, a witness row that a fixed-point
 theorem would license.
 
+## Inlining
+
+skijack's inlining pass (skijack `21cdef7`, branch `inline`;
+`RUNTIME-DESIGN.md` §10), off by default, unfolds small non-recursive
+functions at their calls and simplifies the cases it exposes: what the
+hand-made variants of "What the gap is made of" did by hand, automatically.
+Avon `9cf2b9f`; `run.py --inline` against `run.py`, run one after the
+other, user CPU, best of five, load average about 2; every answer True.
+
+| program | data jets, s | inlined, s | speedup | inlined ÷ Reduceron | steps | inlined steps | SKI, s | inlined SKI, s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| OrdList | 2.09 | 1.94 | 1.08 | 1.98 | 86,769,589 | 75,241,689 | 22.02 | 25.85 |
+| Queens2 | 1.92 | 1.92 | 1.00 | 1.49 | 79,407,036 | 78,750,055 | 10.08 | 10.04 |
+| Taut | 1.62 | 1.40 | 1.16 | 2.46 | 69,679,137 | 54,575,750 | 21.19 | 21.24 |
+| Clausify | 2.07 | 1.74 | 1.19 | 2.38 | 68,204,552 | 62,167,886 | 11.65 | 11.79 |
+| PermSort | 3.65 | 3.10 | 1.18 | 1.91 | 132,810,527 | 120,339,895 | 42.54 | 42.56 |
+
+- With data jets, inlining takes 1.12 times less time by geometric mean,
+  and the ports from 2.25 times the Reduceron's time to 2.01. Queens2's
+  helpers are higher-order (`one (eq L)`), and its numbers stay.
+- As pure SKI it gains nothing, and costs OrdList 17%: a larger body is
+  more S and K plumbing.
+- The front end compiled with it (`run0 --inline`): 14,448,777 steps
+  against 17,389,998 with templates and data jets, all 492 names the same,
+  0.84 s against 0.85 s -- the compile itself is about 0.45 s of each,
+  loading the templates the rest.
+
+**Reproduce.** `python3 tests/workloads/reduceron/run.py --avon build/avon
+--skijack ~/skijack --inline`, skijack at `21cdef7` or later.
+
 ## Data jets on the corpus
 
 Avon `f414272`, the corpus export used for "Templates on
