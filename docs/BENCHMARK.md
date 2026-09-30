@@ -331,6 +331,41 @@ count and the best user time, and fails if an answer is not True.
   integer arithmetic (Braun compares the numbers 0 to 255 six thousand
   times over), which Scott numerals would turn into a different benchmark.
 
+## The cost of a step
+
+With templates and data jets a step still costs about 400 instructions, at
+4.6 instructions a cycle: Queens2's heap is 0.5 MB and PermSort's 67 MB,
+and each takes about 25 ns a step, so the cost is instructions, not
+memory. A template whose body is one node, written in place with nothing
+allocated (`M M`, M = `S I I` with the template `v0 v0`), took 228
+instructions a fire; pure SKI takes 130 a contraction.
+
+Avon `instance-cost` (committed below), each change measured by
+instructions retired (`/usr/bin/time -l`), then user CPU, best of five:
+
+| change | instructions a step (Queens2, data jets) |
+|---|---:|
+| data jets as committed (`c065aa4`) | 470 |
+| allocation inlined where `ensure()` reserved; the root written over the redex root | 470 → 470 (time −6%, −3% on OrdList) |
+| the instance loop without reloads or a branch per operand | 470 → 424 |
+| `try_interp` called only for jets with an interpreter's role | 424 → 424 (−45 on the one-node fire) |
+| the scratch sized at load; the instance builder inlined | 424 → 401 |
+
+| program | before, s | after, s |
+|---|---:|---:|
+| OrdList | 2.58 | 2.25 |
+| Queens2 | 2.38 | 2.01 |
+| Taut | 1.90 | 1.71 |
+| Clausify | 2.50 | 2.16 |
+| PermSort | 4.59 | 3.95 |
+| the front end | 0.96 | 0.91 |
+
+Tried and taken out, each within noise: reusing the collector's buffers
+between collections, growing the heap at a quarter full rather than half
+(3 to 5% for twice the memory), and a tighter spine-unwinding loop. What
+is left of a one-node fire, 190 instructions, is spread two to seven at a
+time over the loop's checks.
+
 ## Data jets on the corpus
 
 Avon `f414272`, the corpus export used for "Templates on

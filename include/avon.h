@@ -761,6 +761,8 @@ typedef struct av_tmpl {
     uint32_t  nconsts;
     uint32_t  root;             /* the operand the instance is            */
     uint32_t  key;              /* its term, canonical at load            */
+    bool      root_last;        /* the root is the last instruction: an
+                                   instance may write it over the redex   */
     bool      globals_made;
     uint8_t  *sucop;            /* per instruction: it applies SUC, so an
                                    instance may build a word (§6.10); NULL

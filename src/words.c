@@ -38,10 +38,8 @@ uint32_t word_succ(av_arena *a, uint32_t pred) {
     uint32_t n;
     pred = av_res(a, pred);
     if (!a->word_suc || !av_numeral(a, pred, &n) || n >= AV_WORD_MAX) return AV_NONE;
-    uint32_t t = av_app(a, a->word_suc, pred);
-    if (t == AV_NONE) return AV_NONE;
-    uint32_t w = av_app(a, t, t);
-    if (w == AV_NONE) return AV_NONE;
+    uint32_t t = arena_app_reserved(a, a->word_suc, pred);
+    uint32_t w = arena_app_reserved(a, t, t);
     arena_set(a, w, (av_node){ (AV_JET << AV_TAG_SHIFT) | AV_JET_WORD | (n + 1), t });
     return w;
 }

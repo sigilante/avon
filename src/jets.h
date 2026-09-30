@@ -7,6 +7,8 @@
 #ifndef JETS_H
 #define JETS_H
 
+#include <assert.h>
+
 #include "avon.h"
 
 typedef struct { uint32_t *key; uint64_t *val; size_t cap, n; } nmap;
@@ -32,9 +34,11 @@ void     profile_charge(av_profile *p, const uint32_t *spine, unsigned k, ski_le
 void     profile_remap(av_profile *p, const av_gc *g);
 /*  Templates (tmpl.c): an instance program's operands, as for residuals; a
  *  jet node wrapping inner for jet id (not the dashboard's term, so a run
- *  may write it); an instance of T over args[0 .. T->k-1], allocating
- *  T->nops + T->nsuc nodes at most (reserve them first; it never
- *  collects). */
+ *  may write it); tmpl_instance, at the end of this file, an instance of
+ *  T over args[0 .. T->k-1], allocating T->nops + T->nsuc nodes at most
+ *  (reserve them first; it never collects).  With `into` a redex root, the
+ *  instance is written there -- its root application over the node, or an
+ *  indirection to it -- and `into` returned; AV_NONE, the instance's root. */
 #define TMPL_CONST 0u
 #define TMPL_ARG   1u
 #define TMPL_RES   2u
@@ -42,7 +46,6 @@ void     profile_remap(av_profile *p, const av_gc *g);
 uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner);
 /*  The residual markers @x0 .. @x31, made if not yet: templates' formals. */
 bool     jet_marks(av_arena *a);
-uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args);
 
 /*  Words (words.c, §6.10): W (n+1) over pred, a numeral held (K or a
  *  word), in two reserved nodes, or AV_NONE if pred is not one; a word's
@@ -122,6 +125,16 @@ bool pma_grow(av_arena *a, uint64_t nodes);
 void pma_collected(av_arena *a, const av_node *to, uint32_t used);
 void pma_release(av_arena *a);
 
+/*  An application in a node the caller has already reserved (ensure(),
+ *  av_reserve): av_app with its check for room and its call inlined away,
+ *  the reservation having made the room.  The instance loops' allocator. */
+static inline uint32_t arena_app_reserved(av_arena *a, uint32_t f, uint32_t x) {
+    assert(a->used < a->cap && "allocation past what was reserved");
+    uint32_t i = a->used++;
+    a->nodes[i] = (av_node){ f, x };
+    return i;
+}
+
 /*  Every in-place write of an existing node goes through here. */
 static inline void arena_set(av_arena *a, uint32_t i, av_node n) {
     if (a->pma) pma_touch(a, i);
@@ -137,5 +150,55 @@ int      facts_find(const av_facts *f, size_t n, av_arena *a, uint32_t path,
 uint32_t facts_answer(const av_facts *f, size_t i, av_arena *a);
 bool     facts_same_answer(const av_facts *f, size_t i, const av_arena *a, uint32_t t);
 uint32_t facts_live_path(const av_facts *f, size_t i, av_arena *a, const uint32_t *leaf);
+
+/*  An instance of template T (declared above, with tmpl.c's other hooks):
+ *  inlined into the reducer's two call sites, a fire's fixed cost being
+ *  most of a small template's. */
+static inline __attribute__((always_inline))
+uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args,
+                                     uint32_t into) {
+    /* scratch, sized at load for every template: the instructions'
+     * results, then the constants' nodes */
+    assert(a->tmpl_scratch_cap >= T->nops + T->nconsts);
+    uint32_t *out = a->tmpl_scratch, *cv = out + T->nops;
+    for (uint32_t j = 0; j < T->nconsts; j++) cv[j] = a->tmpl_globals[T->consts[j]];
+    /* an operand is base[kind][index]: no branch on its kind */
+    const uint32_t *const base[3] = { cv, args, out };
+#define OPND(x) (base[(x) >> 30][(x) & AV_PAYLOAD])
+    const uint32_t *ops = T->ops;
+    uint32_t n = T->nops;
+    /* the root application is written over the redex root, as S writes its
+     * result: no node for it, no indirection to it */
+    bool in_place = into != AV_NONE && T->root_last && !(T->sucop && T->sucop[n - 1]);
+    uint32_t end = in_place ? n - 1 : n;
+    if (!T->sucop) {
+        /* the common loop, the arena's pointer and bump counter held in
+         * locals: nothing it stores can move them */
+        av_node *nodes = a->nodes;
+        uint32_t used = a->used;
+        assert(a->cap - used >= end && "allocation past what was reserved");
+        for (uint32_t i = 0; i < end; i++) {
+            nodes[used] = (av_node){ OPND(ops[2 * i]), OPND(ops[2 * i + 1]) };
+            out[i] = used++;
+        }
+        a->used = used;
+    } else {
+        for (uint32_t i = 0; i < end; i++) {
+            uint32_t f = OPND(ops[2 * i]), x = OPND(ops[2 * i + 1]), v;
+            /* SUC of a numeral held: a word (§6.10), two nodes where one was */
+            out[i] = T->sucop[i] && av_numeral(a, x, &v) && v < AV_WORD_MAX
+                   ? word_succ(a, x) : arena_app_reserved(a, f, x);
+        }
+    }
+    if (in_place) {
+        arena_set(a, into, (av_node){ OPND(ops[2 * (n - 1)]), OPND(ops[2 * (n - 1) + 1]) });
+        return into;
+    }
+    uint32_t root = OPND(T->root);
+    if (into != AV_NONE)
+        arena_set(a, into, (av_node){ (AV_IND << AV_TAG_SHIFT) | root, 0 });
+    return into != AV_NONE ? into : root;
+#undef OPND
+}
 
 #endif /* JETS_H */

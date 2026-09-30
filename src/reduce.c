@@ -25,9 +25,7 @@
  *  fail unless a `need` count is wrong, which the debug build catches.
  */
 static inline uint32_t reserved_app(av_arena *a, uint32_t f, uint32_t x) {
-    uint32_t i = av_app(a, f, x);
-    assert(i != AV_NONE && "allocation past what ensure() reserved");
-    return i;
+    return arena_app_reserved(a, f, x);
 }
 
 typedef struct { uint32_t head; size_t base, n, i; } frame;
@@ -267,6 +265,13 @@ static unsigned fire_nargs(const R *r, uint32_t id) {
     return a->interps[a->jets[id].interp].nparams + 2;
 }
 
+/*  Whether jet id has any of try_interp's roles: most jets have none, and
+ *  the reducers skip the call for them. */
+static inline bool interp_role(const av_arena *a, uint32_t id) {
+    const av_jet *j = &a->jets[id];
+    return j->unquote || j->compiler || j->interp >= 0;
+}
+
 static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
                       uint32_t *outp) {
     av_arena *a = r->a;
@@ -488,10 +493,10 @@ static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
     }
     uint32_t nd = r->stk[r->top - k];
     if (d.U) {
-        uint32_t inst = tmpl_instance(a, d.U, d.uarg);
+        if (r->o->profile) profile_rewrote(r->o->profile, nd);
+        uint32_t inst = tmpl_instance(a, d.U, d.uarg, nd);
         assert(inst != AV_NONE && "allocation past what ensure() reserved");
         if (inst == AV_NONE) return AV_SIZE;
-        arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | inst, 0 });
         r->fused++;
     } else if (sh.fields == 0) {
         arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | d.cont, 0 });
@@ -606,7 +611,7 @@ static av_status whnf_share(R *r) {
             uint32_t id = AV_JET_ID(av_left(a, cur));
             av_status ist;
             uint32_t iout;
-            int ir = try_interp(r, &cur, r->top - bottom, &ist, &iout);
+            int ir = interp_role(a, id) ? try_interp(r, &cur, r->top - bottom, &ist, &iout) : 0;
             if (ir < 0) return ist;
             if (ir > 0) {                       /* the redex root becomes it */
                 unsigned k = fire_nargs(r, id);
@@ -647,11 +652,11 @@ static av_status whnf_share(R *r) {
                     uint32_t args[AV_JET_ARITY_MAX];
                     for (unsigned i = 0; i < T->k; i++)
                         args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
-                    uint32_t inst = tmpl_instance(a, T, args);
+                    uint32_t n = r->stk[r->top - T->k];     /* the redex root */
+                    if (o->profile) profile_rewrote(o->profile, n);
+                    uint32_t inst = tmpl_instance(a, T, args, n);
                     assert(inst != AV_NONE && "allocation past what ensure() reserved");
                     if (inst == AV_NONE) return AV_SIZE;
-                    uint32_t n = r->stk[r->top - T->k];     /* the redex root */
-                    arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | inst, 0 });
                     r->top -= T->k;
                     cur = n;
                     r->steps++;

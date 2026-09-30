@@ -371,6 +371,7 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
         }
     }
     T->root = opnd[root];
+    T->root_last = T->nops && T->root == TMPL_OPND(TMPL_RES, T->nops - 1);
     T->key = t;
     free(opnd);
     /* a constructor (§6.10): the body is argument h applied to the first
@@ -610,6 +611,17 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         }
     }
     if (!make_globals(a, ts)) goto fail;
+    /* one scratch for every instance: the largest template's results and
+     * constants, so a fire checks nothing */
+    for (uint32_t ti = 0; ti < a->ntmpls; ti++) {
+        uint32_t need = a->tmpls[ti].nops + a->tmpls[ti].nconsts;
+        if (need > a->tmpl_scratch_cap) {
+            uint32_t *q = realloc(a->tmpl_scratch, need * sizeof *q);
+            if (!q) goto fail;
+            a->tmpl_scratch = q;
+            a->tmpl_scratch_cap = need;
+        }
+    }
     free(text);
     free(refs);
     free(b.n);
@@ -693,31 +705,4 @@ void av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,
     *refused = ts->refused;
     *skipped = ts->eta + ts->open + ts->duplicate + ts->wide;
     *unbound = ts->unbound;
-}
-
-/*  ------------------------------------------------------------ instances */
-
-uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args) {
-    if (a->tmpl_scratch_cap < T->nops) {
-        uint32_t *s = realloc(a->tmpl_scratch, T->nops * sizeof *s);
-        if (!s) return AV_NONE;
-        a->tmpl_scratch = s;
-        a->tmpl_scratch_cap = T->nops;
-    }
-    uint32_t *out = a->tmpl_scratch;
-#define TOPERAND(x) ((x) >> 30 == TMPL_CONST ? a->tmpl_globals[T->consts[(x) & AV_PAYLOAD]] \
-                   : (x) >> 30 == TMPL_ARG   ? args[(x) & AV_PAYLOAD]                       \
-                                             : out[(x) & AV_PAYLOAD])
-    for (uint32_t i = 0; i < T->nops; i++) {
-        uint32_t f = TOPERAND(T->ops[2 * i]), x = TOPERAND(T->ops[2 * i + 1]), n, v;
-        /* SUC of a numeral held: a word (§6.10), two nodes where one was */
-        if (T->sucop && T->sucop[i] && av_numeral(a, x, &v) && v < AV_WORD_MAX)
-            n = word_succ(a, x);
-        else
-            n = av_app(a, f, x);
-        if (n == AV_NONE) return AV_NONE;
-        out[i] = n;
-    }
-    return TOPERAND(T->root);
-#undef TOPERAND
 }
