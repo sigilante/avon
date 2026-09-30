@@ -52,7 +52,7 @@ typedef struct {
 
     uint64_t       jet_calls, jet_steps;
     uint64_t       tmpl_calls;
-    uint64_t       dispatches, fused, word_ops;
+    uint64_t       dispatches, fused, word_ops, fix_calls;
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
@@ -621,6 +621,27 @@ static av_status whnf_share(R *r) {
                 cur = n;
                 continue;
             }
+            if (o->fix && a->jets[id].fix) {
+                /* Y (§6.11): with its argument, Y g is rewritten to
+                 * g (Y g), a fresh Y g, one step -- convertible, not a
+                 * reduct, and acyclic; short of it, its term */
+                if (r->top - bottom >= 1) {
+                    if (!ensure(r, 1)) return AV_SIZE;
+                    uint32_t n = r->stk[r->top - 1];        /* the redex root, reread */
+                    uint32_t y = reserved_app(a, av_left(a, n), av_right(a, n));
+                    if (o->profile) profile_rewrote(o->profile, n);
+                    arena_set(a, n, (av_node){ av_res(a, av_right(a, n)), y });
+                    r->top -= 1;
+                    cur = n;
+                    r->steps++;
+                    r->fix_calls++;
+                    continue;
+                }
+                if (!(av_left(a, cur) & AV_JET_SHARED)) {
+                    cur = av_right(a, cur);
+                    continue;
+                }
+            }
             if (o->data && a->jets[id].word_op) {
                 /* a numeral operation (§6.10): natively on words; else its
                  * term, the node kept for the next call */
@@ -818,6 +839,7 @@ av_opts av_opts_default(void) {
         .jetstats  = NULL,
         .templates = false,
         .data      = false,
+        .fix       = false,
     };
 }
 
@@ -848,5 +870,5 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.marks);
     return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls,
                         r.jet_steps, r.jet_fault, r.tmpl_calls,
-                        r.dispatches, r.fused, r.word_ops };
+                        r.dispatches, r.fused, r.word_ops, r.fix_calls };
 }

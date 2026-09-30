@@ -118,6 +118,8 @@ typedef struct {
                                    abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
     uint32_t   word_suc;        /* words' successor term (§6.10), a root;
                                    0 while words are off                  */
+    bool       fix_on;          /* Y unfolds in one step (§6.11): the next
+                                   template load registers it             */
     struct av_pma *pma;         /* the persistent image (§19.1), or NULL  */
     uint64_t   lookups;         /* scries answered natively from it      */
 } av_arena;
@@ -346,6 +348,8 @@ typedef struct {
     bool        data;           /* share mode: data jets (§6.10), numeral
                                    operations on words and constructor
                                    dispatch; copy mode ignores it         */
+    bool        fix;            /* share mode: Y g unfolds to g (Y g) in
+                                   one step (§6.11); copy mode ignores it */
 } av_opts;
 
 typedef struct {
@@ -365,6 +369,8 @@ typedef struct {
                                template in the same step, among them      */
     uint64_t  word_ops;     /* numeral operations run on words, one step
                                each, among steps                          */
+    uint64_t  fix_calls;    /* Y unfolded (§6.11), one step each, among
+                               steps                                      */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -645,6 +651,7 @@ typedef struct av_jet {
     uint32_t  tmpl;             /* 1 + its template in a->tmpls (§6.9), or 0 */
     uint8_t   word_op;          /* a numeral operation on words (§6.10):
                                    an AV_WOP_*, or 0                      */
+    bool      fix;              /* Curry's Y (§6.11): Y g unfolds to g (Y g) */
 } av_jet;
 
 /*  The numeral operations (§6.10), skijack's natAdd .. natIfLe. */
@@ -789,6 +796,8 @@ void        av_templates_free(av_tmplset *ts);
 /*  Numeral operations (§6.10) the templates' DIR/words.tsv offered: those
  *  admitted, and those whose terms failed their probes. */
 void        av_templates_word_counts(const av_tmplset *ts, long *admitted, long *refused);
+/*  Whether the load registered Y (§6.11): av_fix_on was called first. */
+bool        av_templates_fix(const av_tmplset *ts);
 
 /*  ------------------------------------------------------------ words
  *
@@ -803,6 +812,12 @@ void        av_templates_word_counts(const av_tmplset *ts, long *admitted, long 
  *  it exists only where these calls made it.
  */
 bool av_words_on(av_arena *a);
+/*  Y unfolded in one step (docs/DESIGN.md §6.11): call before
+ *  av_templates_load, which then registers Curry's Y, found in the loaded
+ *  term and the templates' globals by tree identity.  With av_opts.fix,
+ *  share mode rewrites Y g, Y at the head with an argument, to g (Y g), a
+ *  fresh Y g: convertible, acyclic, one step. */
+void av_fix_on(av_arena *a);
 long av_words_scan(av_arena *a, uint32_t t);    /* words made, or -1 */
 bool av_words_mark(av_arena *a);
 

@@ -258,6 +258,7 @@ struct av_tmplset {
                                    ids hold only until the next one */
     long     accepted, refused, eta, open, duplicate, wide, unbound;
     long     words, words_refused;      /* numeral operations (§6.10) */
+    bool     fix;                       /* Y registered (§6.11) */
 };
 
 static bool global_push(av_arena *a, uint32_t node, uint32_t *ix) {
@@ -610,6 +611,25 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
             ts->words++;
         }
     }
+    /* Curry's Y (§6.11), when asked for: keyed like a numeral operation, so
+     * its occurrences in the term and in the globals are wrapped */
+    if (a->fix_on) {
+        static const char Y[] = "S (K (S I I)) (S (S (K S) K) (K (S I I)))";
+        av_parse_error pe;
+        uint32_t t = av_parse(a, Y, sizeof Y - 1, &pe);
+        uint32_t c = t == AV_NONE ? AV_NONE : hc_canon(a, &ts->h, t);
+        uint64_t d, have;
+        if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
+        if (!nmap_get(&ts->key_jet, c, &have)) {
+            uint32_t id = jet_entry_for(a, d, c);
+            if (id == AV_NONE) goto fail;
+            if (!a->jets[id].tmpl && !a->jets[id].word_op) {
+                if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
+                a->jets[id].fix = true;
+                ts->fix = true;
+            }
+        }
+    }
     if (!make_globals(a, ts)) goto fail;
     /* one scratch for every instance: the largest template's results and
      * constants, so a fire checks nothing */
@@ -653,8 +673,8 @@ bool av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t) {
         if (av_tag(a, x) == AV_JET) {
             uint32_t id = AV_JET_ID(av_left(a, x));
             uint32_t inner = av_right(a, x);
-            if (a->jets[id].word_op) {
-                /* a numeral operation, likewise, on its own term only */
+            if (a->jets[id].word_op || a->jets[id].fix) {
+                /* a numeral operation or Y, likewise, on its own term only */
                 uint32_t c = hc_canon(a, &ts->h, inner);
                 uint64_t have;
                 if (c == AV_NONE) { ok = false; break; }
@@ -692,6 +712,10 @@ void av_templates_free(av_tmplset *ts) {
     hc_free(&ts->h);
     nmap_free(&ts->key_jet);
     free(ts);
+}
+
+bool av_templates_fix(const av_tmplset *ts) {
+    return ts->fix;
 }
 
 void av_templates_word_counts(const av_tmplset *ts, long *admitted, long *refused) {

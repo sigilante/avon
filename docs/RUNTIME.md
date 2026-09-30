@@ -94,6 +94,7 @@ differently (§6).
 | `--interp=FILE` | `interpreters.tsv`: interpreter jets (§7); needs `--jets` | both | changes counts; off unless asked |
 | `--templates=DIR` | `DIR/templates.tsv` and `DIR/template_terms.tsv`: supercombinator templates (§6.9) | `share` only; `copy` refuses | one step per instantiation, reported |
 | `--data` | with `--templates`: data jets (§6.10), constructor dispatch and numerals held as words, and `DIR/words.tsv`'s numeral operations | `share` only | one step per dispatch or operation, reported |
+| `--fix` | with `--templates`: Curry's Y at the head with an argument, `Y g`, rewritten to `g (Y g)` in one step (§6.11) | `share` only | one step per unfolding, reported |
 
 ```sh
 build/avon reduce --strategy=copy --jets=tests/conformance/dictionary.tsv --jet-check=1 \
@@ -139,6 +140,12 @@ data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dis
 
 Normal forms are the unjetted ones, byte for byte; a WHNF state is
 templates' (which may differ from SKI's in form, not value).
+
+**Y unfolded** (`--fix`, §6.11) prints a third line,
+`fix: 124279 unfoldings of Y among the contractions`. The rewrite is
+convertible, not a reduct: normal forms and answers are SKI's, a term
+without a normal form still stops at FUEL, and a WHNF state may differ in
+form (`Y K` stops at `K (Y K)`).
 
 ## Measuring
 
@@ -193,7 +200,7 @@ PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templat
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --profile
 ```
 
-`front0` also takes `--templates=DIR`, `--data`, `--profile=NAMES`, `--jets=DICT`,
+`front0` also takes `--templates=DIR`, `--data`, `--fix`, `--profile=NAMES`, `--jets=DICT`,
 `--ctors[=N]`, `--jet-stats[=N]`, `--names=FILE`, `--fuel=N` and
 `--max-nodes=N`.
 
@@ -273,7 +280,7 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 |---|---|---|
 | `make check` | every unit test, under ASan and UBSan | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
-| `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, and with templates and data jets | skijack |
+| `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | skijack |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |
 | `make jet-witness-check` | the same, jetted (§18) | lean-ski |
 | `make probe-witness-check` | the same, with probe segments | lean-ski |

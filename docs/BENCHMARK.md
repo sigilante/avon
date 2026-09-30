@@ -464,6 +464,46 @@ other, user CPU, best of five, load average about 2; every answer True.
 **Reproduce.** `python3 tests/workloads/reduceron/run.py --avon build/avon
 --skijack ~/skijack --inline`, skijack at `21cdef7` or later.
 
+## Y unfolded in one step
+
+`--fix` (DESIGN §6.11) rewrites `Y g` to `g (Y g)` in one step, against the
+true cycle `n = g n` of `e74e581` (branch `experiment-knot`, built from the
+same code plus `--knot`). Avon `fix-jet` over `68a19a4`; every mode with
+templates and data jets; user CPU, best of five, interleaved; load average
+2 to 3; every answer True. Each cell: time, steps, time as a multiple of
+the Reduceron's.
+
+| program | data jets | + `--fix` | + cycle | fix ÷ cycle |
+|---|---:|---:|---:|---:|
+| OrdList | 2.12 s, 86.8M, 2.16 | 2.02 s, 77.6M, 2.07 | 1.69 s, 75.3M, 1.73 | 1.20 |
+| Queens2 | 1.92 s, 79.4M, 1.49 | 1.93 s, 79.4M, 1.49 | 1.89 s, 79.4M, 1.47 | 1.02 |
+| Taut | 1.63 s, 69.7M, 2.86 | 1.60 s, 67.6M, 2.81 | 1.46 s, 67.1M, 2.55 | 1.10 |
+| Clausify | 2.10 s, 68.2M, 2.87 | 2.07 s, 65.6M, 2.83 | 1.75 s, 64.8M, 2.39 | 1.18 |
+| PermSort | 3.73 s, 132.8M, 2.30 | 3.52 s, 116.8M, 2.17 | 2.60 s, 112.9M, 1.61 | 1.35 |
+| geometric mean, ÷ Reduceron | 2.28 | 2.22 | 1.90 | 1.17 |
+
+Compiled with skijack's inlining, the geometric means are 2.04, 1.98 and
+1.77, and fix ÷ cycle 1.12.
+
+- **The steps fall almost as far as the cycle's; the time does not.**
+  `--fix` takes 1.03 times less time than data jets alone; the cycle 1.20.
+- **The difference is memory.** Peak resident set, PermSort: 244 MB with
+  data jets, 266 MB with `--fix`, 3.5 MB with the cycle; OrdList 236, 244
+  and 3.4 MB. Instructions, PermSort: 59.1, 56.8 and 45.3 billion. A cycle
+  shares one node for a function's recursion; each unfolding makes a fresh
+  `Y g`, and the lazy structures (PermSort's pending permutations) keep
+  every copy they captured.
+- **The front end:** 16,892,457 steps with `--fix` against 17,389,998,
+  124,279 unfoldings, 0.83 s against 0.85 s, the same names.
+- **The plan's gate** was `--fix` within about 10% of the cycle; it is
+  17% off (12% inlined). The cycle's worth is its sharing, which an
+  acyclic unfolding cannot have; making a cycle safe is a plan of its own
+  (DESIGN §6.11).
+
+**Reproduce.** `python3 tests/workloads/reduceron/run.py --avon build/avon
+--skijack ~/skijack` (its `fix` mode); the cycle from `e74e581`'s binary
+with `--templates=DIR --data --knot`.
+
 ## Data jets on the corpus
 
 Avon `f414272`, the corpus export used for "Templates on

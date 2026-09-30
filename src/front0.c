@@ -36,7 +36,7 @@ typedef struct {
     nmap      memo;             /* node -> digest, remapped on collection */
     ski_leaf  mark[5];          /* the markers' leaf ids                  */
     uint32_t  marknode[5];      /* rooted too: a collection moves leaves */
-    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops;
+    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, fix_calls;
     bool      lost;             /* a remap ran out of memory              */
 } reader;
 
@@ -105,6 +105,7 @@ static int probe(reader *r, unsigned nctors, const unsigned *fields, const av_op
     r->dispatches += res.dispatches;
     r->fused += res.fused;
     r->word_ops += res.word_ops;
+    r->fix_calls += res.fix_calls;
     if (res.status != AV_WHNF && res.status != AV_NORMAL) {
         *err = av_status_name(res.status);
         return -1;
@@ -262,6 +263,7 @@ done:
         tally->dispatches = r.dispatches;
         tally->fused = r.fused;
         tally->word_ops = r.word_ops;
+        tally->fix_calls = r.fix_calls;
     }
     free(r.node);
     free(r.kind);

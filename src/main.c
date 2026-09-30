@@ -55,7 +55,7 @@
  *                                     calls file through DIR/abs.skit, or its
  *                                     jet, checked against Python's by hash
  *      avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]
- *                  [--templates=DIR [--data]] [--names=FILE]... [--fuel=N]
+ *                  [--templates=DIR [--data] [--fix]] [--names=FILE]... [--fuel=N]
  *                  [--max-nodes=N] DIR SOURCE
  *                                     the SKIjack-0 front end (docs/DESIGN.md
  *                                     §20.3) on SOURCE: DIR/front.skit and the
@@ -80,7 +80,8 @@
  *  templates checked against the terms and instantiated, §6.9), --data
  *  (with --templates: data jets, §6.10: constructor templates dispatched,
  *  fused into the branch's template, numerals held as words, and
- *  DIR/words.tsv's numeral operations run on them natively).
+ *  DIR/words.tsv's numeral operations run on them natively), --fix (with
+ *  --templates: Y g unfolded to g (Y g) in one step, §6.11).
  *  docs/RUNTIME.md is the user's guide.
  */
 
@@ -111,6 +112,7 @@ typedef struct {
     const char *profile;          /* --profile: a names file, or NULL */
     const char *templates;        /* --templates: a directory, or NULL */
     bool        data;             /* --data: data jets (§6.10) */
+    bool        fix;              /* --fix: Y unfolded in one step (§6.11) */
     const char *file;
 } args;
 
@@ -126,7 +128,7 @@ static int usage(void) {
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
-        "        --profile=NAMES --templates=DIR --data)\n"
+        "        --profile=NAMES --templates=DIR --data --fix)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"
@@ -140,7 +142,7 @@ static int usage(void) {
         "       (boot, poke, peek, load accept --strategy=, --fuel=, --budget=)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
-        "                   [--templates=DIR [--data]]\n"
+        "                   [--templates=DIR [--data] [--fix]]\n"
         "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
         "       avon --version\n");
     return 2;
@@ -165,6 +167,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->profile = NULL;
     g->templates = NULL;
     g->data = false;
+    g->fix = false;
     g->jet_table = NULL;
     g->plan = NULL;
     g->jet_floor = 8;
@@ -197,6 +200,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--profile=", 10) == 0 && s[10]) g->profile = s + 10;
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) g->templates = s + 12;
         else if (strcmp(s, "--data") == 0)           g->data = true;
+        else if (strcmp(s, "--fix") == 0)            g->fix = true;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
             g->o.interp_jets = true;
@@ -325,8 +329,9 @@ static av_profile *profile_load(const char *path, const av_arena *a, uint32_t t)
  *  then *t matched and the templates bound to it.  counts: accepted,
  *  refused, skipped, unbound.  False, with a message, on failure. */
 static bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
-                          bool data, long wc[3]) {
+                          bool data, long wc[3], bool fix) {
     const char *err = NULL;
+    if (fix) av_fix_on(a);
     if (data && !av_words_on(a)) {
         fprintf(stderr, "avon: out of memory\n");
         return false;
@@ -334,6 +339,11 @@ static bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts
     av_tmplset *ts = av_templates_load(a, dir, &err);
     if (!ts) {
         fprintf(stderr, "avon: %s: %s\n", dir, err ? err : "cannot load templates");
+        return false;
+    }
+    if (fix && !av_templates_fix(ts)) {
+        fprintf(stderr, "avon: Y is already another jet; --fix cannot register it\n");
+        av_templates_free(ts);
         return false;
     }
     *t = av_jets_match(a, *t);
@@ -359,6 +369,12 @@ static void report_data(const long wc[3], const av_result *r) {
             (unsigned long long)r->word_ops);
 }
 
+/*  The unfolding's report line (§6.11). */
+static void report_fix(const av_result *r) {
+    fprintf(stderr, "fix: %llu unfoldings of Y among the contractions\n",
+            (unsigned long long)r->fix_calls);
+}
+
 static int run_one(const args *g, const char *src, size_t len, char sep) {
     av_arena *a = new_arena(g, 1u << 16);
     if (!a) return 1;
@@ -381,8 +397,13 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_arena_free(a);
         return 1;
     }
+    if (g->fix && !g->templates) {
+        fprintf(stderr, "avon: --fix needs --templates=DIR: Y is registered with them\n");
+        av_arena_free(a);
+        return 1;
+    }
     if (t != AV_NONE && g->templates) {
-        if (!use_templates(a, g->templates, &t, tc, g->data, wc)) t = AV_NONE;
+        if (!use_templates(a, g->templates, &t, tc, g->data, wc, g->fix)) t = AV_NONE;
     } else if (t != AV_NONE && (g->njets || g->ctors)) {
         t = av_jets_match(a, t);
     }
@@ -393,6 +414,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     av_opts o = g->o;
     o.templates = g->templates != NULL;
     o.data = g->data;
+    o.fix = g->fix;
     av_profile *prof = NULL;
     if (g->profile && o.strategy != AV_SHARE) {
         fprintf(stderr, "avon: --profile charges share-mode contractions only\n");
@@ -420,6 +442,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
                 "%llu instantiations among the contractions\n", tc[0], tc[1], tc[2], tc[3],
                 (unsigned long long)r.tmpl_calls);
     if (g->data) report_data(wc, &r);
+    if (g->fix) report_fix(&r);
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE && av_print(a, r.term, g->budget, &b);
     printf("%s %" PRIu64 "%c%s%s\n", av_status_name(r.status), r.steps, sep,
@@ -1412,7 +1435,7 @@ static void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, si
  *  `RErr`, and the contractions on stderr. */
 static int front0_main(int argc, char **argv) {
     const char *dir = NULL, *source = NULL, *profile = NULL, *templates = NULL;
-    bool data = false;
+    bool data = false, fix = false;
     char *dicts[16], *namefiles[64];
     int nd = 0, nn = 0;
     uint64_t ctors = 0, stats_top = 0;
@@ -1427,6 +1450,7 @@ static int front0_main(int argc, char **argv) {
         else if (strncmp(s, "--ctors=", 8) == 0 && number(s + 8, &v) && v) ctors = v;
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) templates = s + 12;
         else if (strcmp(s, "--data") == 0) data = true;
+        else if (strcmp(s, "--fix") == 0) fix = true;
         else if (strncmp(s, "--names=", 8) == 0 && s[8] && nn < 64) namefiles[nn++] = argv[i] + 8;
         else if (strcmp(s, "--jet-stats") == 0) stats_top = 40;
         else if (strncmp(s, "--jet-stats=", 12) == 0 && number(s + 12, &v)) stats_top = v;
@@ -1437,7 +1461,7 @@ static int front0_main(int argc, char **argv) {
         else if (s[0] != '-' && !source) source = s;
         else return usage();
     }
-    if (!dir || !source || (data && !templates)) return usage();
+    if (!dir || !source || ((data || fix) && !templates)) return usage();
     FILE *sf = fopen(source, "rb");
     if (!sf) { perror(source); return 1; }
     size_t slen;
@@ -1486,10 +1510,11 @@ static int front0_main(int argc, char **argv) {
     av_root_pop(a);
     long tc[4] = { 0, 0, 0, 0 }, wc[3] = { 0, 0, 0 };
     if (jets_ok && templates) {
-        jets_ok = use_templates(a, templates, &t, tc, data, wc);
+        jets_ok = use_templates(a, templates, &t, tc, data, wc, fix);
         o.jets = true;
         o.templates = true;
         o.data = data;
+        o.fix = fix;
     } else if (jets_ok && a->njets) {
         t = av_jets_match(a, t);
         o.jets = true;
@@ -1514,6 +1539,7 @@ static int front0_main(int argc, char **argv) {
                 "%llu instantiations among the contractions\n", tc[0], tc[1], tc[2], tc[3],
                 (unsigned long long)tally.tmpl_calls);
     if (data) report_data(wc, &tally);
+    if (fix) report_fix(&tally);
     if (stats) {
         drow *rows = NULL;
         size_t nr = 0, nlabels = 0;

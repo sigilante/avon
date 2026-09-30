@@ -25,6 +25,10 @@
 
 static const char SUC_TEXT[] = "S (K K) (S (K (S I)) K)";
 
+void av_fix_on(av_arena *a) {
+    a->fix_on = true;
+}
+
 bool av_words_on(av_arena *a) {
     if (a->word_suc) return true;
     av_parse_error pe;

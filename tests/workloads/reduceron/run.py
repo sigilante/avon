@@ -4,10 +4,11 @@
 
 Compiles each port with skijack, writes its supercombinator templates and
 numeral operations, and reduces ``main Tt Ff`` to weak head normal form in
-share mode three ways -- as SKI, with ``--templates``, and with
-``--templates --data`` (data jets) -- best of ``--reps`` user CPU,
-interleaved.  Every count is its own column: contractions and the
-instantiations, dispatches and numeral operations among them.  With
+share mode four ways -- as SKI, with ``--templates``, with ``--templates
+--data`` (data jets), and with ``--templates --data --fix`` (Y unfolded in
+one step) -- best of ``--reps`` user CPU, interleaved.  Every count is its
+own column: contractions and the instantiations, dispatches, numeral
+operations and unfoldings among them.  With
 ``--inline`` the ports are compiled with skijack's inlining pass.  Every port's
 main is a check that returns True, the second constructor of ``bool``, so
 the expected answer is ``Ff``.
@@ -33,7 +34,8 @@ def build(skijack: pathlib.Path, prog: str, out: pathlib.Path, inline: bool = Fa
 
 
 MODES = {"ski": [], "templates": ["--templates={d}"],
-         "data": ["--templates={d}", "--data"]}
+         "data": ["--templates={d}", "--data"],
+         "fix": ["--templates={d}", "--data", "--fix"]}
 
 
 def run(avon: str, d: pathlib.Path, mode: str):
@@ -43,7 +45,7 @@ def run(avon: str, d: pathlib.Path, mode: str):
     out = subprocess.run(args, capture_output=True, text=True, check=True)
     u = resource.getrusage(resource.RUSAGE_CHILDREN).ru_utime - u0
     status, steps = out.stdout.split("\n")[0].split()
-    counts = {"inst": 0, "disp": 0, "fused": 0, "ops": 0}
+    counts = {"inst": 0, "disp": 0, "fused": 0, "ops": 0, "fix": 0}
     for line in out.stderr.splitlines():
         if line.startswith("templates:"):
             counts["inst"] = int(line.split("; ")[1].split()[0])
@@ -51,6 +53,8 @@ def run(avon: str, d: pathlib.Path, mode: str):
             tail = line.split("; ")[2].split()
             counts["disp"], counts["ops"] = int(tail[0]), int(tail[4])
             counts["fused"] = int(tail[2].strip("("))
+        if line.startswith("fix:"):
+            counts["fix"] = int(line.split()[1])
     return int(steps), counts, out.stdout.split("\n")[1], u
 
 
@@ -77,12 +81,12 @@ def main() -> int:
                     ok = False
                 seen[p, mode] = (steps, counts)
                 best[p, mode] = min(best.get((p, mode), float("inf")), u)
-    print("program\tmode\tsteps\tinstantiations\tdispatches\tfused\tnumeral_ops\tuser_s")
+    print("program\tmode\tsteps\tinstantiations\tdispatches\tfused\tnumeral_ops\tunfoldings\tuser_s")
     for p in progs:
         for mode in MODES:
             steps, c = seen[p, mode]
             print(f"{p}\t{mode}\t{steps}\t{c['inst']}\t{c['disp']}\t{c['fused']}\t{c['ops']}"
-                  f"\t{best[p, mode]:.2f}")
+                  f"\t{c['fix']}\t{best[p, mode]:.2f}")
     return 0 if ok else 1
 
 

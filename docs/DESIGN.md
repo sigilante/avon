@@ -1155,6 +1155,70 @@ templates' (`tests/test_data.c`, `make front0-check`).
 allocation per node -- is two fifths of the time, and every jet head asks
 `try_interp` first. Those, and strictness (§6.9), are the next levers.
 
+### 6.11 Y unfolded in one step
+
+**With `--fix`, share mode rewrites `Y g` to `g (Y g)` in one step.** Y is
+Curry's `S (K (S I I)) (S (S (K S) K) (K (S I I)))`, the term skijack ties
+every recursion with. Without the rewrite, each recursive call re-derives
+Y's unfolding in five or six S, K and I steps (`docs/BENCHMARK.md`, "What
+the gap is made of"). `av_fix_on` before the template load registers Y as
+the numeral operations are registered (§6.10), found in the term and in
+the templates' globals by tree identity. Y at the head with an argument
+rewrites the redex root to `App(g, y)`, `y` a fresh `App(Y, g)`: one step,
+one node, no indirection, and every pointer still points backward.
+
+**It is convertible, not a reduct, so it keeps values, not states.**
+With `M = S I I` and `Q = S (S (K S) K) (K M)`, `Y g` reduces to
+`g (M (Q g))` and on to `g (g (M (Q g)))`, which `g (Y g)` reduces to as
+well; neither of the two reduces to the other. So:
+
+- normal forms are SKI's, byte for byte, and a term without one still
+  stops at FUEL (`Y K`, `Y I`, `Y (S I I)`, `tests/test_fix.c`);
+- answers read by probing are unchanged;
+- a weak head normal form state may differ in form: `Y K` stops at
+  `K (Y K)` where SKI stops at `K (K (S I I) K (I (S (K K) (K (S I I) K))))`.
+
+lean-ski's simulation already allows for this: `Tr` "is a relation, not a
+function" because Y unrolls to a self-reference that behaves as `Y ⬝ F`
+(`Simulation.lean`, `Tr.self`).
+
+**Not a cycle.** The experiment of `e74e581` (branch `experiment-knot`)
+rewrote `Y g` to the cycle `n = g n`, and a cycle is what Avon cannot keep:
+
+- it changes answers: `Y K` reports NORMAL, where SKI stops at FUEL;
+- it hangs: `Y I` writes an indirection to itself and spins in `av_res`,
+  `Y (S I I)` makes the spine cycle, both where no fuel is checked, and
+  copy mode hangs;
+- most of the runtime's graph walks loop on it -- the §5 hash, `hc_canon`,
+  `match`, snapshots, `--profile` -- against §2's and §4.2's acyclic arena;
+- the witness cannot hold it: lean-ski's heap points only backward, its
+  `termAt` gives a cycle no meaning, and every soundness theorem needs
+  `decode` to succeed.
+
+The one-step rewrite writes a cell that points backward, so a witness row
+for it fits the write-once memory as it stands: at a loaded Y address with
+a C cell, one cell `App(g, r)`, `r` the `App(Y, g)` the stack holds. Its
+licence would be a simulation theorem relating the run to the plain one
+by `Tr`, owed in lean-ski; not built.
+
+**Results, 2026-09-30** (avon `fix-jet`; `docs/BENCHMARK.md`, "Y unfolded
+in one step"). The steps fall almost as far as the cycle's -- PermSort
+116.8 million against the cycle's 112.9, from 132.8 -- but the time does
+not: 1.03 times less than data jets alone by geometric mean, against the
+cycle's 1.20. The difference is memory. The cycle shares one node for a
+function's recursion; each one-step unfolding makes a fresh `Y g`, and a
+lazy structure keeps each copy it captured alive. PermSort peaks at 266 MB
+with the rewrite, 244 MB without, 3.5 MB with the cycle; OrdList at 244,
+236 and 3.4 MB.
+
+So the sharing, not the steps, is what the cycle was worth, and an
+acyclic unfolding cannot share an infinite term. What would recover it
+is a cycle made safe: black holes, so that a cyclic redex that needs
+itself stops at FUEL as SKI does; walks that tolerate cycles, or a proof
+that none reaches them; copy mode left without it; and, before a witness
+could use one, a lean-ski heap semantics for cycles. That is its own
+plan. `--fix` stays: it is correct, cheap, and fits the witness.
+
 ## 7. The interpreter jet
 
 **It is Avon's level-1 interpreter, not an optimization of one.** Vere runs
@@ -2213,6 +2277,10 @@ allowed. It is the last tier and has the largest payoff.
 
 - §6.5: a jetted witness reports jet calls beside contractions, and has
   fewer rows, not the same count.
+- §6.11: Y's one-step unfolding would be a row writing one backward cell,
+  `App(g, r)`, licensed by a simulation theorem up to lean-ski's `Tr`
+  (owed); a witnessed recursive call now pays Y's plumbing in S, K and I
+  rows.
 - §6.6: testing stays the admission rule for `share` mode. In `witness`
   mode a jet is admitted only when its tier's theorem is proved: 18.1
   once, 18.2 per jet, 18.3 once.
