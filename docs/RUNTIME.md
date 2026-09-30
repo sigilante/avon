@@ -232,6 +232,7 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 | `namespaces.tsv` | the resume loop's runs | the same |
 | `templates.tsv`, `template_terms.tsv` | supercombinator templates and the terms they reference | the same; `run0` for the front end |
 | `tests/workloads/skilark/manifest.tsv` | SKIlark's workloads | skilark's export |
+| `tests/workloads/reduceron/*.ascii.ski` | five Reduceron benchmarks in SKIjack; `run.py` compiles, runs and times them (`docs/BENCHMARK.md`) | written by hand |
 | `jets/birds.tsv`, `jets/joy.tsv` | bird and Joy dictionaries; `*_names.tsv` label them | `jets/birds.py`, `jets/joy.py` |
 | `tests/selfhost/*` | the compiler core's terms and calls | `tests/selfhost/export.py` |
 | `tests/kernel/*` | kernel pills, events, expected values | `tests/kernel/export.py` |

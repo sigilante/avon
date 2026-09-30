@@ -141,6 +141,136 @@ Every run reaches the same normal form. Of the corpus's 240 templates,
 110 are used: 128 are the constructors of a 128-way character type, past
 the 32 arguments a template takes, and 2 are duplicates or bare leaves.
 
+## Against the Reduceron
+
+The Reduceron is Naylor and Runciman's template-instantiation machine on
+an FPGA ("The Reduceron reconfigured and re-evaluated", JFP 22(4–5), 2012).
+Its benchmarks are small lazy programs in F-lite, a subset of Haskell. Five
+of them are ported to SKIjack in `tests/workloads/reduceron/`: OrdList
+and Queens2, which the paper calls purely symbolic; Clausify, almost so;
+and Taut and PermSort, whose integers are small. Avon runs each at `0c7682b`, compiled by
+skijack `bbb2ff4`, in `share` mode, as SKI and with templates (§6.9).
+
+### The published numbers
+
+From the paper: Table 6 (the Reduceron on a Virtex-5 at 96 MHz), Table 5
+(GHC 7.0.3 `-O2` on a 3 GHz Core 2 Duo) and Table 7 (hand-reductions per
+clock cycle). A hand-reduction is a function or primitive application,
+counting the functions case compilation introduces and excluding
+constructor reduction, updating and unwinding.
+
+| program | Reduceron, s | GHC, s | hand-reductions per cycle |
+|---|---:|---:|---:|
+| Adjoxo | 0.39 | 0.07 | 0.65 |
+| Braun | 0.74 | 0.27 | 0.46 |
+| Cichelli | 0.41 | 0.06 | 0.52 |
+| Clausify | 0.73 | 0.20 | 0.54 |
+| CountDown | 0.19 | 0.05 | 0.62 |
+| Fib | 2.52 | 0.28 | 0.90 |
+| KnuthBendix | 0.19 | 0.05 | 0.47 |
+| Mate | 6.74 | 0.66 | 0.52 |
+| MSS | 0.69 | 0.13 | 0.65 |
+| OrdList | 0.98 | 0.61 | 0.43 |
+| PermSort | 1.62 | 0.51 | 0.43 |
+| Queens | 1.00 | 0.11 | 0.72 |
+| Queens2 | 1.29 | 0.47 | 0.40 |
+| SumPuz | 3.82 | 0.80 | 0.46 |
+| Taut | 0.57 | 0.16 | 0.46 |
+| While | 0.36 | 0.08 | 0.49 |
+
+The paper puts the Reduceron at 4–5 times slower than GHC on the PC and
+at 6.4 times fewer cycles than its 2007 design.
+
+### The ports
+
+Each port keeps the original's algorithm, inputs and evaluation order.
+SKIjack has no integers and no polymorphic data, so four things change:
+
+- integers become Scott numerals (PermSort's 1–10, Taut's counts,
+  Clausify's symbols, all 0) and Taut's variable names become five-bit
+  codes;
+- each list type is declared once per element type, with its own `map`
+  and `append`;
+- a type may have one binary self-referential constructor, so Taut's
+  `And` and `Implies` and Clausify's `Con` and `Dis` hold a pair;
+- every `main` checks its answer and returns a boolean: OrdList's and
+  Taut's are the original's; Queens2 checks 2,680 solutions, PermSort the
+  list 1..10, Clausify the one clause `([0], [])` that
+  `clausify_ref.py`, a transliteration of the original, computes.
+
+Every run returns True. Changing each expected answer (93 queens for 92 on
+eight, a non-tautology, `([], [0])`, the list 0..10) makes it return False.
+PermSort is the port that differs most: its `<=` walks two numerals, up to
+ten steps where the Reduceron takes one.
+
+### Results
+
+Avon at `0c7682b`; user CPU, best of five, interleaved; load average 3.3
+to 4.7.
+
+| program | SKI steps | SKI, s | template steps | instantiations | templates, s | Reduceron, s | templates ÷ Reduceron |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| OrdList | 1,030,065,841 | 23.12 | 111,124,752 | 92,915,213 | 2.74 | 0.98 | 2.8 |
+| Queens2 | 979,383,271 | 10.49 | 103,498,308 | 92,891,133 | 2.54 | 1.29 | 2.0 |
+| Taut | 1,047,965,671 | 21.91 | 85,212,816 | 68,331,304 | 2.01 | 0.57 | 3.5 |
+| Clausify | 943,064,451 | 10.37 | 100,493,557 | 88,121,044 | 2.70 | 0.73 | 3.7 |
+| PermSort | 2,741,630,882 | 29.94 | 307,482,207 | 244,002,158 | 7.76 | 1.62 | 4.8 |
+
+- **Time.** With templates Avon takes 2.0 to 4.8 times the Reduceron's
+  time, 3.2 by geometric mean; as SKI, 18 times. Against the paper's GHC
+  it takes 4.5 to 15 times, 9.1 by geometric mean, on a machine a decade
+  newer than GHC's.
+- **Work.** Counting the Reduceron's hand-reductions as rate × time × 96
+  MHz (40.5 million for OrdList, 49.5 Queens2, 25.2 Taut, 37.8 Clausify,
+  66.9 PermSort), Avon instantiates 1.9 to 2.7 templates per
+  hand-reduction, and PermSort 3.6. A template instantiation counts what a
+  hand-reduction excludes: a constructor applied to its case's
+  alternatives is one. SKI takes 20 to 42 contractions per hand-reduction.
+- **Rate.** Avon spends 24 to 27 ns per step with templates. The
+  Reduceron spends 19 to 26 ns per hand-reduction on these five: a
+  10.4 ns cycle at 0.40 to 0.54 per cycle. As SKI Avon steps 91 to 93 million contractions a second on
+  Queens2, Clausify and PermSort and 45 to 48 million on OrdList and Taut;
+  why those two run at half the rate was not investigated.
+- Templates cut steps 8.9 to 12.3 times and time 3.8 to 10.9 times.
+
+**Reproduce.**
+
+```sh
+python3 tests/workloads/reduceron/run.py --avon build/avon --skijack ~/skijack
+```
+
+It prints each port's steps, instantiations and best user time, and fails
+if an answer is not True.
+
+### Other machines
+
+- **NORMA** (Scheevel, 1986), a Turner-combinator machine, did about
+  250,000 reductions a second at 5 MHz, 0.125 per cycle (the Reduceron
+  paper, §6.10). Avon's SKI mode does 45 to 93 million.
+- **Heron** (Ramsay and Stewart, IFL 2023) reimplements the Reduceron on
+  an Alveo U280 at 193 MHz. Its per-benchmark results are plots, not
+  tables. It reports its runtime at 48% of the Reduceron's, 1.88% of
+  the device against the Reduceron's 90%, and GHC 8.6.5 on an i7-1250U
+  doing 22% of its hand-reductions per cycle, on an i3-4030U 15%. It beats
+  GHC on the i3 on 5 of 16 benchmarks; desktop and server CPUs beat it by
+  about 2.5 times. At 48%, Avon's templates would trail Heron by about 6.7
+  times on these five; this is an estimate, not a measurement.
+- **SKIM** (Clarke, Gladstone, MacLean and Norman, LISP 1980): its
+  figures were not obtained. The paper is a scanned PDF behind the ACM
+  library.
+
+### What the comparison does not say
+
+- The ports are not the originals. Scott numerals and pair constructors
+  add work the Reduceron's integers and wide constructors avoid; PermSort
+  pays most.
+- The Reduceron's times include its garbage collector (0.9% to 4.4% of
+  them on these five) and ran on 2012 hardware; Avon's include loading
+  and checking templates.
+- Eleven benchmarks are not ported. Fib, Queens, Braun and the rest do
+  integer arithmetic (Braun compares the numbers 0 to 255 six thousand
+  times over), which Scott numerals would turn into a different benchmark.
+
 ## Earlier measurements
 
 Recorded in `docs/DESIGN.md` with their dates:
