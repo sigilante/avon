@@ -39,9 +39,16 @@ against 129,957 plain: 8.8%**, and 74,116 memory cells against 215,393
 (lean-ski `bench/plonky3/README.md`). The table comes from the SKIjack
 source's own templates: 178 templates, 130 jets, 21,049 licensed roots.
 Lean accepts the jetted table (`jets check-src`, `Air.checkJA_sound`).
-Dropping the 104 roots that reach the bits, as §4's closure rule would
-under hiding, leaves 11,571 rows. The padded CPU falls from `2^17` to
-`2^14` rows, with POP and INSTW at `2^14` each.
+Dropping the 104 roots that reach the bits, as §4's closure rule does,
+leaves 11,571 rows. The padded CPU falls from `2^17` to `2^14` rows, with
+POP and INSTW at `2^14` each.
+
+**Measured on the composed heap (milestone 3, 2026-09-30).** Over the
+statement's blank heap with the closure rule, run over the filled heap
+(`lake exe skilark cjets-measure`), `split8` takes 11,598 CPU rows
+against 129,964 plain, 8.9%, and `csplit8` 157,680 against 471,887,
+33.4%. Both halt at `K` over the nil, and `checkJA` accepts both from the
+filled machine.
 
 **The goal.** A proof, in zero knowledge, that a public verifier accepts
 hidden literal bits (lean-ski's predicate statement, `Ski/Predicate.lean`)
@@ -171,7 +178,9 @@ addresses, with its soundness lemma, run by the verifier's statement check
 beside `rootsOKB` (not only by `jets emit`); and `termAt_public`, that the
 blank and the filled heap read the same term at such a cell, so that
 `rootsOKB` and `publicB` over the blank heap give `RootsOK` over every
-filled one. An
+filled one. *Built (milestone 3):* `publicB`, `publicB_sound`,
+`termAt_public`, `rootsOK_filled`, and the check `jetStmtC`
+(`jetStmtC_sound`), in lean-ski's `Ski/JetPublic.lean`. An
 instantiation's arguments may still point anywhere, into the bits or the
 region included: they are pointers on the stack, private values in
 private columns, and `inst_sound_g` substitutes them as arguments.
@@ -267,7 +276,10 @@ unjetted value has head `K` and arity 0 and is `K`. *Obligation:*
   `compExportG_sound` does.
 - Roots and globals whose closures avoid the private addresses, licensed
   over the blank heap: `rootsOKB` and `publicB` of the statement's jet
-  table, and `termAt_public` (§4) to carry them to the filled heap.
+  table, and `termAt_public` (§4) to carry them to the filled heap
+  (proved, milestone 3: `rootsOK_filled`, `jetStmtC_sound`; the circuit
+  feeds `RootsOK` of the filled `m0.heap` to `AcceptsJ.reach`, or cites
+  `rootsOK_public`, which needs no bit mode).
 
 *Obligations, completeness:* `compJ_complete_log`. Every run of the
 composed machine with instantiations at licensed roots, within
@@ -353,10 +365,16 @@ the tree; its height is a public budget like POP's.
    now proved as the tree of three (`chain_viewT`, `tsum_tsumN`), so
    `comp_transcript`, with its statement unchanged, is the three-table
    instance.
-3. **Public closures.** The closure rule of §4: `firstAt` skipping private
-   closures in `jets emit`, the decided check `publicB` in the verifier's
-   statement check, and `termAt_public`. It comes before
-   the circuit, since the circuit's soundness rests on it.
+3. **Public closures.** *Done, 2026-09-30,* in lean-ski's
+   `Ski/JetPublic.lean`, axiom-clean. `jetTable` skips private closures
+   for roots and globals alike (`priv`, `pubCells`; `jetTableC` for a
+   composed statement). The verifier's check `jetStmtC` holds the
+   recomputed table, `rootsOKB` and `publicB`, and `jetStmtC_sound`
+   licenses its roots over every filled heap, through `termAt_public`
+   and `rootsOK_filled` (`skilark cjets`, `cjets-statement`,
+   `cjets-measure`). The hazard is real: without the rule, `split8`'s
+   table licenses 47 roots and 3 globals that reach a private cell, and
+   fails `rootsOKB` over the honest filled heap.
 4. **The circuit as data.** `compJAirs` in Lean and `compJ.rs` in Rust, the
    ten tables of §4 with the tree of §5, compared by `lake exe circuit
    compare-compJ`.
@@ -385,8 +403,9 @@ the tree; its height is a public budget like POP's.
   occurs only in cells that reach private addresses gets no global, and a
   root whose term reaches them is not licensed. On `split8` in the clear
   it drops 104 of 21,049 roots and no global, and the run grows from
-  11,483 rows to 11,571; the composed heap's layout differs, so milestone
-  3 measures it there.
+  11,483 rows to 11,571. On the composed heap it drops 47 of 21,043 roots
+  on `split8` (11,489 CPU rows in the clear to 11,598) and 71 of 57,245
+  on `csplit8` (157,513 to 157,680).
 - **The jet table grows the statement.** Its check is Lean's recomputation,
   as for the corpus, from the SKIjack source's templates
   (`JetTable.fileTemplates`, as `jets check-src` uses them).
