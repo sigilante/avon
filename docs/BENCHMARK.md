@@ -367,6 +367,73 @@ between collections, growing the heap at a quarter full rather than half
 is left of a one-node fire, 190 instructions, is spread two to seven at a
 time over the loop's checks.
 
+## What the gap is made of
+
+**Per step Avon is at the Reduceron's pace; it takes more steps.** Avon
+`aeae3c9`, data jets, against Table 6's times and Table 7's rates (a
+hand-reduction every 1/(rate x 96 MHz)):
+
+| program | Avon ÷ Reduceron | Avon steps per hand-reduction | ns a step | Reduceron ns a hand-reduction |
+|---|---:|---:|---:|---:|
+| OrdList | 2.30 | 2.14 | 25.9 | 24.2 |
+| Queens2 | 1.56 | 1.60 | 25.3 | 26.0 |
+| Taut | 3.00 | 2.77 | 24.5 | 22.6 |
+| Clausify | 2.96 | 1.80 | 31.7 | 19.3 |
+| PermSort | 2.44 | 1.99 | 29.7 | 24.2 |
+
+A step takes about 90 cycles of a 4.5 GHz core; a hand-reduction takes
+the Reduceron 2.3 cycles at 96 MHz.
+
+**Recursion re-derives its fixed point.** One-line loops, per element (the
+difference of runs over 200 and 100), with templates and data jets:
+
+| loop | steps | of them instantiations and dispatches | S, K, I |
+|---|---:|---:|---:|
+| `loop n = n \|> { Zero True ; Suc m loop m }` | 8 | 2 | 6 |
+| `walk (build n)` | 16 | 5 | 11 |
+| `count n acc`, accumulating `Suc acc` | 18 | 8 | 10 |
+
+The S, K and I are `Y`'s: skijack ties recursion as `Y g`, and SKI's Y
+cannot share its unfolding -- a pure term has no cycle -- so every
+recursive call unfolds it again.
+
+**Taken apart** (avon `e74e581`, branch `experiment-knot`, not for
+merging; `tests/workloads/reduceron/variants/measure.py` there). Three
+changes, measured alone and together, each port answering True, best of
+three, the time as a multiple of the Reduceron's:
+
+- the *knot*: `avon reduce --knot` rewrites each `Y g` of the loaded term
+  to the cycle `n = g n`, the graph form of what `Y g` denotes, so a
+  recursive call unfolds nothing;
+- a *variant* of each port by hand: small helpers inlined (`and`,
+  `implies`, `not`, `or`, `comp`), as the Reduceron's compiler inlines
+  (its Table 3 credits inlining with 10 to 27% of cycles); Taut's names
+  and Queens2's tags as numerals compared by `natIfEq`, where the
+  Reduceron compares integers.
+
+| program | as it is | knot | variant | variant and knot |
+|---|---:|---:|---:|---:|
+| OrdList (inlined) | 2.21 | 1.73 | 2.00 | 1.57 |
+| Queens2 (tags as numerals) | 1.48 | 1.49 | 1.42 | 1.41 |
+| Taut (names as numerals, inlined) | 2.86 | 2.60 | 1.57 | 1.34 |
+| Clausify (inlined) | 2.88 | 2.45 | 2.66 | 2.25 |
+| PermSort (inlined) | 2.37 | 1.65 | 2.07 | 1.35 |
+| geometric mean | 2.30 | 1.93 | 1.90 | 1.55 |
+
+- The knot is the largest single gain: 1.44 times on PermSort, 1.28 on
+  OrdList. Queens2's S, K and I are cases on `False` and `Nil`, which
+  are one step by nature; the knot leaves it where it was.
+- Numerals decide Taut: its names compared as numerals, not five bits at a
+  time, take 1.63 s to 0.96 s by themselves; inlining takes it to 0.89.
+- Inlining alone is worth 1.08 to 1.15 times.
+- What remains is Clausify, whose connectives are pairs (a SKIjack type
+  has one binary self-reference), and Queens2.
+
+Each is compatible with a proven SKI machine: inlining is skijack's, its
+output pure SKI; numerals are words (§6.10, §18.2); a knot is a node
+written once with its own address, a witness row that a fixed-point
+theorem would license.
+
 ## Data jets on the corpus
 
 Avon `f414272`, the corpus export used for "Templates on
