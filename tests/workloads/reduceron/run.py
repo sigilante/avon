@@ -2,9 +2,12 @@
 
     python3 run.py --avon ../../../build/avon --skijack ~/skijack [--reps 5]
 
-Compiles each port with skijack, writes its supercombinator templates, and
-reduces ``main Tt Ff`` to weak head normal form in share mode, as SKI and
-with ``--templates``, best of ``--reps`` user CPU, interleaved.  Every port's
+Compiles each port with skijack, writes its supercombinator templates and
+numeral operations, and reduces ``main Tt Ff`` to weak head normal form in
+share mode three ways -- as SKI, with ``--templates``, and with
+``--templates --data`` (data jets) -- best of ``--reps`` user CPU,
+interleaved.  Every count is its own column: contractions and the
+instantiations, dispatches and numeral operations among them.  Every port's
 main is a check that returns True, the second constructor of ``bool``, so
 the expected answer is ``Ff``.
 """
@@ -20,21 +23,34 @@ def build(skijack: pathlib.Path, prog: str, out: pathlib.Path) -> None:
     sys.setrecursionlimit(1_000_000)
     import skijack as sj
     from aviary_kernel.terms import pretty
-    from skijack.templates import templates, write
+    from skijack.templates import templates, write, write_words
     exp = sj.compile((HERE / f"{prog}.ascii.ski").read_text(), lexicon="ascii")
     out.mkdir(parents=True, exist_ok=True)
     (out / "main.ski").write_text(pretty(exp.terms["main"]) + " Tt Ff\n")
     write(templates(exp), out / "templates.tsv", out / "template_terms.tsv")
+    write_words(exp, out / "words.tsv")
 
 
-def run(avon: str, d: pathlib.Path, tmpl: bool):
-    args = [avon, "reduce", "--whnf"] + ([f"--templates={d}"] if tmpl else []) + [str(d / "main.ski")]
+MODES = {"ski": [], "templates": ["--templates={d}"],
+         "data": ["--templates={d}", "--data"]}
+
+
+def run(avon: str, d: pathlib.Path, mode: str):
+    args = ([avon, "reduce", "--whnf"] + [x.format(d=d) for x in MODES[mode]]
+            + [str(d / "main.ski")])
     u0 = resource.getrusage(resource.RUSAGE_CHILDREN).ru_utime
     out = subprocess.run(args, capture_output=True, text=True, check=True)
     u = resource.getrusage(resource.RUSAGE_CHILDREN).ru_utime - u0
     status, steps = out.stdout.split("\n")[0].split()
-    inst = out.stderr.split("; ")[1].split()[0] if tmpl else "0"
-    return steps, int(inst), out.stdout.split("\n")[1], u
+    counts = {"inst": 0, "disp": 0, "fused": 0, "ops": 0}
+    for line in out.stderr.splitlines():
+        if line.startswith("templates:"):
+            counts["inst"] = int(line.split("; ")[1].split()[0])
+        if line.startswith("data:"):
+            tail = line.split("; ")[2].split()
+            counts["disp"], counts["ops"] = int(tail[0]), int(tail[4])
+            counts["fused"] = int(tail[2].strip("("))
+    return int(steps), counts, out.stdout.split("\n")[1], u
 
 
 def main() -> int:
@@ -51,18 +67,19 @@ def main() -> int:
     best, seen, ok = {}, {}, True
     for _ in range(a.reps):
         for p in progs:
-            for tmpl in (False, True):
-                steps, inst, res, u = run(a.avon, tmp / p, tmpl)
+            for mode in MODES:
+                steps, counts, res, u = run(a.avon, tmp / p, mode)
                 if res != "Ff":
-                    print(f"{p}: answer {res}, expected Ff", file=sys.stderr)
+                    print(f"{p} {mode}: answer {res}, expected Ff", file=sys.stderr)
                     ok = False
-                seen[p, tmpl] = (steps, inst)
-                best[p, tmpl] = min(best.get((p, tmpl), float("inf")), u)
-    print("program\tmode\tsteps\tinstantiations\tuser_s")
+                seen[p, mode] = (steps, counts)
+                best[p, mode] = min(best.get((p, mode), float("inf")), u)
+    print("program\tmode\tsteps\tinstantiations\tdispatches\tfused\tnumeral_ops\tuser_s")
     for p in progs:
-        for tmpl in (False, True):
-            steps, inst = seen[p, tmpl]
-            print(f"{p}\t{'templates' if tmpl else 'ski'}\t{steps}\t{inst}\t{best[p, tmpl]:.2f}")
+        for mode in MODES:
+            steps, c = seen[p, mode]
+            print(f"{p}\t{mode}\t{steps}\t{c['inst']}\t{c['disp']}\t{c['fused']}\t{c['ops']}"
+                  f"\t{best[p, mode]:.2f}")
     return 0 if ok else 1
 
 

@@ -1050,6 +1050,111 @@ are the larger part, and what would shrink them is strictness: an
 argument a body forces evaluated where it is needed, not written as a
 cell (SKA's data requirements).
 
+### 6.10 Data jets: constructors dispatched, numerals held as numbers
+
+**Data jets make a `case` and a numeral cheaper in share mode, and change
+no answer.** With templates (§6.9), `--data` adds two: a constructor
+meeting its continuations dispatches straight into the branch it selects,
+and a numeral is held as a number, on which skijack's numeral operations
+run natively. The program is still the pure SKI term: copy mode, the
+witness, and a run without `--data` are what they were, and normal forms
+are the unjetted ones byte for byte.
+
+**A `case` was three steps; it is two.** Scott encoding makes a `case` an
+application of the scrutinee to one continuation per constructor, and
+skijack lifts each branch that binds fields into a rule over what it
+captures and the fields. With templates, `case xs of Cons x r -> e` took
+the function's own instantiation, the constructor's (`Cons x r n c` to `c
+x r`), and the branch's. A constructor's template is recognized by its
+body, a formal applied to the fields -- `v_h v0 .. v(m-1)`, the shape
+`(m, h - m, k - m)` of §6.8 and lean-ski's `ctorO` -- and with every
+argument it dispatches: the continuation its index selects, applied to the
+fields, replaces the redex root, one step. When that continuation is a
+template's key applied to exactly the arguments that, with the fields, it
+takes, the branch is instantiated in the same step, *fused*: a `case` is
+the function and the branch, as it is the Reduceron's function application
+and case alternative. A nullary constructor never fuses: its continuation,
+applied to nothing, is itself the redex, and must be updated where it
+stands, since it may be shared.
+
+**A word is a numeral held as a number, and every reader still sees the
+numeral.** `W n`, for n >= 1, is a jet node flagged `AV_JET_WORD`: its id
+field holds n and its term is `SUC (W (n-1))`, `W 0` being `K`, where SUC
+is skijack's successor `S (K K) (S (K (S I)) K)`, the term every `Zero |
+Suc t` type compiles to, whatever it is called. `av_view` sees through it
+as through any jet node, so printing, the §5 hash, `jam`, snapshots and
+the witness read the numeral itself; the predecessor is its term's right
+child. A word meeting its two continuations dispatches with no allocation:
+`W n z s` becomes `s (W (n-1))` in place. A word is a value but its term
+is not in normal form -- `SUC x` is a redex -- so making a normal form,
+or reporting a weak head normal form with a word at the head, reduces a
+fresh copy of the term, as the unjetted run would. Copy mode runs the term.
+
+**Words come from where a numeral is already whole; nothing is forced to
+make one.** The loaded program's closed numerals become words in place
+(`av_words_scan`, after binding); a template instruction applying SUC to
+a numeral already held builds a word (`av_words_mark`); and the numeral
+operations return words.
+
+**The numeral operations are skijack's terms, found by hash and checked
+by running.** `natAdd`, `natSub` (truncated), `natMul`, `natIfEq` and
+`natIfLe` join skijack's prelude when a program names one (skijack
+`SPEC.md` §4); `words.tsv` lists each by the §5 hash of its term. Avon
+loads a row only if the term matches its hash, and admits it only if the
+term, run in share mode on private copies over the numerals 0 to 5, agrees
+with the native operation on all 36 pairs; one that does not runs as its
+term. A match on 36 pairs is a test, not a proof: each admitted operation
+is native code the runtime trusts, as a Vere jet is, and its licence for
+a proof is §18.2's word-level theorem, owed per operation. An operation
+fires only when both numeral operands are words already, as the
+Reduceron's primitive-redex speculation fires only on evaluated
+operands; otherwise its node runs its term, kept for the next call. So an
+operation forces nothing its term would not: `natAdd ⊥ 1` is a successor.
+One that would build more than 2^20 nodes runs its term too, which builds
+its result lazily. A word's value fits the 28 bits of a jet node's id
+field, so a numeral past 2^28 - 1 stays SKI, and jet ids, sharing the
+field, are capped at 2^28.
+
+**What was not built.** The plan (2026-09-29) also made a constructor
+value reduced on its own a node that keeps its dispatch, a DATA node. In
+lazy share-mode reduction a constructor value is reduced without its
+continuations only at the top of a run or while the normal form is
+made, and both must report the SKI term, so a DATA node would be made
+only to be undone; on the five Reduceron ports no constructor template
+missed once. It was built, found idle, and taken out. Types of more than
+32 constructors still dispatch as SKI: a template past 32 formals cannot
+be checked with the 32 markers the hash-cons table has.
+
+**Counts are reported apart; only time is the measure.** A dispatch, fused
+or not, and a numeral operation are each one step of fuel, and are
+reported beside the contractions (`data:` on stderr), never folded into
+the instantiations. That a fused dispatch is one step and not two says
+how Avon counts, not that it does less; the claim rests on user time.
+
+**Results, 2026-09-29** (avon `data-jets` over `5aee392`, skijack
+`8b34529`; user CPU, best of five, interleaved). The
+front end compiling itself, all 492 names the same:
+
+| | contractions | instantiations | dispatches (fused) | user time |
+|---|---:|---:|---:|---:|
+| templates | 21,238,890 | 18,930,884 | -- | 0.96 s |
+| templates and data | 17,389,998 | 6,554,787 | 8,527,205 (3,848,892) | 0.92 s |
+
+Of each time, about 0.39 s loads the templates. The five Reduceron ports
+(`docs/BENCHMARK.md`), their integers now the prelude's operations: data
+jets take 1.10 to 1.19 times less time than templates alone on the four
+without arithmetic to speak of, and PermSort, whose comparisons run on
+words, 2.12 times less. The corpus's 43 halting runs, to weak head normal
+form: 43,348 steps with templates, 33,244 with data jets, 13,627 of them
+dispatches. Every normal form is SKI's and every weak head normal form
+templates' (`tests/test_data.c`, `make front0-check`).
+
+**What is left.** The profile of Milestone 0 (Queens2, templates):
+`whnf_share` 47% of samples, `av_app` 23%, `tmpl_instance` 21%,
+`try_interp` 5%, the collector 3%. Building instances -- an out-of-line
+allocation per node -- is two fifths of the time, and every jet head asks
+`try_interp` first. Those, and strictness (§6.9), are the next levers.
+
 ## 7. The interpreter jet
 
 **It is Avon's level-1 interpreter, not an optimization of one.** Vere runs
@@ -2079,7 +2184,13 @@ residual jets off. When it gains proof jets, it should:
 ### 18.2 Data jets: native values at the boundary
 
 Arithmetic on Scott numerals is unary, so a jet for it pays only over
-native values. That needs a word cell `W n`: an inert leaf with a
+native values. Share mode holds them already (§6.10): a word `W n` is this
+cell's value in the clear, its term the numeral, and its operations are
+admitted by testing, which is all share mode needs. A proof needs more:
+share mode's word is a jet node over its numeral term, which the witness
+has no cell for, and its operations are trusted, not proved.
+
+A proof needs a word cell `W n`: an inert leaf with a
 field-element payload, whose meaning is a term, `⟦W n⟧` being the numeral
 `n`. Each jet then gets a table that proves its function on words (`ADD`,
 with range checks, and so on), joined to the CPU by a bus.

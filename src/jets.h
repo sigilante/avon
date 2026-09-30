@@ -33,7 +33,8 @@ void     profile_remap(av_profile *p, const av_gc *g);
 /*  Templates (tmpl.c): an instance program's operands, as for residuals; a
  *  jet node wrapping inner for jet id (not the dashboard's term, so a run
  *  may write it); an instance of T over args[0 .. T->k-1], allocating
- *  T->nops nodes (reserve them first; it never collects). */
+ *  T->nops + T->nsuc nodes at most (reserve them first; it never
+ *  collects). */
 #define TMPL_CONST 0u
 #define TMPL_ARG   1u
 #define TMPL_RES   2u
@@ -42,6 +43,16 @@ uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner);
 /*  The residual markers @x0 .. @x31, made if not yet: templates' formals. */
 bool     jet_marks(av_arena *a);
 uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args);
+
+/*  Words (words.c, §6.10): W (n+1) over pred, a numeral held (K or a
+ *  word), in two reserved nodes, or AV_NONE if pred is not one; a word's
+ *  predecessor; whether a numeral operation's term computes it on the
+ *  operands 0 .. 5, run in share mode on private copies, never collecting. */
+uint32_t word_succ(av_arena *a, uint32_t pred);
+static inline uint32_t word_pred(const av_arena *a, uint32_t w) {
+    return av_right(a, av_right(a, w));
+}
+bool     word_admit(av_arena *a, uint32_t term, unsigned op);
 
 /*  The jet stats' hooks (jetstats.c): a fire of jet id at jet node `node`;
  *  a miss; a share-mode demotion, copied or not; a jet node made fresh

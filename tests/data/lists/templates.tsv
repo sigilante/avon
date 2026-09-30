@@ -1,0 +1,30 @@
+skijack-1:ce8f9d06ec5f927f	prelude	pair	3	0,1,2	``v2 v0 v1
+skijack-1:331e34bbd6748b29	prelude	hd	1	0	`v0 K
+skijack-1:8d1a3ebf2f9e6ee7	prelude	tl	1	0	`v0 `K I
+skijack-1:86be9a55762d316a	prelude	nil	2	0,1	v0
+skijack-1:46412d09fb89cbc9	prelude	cons	4	0,1,2,3	``v3 v0 v1
+skijack-1:86be9a55762d316a	prelude	zero	2	0,1	v0
+skijack-1:f978ff1a0137879e	prelude	suc	3	0,1,2	`v2 v0
+skijack-1:86be9a55762d316a	ctor	False	2	0,1	v0
+skijack-1:0a9bea03c09bf005	ctor	True	2	0,1	v1
+skijack-1:24497f5df45206d2	ctor	A	3	0,1,2	v0
+skijack-1:be0536e1fbee1510	ctor	B	3	0,1,2	v1
+skijack-1:5b74a44b19903d6e	ctor	C	3	0,1,2	v2
+skijack-1:86be9a55762d316a	ctor	Nil	2	0,1	v0
+skijack-1:46412d09fb89cbc9	ctor	Cons	4	0,1,2,3	``v3 v0 v1
+skijack-1:ce8f9d06ec5f927f	ctor	Pr	3	0,1,2	``v2 v0 v1
+skijack-1:331e34bbd6748b29	eq	and	2	0,1	``v0 #86be9a55762d316a v1
+skijack-1:2e8dee1030211cf2	eq	eqTag	2	0,1	```v0 ```v1 #0a9bea03c09bf005 #86be9a55762d316a #86be9a55762d316a ```v1 #86be9a55762d316a #0a9bea03c09bf005 #86be9a55762d316a ```v1 #86be9a55762d316a #86be9a55762d316a #0a9bea03c09bf005
+skijack-1:2dd783b12fa692e9	lift	eqTags	2	0,1	#86be9a55762d316a
+skijack-1:2975a90e8374aacb	lift	eqTags	5	0,1,2,3,4	``#331e34bbd6748b29 ``#2e8dee1030211cf2 v1 v3 ``v0 v2 v4
+skijack-1:764510bb2928775e	lift	eqTags	4	0,1,2,3	``v1 #86be9a55762d316a ```#2975a90e8374aacb v0 v2 v3
+skijack-1:111bcf2dc8aff13a	rec	eqTags	3	0,1,2	``v1 ``v2 #0a9bea03c09bf005 #2dd783b12fa692e9 ``#764510bb2928775e v0 v2
+skijack-1:e7621922b4b26638	lift	append	4	0,1,2,3	``#46412d09fb89cbc9 v2 ``v0 v3 v1
+skijack-1:2f9087b03faa6ebd	rec	append	3	0,1,2	``v1 v2 ``#e7621922b4b26638 v0 v2
+skijack-1:07a97809db8f9c81	lift	revOnto	4	0,1,2,3	``v0 ``#46412d09fb89cbc9 v2 v1 v3
+skijack-1:f0831d875ee105dc	rec	revOnto	3	0,1,2	``v2 v1 ``#07a97809db8f9c81 v0 v1
+skijack-1:d1728ef0d63652a7	lift	split	3	0,1,2	``#ce8f9d06ec5f927f ``#46412d09fb89cbc9 v0 v2 v1
+skijack-1:d472ada64739eaa2	lift	split	3	0,1,2	``v0 v2 `#d1728ef0d63652a7 v1
+skijack-1:4187dc3e6a12a356	rec	split	2	0,1	``v1 ``#ce8f9d06ec5f927f #86be9a55762d316a #86be9a55762d316a `#d472ada64739eaa2 v0
+skijack-1:e971ba41141921a3	lift	merge	2	0,1	``#53630665a3cb211f `#b0a11f602e9d0d02 v0 v1
+skijack-1:ec1bbaa21f7dad45	eq	merge	1	0	`v0 #e971ba41141921a3

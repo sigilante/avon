@@ -14,9 +14,9 @@ ps   === PNil | PCons prop ps
 con p q = Con (Pr p q)
 dis p q = Dis (Pr p q)
 
-eqNat m n = m |> { Zero (n |> { Zero True ; Suc k False }) ; Suc j (n |> { Zero False ; Suc k eqNat j k }) }
-leNat m n = m |> { Zero True ; Suc j (n |> { Zero False ; Suc k leNat j k }) }
-add m n = n |> { Zero m ; Suc k Suc (add m k) }
+eqNat m n = natIfEq m n True False
+leNat m n = natIfLe m n True False
+add m n = natAdd m n
 
 or a b = a |> { False b ; True True }
 and a b = a |> { False False ; True b }

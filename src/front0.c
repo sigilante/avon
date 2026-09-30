@@ -36,7 +36,7 @@ typedef struct {
     nmap      memo;             /* node -> digest, remapped on collection */
     ski_leaf  mark[5];          /* the markers' leaf ids                  */
     uint32_t  marknode[5];      /* rooted too: a collection moves leaves */
-    uint64_t  steps, tmpl_calls;
+    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops;
     bool      lost;             /* a remap ran out of memory              */
 } reader;
 
@@ -102,6 +102,9 @@ static int probe(reader *r, unsigned nctors, const unsigned *fields, const av_op
     av_result res = av_reduce(a, t, &po);
     r->steps += res.steps;
     r->tmpl_calls += res.tmpl_calls;
+    r->dispatches += res.dispatches;
+    r->fused += res.fused;
+    r->word_ops += res.word_ops;
     if (res.status != AV_WHNF && res.status != AV_NORMAL) {
         *err = av_status_name(res.status);
         return -1;
@@ -221,7 +224,7 @@ uint32_t av_front0_input(av_arena *a, const av_front0 *f, const char *src, size_
 }
 
 int av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
-                   uint64_t *steps, uint64_t *tmpl_calls, const char **err) {
+                   uint64_t *steps, av_result *tally, const char **err) {
     reader r = { .a = a };
     av_active me = { roots, after, &r, a->active };
     int rc = -1;
@@ -253,7 +256,13 @@ int av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
 done:
     a->active = me.next;
     *steps = r.steps;
-    if (tmpl_calls) *tmpl_calls = r.tmpl_calls;
+    if (tally) {
+        tally->steps = r.steps;
+        tally->tmpl_calls = r.tmpl_calls;
+        tally->dispatches = r.dispatches;
+        tally->fused = r.fused;
+        tally->word_ops = r.word_ops;
+    }
     free(r.node);
     free(r.kind);
     free(r.dig);

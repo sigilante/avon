@@ -257,6 +257,7 @@ struct av_tmplset {
     uint64_t collections;       /* the arena's, at load: the table's node
                                    ids hold only until the next one */
     long     accepted, refused, eta, open, duplicate, wide, unbound;
+    long     words, words_refused;      /* numeral operations (§6.10) */
 };
 
 static bool global_push(av_arena *a, uint32_t node, uint32_t *ix) {
@@ -372,6 +373,24 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
     T->root = opnd[root];
     T->key = t;
     free(opnd);
+    /* a constructor (§6.10): the body is argument h applied to the first
+     * m arguments in order, h past them; its shape (m, h - m, k - m) */
+    {
+        uint32_t x = T->root, m = 0;
+        bool shape = true;
+        while (shape && x >> 30 == TMPL_RES) {
+            uint32_t j = x & AV_PAYLOAD, arg = T->ops[2 * j + 1];
+            shape = arg >> 30 == TMPL_ARG && j == T->nops - 1 - m;
+            x = T->ops[2 * j];
+            m++;
+        }
+        /* the arguments, innermost first, must be 0 .. m-1 */
+        for (uint32_t j = 0; shape && j < m; j++)
+            shape = T->ops[2 * j + 1] == TMPL_OPND(TMPL_ARG, j);
+        if (shape && m == T->nops && x >> 30 == TMPL_ARG &&
+            (x & AV_PAYLOAD) >= m && (x & AV_PAYLOAD) < k)
+            T->ctor = (av_ctor){ m, (x & AV_PAYLOAD) - m, k - m };
+    }
     a->jets[id].tmpl = ++a->ntmpls;
 done:
     free(cn);
@@ -548,6 +567,48 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         else if (why == 3 || why == 5) ts->eta++;
         else ts->duplicate++;
     }
+    /* the numeral operations (§6.10), when words are on: each term checked
+     * against its hash, then run on small numerals before it is keyed */
+    free(text);
+    text = NULL;
+    snprintf(path, sizeof path, "%s/words.tsv", dir);
+    if (a->word_suc && (text = slurp_path(path, &len)) != NULL) {
+        for (char *line = text, *nl; *line; line = nl ? nl + 1 : line + strlen(line)) {
+            nl = strchr(line, '\n');
+            if (nl) *nl = '\0';
+            char *fld[4];
+            int k = 0;
+            for (char *q = line; k < 4 && q; k++) {
+                fld[k] = q;
+                q = strchr(q, '\t');
+                if (q) *q++ = '\0';
+            }
+            if (k < 4) { if (*line) { msg = "malformed words.tsv line"; goto fail; } continue; }
+            static const char *const opname[] = { "", "add", "sub", "mul", "ifeq", "ifle" };
+            unsigned op = 0;
+            for (unsigned i = 1; i < sizeof opname / sizeof *opname; i++)
+                if (strcmp(fld[1], opname[i]) == 0) op = i;
+            uint64_t want;
+            if (!op || !av_hash_parse(fld[0], &want)) { msg = "malformed words.tsv line"; goto fail; }
+            av_parse_error pe;
+            uint32_t t = av_parse(a, fld[3], strlen(fld[3]), &pe);
+            if (t == AV_NONE) { msg = "unparsable term in words.tsv"; goto fail; }
+            uint32_t c = hc_canon(a, &ts->h, t);
+            uint64_t d, have;
+            if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
+            if (d != want) { msg = "a word operation does not match its hash"; goto fail; }
+            if (nmap_get(&ts->key_jet, c, &have) || !word_admit(a, c, op)) {
+                ts->words_refused++;
+                continue;
+            }
+            uint32_t id = jet_entry_for(a, want, c);
+            if (id == AV_NONE) goto fail;
+            if (a->jets[id].tmpl || a->jets[id].word_op) { ts->words_refused++; continue; }
+            if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
+            a->jets[id].word_op = (uint8_t)op;
+            ts->words++;
+        }
+    }
     if (!make_globals(a, ts)) goto fail;
     free(text);
     free(refs);
@@ -576,10 +637,20 @@ bool av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t) {
         uint64_t v;
         if (nmap_get(&seen, x, &v)) continue;
         if (!(ok = nmap_put(&seen, x, 1))) break;
+        if (av_is_word(a, x)) continue;
         if (av_tag(a, x) == AV_JET) {
             uint32_t id = AV_JET_ID(av_left(a, x));
             uint32_t inner = av_right(a, x);
-            if (a->jets[id].tmpl) {
+            if (a->jets[id].word_op) {
+                /* a numeral operation, likewise, on its own term only */
+                uint32_t c = hc_canon(a, &ts->h, inner);
+                uint64_t have;
+                if (c == AV_NONE) { ok = false; break; }
+                if (!nmap_get(&ts->key_jet, c, &have) || have != (uint64_t)id + 1) {
+                    arena_set(a, x, (av_node){ (AV_IND << AV_TAG_SHIFT) | inner, 0 });
+                    ts->unbound++;
+                }
+            } else if (a->jets[id].tmpl) {
                 /* the template fires here only on its own term */
                 uint32_t c = hc_canon(a, &ts->h, inner);
                 if (c == AV_NONE) { ok = false; break; }
@@ -611,6 +682,11 @@ void av_templates_free(av_tmplset *ts) {
     free(ts);
 }
 
+void av_templates_word_counts(const av_tmplset *ts, long *admitted, long *refused) {
+    *admitted = ts->words;
+    *refused = ts->words_refused;
+}
+
 void av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,
                          long *skipped, long *unbound) {
     *accepted = ts->accepted;
@@ -633,7 +709,12 @@ uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args) {
                    : (x) >> 30 == TMPL_ARG   ? args[(x) & AV_PAYLOAD]                       \
                                              : out[(x) & AV_PAYLOAD])
     for (uint32_t i = 0; i < T->nops; i++) {
-        uint32_t n = av_app(a, TOPERAND(T->ops[2 * i]), TOPERAND(T->ops[2 * i + 1]));
+        uint32_t f = TOPERAND(T->ops[2 * i]), x = TOPERAND(T->ops[2 * i + 1]), n, v;
+        /* SUC of a numeral held: a word (§6.10), two nodes where one was */
+        if (T->sucop && T->sucop[i] && av_numeral(a, x, &v) && v < AV_WORD_MAX)
+            n = word_succ(a, x);
+        else
+            n = av_app(a, f, x);
         if (n == AV_NONE) return AV_NONE;
         out[i] = n;
     }

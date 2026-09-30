@@ -9,8 +9,8 @@ fl   === FNil | FCons ml fl
 sl   === SNil | SCons fl sl
 
 pred n = n |> { Zero Zero ; Suc m m }
-add m n = n |> { Zero m ; Suc k Suc (add m k) }
-eqNat m n = m |> { Zero (n |> { Zero True ; Suc k False }) ; Suc j (n |> { Zero False ; Suc k eqNat j k }) }
+add m n = natAdd m n
+eqNat m n = natIfEq m n True False
 
 eq x y = x |> { L (y |> { L True ; R False ; D False }) ; R (y |> { L False ; R True ; D False }) ; D (y |> { L False ; R False ; D True }) }
 
@@ -52,7 +52,7 @@ sol n row = mapS (FCons row) (solve n (next row))
 nqueens n = length (solve n (replicate n))
 
 n10 = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))))
-mul m n = n |> { Zero Zero ; Suc k add m (mul m k) }
+mul m n = natMul m n
 
 n2 = Suc (Suc Zero)
 n6 = add n2 (add n2 n2)

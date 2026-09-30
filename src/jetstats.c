@@ -98,6 +98,7 @@ static bool walk(av_jetstats *s, const av_arena *a, uint32_t root, uint64_t outs
         uint64_t v;
         if (nmap_get(&seen, x, &v)) continue;
         if (!(ok = nmap_put(&seen, x, 1))) break;
+        if (av_is_word(a, x)) continue;             /* a numeral, no jet id */
         if (av_tag(a, x) == AV_JET) {
             if (!nmap_get(&s->origin, x, &v) && !(ok = nmap_put(&s->origin, x, outside))) break;
             if (nin == ncap) {
@@ -129,6 +130,7 @@ static bool walk(av_jetstats *s, const av_arena *a, uint32_t root, uint64_t outs
             uint64_t v;
             if (nmap_get(&seen, x, &v)) continue;
             if (!(ok = nmap_put(&seen, x, 1))) break;
+            if (av_is_word(a, x)) continue;
             if (av_tag(a, x) == AV_JET) {
                 if (!nmap_get(&s->origin, x, &v) && !(ok = nmap_put(&s->origin, x, in))) break;
                 if (nin == ncap) {

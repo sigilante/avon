@@ -7,8 +7,8 @@ nl   === Nil | Cons nat nl
 nll  === LNil | LCons nl nll
 
 and a b = a |> { False False ; True b }
-leNat m n = m |> { Zero True ; Suc j (n |> { Zero False ; Suc k leNat j k }) }
-eqNat m n = m |> { Zero (n |> { Zero True ; Suc k False }) ; Suc j (n |> { Zero False ; Suc k eqNat j k }) }
+leNat m n = natIfLe m n True False
+eqNat m n = natIfEq m n True False
 
 head xs = xs |> { LNil Nil ; LCons x r x }
 mapCons y xs = xs |> { LNil LNil ; LCons x r LCons (Cons y x) (mapCons y r) }

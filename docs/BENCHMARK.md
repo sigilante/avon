@@ -29,6 +29,7 @@ size.
 | 3 | `8d80314` | `711d6c4` | identifiers interned; tries keyed by their bits | 492 | 740,558,347 | 10.5 s wall, Avon alone |
 | 4 | `eb054d8` | `e706d6e` | the result read by probing (`avon front0`), no renderer | 492 | 306,991,371 | 8.0 s wall; 4.38 s user, best of 5, at `a0fba14` without templates |
 | 5 | `a0fba14` | `5f81687` | supercombinator templates (§6.9) | 492 | 21,238,890 | 0.97 s user, best of 5 |
+| 6 | `data-jets`, over `5aee392` | `8b34529` | data jets (§6.10): constructors dispatched, fused into the branch | 492 | 17,389,998 | 0.92 s user, best of 5, against row 5's 0.96 s run beside it |
 
 - Rows 1–3 wrote the result out through a renderer (`render0.ascii.ski`)
   as a tree of marker atoms for `avon reduce` to print; its contractions
@@ -42,14 +43,20 @@ size.
   DESIGN.md, so row 2 is the same at either. At `a0fba14` without
   `--templates`, row 4's workload takes the same 306,991,371 contractions
   it took at `eb054d8`.
+- Row 6's 17,389,998 includes 6,554,787 instantiations and 8,527,205
+  dispatches, 3,848,892 of them fused into the branch's template. The
+  front end names no numeral operation; 9 closed numerals became words.
+  Both row 5 and row 6 load templates for about 0.39 s, so the compile
+  itself went from about 0.57 s to 0.53 s.
 - Every row's output is the same set of terms, checked by hash against
-  Python's; rows 4 and 5 also agree with each other byte for byte.
+  Python's; rows 4, 5 and 6 also agree with each other byte for byte.
 
 **Reproduce.** At the listed commits, from skijack's `python/`:
 
 ```sh
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon            # rows 1-4
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templates  # row 5
+PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templates --data  # row 6
 ```
 
 The fixed-point line reports the contractions.
@@ -233,7 +240,7 @@ to 4.7.
   why those two run at half the rate was not investigated.
 - Templates cut steps 8.9 to 12.3 times and time 3.8 to 10.9 times.
 
-**Reproduce.**
+**Reproduce** at `1e2f24f`, where the ports are as above:
 
 ```sh
 python3 tests/workloads/reduceron/run.py --avon build/avon --skijack ~/skijack
@@ -241,6 +248,59 @@ python3 tests/workloads/reduceron/run.py --avon build/avon --skijack ~/skijack
 
 It prints each port's steps, instantiations and best user time, and fails
 if an answer is not True.
+
+### With data jets
+
+Data jets (§6.10) run on the same ports with one change to three of them:
+`eqNat`, `leNat`, `add` and `mul` in Clausify, PermSort and Queens2 now
+call the prelude's numeral operations (`eqNat m n = natIfEq m n True
+False`), as the originals call integer primitives. That changes their SKI:
+the prelude's operations are `Y`-tied, and cost more as pure SKI than the
+hand-written recursions did. The table above keeps the ports as they were
+at `0c7682b`; this one is avon `data-jets` over `5aee392`, skijack
+`8b34529`, every mode run beside the others, user CPU,
+best of five, load average about 2.5.
+
+| program | SKI, s | templates: steps | s | data: steps | instantiations | dispatches (fused) | numeral operations | s | Reduceron, s | data ÷ Reduceron |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| OrdList | 22.32 | 111,124,752 | 2.76 | 86,769,589 | 37,791,738 | 30,768,312 (24,355,163) | 0 | 2.49 | 0.98 | 2.5 |
+| Queens2 | 10.30 | 103,498,309 | 2.61 | 79,407,036 | 34,024,582 | 34,778,139 (24,089,377) | 4 | 2.31 | 1.29 | 1.8 |
+| Taut | 21.41 | 85,212,816 | 2.05 | 69,679,137 | 25,590,624 | 27,207,001 (15,533,679) | 0 | 1.86 | 0.57 | 3.3 |
+| Clausify | 12.00 | 104,257,799 | 2.88 | 68,204,552 | 25,887,702 | 33,708,614 (28,524,686) | 3,764,243 | 2.43 | 0.73 | 3.3 |
+| PermSort | 43.28 | 313,717,527 | 9.20 | 132,810,527 | 52,797,028 | 42,114,724 (39,508,198) | 6,235,320 | 4.34 | 1.62 | 2.7 |
+
+- **Time.** Data jets take 1.10 to 1.19 times less time than templates on
+  OrdList, Queens2, Taut and Clausify, and 2.12 times less on PermSort,
+  whose comparisons of list elements run on words; 1.28 by geometric
+  mean. Clausify's 3.8 million numeral operations gain little: its
+  symbols are all 0, and comparing 0 with 0 was a step or two as a term,
+  where PermSort's elements run to 10. Against the Reduceron, 1.8 to 3.3 times its time, 2.7 by
+  geometric mean, where templates on these ports take 3.4.
+- **Where the gain comes from.** Fusion takes a `case` from three steps
+  to two -- the function, then constructor and branch in one -- but a
+  fused step still builds the branch's instance, so time falls by about a
+  tenth, as the estimate from the sampling profile below had it. The numeral operations fire only on
+  operands already words: 6.2 million times in PermSort, 3.8 million in
+  Clausify, 4 times in Queens2, whose counts are built lazily.
+- **Counts.** A dispatch and a numeral operation are one step each, and
+  appear in their own columns; the steps column is contractions plus
+  instantiations plus these.
+
+**Before building: where a templated step's time goes.** A sampling
+profile (`sample`, 1 s, Queens2 with templates at `0c7682b`): `whnf_share`
+47% of samples, `av_app` 23%, `tmpl_instance` 21%, `try_interp` 5%, the
+collector 3%. No constructor template missed its continuations on any of
+the five ports, which is why the plan's constructor-value nodes were
+dropped (§6.10).
+
+**Reproduce.**
+
+```sh
+python3 tests/workloads/reduceron/run.py --avon build/avon --skijack ~/skijack
+```
+
+It runs each port as SKI, with templates and with data jets, prints every
+count and the best user time, and fails if an answer is not True.
 
 ### Other machines
 
@@ -270,6 +330,15 @@ if an answer is not True.
 - Eleven benchmarks are not ported. Fib, Queens, Braun and the rest do
   integer arithmetic (Braun compares the numbers 0 to 255 six thousand
   times over), which Scott numerals would turn into a different benchmark.
+
+## Data jets on the corpus
+
+Avon `data-jets` over `5aee392`, the corpus export used for "Templates on
+the corpus": the 43 halting conformance runs, `share` mode, to weak head
+normal form, fuel ten times the manifest's. With templates they take
+43,348 steps; with data jets 33,244, of them 13,627 dispatches, 10,104
+fused. Every weak head normal form is templates', and every normal form
+is SKI's.
 
 ## Earlier measurements
 

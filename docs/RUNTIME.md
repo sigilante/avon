@@ -93,6 +93,7 @@ differently (§6).
 | `--no-jets` | match nothing | | |
 | `--interp=FILE` | `interpreters.tsv`: interpreter jets (§7); needs `--jets` | both | changes counts; off unless asked |
 | `--templates=DIR` | `DIR/templates.tsv` and `DIR/template_terms.tsv`: supercombinator templates (§6.9) | `share` only; `copy` refuses | one step per instantiation, reported |
+| `--data` | with `--templates`: data jets (§6.10), constructor dispatch and numerals held as words, and `DIR/words.tsv`'s numeral operations | `share` only | one step per dispatch or operation, reported |
 
 ```sh
 build/avon reduce --strategy=copy --jets=tests/conformance/dictionary.tsv --jet-check=1 \
@@ -113,6 +114,31 @@ templates: 641 accepted, 0 refused, 352 skipped, 0 unbound; 18930884 instantiati
 malformed lines; `skipped` counts duplicates, η-templates, open bodies,
 bare-leaf keys, and templates of more than 32 formals (a constructor of a
 128-way type takes 128), the most one fire takes.
+
+**Data jets** (`--data`, §6.10) add three things to templates, and print a
+second line:
+
+```
+data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dispatches (1395 fused), 8 numeral operations among the contractions
+```
+
+- A constructor's template -- its body a formal applied to the fields --
+  meeting its continuations dispatches: the selected continuation applied
+  to the fields replaces the redex, one step. When that continuation is a
+  case branch's template with what it captured, the branch is
+  instantiated in the same step, `fused`.
+- Closed numerals (`Suc (Suc Zero)`, whatever the type is called) become
+  words, numbers whose term is still the numeral; a word meeting its two
+  continuations dispatches without allocating.
+- skijack's numeral operations (`natAdd`, `natSub`, `natMul`, `natIfEq`,
+  `natIfLe`), listed in `words.tsv` by the §5 hash of their terms, run
+  natively when both operands are words already, and otherwise run as
+  their terms. Each is `admitted` only after its term, run on the numerals
+  0 to 5, agrees with the native operation; one that does not is
+  `refused` and runs as its term.
+
+Normal forms are the unjetted ones, byte for byte; a WHNF state is
+templates' (which may differ from SKI's in form, not value).
 
 ## Measuring
 
@@ -163,10 +189,11 @@ drives the checks:
 ```sh
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --edges --random 1000
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templates --edges --random 1000
+PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templates --data --edges --random 1000
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --profile
 ```
 
-`front0` also takes `--templates=DIR`, `--profile=NAMES`, `--jets=DICT`,
+`front0` also takes `--templates=DIR`, `--data`, `--profile=NAMES`, `--jets=DICT`,
 `--ctors[=N]`, `--jet-stats[=N]`, `--names=FILE`, `--fuel=N` and
 `--max-nodes=N`.
 
@@ -231,6 +258,8 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 | `interpreters.tsv` | interpreter jets' specs | the same |
 | `namespaces.tsv` | the resume loop's runs | the same |
 | `templates.tsv`, `template_terms.tsv` | supercombinator templates and the terms they reference | the same; `run0` for the front end |
+| `words.tsv` | numeral operations: `hash op atoms printed-term`, written only when a program names one | skijack `templates.write_words` |
+| `tests/data/*` | data-jet fixtures: two programs, their templates, words and names printed | `tests/data/export.py` |
 | `tests/workloads/skilark/manifest.tsv` | SKIlark's workloads | skilark's export |
 | `tests/workloads/reduceron/*.ascii.ski` | five Reduceron benchmarks in SKIjack; `run.py` compiles, runs and times them (`docs/BENCHMARK.md`) | written by hand |
 | `jets/birds.tsv`, `jets/joy.tsv` | bird and Joy dictionaries; `*_names.tsv` label them | `jets/birds.py`, `jets/joy.py` |
@@ -244,7 +273,7 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 |---|---|---|
 | `make check` | every unit test, under ASan and UBSan | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
-| `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does, with and without templates | skijack |
+| `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, and with templates and data jets | skijack |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |
 | `make jet-witness-check` | the same, jetted (§18) | lean-ski |
 | `make probe-witness-check` | the same, with probe segments | lean-ski |

@@ -468,6 +468,7 @@ static uint32_t register_term(av_arena *a, uint32_t t, size_t min_atoms,
     av_root_pop(a);
     av_root_pop(a);
     if (ctors_only && !av_ctor_is(shape)) { msg = "not a constructor"; goto done; }
+    if (a->njets >= AV_JET_WORD) { msg = "too many jets"; goto done; }  /* ids below the word flag */
 
     if (a->njets == a->jetcap) {
         uint32_t cap = a->jetcap ? a->jetcap * 2 : 64;
@@ -504,6 +505,7 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
 uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t) {
     uint32_t have = jet_find(a, digest);
     if (have != AV_NONE) return have;
+    if (a->njets >= AV_JET_WORD) return AV_NONE;       /* ids below the word flag */
     if (a->njets == a->jetcap) {
         uint32_t cap = a->jetcap ? a->jetcap * 2 : 64;
         av_jet *j = realloc(a->jets, cap * sizeof *j);

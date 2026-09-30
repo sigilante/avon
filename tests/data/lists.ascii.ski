@@ -1,0 +1,26 @@
+-- Data jets on constructors (docs/DESIGN.md §6.10): cases on lists and
+-- pairs, whose branches are lifted lambdas that capture, so dispatches
+-- fuse; main checks its own answer.
+bool  === False | True
+tag   === A | B | C
+tags  === Nil | Cons tag tags
+pr    === Pr tags tags
+
+and x y = x |> { False False ; True y }
+eqTag x y = x |> { A (y |> { A True ; B False ; C False }) ; B (y |> { A False ; B True ; C False }) ; C (y |> { A False ; B False ; C True }) }
+eqTags xs ys = xs |> { Nil (ys |> { Nil True ; Cons y s False }) ; Cons x r (ys |> { Nil False ; Cons y s and (eqTag x y) (eqTags r s) }) }
+
+append xs ys = xs |> { Nil ys ; Cons x r Cons x (append r ys) }
+rev xs = revOnto Nil xs
+revOnto acc xs = xs |> { Nil acc ; Cons x r revOnto (Cons x acc) r }
+split xs = xs |> { Nil Pr Nil Nil ; Cons x r (split r |> { Pr a b Pr (Cons x b) a }) }
+merge p = p |> { Pr a b append (rev a) b }
+
+abc = Cons A (Cons B (Cons C Nil))
+big = append abc (append abc (append abc abc))
+
+-- reversing twice, and splitting and rejoining, keep every list
+main = and (eqTags (rev (rev big)) big) (eqTags (merge (split abc)) (Cons C (Cons A (Cons B Nil))))
+
+-- the normal form of a list, for comparing printed normal forms
+out = merge (split big)
