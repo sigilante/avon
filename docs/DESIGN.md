@@ -726,6 +726,94 @@ under `--all`, each called 11 to 147 times; §6.8 raised the cap. A small
 corpus under-ranks what it happens not to call, which is why §6.8 jets
 Joy's word list whatever its rank.
 
+**The profile: which code a share-mode run executes.** The census runs
+in copy mode without collecting, which a program that must share -- the
+SKIjack-0 front end (§20.3), 2.2 billion contractions -- cannot afford.
+`avon reduce --profile=NAMES` (share mode) charges each contraction
+instead:
+
+- At load, every application node of the term belongs to the innermost
+  subterm whose §5 hash the names file lists (`kind TAB name TAB hash`,
+  as for `census --names`). Leaves are one node per atom, shared by every
+  term, and belong to no one.
+- A contraction is charged to the first loaded node among its
+  combinator's partial applications: `S f` then `S f g`, `K x`, the redex
+  `I x`. A loaded node the run rewrites in place holds the run's work
+  from then on and leaves the loaded term. When the run built all of
+  them -- a combinator passed as a value, a Scott boolean a case chose --
+  the contraction goes to a "built at run time" row for its combinator.
+- Ownership follows the nodes through collections. The profile changes
+  no count and no result (`tests/test_profile.c`).
+
+The profile is self time: a row counts the contractions its own code
+runs, not its callees'. A term too small to be distinctive (`K K` is a
+dozen case branches) would take code from the equation it is written in,
+so skijack's `run0 --profile` names only terms of six atoms or more,
+labels each lifted lambda and recursion body by its equation, and totals
+by equation.
+
+**Results, 2026-09-29: the front end compiling itself** (2,176,424,461
+contractions, the renderer that writes the result out included):
+
+| row | share |
+|---|---:|
+| name comparison: `eqCode`, `eqName`, `eqBit`, `andB`, `notB` | 39.5% |
+| built at run time: K, S, I | 32.2% |
+| the renderer, `rTm` (the harness, not the front end) | 13.8% |
+| everything else, no row above 2.7% | 14.5% |
+
+Comparison is the front end's cost, and the run-time rows are mostly its
+consequence: a comparison's result is a Scott boolean or bit, which the
+case that reads it applies as a combinator the run built. A second run
+splits comparison by call site. Each site gets its own copy of the
+comparison chain, made distinct by a constant that K discards, so every
+copy costs the same per call. The copies add one contraction per bit
+compared, 82.7 million, and the shares are of that run's 2,259,156,268:
+
+| call site | share |
+|---|---:|
+| dependencies: is each equation free in each body (`eqDeps`) | 10.3% |
+| grouping: mutual reachability (`grp`) | 6.3% |
+| the memo of finished terms (`findMe`) | 4.7% |
+| a dependency list by name (`depsOf`) | 4.7% |
+| reachability (`closure`) | 3.2% |
+| name resolution (`resolve`) | 2.7% |
+| constructor and type tables | 1.7% |
+| the rule table, duplicate names | 2.2% |
+
+**What this means.** The recursion analysis -- dependencies, grouping,
+the dependency lists and reachability, 24.5% -- is quadratic in the
+equations: every equation's name is
+tested against every body, and every pair's reachability is compared by
+list membership. One pass collecting each body's free names, and
+Tarjan's strongly connected components over them, make it linear in the
+program. The memo and rule table are linear scans a search tree keyed by
+name would make logarithmic. These are changes to the program, not the
+runtime. A jet on name equality would take what remains, and it is the
+one candidate the profile names; it should wait until the algorithms
+stop calling it quadratically often.
+
+**After, 2026-09-29.** The front end now collects each body's free names
+once, finds its groups as Tarjan's components, and keeps its rules, memo,
+names and constructors in search trees ordered by name. The fixed point
+takes 1,262,327,332 contractions, 42% fewer, though the source grew from
+375 names to 433; without the renderer, whose output grew with it, the
+front end's own work fell from about 1.88 billion to 0.85 billion. Name
+comparison fell from 39.5% of the run to 11.4%. What the profile
+shows now:
+
+| row | share |
+|---|---:|
+| the renderer, `rTm` | 32.7% |
+| built at run time: I, K, S | 34.4% |
+| comparing names: `cmpCode`, `eqCode`, `cmpBit`, `cmpName`, `eqName` | 11.4% |
+| everything else, no row above 5.2% | 21.5% |
+
+The run-time rows are now the most of the front end: Scott dispatch on
+the values its cases read. That is Turner's case for an extended basis
+(§6.7's two tiers) and for constructor jets (§6.8), not for the
+program's own functions.
+
 ### 6.8 Constructor jets and the jet dictionaries
 
 **Avon recognizes a Scott constructor by running it, and jets every one
@@ -1390,9 +1478,9 @@ in stage 8"):
   every fire checked; a term that does not abstract as aviary does is
   refused.
 - **The compiler is a term in a pill**, a kernel answering `Abs` events.
-- What remains is the front end in SKIjack (skijack DESIDERATA §6, item
-  5); until then Python parses and desugars, and the core is what Avon
-  runs.
+- **The front end, for SKIjack-0, compiles its own source** (§20.3,
+  "Built for SKIjack-0"): all 433 of its names, from source text, hash for
+  hash (`make front0-check`). The full language's front end remains.
 
 **Stage 9, done.** The persistent arena (§19.1, "Built in stage 9"):
 
@@ -2132,7 +2220,8 @@ that abstraction, written in SKIjack: `abs x t`, aviary's algorithm with
 η, over encoded terms `tm = TS | TK | TI | TV nat | TA ap`, `ap = Ap tm
 tm` (an application's fields have their own type, since a type with a
 two-field self-constructor would be the program's object type). It is
-one recursive equation, because skijack refuses mutual recursion.
+one recursive equation, because skijack refused mutual recursion when it
+was written.
 
 - **The fixed point.** skijack compiling `abstract.ascii.ski` performs
   123 outermost abstractions, 87 distinct once variables are renamed;
@@ -2152,11 +2241,35 @@ one recursive equation, because skijack refuses mutual recursion.
   poked with every call of its own compilation, it answers each with
   Python's abstraction, by the term and with the jet.
 
-**Not yet self-hosted: the front end.** Parsing, name resolution, case
-and type compilation, axes, pairs and quotation still run in Python;
-they produce the bodies the core abstracts. Writing them in SKIjack is
-skijack's own open item (DESIDERATA §6, item 5), and when it lands the
-fixed point extends from abstraction to source text.
+**Built for SKIjack-0: the front end** (skijack's `selfhost-front-end`
+branch, `python/skijack/selfhost/`; `tests/front0_check.sh`). SKIjack-0
+is the subset of SKIjack with types, equations, definitions, cases,
+cells, picks and lambdas, and skijack's `docs/SKIJACK-0.md` specifies its
+compilation term for term. The front end is a SKIjack-0 program: it
+lexes, parses, desugars, lifts lambdas, ties recursion -- one fixpoint
+per group of mutually recursive equations, which skijack's expander
+learned on the same branch -- and abstracts with the core's `abs`. Python
+compiles it to one term, `front`; Avon runs it in share mode on a
+program's 7-bit character codes.
+
+- **The fixed point from source text.** `front` applied to its own
+  36,375-character source gives all 433 of its names their terms, hash
+  for hash with Python's, in 1,262,327,332 contractions, 16 seconds.
+  The first version took 2,176,424,461 for 375 names; §6.7's profile
+  found where.
+- **Agreement.** It compiles a thousand random SKIjack-0 programs as
+  skijack's specification does, and accepts or refuses 67 programs at
+  the subset's edges (duplicate names, cycles, newlines before a closing
+  bracket, shadowed recursion) as it does.
+- **Sharing is required.** `front` passes its tables and environment to
+  many callers; a reducer that copies recomputes each at every use, so
+  the check runs in share mode, and the non-sharing reference reducer
+  runs only the lexer (skijack's `tests/test_front0.py`).
+
+The full language's front end -- cores, macros, signatures, quotation,
+scries, namespace literals and the type checker -- still runs in Python.
+Next come the whole language's front end, checked on the corpus, and jets
+for the front end's hot equations.
 
 ### 20.4 What else the analogy imports
 

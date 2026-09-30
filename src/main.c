@@ -57,7 +57,9 @@
  *  --jet-floor=N (atoms, default 8), --jet-check=N (check
  *  every Nth fire against the unjetted run, §6.6), --no-jets,
  *  --interp=FILE (interpreters.tsv: interpreter jets, §7; needs --jets, and
- *  takes the constructors' terms from the first --jets= dictionary).
+ *  takes the constructors' terms from the first --jets= dictionary),
+ *  --profile=NAMES (share mode: each contraction charged to the named term
+ *  whose code it runs, reported on stderr, §6.7).
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -84,6 +86,7 @@ typedef struct {
     const char *jet_table;        /* lean-ski's jet file, or NULL */
     const char *plan;             /* lean-ski's probe plan, or NULL */
     uint64_t    jet_floor;
+    const char *profile;          /* --profile: a names file, or NULL */
     const char *file;
 } args;
 
@@ -98,7 +101,8 @@ static int usage(void) {
         "       avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [--plan=PLAN]\n"
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
-        "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets)\n"
+        "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
+        "        --profile=NAMES)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... MANIFEST...\n"
         "       avon scry [--log=DIR] [--jets=DICT [--interp=FILE]] [--jet-check=N]\n"
@@ -129,6 +133,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->njets = 0;
     g->ctors = 0;
     g->interp = NULL;
+    g->profile = NULL;
     g->jet_table = NULL;
     g->plan = NULL;
     g->jet_floor = 8;
@@ -158,6 +163,7 @@ static bool parse_args(int argc, char **argv, args *g) {
             g->ctors = v;
         }
         else if (strcmp(s, "--no-jets") == 0)        g->o.jets = false;
+        else if (strncmp(s, "--profile=", 10) == 0 && s[10]) g->profile = s + 10;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
             g->o.interp_jets = true;
@@ -255,6 +261,33 @@ static av_arena *new_arena(const args *g, uint32_t cap) {
 }
 
 /* Reduce one term and print "STATUS steps term" (sep between). */
+/*  A profile of t (§6.7) named by a names file, `kind TAB name TAB hash`
+ *  per line, as census --names reads. */
+static av_profile *profile_load(const char *path, const av_arena *a, uint32_t t) {
+    FILE *f = fopen(path, "rb");
+    if (!f) { perror(path); return NULL; }
+    av_profile *p = av_profile_new();
+    char line[4096];
+    bool ok = p != NULL;
+    while (ok && fgets(line, sizeof line, f)) {
+        char *t1 = strchr(line, '\t'), *t2 = t1 ? strchr(t1 + 1, '\t') : NULL;
+        if (!t2) continue;
+        *t1 = *t2 = '\0';
+        t2[1 + strcspn(t2 + 1, "\n")] = '\0';
+        if (!av_profile_name(p, t2 + 1, t1 + 1)) {
+            fprintf(stderr, "avon: %s: bad hash %s\n", path, t2 + 1);
+            ok = false;
+        }
+    }
+    fclose(f);
+    if (ok && !av_profile_begin(p, a, t)) {
+        fprintf(stderr, "avon: out of memory profiling\n");
+        ok = false;
+    }
+    if (!ok) { av_profile_free(p); return NULL; }
+    return p;
+}
+
 static int run_one(const args *g, const char *src, size_t len, char sep) {
     av_arena *a = new_arena(g, 1u << 16);
     if (!a) return 1;
@@ -271,7 +304,23 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_arena_free(a);
         return 1;
     }
-    av_result r = av_reduce(a, t, &g->o);
+    av_opts o = g->o;
+    av_profile *prof = NULL;
+    if (g->profile && o.strategy != AV_SHARE) {
+        fprintf(stderr, "avon: --profile charges share-mode contractions only\n");
+        av_arena_free(a);
+        return 1;
+    }
+    if (g->profile && !(prof = profile_load(g->profile, a, t))) {
+        av_arena_free(a);
+        return 1;
+    }
+    o.profile = prof;
+    av_result r = av_reduce(a, t, &o);
+    if (prof) {
+        av_profile_report(prof, stderr, SIZE_MAX);
+        av_profile_free(prof);
+    }
     if (g->njets || g->ctors)
         fprintf(stderr, "jets: %u registered (%ld constructors found), %llu fired "
                 "(%llu interpreter)%s\n",

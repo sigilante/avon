@@ -20,6 +20,14 @@ bool     hash_all(const av_arena *a, uint32_t t, nmap *m);
 
 uint32_t jet_find(const av_arena *a, uint64_t digest);
 
+/*  The profile's hooks (profile.c): charge one contraction of combinator
+ *  c, whose partial applications are spine[-1] .. spine[-k], innermost
+ *  first; follow a collection. */
+void     profile_charge(av_profile *p, const uint32_t *spine, unsigned k, ski_leaf c);
+void     profile_remap(av_profile *p, const av_gc *g);
+/*  A redex root rewritten in place is no longer loaded code. */
+void     profile_rewrote(av_profile *p, uint32_t node);
+
 /*  A fresh instance of jet id's residual over args[0 .. arity-1].  The
  *  caller has reserved jets[id].nodes nodes, so this never collects.
  *  With fresh_jets, the template's jet nodes are copied too, so a share-
