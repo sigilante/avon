@@ -333,23 +333,24 @@ count and the best user time, and fails if an answer is not True.
 
 ## The cost of a step
 
-With templates and data jets a step still costs about 400 instructions, at
-4.6 instructions a cycle: Queens2's heap is 0.5 MB and PermSort's 67 MB,
-and each takes about 25 ns a step, so the cost is instructions, not
-memory. A template whose body is one node, written in place with nothing
-allocated (`M M`, M = `S I I` with the template `v0 v0`), took 228
-instructions a fire; pure SKI takes 130 a contraction.
+With templates and data jets a step cost about 570 instructions, at 4.6
+instructions a cycle: Queens2's heap is 0.5 MB and PermSort's 67 MB, and
+each took about 30 ns a step, so the cost is instructions, not memory. A
+template whose body is one node (`M M`, M = `S I I` with the template
+`v0 v0`) took 314 instructions a fire; pure SKI takes 130 a contraction.
 
-Avon `instance-cost` (committed below), each change measured by
-instructions retired (`/usr/bin/time -l`), then user CPU, best of five:
+Avon `aeae3c9` (branch `instance-cost`), each change measured by
+instructions retired (`/usr/bin/time -l`, deterministic), then user CPU,
+best of five:
 
-| change | instructions a step (Queens2, data jets) |
-|---|---:|
-| data jets as committed (`c065aa4`) | 470 |
-| allocation inlined where `ensure()` reserved; the root written over the redex root | 470 → 470 (time −6%, −3% on OrdList) |
-| the instance loop without reloads or a branch per operand | 470 → 424 |
-| `try_interp` called only for jets with an interpreter's role | 424 → 424 (−45 on the one-node fire) |
-| the scratch sized at load; the instance builder inlined | 424 → 401 |
+| change | instructions a step, Queens2 with data jets | a one-node fire |
+|---|---:|---:|
+| data jets as committed (`c065aa4`) | 568 | 314 |
+| allocation inlined where `ensure()` reserved | 511 | 298 |
+| the root application written over the redex root | 512 | 272 |
+| the instance loop without reloads or a branch per operand | 470 | 283 |
+| `try_interp` called only for jets with an interpreter's role | 424 | 230 |
+| the scratch sized at load; the instance builder inlined | 401 | 193 |
 
 | program | before, s | after, s |
 |---|---:|---:|
