@@ -19,6 +19,10 @@ make check              # unit tests under ASan and UBSan; also build/dbg/avon
 build/avon reduce --strategy=copy --whnf tests/fixtures/t0.ski
 ```
 
+`docs/RUNTIME.md` is the user's guide: every command, option, input file
+and check. `docs/BENCHMARK.md` has the measurements and the commits they
+were taken at.
+
 `avon reduce` reads a term in the printed form of `aviary_kernel.terms.pretty`
 and prints the status, the contraction count, and the term reached.
 `--strategy=copy` reproduces the reference host's contraction counts, and

@@ -7,7 +7,8 @@
  *  - Where the key meets its arguments in share mode the body is
  *    instantiated, one step, and the normal form is the unjetted one.
  *  - A body that does not abstract to its key is refused, and the term runs
- *    as pure SKI; an η-template, an open body and a leaf key are skipped.
+ *    as pure SKI; an η-template, an open body, a leaf key and a template of
+ *    more than 32 formals are skipped.
  *  - Copy mode ignores templates: its counts are the unjetted ones.
  *  - Short of its arguments the key's term is entered and its node stays a
  *    jet node, not demoted: the next full application of it fires.
@@ -42,8 +43,8 @@ static void tdir(char dir[64], const char *const *lines, int n,
     snprintf(path, sizeof path, "%s/templates.tsv", dir);
     FILE *f = fopen(path, "w");
     for (int i = 0; i < n; i++) {
-        char key[128], k[8], formals[64], body[256], h[27];
-        CHECK(sscanf(lines[i], "%127[^|]|%7[^|]|%63[^|]|%255[^\n]", key, k, formals, body) == 4);
+        char key[128], k[8], formals[256], body[256], h[27];
+        CHECK(sscanf(lines[i], "%127[^|]|%7[^|]|%255[^|]|%255[^\n]", key, k, formals, body) == 4);
         hash_of(key, h);
         fprintf(f, "%s\ttest\tt%d\t%s\t%s\t%s\n", h, i, k, formals, body);
     }
@@ -148,14 +149,20 @@ TEST(eta_open_and_leaf_templates_are_skipped) {
     char b_hash[27], eta[128];
     hash_of(B_KEY, b_hash);
     snprintf(eta, sizeof eta, B_KEY "|1|0|`#%s v0", b_hash + 10);
-    const char *lines[3] = { eta, "K|1|0|v1", "K|2|0,1|v0" };
+    /* and one of 33 formals, past the 32 a fire takes: skipped, not refused */
+    char wide[512];
+    size_t at = (size_t)snprintf(wide, sizeof wide, "K|33|");
+    for (int i = 0; i < 33; i++)
+        at += (size_t)snprintf(wide + at, sizeof wide - at, i ? ",%d" : "%d", i % 32);
+    snprintf(wide + at, sizeof wide - at, "|v0");
+    const char *lines[4] = { eta, "K|1|0|v1", "K|2|0,1|v0", wide };
     const char *refs[1] = { B_KEY };
     char d[64];
-    tdir(d, lines, 3, refs, 1);
+    tdir(d, lines, 4, refs, 1);
     outcome jet = run(B_KEY " f g x", d, AV_SHARE, false, 1000, 1u << 10);
     CHECK_EQ(jet.accepted, 0);
     CHECK_EQ(jet.refused, 0);
-    CHECK_EQ(jet.skipped, 3);
+    CHECK_EQ(jet.skipped, 4);
     CHECK_EQ(jet.tmpl_calls, 0);
     rmdir_all(d);
 }

@@ -55,7 +55,8 @@
  *                                     calls file through DIR/abs.skit, or its
  *                                     jet, checked against Python's by hash
  *      avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]
- *                  [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE
+ *                  [--templates=DIR] [--names=FILE]... [--fuel=N] [--max-nodes=N]
+ *                  DIR SOURCE
  *                                     the SKIjack-0 front end (docs/DESIGN.md
  *                                     §20.3) on SOURCE: DIR/front.skit and the
  *                                     input's constructors; each name and its
@@ -74,7 +75,10 @@
  *  --interp=FILE (interpreters.tsv: interpreter jets, §7; needs --jets, and
  *  takes the constructors' terms from the first --jets= dictionary),
  *  --profile=NAMES (share mode: each contraction charged to the named term
- *  whose code it runs, reported on stderr, §6.7).
+ *  whose code it runs, reported on stderr, §6.7), --templates=DIR (share
+ *  mode: DIR/templates.tsv and DIR/template_terms.tsv, supercombinator
+ *  templates checked against the terms and instantiated, §6.9;
+ *  docs/RUNTIME.md is the user's guide).
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -381,7 +385,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
                 r.jet_fault ? ", A CHECK FAILED" : "");
     if (g->templates)
         fprintf(stderr, "templates: %ld accepted, %ld refused, %ld skipped, %ld unbound; "
-                "%llu instantiations among the steps\n", tc[0], tc[1], tc[2], tc[3],
+                "%llu instantiations among the contractions\n", tc[0], tc[1], tc[2], tc[3],
                 (unsigned long long)r.tmpl_calls);
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE && av_print(a, r.term, g->budget, &b);

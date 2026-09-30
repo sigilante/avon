@@ -706,7 +706,8 @@ long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
  *  open body, from skijack's templates.tsv and template_terms.tsv, keyed
  *  by the §5 hash of the SKI term it compiles to.  Load them after every
  *  dictionary and before av_jets_match, then bind them to the matched
- *  term; nothing may collect between.  A template is kept only if its body
+ *  term; nothing may collect between.  A template of more than
+ *  AV_JET_ARITY_MAX formals is skipped.  A template is kept only if its body
  *  abstracts to its key, and fires only on a node whose term is that key,
  *  compared as trees in a hash-consed table, never by hash alone.  With
  *  av_opts.templates, share mode instantiates the body over the arguments

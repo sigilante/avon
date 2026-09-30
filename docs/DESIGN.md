@@ -859,7 +859,7 @@ of the 2.66 million contractions, whose counts measure the budget.
   45,353 each alone and nothing together: the head they belong to fires.
 - **Nested fires come from residuals.** An outer jet's residual carries
   the inner jets its body calls, and they fire next: Y's residual fires L
-  14,793 times, L's fires KM 16,567. No fire in either mode came from a
+  14,792 times, L's fires KM 16,567. No fire in either mode came from a
   term entered after a miss, and the corpora miss 61 times in all.
 - **Share mode can gain fires.** L fires 9,899 times together and 3,916
   alone, Y 1,058 and 453: an instance builds afresh what sharing built

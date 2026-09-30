@@ -256,7 +256,7 @@ struct av_tmplset {
     nmap     key_jet;           /* canonical key node -> jet id + 1 */
     uint64_t collections;       /* the arena's, at load: the table's node
                                    ids hold only until the next one */
-    long     accepted, refused, eta, open, duplicate, unbound;
+    long     accepted, refused, eta, open, duplicate, wide, unbound;
 };
 
 static bool global_push(av_arena *a, uint32_t node, uint32_t *ix) {
@@ -521,9 +521,10 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         uint64_t key;
         if (!av_hash_parse(fld[0], &key)) { msg = "malformed hash in templates.tsv"; goto fail; }
         unsigned long arity = strtoul(fld[3], NULL, 10);
+        if (arity > AV_JET_ARITY_MAX) { ts->wide++; continue; }   /* past the cap */
         uint32_t formals[AV_JET_ARITY_MAX];
         unsigned nf = 0;
-        bool fok = arity > 0 && arity <= AV_JET_ARITY_MAX;
+        bool fok = arity > 0;
         for (char *q = fld[4]; fok && *q; ) {
             char *end;
             unsigned long v = strtoul(q, &end, 10);
@@ -614,7 +615,7 @@ void av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,
                          long *skipped, long *unbound) {
     *accepted = ts->accepted;
     *refused = ts->refused;
-    *skipped = ts->eta + ts->open + ts->duplicate;
+    *skipped = ts->eta + ts->open + ts->duplicate + ts->wide;
     *unbound = ts->unbound;
 }
 
