@@ -1,10 +1,10 @@
 # Jets under hiding
 
-> **Status (2026-09-30).** Being built: milestones 1–5 of §9 are done.
+> **Status (2026-09-30).** Being built: milestones 1–6 of §9 are done.
 > The circuit exists as data in Lean and in Rust, the two agree constraint
 > for constraint, its honest proofs verify under hiding, and its soundness
-> is proved (`compJExport_sound`); its completeness and zero knowledge
-> (milestones 6–7) are not yet. It joins two circuits that lean-ski has proved separately, the
+> (`compJExport_sound`) and completeness (`compJ_complete_log`) are
+> proved; its zero knowledge (milestone 7) is not yet. It joins two circuits that lean-ski has proved separately, the
 > composed statement in zero knowledge and the supercombinator jet
 > circuit, into one circuit whose proofs hide the witness and instantiate
 > licensed templates. Each claim below about
@@ -303,7 +303,7 @@ composed machine with instantiations at licensed roots, within
 tables at those heights, the padding rows inert, and the program and
 segment tables the public ones (as `comp_completeG_log` returns them). It
 carries `jet_complete`'s hypotheses on the jet table too: nonempty, and
-each provider table at most `2^27` rows.
+each provider table at most `2^27` rows (proved, milestone 6).
 
 *Obligation, the table check:* `checkCJ` and its soundness, the jetted
 composed checker. `lake exe composed check` decides `AcceptsC`, which has
@@ -425,7 +425,20 @@ the tree; its height is a public budget like POP's.
    The checker `checkCJ` (`checkCJ_sound`, `lake exe composed check-cj`)
    accepts the honest tables of `split8`, `and` and `or` and rejects
    tampered ones.
-6. **Completeness.** `compJ_complete_log`.
+6. **Completeness.** *Done, 2026-09-30,* in lean-ski's
+   `Ski/Circuit/CompJComplete.lean`, axiom-clean. The honest tables of a
+   jetted run (`CRun`) are the jet circuit's CPU columns, with the restart
+   rows' selectors cleared and the segment counter and next root added.
+   The CPU satisfies its AIR (`cpuCJ_sat`) and sends as the jet circuit's
+   CPU off the memory, segment and blinding buses (`cpuCJ_jetSends`).
+   Every blinded table's flags are clear, so it sends as its base
+   (`sends_withBlocks_quiet`), and the ten tables balance bus by bus on
+   the jet circuit's lemmas (`balancedCJ`). `compJ_complete_log`: a run
+   within `2^R` rows, `2^Lm` cells and `2^Lp`, `2^Li` POP and INSTW rows,
+   all at most `2^20`, with roots licensed over the filled heap, gives
+   tables `compJAirs` accepts at those heights, with the public program
+   and segment tables, decoding back to the memory and the run;
+   `compJStmt_complete_log` takes `jetStmtC` in place of the license.
 7. **Zero knowledge.** `compJ_transcript`.
 8. **Avon.** Public budgets, the composed machine, and
    `zk-jet-witness-check`.
