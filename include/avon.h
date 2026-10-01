@@ -338,6 +338,8 @@ typedef struct {
     uint64_t    jet_check;      /* check every Nth fire against the
                                    unjetted run (§6.6); 0 never */
     struct av_census *census;   /* copy mode: record calls; NULL off */
+    struct av_trace *trace;     /* copy mode: observe the head run (§22);
+                                   NULL off                               */
     struct av_profile *profile; /* share mode: charge each contraction to
                                    a named term (§6.7); NULL off */
     struct av_jetstats *jetstats;   /* count each jet's fires, misses and
@@ -576,6 +578,10 @@ bool av_prefix(const av_arena *a, uint32_t t, size_t budget, av_buf *out);
 /*  Parse the prefix form: S, K, I, and ` before an application's function
  *  and argument, surrounding whitespace allowed.  AV_NONE on anything else.
  */
+/*  The DAG form, `dag <id>=<rhs> ... @<root>` on one line (docs/RUNTIME.md,
+ *  "Frame traces"): AV_NONE with *msg on anything malformed. */
+uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg);
+
 uint32_t av_parse_prefix(av_arena *a, const char *src, size_t len,
                          const char **err);
 
@@ -812,6 +818,35 @@ bool        av_templates_fix(const av_tmplset *ts);
  *  it exists only where these calls made it.
  */
 bool av_words_on(av_arena *a);
+
+/*  ------------------------------------------------------------ frame traces
+ *
+ *  An observer of copy mode's head run (docs/DESIGN.md §22), for the pure S
+ *  calculus with one opaque atom, the passenger: before each S contraction
+ *  a line `n L positions d D event arity` (docs/RUNTIME.md, "Frame
+ *  traces"), frames dumped as a node table at chosen steps, and, at the
+ *  end, the halt and the records.  It decides nothing.  Set av_opts.trace
+ *  with av_opts.no_collect, strategy copy and whnf_only.
+ */
+typedef struct av_trace av_trace;
+typedef struct {
+    const char *kind;           /* HALT-X HALT-B OPEN FUEL -              */
+    size_t      nconf;          /* confirmed records                      */
+    int64_t     last_restart;   /* -1: none                               */
+} av_trace_summary;
+/*  out NULL: a silent pass (steps and records only, for a second pass). */
+av_trace *av_trace_new(av_arena *a, const char *passenger, bool steps_out, FILE *out);
+void      av_trace_free(av_trace *t);
+/*  Whether every node of the term is S, the passenger, or an application. */
+bool      av_trace_check(av_trace *t, const av_arena *a, uint32_t root);
+bool      av_trace_dump_at(av_trace *t, const uint64_t *steps, size_t n);
+void      av_trace_dump_halt(av_trace *t, bool on);
+bool      av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t steps,
+                       uint32_t term, size_t conf, bool want_records, av_trace_summary *sum);
+/*  The confirmed records' steps n and n+1, for a second pass; malloc'd. */
+size_t    av_trace_record_steps(const av_trace *t, size_t conf, uint64_t **out);
+uint64_t  av_trace_steps_seen(const av_trace *t);
+void      av_trace_flush(av_trace *t);
 /*  Y unfolded in one step (docs/DESIGN.md §6.11): call before
  *  av_templates_load, which then registers Curry's Y, found in the loaded
  *  term and the templates' globals by tree identity.  With av_opts.fix,

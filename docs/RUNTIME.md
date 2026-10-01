@@ -255,6 +255,62 @@ prover (§17); `--jet-table=JETS` adds lean-ski's jet file for the term
 (§18.1), `--plan=PLAN` probe segments. `--rows=N` and `--cells=N` are
 budgets. `make witness-check` runs the corpus through lean-ski.
 
+## Frame traces: `--trace-frame`, `enum`
+
+For the pure-S paper's hider census (§22): an observation of copy mode's
+head run on a term of S and one opaque atom, the passenger (`X` unless
+`--passenger=NAME`). Verdicts and certificates stay with the census's
+scripts; `tests/hider/client.py` runs the census through Avon.
+
+```sh
+echo "S (S S) (S S) S X" | build/avon reduce --trace-frame --fuel=600
+build/avon enum 12 | sed 's/$/ X/' | build/avon batch --trace-frame=summary --fuel=600 \
+    --records --frame-dump=records,halt
+```
+
+`--trace-frame` runs copy mode, head run only, never collecting, whatever
+`--strategy` and `--whnf` say; a term with K, I or another atom is refused.
+Each term gives one block:
+
+```
+> 1                       the term's input line
+0 4 1 0 0 - 1             per step, before it: n L positions d D event arity
+...
+4 3 3 2 0 o 0
+. WHNF 5 OPEN             status, contractions, exit: HALT-X HALT-B OPEN FUEL
+R 3 9 ...                 records (--records), when the run reaches the horizon
+C 3 9 ...                 the confirmed ones: n + CONF <= H (CONF 150)
+d 7=X                     dumped nodes, once each, children first:
+d 9=5.7                   S, X, or <left>.<right>
+f 2 9 10                  a dumped frame: its step, then its items from the x-seat
+$                         the block ends
+```
+
+- The frame is the S head's arguments, the first at the x-seat; positions
+  count from the end, 1 the last item; `-` none.
+- With exactly one X-headed item, the passenger P: `d = pos(P) - 1`, the
+  stack depth, and `D` = the front items with sigma >= 1 plus the stack
+  items with sigma >= 2, sigma(u) the X-headed items among u's head's
+  arguments; otherwise `- -`.
+- The event is the front-most passenger's seat: `o` the x-seat (OPEN: the
+  census stops here; Avon takes one more step, to X at the head), `y` the
+  y-seat, `z` the z-seat, `-` deeper. The arity is the front item's
+  argument count (1 shed, >= 2 free at a y-step). A restart is a line with
+  L = 3 and position 1.
+- A halt (L < 3) is HALT-X with an X-headed item, HALT-B without.
+- `--trace-frame=summary` omits the per-step lines.
+- `--frame-dump=` takes steps and the keywords `records` (each confirmed
+  record n and n+1: a second pass), `halt` (the final frame at a halt) and
+  `last-restart`.
+- `reduce` and `batch` also read the DAG form, `dag 0=S 1=X 2=0.1 ... @2`
+  on one line, ids local to the line: a dumped term handed back without
+  unfolding it.
+
+`avon enum N` prints every closed S-term of size N in the census's order
+(`--start=K --count=M` for a slice; progress on stderr every 10⁵); `avon
+enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
+`S (S (S (S S) (S a))) q` for every ordered pair of the file's terms.
+
 ## The files Avon reads
 
 | file | what it is | written by |
@@ -280,6 +336,7 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 |---|---|---|
 | `make check` | every unit test, under ASan and UBSan | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
+| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`) |
 | `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | skijack |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |
 | `make jet-witness-check` | the same, jetted (§18) | lean-ski |

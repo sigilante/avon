@@ -2715,3 +2715,52 @@ was read in the source; lessons for Avon are marked as such.*
   jammed kernel. Avon takes NockApp's form (§20.1): one term, not events,
   since Avon has no boot sequence beyond applying the pill to its subject.
   Its kernel is Arvo's door, pulled Nock 9's way (§9).
+
+## 22. Frame traces for the hider census
+
+**Avon observes copy mode's head run for the pure-S paper's hider census;
+it decides nothing.** The census (`fixed_points_hider.py`: `run`,
+`descend`, `classify`) runs `f X`, X an opaque passenger, and classifies `f`
+by the fate of the X-headed items. It needs more than an endpoint: the frame
+length and the passenger's seat at every step, counts its defect and y-step
+lemmas use, and the frames at confirmed record times for the fold
+certificate and the descent. `--trace-frame` gives these (`docs/RUNTIME.md`,
+"Frame traces"); the verdicts, the fold lookup and the descent stay in the
+census's Python, called unchanged (`tests/hider/client.py`). So Avon's output
+can widen the evidence or exhibit a term, and a certified exit is a proof
+only through the census's own certificate.
+
+**The frame is copy mode's argument slots.** The census's frame `[u_1 .. u_L]`
+is the S head's arguments, `u_1` at the x-seat; a step pops `(x, y, z)` and
+pushes `spine(x) ++ [z, y·z]`. That is `run_copy`'s S contraction on the
+slots `stk[base..top)`, `u_1 = stk[top-1]`, so the trace is a hook beside
+the census's (§6.7), called before each S contraction of the head run.
+Positions count from the end, 1 the last item.
+
+**It costs what the run costs.** These terms become DAGs within a few
+hundred steps, and anything recursive over paths is exponential on them. A
+trace run never collects, so every application's children are older than
+it, and the per-node facts -- X-headed, contains X, sigma (the X-headed
+items among the head's arguments) and arity -- are filled in index order
+on demand. A step changes only the slots above its top three, so prefix
+counts over the slots are recomputed only there; the passengers are found
+by binary search on them, and the defect is a difference of two prefixes.
+A 10⁵-step run is linear (`tests/test_trace.c`).
+
+**Frames go out as a node table, shared.** A frame printed as a tree would
+unfold the DAG; a dump prints each node once per term, children first, and
+the frame as node ids, and the DAG input form (`dag ... @root`) takes a
+record mint back for the descent's sub-run in its size. Dumps at the
+confirmed records need the records first, so Avon runs such a term twice:
+copy mode is deterministic and these runs never collect, so the node ids
+of the two passes are the same.
+
+**Parity, 2026-09-30** (`make hider-check`, the paper's scripts at
+`HIDER_SCRIPTS`). `avon enum` gives the census's closed terms in its order
+for every size to 12; on all 82,500 closed terms of size 1 to 12 (the
+58,786 of size 12 among them), horizon 600, Avon's trace of `f X` equals
+the census's run line for line -- length and X-headed positions against
+its `hist`, the depth, defect, event and front arity against the
+definitions -- and its exit and step; the census through Avon gives the
+census's verdict, exit and trail; and the five named cases hold, through
+both.

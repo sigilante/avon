@@ -370,6 +370,9 @@ static av_status run_copy(R *r) {
             if (k == 0 || r->top - r->base < k) break;
             uint32_t x;
             if (c == SKI_S) {                   /* S x y z -> x z (y z) */
+                if (o->trace && r->nfr == 0 &&
+                    !trace_step(o->trace, a, r->stk, r->base, r->top, r->steps))
+                    return AV_INTERRUPTED;      /* the trace cannot follow */
                 if (!ensure(r, 1)) return AV_SIZE;
                 x = r->stk[r->top - 1];
                 uint32_t y = r->stk[r->top - 2], z = r->stk[r->top - 3];
@@ -835,6 +838,7 @@ av_opts av_opts_default(void) {
         .compile_jets = false,
         .jet_check = 0,
         .census    = NULL,
+        .trace     = NULL,
         .profile   = NULL,
         .jetstats  = NULL,
         .templates = false,

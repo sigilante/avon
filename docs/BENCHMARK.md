@@ -504,6 +504,34 @@ Compiled with skijack's inlining, the geometric means are 2.04, 1.98 and
 --skijack ~/skijack` (its `fix` mode); the cycle from `e74e581`'s binary
 with `--templates=DIR --data --knot`.
 
+## The hider census through frame traces
+
+The pure-S paper's passenger census (`fixed_points_hider.py census 12`)
+against the same census with each head run done by `avon --trace-frame`
+and the census's own verdict code and fold certificate called unchanged
+(`tests/hider/client.py`, DESIGN §22). Avon `frame-trace`; the census at
+horizon 600, confirmation 150, depth 4; user time, one run each.
+
+| sizes | the census in Python | through Avon | verdicts |
+|---|---:|---:|---|
+| 1..12 (82,500 terms) | 164 s, 213 MB | 42 s, 195 MB | the same: FROZEN-c 21,258, HALT-X 38,307, OPEN 22,930, RIDE>FROZEN-c 3, RIDE>HALT-X 2 |
+| 1..13 (290,512 terms) | -- | 173 s | FROZEN-c 86,426, HALT-X 131,335, OPEN 72,741, RIDE>FROZEN-c 4, RIDE>HALT-X 6 |
+
+- The verdicts are not only the same in total: `make hider-check` checks
+  every term's verdict, exit and trail against the census's, and every
+  trace line against its run.
+- **Where the time goes.** Avon alone traces all 208,012 terms of size 13,
+  with every frame the census could ask for, in 16.6 s; the client's 131 s
+  for that size is mostly Python reading those frames -- 6.1 GB of output,
+  since every confirmed record's frames are dumped and the census decides
+  at the first, nearly always. Dumping only the first record's frames, and
+  asking for more when the census goes on, is the next lever.
+- **Sizes 15 and 16.** At size 13's rate, 0.63 ms a term, size 15's
+  2,674,440 terms would take about 28 minutes and size 16's 9,694,845 about
+  1.7 hours through the client as it is; Avon's own share, about 0.08 ms a
+  term, would be 3.5 and 13 minutes. `avon enum` produces size 15 in
+  0.6 s, never holding size 15 itself. These are estimates, not runs.
+
 ## Data jets on the corpus
 
 Avon `f414272`, the corpus export used for "Templates on

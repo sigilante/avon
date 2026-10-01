@@ -117,6 +117,11 @@ bool compile_check(av_arena *a, uint32_t node, const uint32_t *argv, uint32_t ou
  *  `avail` arguments at the head. */
 void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail);
 
+/*  The frame trace's hook (trace.c): before an S contraction of the head
+ *  run, the slots stk[base..top).  False if the trace cannot follow. */
+bool trace_step(av_trace *t, const av_arena *a, const uint32_t *stk, size_t base,
+                size_t top, uint64_t step);
+
 /*  The persistent arena (pma.c): an in-place write of node i marks its
  *  chunk; growth maps more of the reservation; a collection copies back
  *  into the mapping and marks everything; freeing unmaps. */

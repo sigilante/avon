@@ -116,3 +116,104 @@ done:
     free(lv.open);
     return msg ? AV_NONE : out;
 }
+
+/*  ------------------------------------------------------------- the DAG form */
+
+/*  `dag <id>=<rhs> ... @<root>`: a shared graph on one line, the form frame
+ *  dumps print (docs/RUNTIME.md, "Frame traces").  <rhs> is a leaf name (S,
+ *  K, I or an atom) or <l>.<r>, two ids defined before it; ids are any
+ *  numbers, local to the line.  The graph is rebuilt node for node, so a
+ *  term the tree printer would unfold exponentially is read in its size. */
+uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg) {
+    size_t i = 0;
+    while (i < len && (src[i] == ' ' || src[i] == '\t')) i++;
+    if (len - i < 4 || memcmp(src + i, "dag ", 4) != 0) { *msg = "not the dag form"; return AV_NONE; }
+    i += 4;
+    size_t cap = 1024;                      /* open addressing: id -> node */
+    uint64_t *key = calloc(cap, sizeof *key);
+    uint32_t *val = malloc(cap * sizeof *val);
+    size_t used = 0;
+    uint32_t root = AV_NONE;
+    *msg = NULL;
+    if (!key || !val) { *msg = "out of memory"; goto out; }
+#define FIND(id, slot)                                                         \
+    do {                                                                       \
+        slot = (size_t)(((id) + 1) * 0x9e3779b97f4a7c15u >> 20) & (cap - 1);   \
+        while (key[slot] && key[slot] != (id) + 1) slot = (slot + 1) & (cap - 1); \
+    } while (0)
+    for (;;) {
+        while (i < len && (src[i] == ' ' || src[i] == '\t')) i++;
+        if (i >= len || src[i] == '\n' || src[i] == '\r') break;
+        if (src[i] == '@') {
+            i++;
+            uint64_t id = 0;
+            size_t s = i;
+            while (i < len && src[i] >= '0' && src[i] <= '9') id = id * 10 + (uint64_t)(src[i++] - '0');
+            if (i == s) { *msg = "a root id expected after '@'"; goto out; }
+            size_t slot;
+            FIND(id, slot);
+            if (!key[slot]) { *msg = "the root is not defined"; goto out; }
+            root = val[slot];
+            continue;
+        }
+        uint64_t id = 0;
+        size_t s = i;
+        while (i < len && src[i] >= '0' && src[i] <= '9') id = id * 10 + (uint64_t)(src[i++] - '0');
+        if (i == s || i >= len || src[i] != '=') { *msg = "<id>= expected"; goto out; }
+        i++;
+        uint32_t node;
+        if (i < len && src[i] >= '0' && src[i] <= '9') {
+            uint64_t l = 0, r = 0;
+            while (i < len && src[i] >= '0' && src[i] <= '9') l = l * 10 + (uint64_t)(src[i++] - '0');
+            if (i >= len || src[i] != '.') { *msg = "<l>.<r> expected"; goto out; }
+            i++;
+            size_t s2 = i;
+            while (i < len && src[i] >= '0' && src[i] <= '9') r = r * 10 + (uint64_t)(src[i++] - '0');
+            if (i == s2) { *msg = "<l>.<r> expected"; goto out; }
+            size_t sl, sr;
+            FIND(l, sl);
+            FIND(r, sr);
+            if (!key[sl] || !key[sr]) { *msg = "an id used before it is defined"; goto out; }
+            node = av_app(a, val[sl], val[sr]);
+        } else {
+            size_t s2 = i;
+            while (i < len && src[i] != ' ' && src[i] != '\t' && src[i] != '\n' && src[i] != '\r') i++;
+            if (i == s2) { *msg = "a leaf name expected"; goto out; }
+            if (src[s2] == '@' || src[s2] == '`') { *msg = "a reserved leaf name"; goto out; }
+            if (!(i - s2 == 1 && (src[s2] == 'S' || src[s2] == 'K' || src[s2] == 'I')) &&
+                !a->allow_bird_atoms && av_is_bird(src + s2, i - s2)) {
+                *msg = "atom named like a live aviary combinator (§4.3)";
+                goto out;
+            }
+            node = av_leaf(a, src + s2, i - s2);
+        }
+        if (node == AV_NONE) { *msg = "out of memory"; goto out; }
+        if (2 * (used + 1) > cap) {             /* grow the table */
+            size_t ncap = cap * 2;
+            uint64_t *nk = calloc(ncap, sizeof *nk);
+            uint32_t *nv = malloc(ncap * sizeof *nv);
+            if (!nk || !nv) { free(nk); free(nv); *msg = "out of memory"; goto out; }
+            for (size_t k = 0; k < cap; k++) {
+                if (!key[k]) continue;
+                size_t sl = (size_t)(key[k] * 0x9e3779b97f4a7c15u >> 20) & (ncap - 1);
+                while (nk[sl]) sl = (sl + 1) & (ncap - 1);
+                nk[sl] = key[k];
+                nv[sl] = val[k];
+            }
+            free(key); free(val);
+            key = nk; val = nv; cap = ncap;
+        }
+        size_t slot;
+        FIND(id, slot);
+        if (key[slot]) { *msg = "an id defined twice"; goto out; }
+        key[slot] = id + 1;
+        val[slot] = node;
+        used++;
+    }
+#undef FIND
+    if (root == AV_NONE && !*msg) *msg = "no root: '@<id>' expected";
+out:
+    free(key);
+    free(val);
+    return *msg ? AV_NONE : root;
+}

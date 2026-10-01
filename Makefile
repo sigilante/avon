@@ -5,7 +5,8 @@
 # `make probe-witness-check` runs tests/probe_witness_check.sh (the last
 # three need a lean-ski checkout), `make selfhost-check` runs
 # tests/selfhost_check.sh and `make front0-check` runs
-# tests/front0_check.sh (both need a skijack checkout), `make clean`
+# tests/front0_check.sh (both need a skijack checkout), `make hider-check`
+# runs tests/hider_check.sh (needs the pure-S paper's scripts), `make clean`
 # removes build/.  Requires GNU Make 3.81+.
 
 CC      := clang
@@ -28,7 +29,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
 .PHONY: all check clean witness-check jet-witness-check probe-witness-check selfhost-check \
-	front0-check
+	front0-check hider-check
 .SECONDARY:
 
 all: $(BUILD)/avon
@@ -72,6 +73,11 @@ selfhost-check: $(BUILD)/avon
 
 front0-check: $(BUILD)/avon
 	tests/front0_check.sh
+
+# Frame traces against the pure-S paper's hider census (docs/DESIGN.md §22);
+# needs the paper's scripts at $$HIDER_SCRIPTS.
+hider-check: $(BUILD)/avon
+	tests/hider_check.sh
 
 clean:
 	rm -rf $(BUILD)
