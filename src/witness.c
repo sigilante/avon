@@ -269,6 +269,8 @@ static bool run_to_halt(av_witness *w, const av_jettable *jt, const uint32_t *ro
                 hd = resolve(J->root, c, ps);
                 stk = s;
                 if (insts) (*insts)++;
+                w->pops += J->k;
+                w->wcells += J->ncells;
                 continue;
             }
         }
@@ -707,4 +709,276 @@ done:
     free(stk);
     if (msg && err) *err = msg;
     return msg ? AV_NONE : root;
+}
+
+/*  ------------------------------------------- composed statements, jetted */
+
+/*  A line cursor: lines as Rust's str::lines splits them (at \n, a \r
+ *  before it dropped), and space-separated numbers within one. */
+typedef struct { const char *s; size_t len, pos; } lines;
+
+static bool next_line(lines *L, const char **l, size_t *n) {
+    if (L->pos >= L->len) return false;
+    size_t start = L->pos, end = start;
+    while (end < L->len && L->s[end] != '\n') end++;
+    bool nl = end < L->len;
+    L->pos = nl ? end + 1 : end;
+    if (nl && end > start && L->s[end - 1] == '\r') end--;
+    *l = L->s + start;
+    *n = end - start;
+    return true;
+}
+
+/*  `key n0 n1 …`, each number a u32: up to max numbers into out, *k of
+ *  them.  False unless the line is exactly that. */
+static bool nums_line(const char *l, size_t n, const char *key, uint32_t *out, size_t max,
+                      size_t *k) {
+    size_t kl = strlen(key);
+    if (n < kl + 2 || memcmp(l, key, kl) != 0 || l[kl] != ' ') return false;
+    size_t i = kl + 1;
+    *k = 0;
+    for (;;) {
+        size_t start = i;
+        uint64_t v = 0;
+        while (i < n && l[i] >= '0' && l[i] <= '9') {
+            v = v * 10 + (uint64_t)(l[i] - '0');
+            if (v > UINT32_MAX) return false;
+            i++;
+        }
+        if (i == start || *k == max) return false;
+        out[(*k)++] = (uint32_t)v;
+        if (i == n) return true;
+        if (l[i] != ' ') return false;
+        i++;
+    }
+}
+
+/*  A cell's text, `S`, `K`, `I`, `N`, `A f x`, `C x r` or `X n`, as
+ *  bench/plonky3's parse_cell reads it. */
+static bool cell_text(const char *l, size_t n, av_cell *c) {
+    if (n == 1) {
+        switch (l[0]) {
+        case 'S': *c = (av_cell){ AV_CELL_S, 0, 0 }; return true;
+        case 'K': *c = (av_cell){ AV_CELL_K, 0, 0 }; return true;
+        case 'I': *c = (av_cell){ AV_CELL_I, 0, 0 }; return true;
+        case 'N': *c = (av_cell){ AV_CELL_NIL, 0, 0 }; return true;
+        default:  return false;
+        }
+    }
+    uint32_t v[2];
+    size_t k;
+    if (nums_line(l, n, "A", v, 2, &k) && k == 2) { *c = (av_cell){ AV_CELL_APP, v[0], v[1] }; return true; }
+    if (nums_line(l, n, "C", v, 2, &k) && k == 2) { *c = (av_cell){ AV_CELL_CONS, v[0], v[1] }; return true; }
+    if (nums_line(l, n, "X", v, 1, &k) && k == 1) { *c = (av_cell){ AV_CELL_ATOM, v[0], 0 }; return true; }
+    return false;
+}
+
+void av_cstmt_free(av_cstmt *s) {
+    free(s->header);
+    free(s->roots);
+    free(s->cells);
+    memset(s, 0, sizeof *s);
+}
+
+static bool log_ok(uint32_t x) { return x >= 8 && x <= 20; }
+
+bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err) {
+    memset(s, 0, sizeof *s);
+    lines L = { src, len, 0 };
+    const char *l;
+    size_t n, k;
+    uint32_t v[4];
+    const char *msg = "a truncated statement";
+    if (!next_line(&L, &l, &n)) goto fail;
+    if (!((n >= 8 && memcmp(l, "formula ", 8) == 0) || (n >= 10 && memcmp(l, "predicate ", 10) == 0))) {
+        msg = "expected `formula …` or `predicate …`";
+        goto fail;
+    }
+    if (memchr(l, '\0', n)) { msg = "a NUL in the header"; goto fail; }
+    s->header = malloc(n + 1);
+    if (!s->header) { msg = "out of memory"; goto fail; }
+    memcpy(s->header, l, n);
+    s->header[n] = '\0';
+    msg = "a malformed header";
+    if (!next_line(&L, &l, &n) || !nums_line(l, n, "W", v, 1, &k) || k != 1) goto fail;
+    s->w = v[0];
+    if (!next_line(&L, &l, &n)) goto fail;
+    s->log_rows = 11;
+    s->log_mem = 11;
+    if (n >= 4 && memcmp(l, "log ", 4) == 0) {
+        if (!nums_line(l, n, "log", v, 4, &k)) { msg = "a bad `log` line"; goto fail; }
+        if (k == 2 && log_ok(v[0]) && log_ok(v[1]) && !(v[0] == 11 && v[1] == 11)) {
+            s->log_rows = v[0];
+            s->log_mem = v[1];
+        } else if (k == 4 && log_ok(v[0]) && log_ok(v[1]) && log_ok(v[2]) && log_ok(v[3])) {
+            s->log_rows = v[0];
+            s->log_mem = v[1];
+            s->log_pop = v[2];
+            s->log_instw = v[3];
+        } else {
+            msg = "a bad `log` line";
+            goto fail;
+        }
+        if (!next_line(&L, &l, &n)) goto fail;
+    }
+    if (!nums_line(l, n, "bits", v, 1, &k) || k != 1) goto fail;
+    s->nbits = v[0];
+    if (!next_line(&L, &l, &n) || n < 7 || memcmp(l, "roots ", 6) != 0) goto fail;
+    size_t nr = 1;
+    for (size_t i = 6; i < n; i++) nr += l[i] == ' ';
+    s->roots = malloc(nr * sizeof *s->roots);
+    if (!s->roots) { msg = "out of memory"; goto fail; }
+    if (!nums_line(l, n, "roots", s->roots, nr, &s->nroots) || s->nroots == 0) goto fail;
+    if (!next_line(&L, &l, &n) || !nums_line(l, n, "nil", v, 1, &k) || k != 1) goto fail;
+    s->nil = v[0];
+    /* the registers: `hd stk ctr` */
+    if (!next_line(&L, &l, &n) || n + 2 > 64) goto fail;
+    char regs[64] = "r ";
+    memcpy(regs + 2, l, n);
+    if (!nums_line(regs, n + 2, "r", v, 3, &k) || k != 3) goto fail;
+    s->hd0 = v[0];
+    s->stk0 = v[1];
+    s->ctr0 = v[2];
+    if (s->ctr0 > AV_MAX_NODES) { msg = "a heap past the cell budget"; goto fail; }
+    s->cells = calloc(s->ctr0 ? s->ctr0 : 1, sizeof *s->cells);
+    if (!s->cells) { msg = "out of memory"; goto fail; }
+    uint64_t lo = 3, hi = 3 + (uint64_t)s->nbits + s->w;
+    msg = "a truncated statement";
+    for (uint32_t i = 0; i < s->ctr0; i++) {
+        if (!next_line(&L, &l, &n)) goto fail;
+        bool blank = n == 1 && l[0] == 'W';
+        if (blank != (i >= lo && i < hi)) {
+            msg = "the bits and the region are not exactly the blank cells";
+            goto fail;
+        }
+        if (blank) s->cells[i] = (av_cell){ AV_CELL_NIL, 0, 0 };
+        else if (!cell_text(l, n, &s->cells[i])) { msg = "a bad cell"; goto fail; }
+    }
+    if (hi > s->ctr0) {
+        msg = "the bits and the region are not exactly the blank cells";
+        goto fail;
+    }
+    if ((uint64_t)s->nbits + s->w > 256) { msg = "too many private cells"; goto fail; }
+    return true;
+fail:
+    if (err) *err = msg;
+    av_cstmt_free(s);
+    return false;
+}
+
+bool av_cwitness_read(const char *src, size_t len, const av_cstmt *s, av_cell *priv,
+                      const char **err) {
+    lines L = { src, len, 0 };
+    const char *l;
+    size_t n, i = 0, want = (size_t)s->nbits + s->w;
+    while (next_line(&L, &l, &n)) {
+        if (n == 0) continue;
+        if (i == want) { if (err) *err = "a witness with too many lines"; return false; }
+        if (i < s->nbits && n == 1 && l[0] == '1') priv[i] = (av_cell){ AV_CELL_K, 0, 0 };
+        else if (i < s->nbits && n == 1 && l[0] == '0') priv[i] = (av_cell){ AV_CELL_APP, 0, 1 };
+        else if (!cell_text(l, n, &priv[i])) { if (err) *err = "a bad witness cell"; return false; }
+        i++;
+    }
+    if (i != want) { if (err) *err = "a witness with too few lines"; return false; }
+    return true;
+}
+
+av_status av_witness_run_composed(const av_cstmt *s, const av_cell *priv, const av_jettable *jt,
+                                  av_witness *w, size_t **ends, uint64_t *insts,
+                                  const char **err) {
+    memset(w, 0, sizeof *w);
+    *ends = NULL;
+    if (insts) *insts = 0;
+    const char *msg = NULL;
+    av_status st = AV_SIZE;
+    uint32_t *root_of = NULL, *ps = NULL;
+    if (s->log_pop == 0) { msg = "the statement fixes no budgets"; goto out; }
+    size_t max_rows = (size_t)1 << s->log_rows, max_cells = (size_t)1 << s->log_mem;
+    /* the statement's heap, its private cells the witness's */
+    for (uint32_t i = 0; i < s->ctr0; i++) {
+        bool p = i >= 3 && i < 3 + (uint64_t)s->nbits + s->w;
+        if (!put_cell(w, p ? priv[i - 3].tag : s->cells[i].tag, p ? priv[i - 3].a : s->cells[i].a,
+                      p ? priv[i - 3].b : s->cells[i].b)) { msg = "out of memory"; goto out; }
+    }
+    w->loaded = w->nmem;
+    w->hd0 = s->hd0;
+    w->stk0 = s->stk0;
+    if (w->nmem > max_cells) { msg = "the run exceeds the statement's memory"; goto out; }
+    uint32_t maxk = 1;
+    for (size_t j = 0; j < jt->njets; j++)
+        if (jt->jets[j].k > maxk) maxk = jt->jets[j].k;
+    root_of = calloc(w->loaded ? w->loaded : 1, sizeof *root_of);
+    ps = calloc(maxk, sizeof *ps);
+    *ends = calloc(s->nroots, sizeof **ends);
+    if (!root_of || !ps || !*ends) { msg = "out of memory"; goto out; }
+    for (size_t i = 0; i < jt->nroots; i++) {
+        if (jt->root_addr[i] >= w->loaded) { msg = "a root outside the statement's heap"; goto out; }
+        root_of[jt->root_addr[i]] = jt->root_jet[i] + 1;
+    }
+    for (size_t j = 0; j < s->nroots; j++) {
+        uint32_t hd = s->roots[j], stk = s->nil;
+        if (!run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, &msg)) goto out;
+        (*ends)[j] = w->nrows - 1;
+        const av_cell *h = get(w, hd), *t = get(w, stk);
+        if (!h || h->tag != AV_CELL_K || !t || t->tag != AV_CELL_NIL) {
+            msg = "a segment does not end at K over a nil: the witness does not satisfy the statement";
+            st = AV_INTERRUPTED;
+            goto out;
+        }
+    }
+    if (w->pops > ((uint64_t)1 << s->log_pop)) { msg = "the run's pops exceed POP's budget"; goto out; }
+    if (w->wcells > ((uint64_t)1 << s->log_instw)) { msg = "the run's written cells exceed INSTW's budget"; goto out; }
+    st = AV_WHNF;
+out:
+    free(root_of);
+    free(ps);
+    if (st != AV_WHNF) {
+        free(*ends);
+        *ends = NULL;
+        if (err) *err = msg;
+    }
+    return st;
+}
+
+static bool out_cell(av_buf *out, const av_cell *c) {
+    char line[64];
+    int n;
+    switch (c->tag) {
+    case AV_CELL_S:    n = snprintf(line, sizeof line, "S\n"); break;
+    case AV_CELL_K:    n = snprintf(line, sizeof line, "K\n"); break;
+    case AV_CELL_I:    n = snprintf(line, sizeof line, "I\n"); break;
+    case AV_CELL_APP:  n = snprintf(line, sizeof line, "A %u %u\n", c->a, c->b); break;
+    case AV_CELL_NIL:  n = snprintf(line, sizeof line, "N\n"); break;
+    case AV_CELL_CONS: n = snprintf(line, sizeof line, "C %u %u\n", c->a, c->b); break;
+    case AV_CELL_ATOM: n = snprintf(line, sizeof line, "X %u\n", c->a); break;
+    default:           return false;
+    }
+    return out_str(out, line, (size_t)n);
+}
+
+bool av_composed_table(const av_cstmt *s, const av_witness *w, const size_t *ends,
+                       av_buf *out) {
+    char line[64];
+    size_t msize = (size_t)1 << s->log_mem, k = (size_t)1 << s->log_rows;
+    if (w->nrows == 0 || w->nrows > k || w->nmem > msize) return false;
+    if (!out_str(out, s->header, strlen(s->header))) return false;
+    int n = snprintf(line, sizeof line, "\nW %u\n%zu\n", s->w, msize);
+    if (!out_str(out, line, (size_t)n)) return false;
+    const av_cell nil = { AV_CELL_NIL, 0, 0 };
+    for (size_t i = 0; i < msize; i++)
+        if (!out_cell(out, i < w->nmem ? &w->mem[i] : &nil)) return false;
+    n = snprintf(line, sizeof line, "ends %zu\n", s->nroots);
+    if (!out_str(out, line, (size_t)n)) return false;
+    for (size_t j = 0; j < s->nroots; j++) {
+        n = snprintf(line, sizeof line, "%zu\n", j + 1 < s->nroots ? ends[j] : k - 1);
+        if (!out_str(out, line, (size_t)n)) return false;
+    }
+    n = snprintf(line, sizeof line, "%zu\n", k);
+    if (!out_str(out, line, (size_t)n)) return false;
+    for (size_t i = 0; i < k; i++) {
+        const av_row *r = &w->rows[i < w->nrows ? i : w->nrows - 1];
+        n = snprintf(line, sizeof line, "%u %u %u\n", r->hd, r->stk, r->ctr);
+        if (!out_str(out, line, (size_t)n)) return false;
+    }
+    return true;
 }

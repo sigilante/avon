@@ -810,9 +810,91 @@ shows now:
 | everything else, no row above 5.2% | 21.5% |
 
 The run-time rows are now the most of the front end: Scott dispatch on
-the values its cases read. That is Turner's case for an extended basis
-(§6.7's two tiers) and for constructor jets (§6.8), not for the
-program's own functions.
+the values its cases read.
+
+**Jets, measured, 2026-09-29.** On the self-compile above (16.6 seconds
+unjetted), with output checked byte for byte: constructor jets (§6.8,
+`--ctors`) fire 232 million times and take 24.0 seconds, since a fire
+builds its residual in fresh nodes where share mode would have contracted
+a few in place; residual jets for all 747 of the front end's rules of
+eight atoms or more had not finished after 13.5 minutes. The measurement
+also found the constructor scan quadratic -- it sized every subterm with
+its own walk -- which ran 20 minutes on this term before one pass
+replaced it. Dispatch on a two-constructor value is one or two
+contractions, which no jet beats; the way to fewer is fewer dispatches.
+
+**Which jets eat which, 2026-09-29.** The loader wraps every subterm
+whose §5 hash is a jet's, nested ones too, and the reducer fires the
+first jet node it meets walking down the spine if the arguments cover
+its arity, else enters the term, where the inner jets meet theirs. So a
+fire can take what an inner jet would have: *eat* it. `avon jetstat`
+measures this: per jet, its fires and the contractions they absorb,
+together with every candidate and, with `--alone`, registered by itself;
+its misses (reached with too few arguments) and share-mode demotions; and
+each fire's origin -- its jet node from the program as loaded, from an
+instance of another jet's residual (after that jet fired), or from
+another jet's term (after it missed). `src/jetstats.c` fixes a node's
+origin where the node is made and follows it through collections
+(`tests/test_jetstats.c`, hand-counted in both modes). The candidates are
+`census --top=40 --emit`, 201 rows with their layers, and the 153 bird
+encodings; `--halting` leaves out the two runs the fuel stops, 800,000
+of the 2.66 million contractions, whose counts measure the budget.
+
+    avon census --top=40 --emit=census40.tsv MANIFEST...
+    avon jetstat [--share] --halting --alone --jets=census40.tsv \
+        --jets=jets/birds.tsv --names=... MANIFEST...
+
+| 84 halting runs | copy | share |
+|---|---:|---:|
+| contractions, no jets | 1,858,830 | 1,169,837 |
+| absorbed by 348 jets together | 1,313,452 | 1,228,237 |
+| fires | 109,793 | 90,848 |
+| stepped, with jets | 545,378 | 202,448 |
+| each alone, summed | 11,329,207 | 10,886,105 |
+
+- **Eating is the rule.** The jets absorb 88% less together than their
+  alone figures summed. Small patterns lose most: `S (K (S (K K)))` absorbs
+  216,345 alone and 28,250 together, T 147,292 and 6,136, O 127,578 and
+  10,694, Cons 188,005 and 39,235. Two layers of 810 and 566 atoms absorb
+  45,353 each alone and nothing together: the head they belong to fires.
+- **Nested fires come from residuals.** An outer jet's residual carries
+  the inner jets its body calls, and they fire next: Y's residual fires L
+  14,792 times, L's fires KM 16,567. No fire in either mode came from a
+  term entered after a miss, and the corpora miss 61 times in all.
+- **Share mode can gain fires.** L fires 9,899 times together and 3,916
+  alone, Y 1,058 and 453: an instance builds afresh what sharing built
+  once, the fixpoint's unrolling here. The corpora still come out ahead:
+  202,448 contractions and 90,848 fires, against 1,169,837 contractions.
+
+**The front end compiling itself, with jets** (share mode, output
+identical in every case; work is contractions stepped plus fires; user
+time best of five, interleaved, on a loaded machine):
+
+| jets | work | time |
+|---|---:|---:|
+| none | 306,991,371 | 5.31 s |
+| birds | 271,732,988 (−11%) | 5.31 s |
+| constructors (`--ctors`) | 228,890,634 (−25%) | 5.12 s |
+| census and birds | 317,361,509 (+3%) | 7.58 s |
+| its own rules, 5 to 64 atoms | 353,526,862 (+15%) | 7.20 s |
+| all of these | 251,033,829 (−18%) | 7.41 s |
+
+Its own rules neither miss nor demote; they lose by instantiation, which
+copies what sharing would have reduced once, and a fire costs several
+contractions' time. The 587 rules over 64 atoms never miss and demote four
+times in the first 30 million contractions: the slowness of the first
+all-rules run was the fires, not the demotions. Only the constructor jets pay, barely. For this
+program the jets that work are the ones that do not copy: the case for a
+native extended basis over residual instances.
+
+**Interning and reading, 2026-09-29.** Two changes to that end. The front
+end interns each identifier to a binary number after lexing and keys its
+tables by the number's bits, so a lookup is a dispatch per bit and never
+a comparison of names: the fixed point fell to 740,558,347 contractions
+for 492 names. And `avon front0` (§20.3) reads the result by probing
+instead of rendering it as a tree of atoms for a printer, which took
+another 58%: 306,991,371 contractions, eight seconds, against the first
+version's 2,176,424,461 and 40.
 
 ### 6.8 Constructor jets and the jet dictionaries
 
@@ -888,6 +970,85 @@ Constructors and birds overlap -- V, T, K and K I are both -- and
 together absorb about a third of the work. Joy's words add 0.6 points on
 this corpus. The absorption counts contractions a fire replaces; each
 fire still builds its residual, so the wall-clock gain is smaller.
+
+### 6.9 Supercombinator templates: the compiler hands over its functions
+
+**Bracket abstraction erases the program's functions, and the compiler
+still has them.** Every SKIjack rule with formals -- equation, recursion
+body, group part, lifted lambda, constructor, prelude rule -- is also
+written as a template: its formals and open body, keyed by the §5 hash of
+the SKI term it compiles to (skijack's `templates.py`, `templates.tsv`
+and `template_terms.tsv`). Where that term meets its arguments at the
+head in `share` mode, Avon instantiates the body over them in one step,
+instead of running the abstraction's S/K plumbing (`src/tmpl.c`,
+`avon reduce|front0 --templates=DIR`). It is SKA's function recovery
+(Afonin's "Nock Compilation", USTJ 3.2), with the answer supplied by the
+compiler that knew it.
+
+**Pure SKI is untouched.** SKIjack emits the same terms and export files
+byte for byte; the templates are a separate file. Avon without
+`--templates`, or in `copy` mode, which refuses it, runs exactly as
+before, and `copy` counts stay the paper's (§1.1).
+
+**Nothing is trusted, not even the hash.**
+
+- *A template proves itself.* Avon abstracts its body over its formals,
+  the last first, and keeps it only if the result is its key; a body that
+  does not is refused and the term runs as SKI.
+- *Identity is structural.* Loading builds every closed term -- the
+  referenced terms, each checked against its hash, the globals, the
+  abstracted keys -- in one hash-consed table, so equal trees are one
+  node. After `av_jets_match`, each loaded jet node for a template is
+  interned in the same table and kept only if it is the template's term;
+  the hash only proposes. Wrapping a global's inner keys is node identity
+  too.
+- *The instance is weak reduction.* The body over the arguments is a weak
+  reduct of the key applied to them (lean-ski's `absN_beta_close`), so
+  the value and every normal form are the unjetted ones.
+
+**What a fire does.** It pops the key's arity of arguments, writes the
+body's open part -- its maximal closed subterms are globals, built once
+per arena and rooted -- in children-first order, points the redex root at
+it, and charges one step. The count is `share`'s own, reported with the
+instantiations among it. A miss -- the key reached with fewer arguments,
+as a partial application is -- enters the key's term without demoting the
+node, so the node fires on its next full application; a node whose term
+is the dashboard's keeps §6.5's rule. Left out, as lean-ski leaves them:
+rules without formals, open bodies, η-templates, and keys that are a
+bare S, K or I.
+
+**One object with §18.1's proof jets.** A template is lean-ski's
+`(formals, open body)`: the same exclusions, globals as maximal closed
+subterms leaves included, cells in `ibuild` order. The plan for the
+witness: lean-ski's `jets emit` takes skijack's templates as its template
+source, recomputes roots and globals, licenses the roots with `rootOKB`,
+and emits the jet file Avon's witness already reads (§18.1). Share mode's
+globals are per-arena nodes; the witness's are heap addresses, which
+lean-ski resolves itself.
+
+**Results, 2026-09-29.** The front end compiling itself, with its own
+993 templates (641 kept; 352 are duplicates, η-templates or bare-leaf
+keys; none refused, none unbound):
+
+| | contractions | of them instantiations | user time, best of 5 |
+|---|---:|---:|---:|
+| SKI, share mode | 306,991,371 | -- | 4.38 s |
+| with templates | 21,238,890 | 18,930,884 | 0.97 s |
+
+The output is the same, every name's hash. Loading and checking the
+templates -- 6 MB of printed terms, parsed, hash-consed and abstracted --
+is 0.39 s of the 0.97; the compile itself is 7.5× faster, and a compact
+template form would take most of the rest. The corpus's 43 halting runs in
+`share` mode reach the same normal forms in 63,774 steps, 36,616 of them
+instantiations, against 640,853. `make front0-check` runs the edges, a
+thousand random programs and the fixed point both ways.
+
+What is left of the self-compile is 18.9 million instantiations, each
+writing a template's open part in full, and 2.3 million S, K and I
+contractions outside any template, not yet profiled. The instantiations
+are the larger part, and what would shrink them is strictness: an
+argument a body forces evaluated where it is needed, not written as a
+cell (SKA's data requirements).
 
 ## 7. The interpreter jet
 
@@ -1479,7 +1640,7 @@ in stage 8"):
   refused.
 - **The compiler is a term in a pill**, a kernel answering `Abs` events.
 - **The front end, for SKIjack-0, compiles its own source** (§20.3,
-  "Built for SKIjack-0"): all 433 of its names, from source text, hash for
+  "Built for SKIjack-0"): all 492 of its names, from source text, hash for
   hash (`make front0-check`). The full language's front end remains.
 
 **Stage 9, done.** The persistent arena (§19.1, "Built in stage 9"):
@@ -1706,6 +1867,14 @@ the run, and publishes them with the statement. §8's rule applies: the
 elided-fuel policy may size a budget off the record, but may not choose the
 one a proof uses.
 
+A composed statement with jets (`docs/ZK-JETS.md`) names four budgets in
+its `log R M Lp Li` line: rows, memory cells, and POP's and INSTW's rows --
+the instantiations' argument pops and written cells. `avon witness
+--statement=PUBLIC --jet-table=JETS WITNESS` pads its table to the
+statement's heights, not to the next power of two above the run, and
+refuses a run over any of the four. Under hiding a height chosen from the
+run would publish the run's size.
+
 ### 17.3 What a witness does not yet give
 
 - **An output, except by probing.** The constraints fix the run, not the
@@ -1721,7 +1890,10 @@ one a proof uses.
   the per-table lookup sums Plonky3 publishes, which otherwise let a
   verifier check a guessed witness. The verifier checks the statement file
   in Lean first. Other witness shapes need their own witness tables and
-  blinding. The zero-knowledge argument is informal.
+  blinding. lean-ski now proves honest-verifier zero knowledge for its
+  hiding circuits, assuming a statistically hiding PCS (`transcript_zk`,
+  `PCSClose`); Fiat–Shamir is assumed, not proved. Jets under hiding are
+  designed in `ZK-JETS.md`.
 - **Scry.** Only a resume loop's final run is proved, with the final fact
   store as a committed private input (§8).
 
@@ -1952,6 +2124,9 @@ allowed. It is the last tier and has the largest payoff.
   they cover the Scott constructors, which compile to `absN` like any
   lifted chain (`ctorO`). Numeral arithmetic is recursive, not one
   template, and waits for 18.2's word cells.
+- Under hiding: `ZK-JETS.md` designs a circuit that joins the jet tables
+  to lean-ski's composed statement in zero knowledge, with statement-fixed
+  heights and a blinding tree over the eight private tables.
 
 ## 19. Lessons from Nockchain's persistent memory arena
 
@@ -2252,11 +2427,21 @@ learned on the same branch -- and abstracts with the core's `abs`. Python
 compiles it to one term, `front`; Avon runs it in share mode on a
 program's 7-bit character codes.
 
+`avon front0 DIR SOURCE` (`src/front0.c`) builds that input in the arena,
+each code's datum once, and reads the result by probing -- ROk, then each
+name and term -- into a line per name, the name and its term's §5 hash,
+computed bottom up with a memo of hashed nodes, so no term is rebuilt or
+printed. The front end's work happens inside those probes, lazily, so
+unlike av_peel's they collect: the reader registers as a reduction, and
+the collector evacuates its stack of held nodes, its marker leaves, and
+remaps its memo.
+
 - **The fixed point from source text.** `front` applied to its own
-  36,375-character source gives all 433 of its names their terms, hash
-  for hash with Python's, in 1,262,327,332 contractions, 16 seconds.
-  The first version took 2,176,424,461 for 375 names; §6.7's profile
-  found where.
+  39,622-character source gives all 492 of its names their terms, hash
+  for hash with Python's, in 306,991,371 contractions, eight seconds;
+  with its supercombinator templates (§6.9), in 21,238,890, one second.
+  The first version took 2,176,424,461 for 375 names; §6.7 follows the
+  steps between.
 - **Agreement.** It compiles a thousand random SKIjack-0 programs as
   skijack's specification does, and accepts or refuses 67 programs at
   the subset's edges (duplicate names, cycles, newlines before a closing
@@ -2268,8 +2453,10 @@ program's 7-bit character codes.
 
 The full language's front end -- cores, macros, signatures, quotation,
 scries, namespace literals and the type checker -- still runs in Python.
-Next come the whole language's front end, checked on the corpus, and jets
-for the front end's hot equations.
+Next comes the whole language's front end, checked on the corpus. §6.7
+measured jets for this one: constructor jets and residual jets for its
+own equations both make it slower in share mode, so what remains of its
+cost is for the extended basis to try.
 
 ### 20.4 What else the analogy imports
 

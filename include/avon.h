@@ -98,6 +98,14 @@ typedef struct {
     uint32_t  *nats;            /* known numerals: zero, suc pairs: roots  */
     uint32_t   nnats;
     const struct av_facts *facts;   /* the store resolvers here read (§8) */
+    struct av_jetstats *jetstats;   /* set while a reduction counting jets
+                                       runs, for the jet-node makers */
+    struct av_tmpl *tmpls;      /* supercombinator templates (§6.9)       */
+    uint32_t   ntmpls, tmplcap;
+    uint32_t  *tmpl_globals;    /* their bodies' closed parts: roots      */
+    uint32_t   nglobals, globcap;
+    uint32_t  *tmpl_scratch;    /* an instance's intermediate results    */
+    uint32_t   tmpl_scratch_cap;
     uint32_t   compiler[9];     /* the compiler jet's terms (§20.3), roots:
                                    abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
     struct av_pma *pma;         /* the persistent image (§19.1), or NULL  */
@@ -306,6 +314,11 @@ typedef struct {
     struct av_census *census;   /* copy mode: record calls; NULL off */
     struct av_profile *profile; /* share mode: charge each contraction to
                                    a named term (§6.7); NULL off */
+    struct av_jetstats *jetstats;   /* count each jet's fires, misses and
+                                   demotions, and each fire's origin
+                                   (§6.7); NULL off */
+    bool        templates;      /* share mode: instantiate supercombinator
+                                   templates (§6.9); copy mode ignores it */
 } av_opts;
 
 typedef struct {
@@ -316,6 +329,8 @@ typedef struct {
     uint64_t  interp_calls; /* interpreter jets fired, among jet_calls    */
     uint64_t  jet_steps;    /* contractions the fires charged, among steps */
     bool      jet_fault;    /* a jet check disagreed: status INTERRUPTED  */
+    uint64_t  tmpl_calls;   /* template instantiations, one step each,
+                               among steps (§6.9)                         */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -392,6 +407,8 @@ typedef struct {
     size_t    loaded;           /* cells of Mach.load t, the nil included */
     uint32_t  hd0, stk0;
     uint64_t  contractions;     /* rows whose head is not an application */
+    uint64_t  pops, wcells;     /* instantiations' argument pops and written
+                                   cells: POP's and INSTW's rows */
 } av_witness;
 
 /*  Load t and run it to weak head normal form.  AV_WHNF on success;
@@ -506,6 +523,64 @@ void      av_probe_free(av_probe *pr);
 bool av_probe_table(const av_witness *w, const av_probe *pr, unsigned min_log,
                     av_buf *out);
 
+/*  ------------------------------------------- composed statements, jetted
+ *
+ *  lean-ski's composed statement (`public.txt`, ComposedText.publicTextC):
+ *  a header line, the region size, the log heights, the bit count, the
+ *  segments' roots, the nil, the registers, and the composed machine's
+ *  heap with its private cells -- the bits at 3 and the region after them
+ *  -- blank (`W`).  A statement for the circuit with jets
+ *  (docs/ZK-JETS.md, milestone 8) names four log heights, `log R M Lp Li`:
+ *  the CPU's, the memory's, POP's and INSTW's, its public budgets.  Avon
+ *  decides nothing here: lean-ski's `composed statement-jets` checks the
+ *  statement, `composed check-cj` the table.
+ */
+typedef struct {
+    char     *header;           /* the first line, as written */
+    uint32_t  w, nbits;
+    unsigned  log_rows, log_mem;
+    unsigned  log_pop, log_instw;   /* 0: the statement names no budgets */
+    uint32_t *roots;
+    size_t    nroots;
+    uint32_t  nil, hd0, stk0, ctr0;
+    av_cell  *cells;            /* ctr0 cells; the private ones are nil */
+} av_cstmt;
+
+/*  Read a statement, as bench/plonky3's parse_public does: every log
+ *  height in [8, 20], a two-height line only when it is not the default
+ *  (11, 11), and exactly the cells [3, 3 + nbits + w) blank.  False, with
+ *  *err, otherwise. */
+bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err);
+void av_cstmt_free(av_cstmt *s);
+
+/*  Read a witness for s: nbits + w nonempty lines, the bits `1` (K) or `0`
+ *  (A 0 1) or any cell, then the region's cells, into priv (nbits + w
+ *  cells).  False, with *err, on anything malformed. */
+bool av_cwitness_read(const char *src, size_t len, const av_cstmt *s, av_cell *priv,
+                      const char **err);
+
+/*  The composed machine with jets (bench/plonky3's compj run): the
+ *  statement's heap with the private cells filled in, then per root a
+ *  jetted run from the root over the nil to a halt, the next segment
+ *  starting on the row after.  Each segment must halt at K over a nil.
+ *  *ends gets the halted rows' indices (nroots of them, malloc'd).  AV_WHNF
+ *  on success; AV_INTERRUPTED, with *err, when a segment halts elsewhere
+ *  (the witness does not satisfy the statement); AV_SIZE, with *err, on a
+ *  budget: the statement's 2^R rows, 2^M cells, 2^Lp pops, 2^Li written
+ *  cells, or a statement with no budgets. */
+av_status av_witness_run_composed(const av_cstmt *s, const av_cell *priv, const av_jettable *jt,
+                                  av_witness *w, size_t **ends, uint64_t *insts,
+                                  const char **err);
+
+/*  The table in lean-ski's `composed check-cj` format, as bench/plonky3's
+ *  compj-prove writes it: the header, `W w`, the memory padded with nil
+ *  cells to 2^M, `ends n` and the segments' ends -- the restarts, then the
+ *  padded table's last row -- and the rows padded to 2^R by repeating the
+ *  last.  The statement's heights, not the run's: they are its public
+ *  budgets (docs/DESIGN.md §17.2). */
+bool av_composed_table(const av_cstmt *s, const av_witness *w, const size_t *ends,
+                       av_buf *out);
+
 /*  The table in Ski/AirCheck.lean's format: the term in prefix form (`
  *  for application), the memory table, the rows.  Both are padded to a
  *  power of two at least 2^min_log, rows by repeating the halted row and
@@ -593,6 +668,7 @@ typedef struct av_jet {
                                    with the term, 2 refused               */
     bool      unquote;          /* the unquoter, UQ (§20.2): install      */
     bool      compiler;         /* the compiler's abstraction (§20.3)     */
+    uint32_t  tmpl;             /* 1 + its template in a->tmpls (§6.9), or 0 */
 } av_jet;
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
@@ -683,6 +759,106 @@ typedef struct av_interp {
  *  node that is a constructor applied to its fields behaves as one. */
 long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
                      const char **err);
+
+/*  ------------------------------------------------------------ templates
+ *
+ *  Supercombinator templates (docs/DESIGN.md §6.9): each rule's formals and
+ *  open body, from skijack's templates.tsv and template_terms.tsv, keyed
+ *  by the §5 hash of the SKI term it compiles to.  Load them after every
+ *  dictionary and before av_jets_match, then bind them to the matched
+ *  term; nothing may collect between.  A template of more than
+ *  AV_JET_ARITY_MAX formals is skipped.  A template is kept only if its body
+ *  abstracts to its key, and fires only on a node whose term is that key,
+ *  compared as trees in a hash-consed table, never by hash alone.  With
+ *  av_opts.templates, share mode instantiates the body over the arguments
+ *  where the key meets them at the head: one step for the plumbing.
+ */
+typedef struct av_tmpl {
+    uint32_t  jet;              /* its dashboard entry                    */
+    unsigned  k;                /* formals: the arguments one fire takes  */
+    uint32_t *ops;              /* per open application, two operands    */
+    uint32_t  nops;
+    uint32_t *consts;           /* indices into a->tmpl_globals           */
+    uint32_t  nconsts;
+    uint32_t  root;             /* the operand the instance is            */
+    uint32_t  key;              /* its term, canonical at load            */
+    bool      globals_made;
+} av_tmpl;
+
+typedef struct av_tmplset av_tmplset;
+
+/*  Load DIR/templates.tsv and DIR/template_terms.tsv.  NULL, with *err, on
+ *  a malformed file or a term that does not match its hash; a template
+ *  whose body does not abstract to its key is counted as refused. */
+av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err);
+/*  After av_jets_match: unwrap every jet node of t for a template whose
+ *  term the node's is not.  False if a collection intervened, or memory. */
+bool        av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t);
+void        av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,
+                                long *skipped, long *unbound);
+void        av_templates_free(av_tmplset *ts);
+
+/*  ------------------------------------------------------------ jet stats
+ *
+ *  What each jet does on a run (docs/DESIGN.md §6.7): fires and the
+ *  contractions they absorb; misses, reached at the head with fewer
+ *  arguments than its arity; share-mode demotions, and those that copied
+ *  its term.  And each fire's origin: its jet node from the program as
+ *  loaded (top), from an instance of another jet's residual -- after that
+ *  jet fired -- or from another jet's term, entered because that jet did
+ *  not.  Keyed by §5 digest, across runs and arenas; av_jetstats_begin
+ *  once per loaded, matched program, before its reductions.
+ */
+typedef struct av_jetstats av_jetstats;
+
+enum { AV_FROM_RESIDUAL = 0, AV_FROM_TERM = 1 };
+
+typedef struct {
+    uint64_t fires, absorbed;       /* absorbed: fires times the cost      */
+    uint64_t top, in_residual, in_term;   /* the fires, by origin          */
+    uint64_t misses, demotions, copies;
+    av_ctor  ctor;                  /* its constructor shape, if one */
+    uint32_t nodes;                 /* nodes one fire's instance builds */
+} av_jetstat_row;
+
+typedef struct { size_t outer, inner; unsigned kind; uint64_t fires; } av_jetstat_pair;
+
+av_jetstats *av_jetstats_new(void);
+void         av_jetstats_free(av_jetstats *s);
+bool         av_jetstats_begin(av_jetstats *s, const av_arena *a, uint32_t t);
+size_t       av_jetstats_rows(const av_jetstats *s);
+void         av_jetstats_row(const av_jetstats *s, size_t i, char hash[27],
+                             unsigned *arity, uint64_t *cost, size_t *atoms,
+                             av_jetstat_row *counts);
+bool         av_jetstats_find(const av_jetstats *s, const char *hash, size_t *i);
+/*  The (outer, inner, origin) triples and their fires; *out is malloc'd. */
+size_t       av_jetstats_pairs(const av_jetstats *s, av_jetstat_pair **out);
+/*  Whether an origin was lost to memory, so counts undercount. */
+bool         av_jetstats_lost(const av_jetstats *s);
+
+/*  av_jets_load, registering only the row whose hash is `only`. */
+long av_jets_load_only(av_arena *a, const char *path, size_t min_atoms,
+                       uint64_t only, const char **err);
+
+/*  ------------------------------------------------------- the front end
+ *
+ *  The SKIjack-0 front end (docs/DESIGN.md §20.3): `front` applied to a
+ *  program's 7-bit character codes reduces to ROk (OCons name tm ..) or
+ *  RErr.  The terms are the front end's own: SCons, SNil and Code, Lo, Hi
+ *  build the input, each code's datum once.
+ */
+typedef struct { uint32_t front, scons, snil, code, lo, hi; } av_front0;
+
+/*  `front` applied to src; AV_NONE if src is not ASCII or out of memory. */
+uint32_t av_front0_input(av_arena *a, const av_front0 *f, const char *src, size_t len);
+
+/*  Reduce t, from av_front0_input, reading its result by probing with
+ *  collection on: a line `name TAB hash` per name, in its order, or
+ *  `RErr`.  0 for ROk, 1 for RErr, -1 with *err if it does not read.
+ *  *steps counts every probe's contractions, and *tmpl_calls (if not
+ *  NULL) the template instantiations among them (§6.9). */
+int      av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
+                        uint64_t *steps, uint64_t *tmpl_calls, const char **err);
 
 /*  ---------------------------------------------------------------- profile
  *

@@ -15,6 +15,11 @@ bool     nmap_get(const nmap *m, uint32_t k, uint64_t *v);
 bool     nmap_put(nmap *m, uint32_t k, uint64_t v);
 void     nmap_free(nmap *m);
 
+/*  §5 digests: an atom's, from its name; an application's, from its
+ *  two parts'. */
+uint64_t digest_leaf(const char *name);
+uint64_t digest_app(uint64_t f, uint64_t x);
+
 /*  Every node's digest below t, keyed by viewed node. */
 bool     hash_all(const av_arena *a, uint32_t t, nmap *m);
 
@@ -25,6 +30,28 @@ uint32_t jet_find(const av_arena *a, uint64_t digest);
  *  first; follow a collection. */
 void     profile_charge(av_profile *p, const uint32_t *spine, unsigned k, ski_leaf c);
 void     profile_remap(av_profile *p, const av_gc *g);
+/*  Templates (tmpl.c): an instance program's operands, as for residuals; a
+ *  jet node wrapping inner for jet id (not the dashboard's term, so a run
+ *  may write it); an instance of T over args[0 .. T->k-1], allocating
+ *  T->nops nodes (reserve them first; it never collects). */
+#define TMPL_CONST 0u
+#define TMPL_ARG   1u
+#define TMPL_RES   2u
+#define TMPL_OPND(kind, i) ((kind) << 30 | (i))
+uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner);
+/*  The residual markers @x0 .. @x31, made if not yet: templates' formals. */
+bool     jet_marks(av_arena *a);
+uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args);
+
+/*  The jet stats' hooks (jetstats.c): a fire of jet id at jet node `node`;
+ *  a miss; a share-mode demotion, copied or not; a jet node made fresh
+ *  from jet owner's residual or term; a collection. */
+void     jetstats_fire(av_jetstats *s, uint32_t node, uint32_t id);
+void     jetstats_miss(av_jetstats *s, uint32_t id);
+void     jetstats_demote(av_jetstats *s, uint32_t id, bool copied);
+void     jetstats_made(av_jetstats *s, uint32_t node, uint32_t owner, unsigned kind);
+void     jetstats_remap(av_jetstats *s, const av_gc *g);
+
 /*  A redex root rewritten in place is no longer loaded code. */
 void     profile_rewrote(av_profile *p, uint32_t node);
 

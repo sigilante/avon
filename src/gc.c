@@ -66,6 +66,9 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
         for (uint32_t c = 0; c < a->jets[k].nconsts; c++)
             a->jets[k].consts[c] = av_gc_evac(&g, a->jets[k].consts[c]);
     }
+    for (uint32_t k = 0; k < a->nglobals; k++) {        /* templates' globals */
+        a->tmpl_globals[k] = av_gc_evac(&g, a->tmpl_globals[k]);
+    }
     for (uint32_t k = 0; k < 2 * a->nnats; k++)          /* known numerals */
         a->nats[k] = av_gc_evac(&g, a->nats[k]);
     if (a->compiler[0])                                 /* the compiler jet's terms */

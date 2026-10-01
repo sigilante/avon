@@ -70,6 +70,18 @@ static void hex16(uint64_t v, char out[16]) {
     for (int i = 15; i >= 0; i--) { out[i] = hx[v & 15]; v >>= 4; }
 }
 
+uint64_t digest_leaf(const char *name) { return digest_of(name, strlen(name)); }
+
+uint64_t digest_app(uint64_t f, uint64_t x) {
+    char text[35];
+    text[0] = '(';
+    hex16(f, text + 1);
+    text[17] = ' ';
+    hex16(x, text + 18);
+    text[34] = ')';
+    return digest_of(text, sizeof text);
+}
+
 /*  Every node's digest below t, into m keyed by viewed node. */
 bool hash_all(const av_arena *a, uint32_t t, nmap *m) {
     typedef struct { uint32_t node; bool done; } item;
@@ -184,44 +196,51 @@ static bool marks(av_arena *a) {
     return true;
 }
 
+bool jet_marks(av_arena *a) { return a->jet_mark[0] || marks(a); }
+
 /*  Leaves in the tree unfolding, saturating at SIZE_MAX. */
-static size_t tree_atoms(const av_arena *a, uint32_t t) {
-    nmap m = { 0 };
+/*  Every node's leaf count below t, saturating, into m keyed by viewed
+ *  node: one pass, each shared node once. */
+static bool atoms_all(const av_arena *a, uint32_t t, nmap *m) {
     typedef struct { uint32_t node; bool done; } item;
-    size_t cap = 256, top = 0, out = SIZE_MAX;
+    size_t cap = 256, top = 0;
     item *todo = malloc(cap * sizeof *todo);
-    if (!todo) return SIZE_MAX;
-    todo[top++] = (item){ av_view(a, t), false };
-    while (top) {
+    bool ok = todo != NULL;
+    if (ok) todo[top++] = (item){ av_view(a, t), false };
+    while (ok && top) {
         item it = todo[--top];
         uint64_t v;
-        if (nmap_get(&m, it.node, &v)) continue;
+        if (nmap_get(m, it.node, &v)) continue;
         if (av_tag(a, it.node) == AV_LEAF) {
-            if (!nmap_put(&m, it.node, 1)) goto done;
+            ok = nmap_put(m, it.node, 1);
             continue;
         }
         uint32_t f = av_view(a, av_left(a, it.node)), x = av_view(a, av_right(a, it.node));
         if (it.done) {
             uint64_t sf, sx;
-            nmap_get(&m, f, &sf);
-            nmap_get(&m, x, &sx);
-            uint64_t s = sf + sx < sf ? UINT64_MAX : sf + sx;
-            if (!nmap_put(&m, it.node, s)) goto done;
+            nmap_get(m, f, &sf);
+            nmap_get(m, x, &sx);
+            ok = nmap_put(m, it.node, sf + sx < sf ? UINT64_MAX : sf + sx);
             continue;
         }
         if (top + 3 > cap) {
             item *q = realloc(todo, (cap *= 2) * sizeof *q);
-            if (!q) goto done;
+            if (!q) { ok = false; break; }
             todo = q;
         }
         todo[top++] = (item){ it.node, true };
         todo[top++] = (item){ x, false };
         todo[top++] = (item){ f, false };
     }
-    uint64_t v;
-    if (nmap_get(&m, av_view(a, t), &v)) out = v > SIZE_MAX ? SIZE_MAX : (size_t)v;
-done:
     free(todo);
+    return ok;
+}
+
+static size_t tree_atoms(const av_arena *a, uint32_t t) {
+    nmap m = { 0 };
+    uint64_t v;
+    size_t out = atoms_all(a, t, &m) && nmap_get(&m, av_view(a, t), &v)
+                 ? (v > SIZE_MAX ? SIZE_MAX : (size_t)v) : SIZE_MAX;
     nmap_free(&m);
     return out;
 }
@@ -512,6 +531,10 @@ static uint32_t jet_node(av_arena *a, uint32_t idbits, uint32_t inner) {
     return n;
 }
 
+uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner) {
+    return jet_node(a, id, inner);
+}
+
 /*  A fresh copy of t with jets wrapped; the root itself is not wrapped
  *  when skip_root, which is how a jet's own term is matched for its
  *  insides.  shared marks the jet nodes' terms as the dashboard's. */
@@ -581,13 +604,14 @@ static int by_digest(const void *x, const void *y) {
 }
 
 long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
-    /* the distinct subterms, by digest */
-    nmap dig = { 0 };
+    /* the distinct subterms, by digest, and every node's size: one pass
+     * each, since sizing each subterm apart is quadratic in the term */
+    nmap dig = { 0 }, sizes = { 0 };
     dnode *all = NULL;
     uint32_t *cand = NULL;
     size_t n = 0, m = 0;
     long added = 0;
-    bool ok = hash_all(a, av_view(a, t), &dig) &&
+    bool ok = hash_all(a, av_view(a, t), &dig) && atoms_all(a, av_view(a, t), &sizes) &&
               (all = malloc((dig.n ? dig.n : 1) * sizeof *all)) != NULL;
     for (size_t i = 0; ok && i < dig.cap; i++)
         if (dig.key[i] != AV_NONE && av_tag(a, dig.key[i]) == AV_APP)
@@ -598,10 +622,12 @@ long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
     for (size_t i = 0; ok && i < m; i++) {
         if (i && all[i].digest == all[i - 1].digest) continue;
         if (jet_find(a, all[i].digest) != AV_NONE) continue;
-        size_t atoms = tree_atoms(a, all[i].node);
+        uint64_t atoms = 0;
+        nmap_get(&sizes, all[i].node, &atoms);
         if (atoms >= 2 && atoms <= max_atoms) cand[n++] = all[i].node;
     }
     free(all);
+    nmap_free(&sizes);
     /* rooted: the runs collect */
     for (size_t i = 0; ok && i < n; i++) av_root_push(a, &cand[i]);
     for (size_t i = 0; ok && i < n; i++) {
@@ -632,8 +658,21 @@ static bool wrap_insides(av_arena *a) {
     return true;
 }
 
+static long load(av_arena *a, const char *path, size_t min_atoms, bool filter,
+                 uint64_t only, const char **err);
+
 long av_jets_load(av_arena *a, const char *path, size_t min_atoms,
                   const char **err) {
+    return load(a, path, min_atoms, false, 0, err);
+}
+
+long av_jets_load_only(av_arena *a, const char *path, size_t min_atoms,
+                       uint64_t only, const char **err) {
+    return load(a, path, min_atoms, true, only, err);
+}
+
+static long load(av_arena *a, const char *path, size_t min_atoms, bool filter,
+                 uint64_t only, const char **err) {
     FILE *f = fopen(path, "rb");
     if (!f) { if (err) *err = "cannot open the dictionary"; return -1; }
     char *line = NULL;
@@ -650,6 +689,7 @@ long av_jets_load(av_arena *a, const char *path, size_t min_atoms,
         size_t len = strcspn(term, "\n");
         uint64_t want;
         if (!av_hash_parse(h, &want)) { msg = "malformed hash"; break; }
+        if (filter && want != only) continue;
         av_parse_error pe;
         uint32_t t = av_parse(a, term, len, &pe);
         if (t == AV_NONE) { msg = "unparsable dictionary term"; break; }
@@ -696,6 +736,8 @@ static uint32_t copy_template(av_arena *a, uint32_t root, const av_jet *j,
                 ? jet_node(a, AV_JET_ID(av_left(a, x)) | AV_JET_SHARED, av_right(a, x))
                 : x;
             if (built == AV_NONE) goto done;
+            if (fresh_jets && a->jetstats)          /* a copy of j's term */
+                jetstats_made(a->jetstats, built, (uint32_t)(j - a->jets), AV_FROM_TERM);
         } else if (!it.done) {
             if (top + 3 > cap) {
                 item *q = realloc(todo, (cap *= 2) * sizeof *q);
@@ -746,6 +788,8 @@ uint32_t jet_instance(av_arena *a, uint32_t id, const uint32_t *args,
             n = fresh_jets
                 ? jet_node(a, AV_JET_ID(av_left(a, c)) | AV_JET_SHARED, av_right(a, c))
                 : c;
+            if (fresh_jets && n != AV_NONE && a->jetstats)   /* of id's residual */
+                jetstats_made(a->jetstats, n, id, AV_FROM_RESIDUAL);
         } else {
             n = av_app(a, OPERAND(p), OPERAND(q));
         }
