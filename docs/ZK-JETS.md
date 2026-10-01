@@ -1,12 +1,13 @@
 # Jets under hiding
 
-> **Status (2026-09-30).** Being built: milestones 1–8 of §9 are done.
+> **Status (2026-09-30).** Built: milestones 1–9 of §9 are done.
 > The circuit exists as data in Lean and in Rust, the two agree constraint
 > for constraint, its honest proofs verify under hiding, and its soundness
 > (`compJExport_sound`), completeness (`compJ_complete_log`) and zero
 > knowledge (`compJ_transcript`) are proved. Avon writes the witness
-> tables, byte for byte ski-air's (milestone 8). The release (milestone
-> 9) remains. It joins two circuits that lean-ski has proved separately, the
+> tables, byte for byte ski-air's (milestone 8), and lean-ski's release
+> holds `split8` and `csplit8` proved with jets under hiding (milestone
+> 9). It joins two circuits that lean-ski has proved separately, the
 > composed statement in zero knowledge and the supercombinator jet
 > circuit, into one circuit whose proofs hide the witness and instantiate
 > licensed templates. Each claim below about
@@ -475,8 +476,16 @@ the tree; its height is a public budget like POP's.
    region's table is rejected by `check-cj` and does not prove, and a POP
    budget below the run's is refused by both. `split8`: 11,599 rows,
    2,250 instantiations, 8,614 pops, 12,363 written cells.
-9. **Release.** `split8` and `csplit8` proved with jets under hiding, in
-   lean-ski's `release/skilark`, checked by `release/verify.sh`.
+9. **Release.** *Done, 2026-09-30.* lean-ski's `release/skilark/split8/jets`
+   and `release/skilark/csplit8/jets`: each a statement with jets (`log
+   17 18 14 14`, `log 18 19 17 17`), its jet table and a proof of the
+   witness table Avon wrote (`avon witness --statement`), proved by
+   `ski-air compj-prove-table` (`release/produce.sh jets`).
+   `release/verify.sh` checks each statement against its source (`lake
+   exe skilark statement`, `cstatement`), verifies each proof through
+   `compj-verify`, and refuses a changed byte, the plain statement,
+   another budget and the jet table without the closure rule; with Avon
+   nowhere on the verifier's side.
 
 ## 10. Risks
 
