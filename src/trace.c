@@ -51,6 +51,8 @@ struct av_trace {
     size_t    scap, valid;      /* prefixes known for slots < valid       */
     /* the run */
     uint32_t *len;              /* L at each step                         */
+    uint32_t *minpos;           /* the lowest X-headed item's position; 0 none */
+    uint8_t  *ym1;              /* an X-headed item at L-1, the y-seat    */
     size_t    nlen, lcap;
     int64_t   last_restart;     /* -1: none                               */
     /* dumps */
@@ -169,6 +171,8 @@ void av_trace_free(av_trace *t) {
     free(t->fl); free(t->sig); free(t->ar);
     free(t->cX); free(t->c1); free(t->c2);
     free(t->len);
+    free(t->minpos);
+    free(t->ym1);
     free(t->dump);
     free(t->printed);
     free(t->todo);
@@ -371,11 +375,19 @@ bool trace_step(av_trace *t, const av_arena *a, const uint32_t *stk, size_t base
     if (t->nlen == t->lcap) {
         size_t c = t->lcap ? 2 * t->lcap : 1024;
         uint32_t *q = realloc(t->len, c * sizeof *q);
-        if (!q) { t->bad = true; return false; }
-        t->len = q; t->lcap = c;
+        if (q) t->len = q;
+        uint32_t *m = realloc(t->minpos, c * sizeof *m);
+        if (m) t->minpos = m;
+        uint8_t *y = realloc(t->ym1, c);
+        if (y) t->ym1 = y;
+        if (!q || !m || !y) { t->bad = true; return false; }
+        t->lcap = c;
     }
-    t->len[t->nlen++] = (uint32_t)L;
     uint32_t np = t->cX[top - 1];
+    t->len[t->nlen] = (uint32_t)L;
+    t->minpos[t->nlen] = np ? (uint32_t)(kth(t, top, 1) - base + 1) : 0;
+    t->ym1[t->nlen] = L >= 2 && (t->fl[stk[top - 2]] & F_XH);
+    t->nlen++;
     if (np == 1) {
         size_t p = kth(t, top, 1);
         if (L == 3 && p == base) t->last_restart = (int64_t)step;
@@ -503,6 +515,18 @@ bool av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t ste
                 sum->nconf++;
             }
         emit(t, "\n", 1);
+        /* each confirmed record's facts the census decides on: L, the
+         * lowest X-headed position (- none), and an X-headed item at L-1 */
+        for (size_t i = 0; i < H; i++)
+            if (rec[i] && i + conf <= H) {
+                emit(t, "K ", 2);
+                emit_u64(t, i);
+                emit(t, " ", 1);
+                emit_u64(t, t->len[i]);
+                emit(t, " ", 1);
+                if (t->minpos[i]) emit_u64(t, t->minpos[i]); else emit(t, "-", 1);
+                emit(t, t->ym1[i] ? " 1\n" : " 0\n", 3);
+            }
         free(rec);
     }
     return true;
@@ -520,6 +544,30 @@ size_t av_trace_record_steps(const av_trace *t, size_t conf, uint64_t **out) {
         if (t->len[i] < minL) { rec[i] = 1; minL = t->len[i]; }
     for (size_t i = 0; i < H; i++)
         if (rec[i] && i + conf <= H) { v[k++] = i; v[k++] = i + 1; }
+    free(rec);
+    *out = v;
+    return k;
+}
+
+/*  The frames the census reads, in its order over the confirmed records
+ *  (fixed_points_hider.run): at a record n with an X-headed item at or
+ *  below L-3, frame n, and it stops; else with one at L-1, frame n+1, and
+ *  it stops; else frame n+1, for the record's mint, and it goes on.  Which
+ *  frames, not what they certify: that stays with the census. */
+size_t av_trace_census_steps(const av_trace *t, size_t conf, uint64_t **out) {
+    size_t H = t->nlen, k = 0;
+    uint64_t *v = malloc((H + 1) * sizeof *v);
+    uint8_t *rec = calloc(H ? H : 1, 1);
+    if (!v || !rec) { free(v); free(rec); *out = NULL; return 0; }
+    uint32_t minL = UINT32_MAX;
+    for (size_t i = H; i-- > 0;)
+        if (t->len[i] < minL) { rec[i] = 1; minL = t->len[i]; }
+    for (size_t i = 0; i < H; i++) {
+        if (!rec[i] || i + conf > H) continue;
+        if (t->minpos[i] && t->minpos[i] + 3 <= t->len[i]) { v[k++] = i; break; }
+        v[k++] = i + 1;
+        if (t->ym1[i]) break;
+    }
     free(rec);
     *out = v;
     return k;

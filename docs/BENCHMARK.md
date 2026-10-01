@@ -526,7 +526,15 @@ horizon 600, confirmation 150, depth 4; user time, one run each.
   since every confirmed record's frames are dumped and the census decides
   at the first, nearly always. Dumping only the first record's frames, and
   asking for more when the census goes on, is the next lever.
-- **Sizes 15 and 16.** At size 13's rate, 0.63 ms a term, size 15's
+- **Stage 1: dump only what the census reads** (`--frame-dump=census`).
+  The census reads one frame at the first confirmed record that decides
+  (a deep item, or one at L-1), and frame n+1 of every confirmed record
+  only when it rides on. Avon now dumps those, with each confirmed
+  record's L, lowest X-headed position and L-1 flag (`K` lines). Size 13
+  through Avon alone: 6.1 GB of output to 222 MB, 16.6 s to 4.0 s. The
+  census through Avon, sizes 1..13: 173 s to 15 s, the same verdicts;
+  `make hider-check`'s verdict parity on 1..12 unchanged.
+- **Sizes 15 and 16, before stage 1.** At size 13's rate, 0.63 ms a term, size 15's
   2,674,440 terms would take about 28 minutes and size 16's 9,694,845 about
   1.7 hours through the client as it is; Avon's own share, about 0.08 ms a
   term, would be 3.5 and 13 minutes. `avon enum` produces size 15 in

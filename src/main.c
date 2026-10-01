@@ -120,7 +120,7 @@ typedef struct {
     size_t      records;          /* the confirmation window; 0: no records */
     uint64_t    dump_steps[64];   /* --frame-dump steps */
     size_t      ndump;
-    bool        dump_records, dump_halt, dump_restart;
+    bool        dump_records, dump_halt, dump_restart, dump_census;
 } args;
 
 static int usage(void) {
@@ -154,7 +154,7 @@ static int usage(void) {
         "       avon enum N [--start=K] [--count=M]\n"
         "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"
         "       (reduce and batch accept --trace-frame[=summary] --passenger=NAME\n"
-        "        --records[=CONF] --frame-dump=STEPS|records|halt|last-restart)\n"
+        "        --records[=CONF] --frame-dump=STEPS|records|census|halt|last-restart)\n"
         "       avon --version\n");
     return 2;
 }
@@ -189,7 +189,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->passenger = "X";
     g->records = 0;
     g->ndump = 0;
-    g->dump_records = g->dump_halt = g->dump_restart = false;
+    g->dump_records = g->dump_halt = g->dump_restart = g->dump_census = false;
     for (int i = 2; i < argc; i++) {
         const char *s = argv[i];
         uint64_t v;
@@ -253,6 +253,7 @@ static bool parse_args(int argc, char **argv, args *g) {
                 const char *e = strchr(q, ',');
                 size_t n = e ? (size_t)(e - q) : strlen(q);
                 if (n == 7 && memcmp(q, "records", 7) == 0) g->dump_records = true;
+                else if (n == 6 && memcmp(q, "census", 6) == 0) g->dump_census = true;
                 else if (n == 4 && memcmp(q, "halt", 4) == 0) g->dump_halt = true;
                 else if (n == 12 && memcmp(q, "last-restart", 12) == 0) g->dump_restart = true;
                 else {
@@ -430,7 +431,7 @@ static uint64_t term_line = 1;
 /*  One frame-trace run (§22): copy mode, the head run, no collection. */
 static bool trace_pass(const args *g, const char *src, size_t len, bool out,
                        const uint64_t *dumps, size_t ndumps, bool dump_halt,
-                       uint64_t **rec_steps, size_t *nrec, int64_t *restart) {
+                       uint64_t **rec_steps, size_t *nrec, int64_t *restart, bool census) {
     av_arena *a = av_arena_new(1u << 16);
     if (!a) { fprintf(stderr, "avon: out of memory\n"); return false; }
     a->allow_bird_atoms = g->birds;
@@ -461,7 +462,8 @@ static bool trace_pass(const args *g, const char *src, size_t len, bool out,
         }
         /* records only for a run that reached the horizon, as the census */
         if (ok && rec_steps && r.status == AV_FUEL)
-            *nrec = av_trace_record_steps(tr, g->records ? g->records : 150, rec_steps);
+            *nrec = census ? av_trace_census_steps(tr, g->records ? g->records : 150, rec_steps)
+                           : av_trace_record_steps(tr, g->records ? g->records : 150, rec_steps);
         if (ok && restart) *restart = sum.last_restart;
         av_trace_flush(tr);
     }
@@ -479,12 +481,13 @@ static int run_trace(const args *g, const char *src, size_t len) {
     bool ok = true;
     printf("> %llu\n", (unsigned long long)term_line);     /* every block framed */
     fflush(stdout);
-    if (g->dump_records || g->dump_restart) {
+    if (g->dump_records || g->dump_census || g->dump_restart) {
         uint64_t *rec = NULL;
         size_t nrec = 0;
         int64_t restart = -1;
-        ok = trace_pass(g, src, len, false, NULL, 0, false, g->dump_records ? &rec : NULL,
-                        &nrec, &restart);
+        ok = trace_pass(g, src, len, false, NULL, 0, false,
+                        g->dump_records || g->dump_census ? &rec : NULL, &nrec, &restart,
+                        g->dump_census && !g->dump_records);
         if (ok) {
             dumps = malloc((nd + nrec + 1) * sizeof *dumps);
             if (!dumps) ok = false;
@@ -501,7 +504,7 @@ static int run_trace(const args *g, const char *src, size_t len) {
         if (!dumps) ok = false;
         else memcpy(dumps, g->dump_steps, nd * sizeof *dumps);
     }
-    if (ok) ok = trace_pass(g, src, len, true, dumps, nd, g->dump_halt, NULL, NULL, NULL);
+    if (ok) ok = trace_pass(g, src, len, true, dumps, nd, g->dump_halt, NULL, NULL, NULL, false);
     free(dumps);
     if (!ok) printf("! no trace\n");
     printf("$\n");                                         /* the block ends */

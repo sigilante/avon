@@ -22,7 +22,7 @@ class Avon:
         self.HD = HD
         self.p = subprocess.Popen(
             [avon, "batch", "--trace-frame=summary", f"--fuel={H}", f"--records={conf}",
-             "--frame-dump=records,halt"],
+             "--frame-dump=census,halt"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.runs = 0
 
@@ -31,8 +31,10 @@ class Avon:
         self.p.wait()
 
     def run(self, line):
-        """The block for one term: (status, steps, kind, confirmed, frames)
-        with frames {step: [items]} rebuilt as the oracle's objects."""
+        """The block for one term: (status, steps, kind), the confirmed
+        records' facts [(n, L, lowest X-headed position or 0, X-headed at
+        L-1)], and the frames the census reads, {step: [items]} rebuilt as
+        the oracle's objects."""
         HD = self.HD
         self.p.stdin.write(line + "\n")
         self.p.stdin.flush()
@@ -52,8 +54,8 @@ class Avon:
                 raise RuntimeError("avon gave no trace for " + line[:200])
             if c == ".":
                 end = (t[1], int(t[2]), t[3])
-            elif c == "C":
-                conf = [int(x) for x in t[1:]]
+            elif c == "K":
+                conf.append((int(t[1]), int(t[2]), 0 if t[3] == "-" else int(t[3]), t[4] == "1"))
             elif c == "d":
                 i, rhs = t[1].split("=")
                 if rhs == "S":
@@ -109,15 +111,14 @@ def run(av, HD, fr):
     if kind == "OPEN":
         return "OPEN", steps - 1, []
     assert kind == "FUEL", kind
+    # the census's loop over the confirmed records, its decisions on the
+    # positions avon reports: the deep items are those at or below L-3, so
+    # the lowest X-headed position is min(deep) when there are any
     mints = []
-    for n in conf:
-        frn = frames[n]
-        L = len(frn)
-        pos = [L - i for i, it in enumerate(frn) if HD.xheaded(it)]
-        deep = [p for p in pos if p <= L - 3]
-        if deep:
-            return ("FROZEN-c" if HD.certified_frozen(frn, min(deep)) else "FROZEN-u"), n, []
-        if any(p == L - 1 for p in pos):
+    for n, L, low, ym1 in conf:
+        if low and low <= L - 3:
+            return ("FROZEN-c" if HD.certified_frozen(frames[n], low) else "FROZEN-u"), n, []
+        if ym1:
             return ("FROZEN-c" if HD.certified_frozen(frames[n + 1], L - 2) else "FROZEN-u"), n, []
         m = frames[n + 1][-(L - 2)]
         mints.append((m, HD.certified_frozen(frames[n + 1], L - 2)))

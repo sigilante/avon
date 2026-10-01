@@ -845,6 +845,9 @@ bool      av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_
                        uint32_t term, size_t conf, bool want_records, av_trace_summary *sum);
 /*  The confirmed records' steps n and n+1, for a second pass; malloc'd. */
 size_t    av_trace_record_steps(const av_trace *t, size_t conf, uint64_t **out);
+/*  The frames the census reads over the confirmed records, in its order
+ *  (docs/RUNTIME.md, "Frame traces": --frame-dump=census); malloc'd. */
+size_t    av_trace_census_steps(const av_trace *t, size_t conf, uint64_t **out);
 uint64_t  av_trace_steps_seen(const av_trace *t);
 void      av_trace_flush(av_trace *t);
 /*  Y unfolded in one step (docs/DESIGN.md §6.11): call before

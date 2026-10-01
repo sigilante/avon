@@ -265,7 +265,7 @@ scripts; `tests/hider/client.py` runs the census through Avon.
 ```sh
 echo "S (S S) (S S) S X" | build/avon reduce --trace-frame --fuel=600
 build/avon enum 12 | sed 's/$/ X/' | build/avon batch --trace-frame=summary --fuel=600 \
-    --records --frame-dump=records,halt
+    --records --frame-dump=census,halt
 ```
 
 `--trace-frame` runs copy mode, head run only, never collecting, whatever
@@ -280,6 +280,8 @@ Each term gives one block:
 . WHNF 5 OPEN             status, contractions, exit: HALT-X HALT-B OPEN FUEL
 R 3 9 ...                 records (--records), when the run reaches the horizon
 C 3 9 ...                 the confirmed ones: n + CONF <= H (CONF 150)
+K 3 4 2 0                 each confirmed record: n, L, the lowest X-headed position (- none),
+                          and 1 if an X-headed item sits at L-1
 d 7=X                     dumped nodes, once each, children first:
 d 9=5.7                   S, X, or <left>.<right>
 f 2 9 10                  a dumped frame: its step, then its items from the x-seat
@@ -300,8 +302,11 @@ $                         the block ends
 - A halt (L < 3) is HALT-X with an X-headed item, HALT-B without.
 - `--trace-frame=summary` omits the per-step lines.
 - `--frame-dump=` takes steps and the keywords `records` (each confirmed
-  record n and n+1: a second pass), `halt` (the final frame at a halt) and
-  `last-restart`.
+  record n and n+1: a second pass), `census` (only the frames the census
+  reads, in its order over the confirmed records: frame n where an
+  X-headed item sits at or below L-3, and it stops; else frame n+1, and it
+  stops if one sits at L-1; also a second pass), `halt` (the final frame
+  at a halt) and `last-restart`. `census` chooses frames, not verdicts.
 - `reduce` and `batch` also read the DAG form, `dag 0=S 1=X 2=0.1 ... @2`
   on one line, ids local to the line: a dumped term handed back without
   unfolding it.

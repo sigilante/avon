@@ -225,6 +225,38 @@ TEST(records_are_the_strict_future_minima) {
     free(r.text);
 }
 
+TEST(census_dumps_are_the_frames_the_census_reads) {
+    /* r10 X rides: no confirmed record has an X-headed item at or below
+     * L-3 or at L-1, so the census reads frame n+1 of every one, for its
+     * mint -- and nothing else is dumped */
+    enum { H = 600, CONF = 150 };
+    av_arena *a = av_arena_new(1u << 12);
+    uint32_t t = av_parse(a, R10 " X", strlen(R10 " X"), NULL);
+    av_trace *tr = av_trace_new(a, "X", false, NULL);
+    CHECK(av_trace_check(tr, a, t));
+    av_opts o = av_opts_default();
+    o.strategy = AV_COPY;
+    o.whnf_only = true;
+    o.no_collect = true;
+    o.max_steps = H;
+    o.trace = tr;
+    av_result r = av_reduce(a, t, &o);
+    CHECK_EQ(r.status, AV_FUEL);
+    uint64_t *rec = NULL, *cen = NULL;
+    size_t nr = av_trace_record_steps(tr, CONF, &rec);
+    size_t nc = av_trace_census_steps(tr, CONF, &cen);
+    CHECK(nr > 0 && nr % 2 == 0);
+    CHECK_EQ(nc, nr / 2);
+    for (size_t i = 0; i < nc && i < nr / 2; i++) CHECK_EQ(cen[i], rec[2 * i + 1]);
+    free(rec);
+    free(cen);
+    av_trace_free(tr);
+    av_arena_free(a);
+    /* the frozen cases, a deep item read at n and an item at L-1 read at
+     * n+1, are checked by tests/hider/parity.py verdict on every frozen
+     * term of size <= 12, whose verdicts need exactly these frames */
+}
+
 TEST(a_dumped_frame_reads_back_in_the_dag_form) {
     uint64_t at[1] = { 40 };
     traced r = trace(R10 " X", 100, 0, at, 1, NULL);
@@ -294,6 +326,7 @@ TEST_MAIN(
     TEST_CASE(hand_traced_runs_give_their_lines),
     TEST_CASE(every_line_equals_a_recount_from_its_frame),
     TEST_CASE(records_are_the_strict_future_minima),
+    TEST_CASE(census_dumps_are_the_frames_the_census_reads),
     TEST_CASE(a_dumped_frame_reads_back_in_the_dag_form),
     TEST_CASE(k_and_i_are_refused),
     TEST_CASE(a_long_run_stays_linear)
