@@ -534,6 +534,31 @@ horizon 600, confirmation 150, depth 4; user time, one run each.
   through Avon alone: 6.1 GB of output to 222 MB, 16.6 s to 4.0 s. The
   census through Avon, sizes 1..13: 173 s to 15 s, the same verdicts;
   `make hider-check`'s verdict parity on 1..12 unchanged.
+- **Stage 2: stream the level-0 runs.** A profile of the client after
+  stage 1 put its time in waiting on one avon run at a time and in
+  building each level-0 term's DAG line, and 1.7 s in materializing the
+  census's term lists. The level-0 runs depend on nothing, so
+  `client.py census` now pipes `avon enum` into one avon from a thread and
+  reads the blocks in order while that avon runs; only the descents, each
+  depending on a verdict, go one at a time through a second avon. The
+  census through Avon, sizes 1..12: 42 s at first, 1.8 s now; sizes
+  1..13: 173 s, then 15 s, now 7.9 s. `make hider-check` checks this
+  path term by term against the census's classify, as it does the
+  one-at-a-time path.
+
+  With it, the sizes the census could not reach, run (user time and wall
+  time differ by the two avon processes and the client running at once):
+
+  | size | terms | wall time | peak memory | verdicts |
+  |---|---:|---:|---:|---|
+  | 14 | 742,900 | 23 s | 836 MB | FROZEN-c 255,253; HALT-X 326,184; OPEN 161,449; RIDE>FROZEN-c 1; RIDE>HALT-X 13 |
+  | 15 | 2,674,440 | 92 s | 863 MB | FROZEN-c 986,662; HALT-X 1,156,446; OPEN 531,296; RIDE>FROZEN-c 4; RIDE>HALT-X 32 |
+  | 16 | 9,694,845 | 357 s | 925 MB | FROZEN-c 3,783,230; HALT-X 4,138,194; OPEN 1,773,321; RIDE>FROZEN-c 13; RIDE>HALT-X 81; RIDE>OPEN 6 |
+
+  At every size through 16, every term has a certified exit: no
+  `>NONE`, no FROZEN-u. That is the census's verdict through Avon, its
+  certificate unchanged; parity with the census itself is checked to
+  size 12, where the census can run.
 - **Sizes 15 and 16, before stage 1.** At size 13's rate, 0.63 ms a term, size 15's
   2,674,440 terms would take about 28 minutes and size 16's 9,694,845 about
   1.7 hours through the client as it is; Avon's own share, about 0.08 ms a

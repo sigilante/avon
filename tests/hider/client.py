@@ -11,8 +11,49 @@ the run, and only the run.
 """
 
 import subprocess
+import threading
 
 H, CONF, MAXLEVEL = 600, 150, 4
+
+#: the census options of avon batch
+OPTS = ("--trace-frame=summary", f"--fuel={H}", f"--records={CONF}", "--frame-dump=census,halt")
+
+
+def read_block(lines, HD, what=""):
+    """One term's block from avon's output lines: (status, steps, kind), the
+    confirmed records' facts [(n, L, lowest X-headed position or 0,
+    X-headed at L-1)], and the frames the census reads, {step: [items]},
+    rebuilt as the oracle's objects."""
+    S, X = HD.S, HD.X
+    node = {}
+    end = None
+    conf = []
+    frames = {}
+    for raw in lines:
+        c = raw[0]
+        if c == "d":                            # d <id>=S|X|<l>.<r>
+            i, _, rhs = raw[2:-1].partition("=")
+            if rhs == "S":
+                node[int(i)] = S
+            elif rhs == "X":
+                node[int(i)] = X
+            else:
+                l, _, r = rhs.partition(".")
+                node[int(i)] = (node[int(l)], node[int(r)])
+        elif c == "$":
+            break
+        elif c == ".":
+            t = raw.split()
+            end = (t[1], int(t[2]), t[3])
+        elif c == "K":
+            t = raw.split()
+            conf.append((int(t[1]), int(t[2]), 0 if t[3] == "-" else int(t[3]), t[4] == "1"))
+        elif c == "f":
+            t = raw.split()
+            frames[int(t[1])] = [node[int(x)] for x in t[2:]]
+        elif c == "!":
+            raise RuntimeError("avon gave no trace for " + what[:200])
+    return end, conf, frames
 
 
 class Avon:
@@ -24,6 +65,7 @@ class Avon:
             [avon, "batch", "--trace-frame=summary", f"--fuel={H}", f"--records={conf}",
              "--frame-dump=census,halt"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.lines = iter(self.p.stdout)
         self.runs = 0
 
     def close(self):
@@ -35,39 +77,10 @@ class Avon:
         records' facts [(n, L, lowest X-headed position or 0, X-headed at
         L-1)], and the frames the census reads, {step: [items]} rebuilt as
         the oracle's objects."""
-        HD = self.HD
         self.p.stdin.write(line + "\n")
         self.p.stdin.flush()
         self.runs += 1
-        node = {}
-        end = None
-        conf = []
-        frames = {}
-        for raw in self.p.stdout:
-            t = raw.split()
-            if not t:
-                continue
-            c = t[0]
-            if c == "$":
-                break
-            if c == "!":
-                raise RuntimeError("avon gave no trace for " + line[:200])
-            if c == ".":
-                end = (t[1], int(t[2]), t[3])
-            elif c == "K":
-                conf.append((int(t[1]), int(t[2]), 0 if t[3] == "-" else int(t[3]), t[4] == "1"))
-            elif c == "d":
-                i, rhs = t[1].split("=")
-                if rhs == "S":
-                    node[int(i)] = HD.S
-                elif rhs == "X":
-                    node[int(i)] = HD.X
-                else:
-                    l, r = rhs.split(".")
-                    node[int(i)] = (node[int(l)], node[int(r)])
-            elif c == "f":
-                frames[int(t[1])] = [node[int(x)] for x in t[2:]]
-        return end, conf, frames
+        return read_block(self.lines, self.HD, line)
 
 
 def dag(u, HD):
@@ -101,7 +114,12 @@ def run(av, HD, fr):
             return "HALT-X", 0, []
         memo = {}
         return "HALT-B", 0, [(it, True) for it in fr if HD.contains_x(it, memo)]
-    (status, steps, kind), conf, frames = av.run(dag(HD.ap(HD.S, *fr), HD))
+    return decide(HD, av.run(dag(HD.ap(HD.S, *fr), HD)))
+
+
+def decide(HD, block):
+    """The rest of fixed_points_hider.run, on the block of avon's run."""
+    (status, steps, kind), conf, frames = block
     if kind == "HALT-X":
         return "HALT-X", steps, []
     if kind == "HALT-B":
@@ -150,36 +168,77 @@ def classify(av, HD, f):
     """fixed_points_hider.classify through avon: (key, exit, trail)."""
     HD.KEEP.clear()
     v, info, sub = run(av, HD, HD.spine(f) + [HD.X])
+    return finish(av, HD, v, sub)
+
+
+def finish(av, HD, v, sub):
+    """classify's last step: the descent, from the level-0 run's outcome."""
     if v in ("HALT-B", "RIDE"):
         r, tr = descend(av, HD, sub, 1, ["L0:%s" % v])
         return v + (">" + r if r else ">NONE"), r, tr
     return v, v, [v]
 
 
-def census(avon, N):
-    """The census of every closed f of size 1..N through avon: the
+def verdicts(avon, HD, N, NMIN=1):
+    """(key, exit, trail) for every closed f of size NMIN..N, in the
+    census's order, through avon.
+
+    The level-0 runs depend on nothing, so they stream: avon enum's terms,
+    each with X, go into one avon batch from a thread while this one reads
+    the blocks in order and decides; the descents, each depending on a
+    verdict, go one at a time through a second avon.  A term that is S or
+    S a, whose frame f X is shorter than three, is run by avon too and
+    halts at once with its X-headed item, as the census's first check has
+    it."""
+    lev0 = subprocess.Popen([avon, "batch", *OPTS], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, text=True, bufsize=1 << 20)
+
+    def feed():
+        for n in range(NMIN, N + 1):
+            e = subprocess.Popen([avon, "enum", str(n)], stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, text=True, bufsize=1 << 20)
+            for line in e.stdout:
+                lev0.stdin.write(line[:-1] + " X\n")
+            e.wait()
+        lev0.stdin.close()
+    threading.Thread(target=feed, daemon=True).start()
+    av = Avon(avon, HD)                         # the descents
+    lines = iter(lev0.stdout)
+    for raw in lines:
+        if raw[0] != ">":
+            continue
+        if len(HD._CLS) > 3000000:
+            HD.clear_memos()
+        HD.KEEP.clear()
+        v, _info, sub = decide(HD, read_block(lines, HD))
+        yield finish(av, HD, v, sub)
+    lev0.wait()
+    av.close()
+    verdicts.descents = av.runs
+
+
+def census(avon, N, NMIN=1):
+    """The census of every closed f of size NMIN..N through avon: the
     verdict counts, with progress every 10**5 terms."""
     import time
     import oracle
     HD = oracle.load()
     t0 = time.time()
-    av = Avon(avon, HD)
     counts = {}
     total = 0
-    for n in range(1, N + 1):
-        for f in HD.closed(n):
-            if len(HD._CLS) > 3000000:
-                HD.clear_memos()
-            key, _r, _tr = classify(av, HD, f)
-            counts[key] = counts.get(key, 0) + 1
-            total += 1
-            if total % 100000 == 0:
-                print(f"  {total} terms: {dict(sorted(counts.items()))} [{time.time() - t0:.0f}s]", flush=True)
-    av.close()
-    print(f"census through avon, sizes 1..{N}: {dict(sorted(counts.items()))} "
-          f"({total} terms, {av.runs} avon runs, {time.time() - t0:.0f}s)")
+    for key, _r, _tr in verdicts(avon, HD, N, NMIN):
+        counts[key] = counts.get(key, 0) + 1
+        total += 1
+        if total % 100000 == 0:
+            print(f"  {total} terms: {dict(sorted(counts.items()))} [{time.time() - t0:.0f}s]", flush=True)
+    print(f"census through avon, sizes {NMIN}..{N}: {dict(sorted(counts.items()))} "
+          f"({total} terms, {total + verdicts.descents} avon runs, {time.time() - t0:.0f}s)")
+    return counts
 
 
 if __name__ == "__main__":
+    # client.py N [AVON] [NMIN]: the census of sizes NMIN..N (NMIN 1)
     import sys
-    census(sys.argv[2] if len(sys.argv) > 2 else "build/avon", int(sys.argv[1]) if len(sys.argv) > 1 else 12)
+    census(sys.argv[2] if len(sys.argv) > 2 else "build/avon",
+           int(sys.argv[1]) if len(sys.argv) > 1 else 12,
+           int(sys.argv[3]) if len(sys.argv) > 3 else 1)

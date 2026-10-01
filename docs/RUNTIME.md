@@ -260,7 +260,9 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 For the pure-S paper's hider census (§22): an observation of copy mode's
 head run on a term of S and one opaque atom, the passenger (`X` unless
 `--passenger=NAME`). Verdicts and certificates stay with the census's
-scripts; `tests/hider/client.py` runs the census through Avon.
+scripts; `tests/hider/client.py` runs the census through Avon:
+`python3 tests/hider/client.py 16 build/avon 16` is the census of size 16
+(`N AVON NMIN`), about six minutes.
 
 ```sh
 echo "S (S S) (S S) S X" | build/avon reduce --trace-frame --fuel=600

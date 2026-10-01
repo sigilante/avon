@@ -7,7 +7,9 @@
 #      census's run line for line, and its exit;
 #   3. verdicts: the census through avon (tests/hider/client.py) gives the
 #      census's classify(f), verdict, exit and trail;
-#   4. the five named cases.
+#   4. the streaming census (avon enum into avon, as client.py census runs)
+#      gives the same, term by term;
+#   5. the five named cases.
 #
 # Run from the repository root after `make`.  HIDER_SCRIPTS names the
 # paper's scripts/ directory; HIDER_N the largest size (default 12).
@@ -25,5 +27,6 @@ P="python3 tests/hider/parity.py"
 $P enum "$N" --avon "$AVON"
 $P trace "$N" --avon "$AVON"
 $P verdict "$N" --avon "$AVON"
+$P stream "$N" --avon "$AVON"
 $P named --avon "$AVON"
 echo "hider check passed: enumeration, traces, verdicts and the named cases as the census has them"

@@ -16,6 +16,10 @@
     enum N          avon enum n gives the census's closed(n), in its order,
                     for every n <= N.
 
+    stream N        the streaming census (client.verdicts: avon enum into one
+                    avon, the descents through another) gives classify(f)
+                    for every closed f of size 1..N, term by term.
+
     python3 tests/hider/parity.py trace 12 --avon build/avon
 """
 
@@ -190,9 +194,32 @@ def mode_enum(avon, N):
     return 0 if bad == 0 else 1
 
 
+def mode_stream(avon, N):
+    HD = oracle.load()
+    if HD is None:
+        print("no oracle at", oracle.SCRIPTS); return 2
+    t0 = time.time()
+    terms = [f for n in range(1, N + 1) for f in HD.closed(n)]
+    got = list(client.verdicts(avon, HD, N))
+    bad = 0 if len(got) == len(terms) else 1
+    if bad:
+        print(f"DIFFER: {len(got)} verdicts for {len(terms)} terms")
+    for f, g in zip(terms, got):
+        if len(HD._CLS) > 3000000:
+            HD.clear_memos()
+        key, r, tr, _info = HD.classify(f)
+        if g != (key, r, tr):
+            bad += 1
+            if bad <= 10:
+                print(f"DIFFER {HD.show(f)}: stream {g}, oracle {(key, r, tr)}")
+    print(f"streaming census parity, sizes 1..{N}: {len(terms) - bad} of {len(terms)} agree "
+          f"({time.time() - t0:.0f}s)")
+    return 0 if bad == 0 else 1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["trace", "verdict", "named", "enum"])
+    ap.add_argument("mode", choices=["trace", "verdict", "named", "enum", "stream"])
     ap.add_argument("N", type=int, nargs="?", default=12)
     ap.add_argument("H", type=int, nargs="?", default=600)
     ap.add_argument("--avon", default="build/avon")
@@ -203,6 +230,8 @@ def main():
         return mode_named(a.avon)
     if a.mode == "enum":
         return mode_enum(a.avon, a.N)
+    if a.mode == "stream":
+        return mode_stream(a.avon, a.N)
     return mode_trace(a.avon, a.N, a.H)
 
 
