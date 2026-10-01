@@ -2036,6 +2036,14 @@ the run, and publishes them with the statement. §8's rule applies: the
 elided-fuel policy may size a budget off the record, but may not choose the
 one a proof uses.
 
+A composed statement with jets (`docs/ZK-JETS.md`) names four budgets in
+its `log R M Lp Li` line: rows, memory cells, and POP's and INSTW's rows --
+the instantiations' argument pops and written cells. `avon witness
+--statement=PUBLIC --jet-table=JETS WITNESS` pads its table to the
+statement's heights, not to the next power of two above the run, and
+refuses a run over any of the four. Under hiding a height chosen from the
+run would publish the run's size.
+
 ### 17.3 What a witness does not yet give
 
 - **An output, except by probing.** The constraints fix the run, not the
