@@ -1,9 +1,13 @@
 # Jets under hiding
 
-> **Status (2026-09-29).** A design, not built. It joins two circuits that
-> lean-ski has proved separately, the composed statement in zero knowledge
-> and the supercombinator jet circuit, into one circuit whose proofs hide
-> the witness and instantiate licensed templates. Each claim below about
+> **Status (2026-09-30).** Being built: milestones 1–4 of §9 are done.
+> The circuit exists as data in Lean and in Rust, the two agree constraint
+> for constraint, and its honest proofs verify under hiding; its
+> soundness, completeness and zero knowledge (milestones 5–7) are not yet
+> proved. It joins two circuits that lean-ski has proved separately, the
+> composed statement in zero knowledge and the supercombinator jet
+> circuit, into one circuit whose proofs hide the witness and instantiate
+> licensed templates. Each claim below about
 > what exists names its file; each claim about what will exist is marked
 > as a design decision or an obligation. Where this note and lean-ski's
 > sources differ, the sources are authoritative. `DESIGN.md` §17.3 and §18
@@ -141,6 +145,15 @@ function numbers a restart 11 (`kindCf`, `CompTable.lean`), and 11 is
 `INST`'s selector (`SEL + 11`). *Obligation:* `kind_ofCJ`, the kind
 analysis of the union, with the restart renumbered.
 
+*Built (milestone 4):* the CPU is 149 columns. The corpus CPU's 121, the
+jet columns at 121–130 (`JetAir.lean`'s indices, so the jet soundness
+proofs read the same columns), the three blinding blocks `a`, `b`, `c` at
+131–145, and the restart columns `RS`, `CNT`, `ROOT` at 146–148. The
+restart selector is its own column outside the fourteen kinds, so in the
+data `INST` and the restart are distinct; the collision is only in the
+kind numbering of the proofs, where the restart can be numbered 14, its
+place in the one-hot sum (`Ski/Circuit/CompJAir.lean`, `cpuAirCJ`).
+
 **The statement** is lean-ski's `CStmt` (a formula or a predicate), the
 region size, the heights, and the jet table:
 
@@ -193,8 +206,10 @@ private columns, and `inst_sound_g` substitutes them as arguments.
 - **POP and INSTW:** all-zero rows. With `act = 0`, `popCons` forces
   `uses = 0` and `instwCons` forces every operand flag to 0, so a zero row
   sends nothing on any bus (`JetAir.lean`, `popCons`, `instwCons`).
-- **The provider tables:** as today, copies of the first row with
-  multiplicity 0 (`pad_copies`).
+- **The provider tables:** copies of the first row with multiplicity 0,
+  as today (`pad_copies`), but to at least `2^8` rows rather than `2^4`,
+  as the hiding PCS commits no table shorter (`padCopies8`). A copy is a
+  genuine row, so a multiplicity on it provides only a genuine tuple.
 
 **Height bound.** `HeightsOK` weighs each table's rows by its
 interactions and requires the sum below `P` (`Air.lean`). The jet CPU
@@ -312,7 +327,13 @@ the POP and INSTW chains and the provider multiplicities, pads to the
 statement's heights, and writes the seven blinding tuples before proving.
 It proves under `HidingFriPcs` with the composed prover's configuration.
 Its verifier:
-- pins every height to the statement's;
+- pins every height to the statement's. *Built (milestone 4):* the CPU's
+  and memory's come from the statement's `log R M`; POP's and INSTW's are
+  the verifier's arguments `LP` and `LI`, each in `[8, 20]`, not yet lines
+  of the statement. Soundness does not depend on them (Plonky3 bounds the
+  LogUp multiplicities by the real heights). Zero knowledge does: a prover
+  who chose them per run would publish the size of its instantiations, so
+  the statement must carry them (`log R M Lp Li`, §4) before milestone 7;
 - runs the Lean statement check, which compares the jet table with the
   one Lean recomputes and checks the roots;
 - compares its AIRs with Lean's `compJAirs`.
@@ -375,9 +396,21 @@ the tree; its height is a public budget like POP's.
    `cjets-measure`). The hazard is real: without the rule, `split8`'s
    table licenses 47 roots and 3 globals that reach a private cell, and
    fails `rootsOKB` over the honest filled heap.
-4. **The circuit as data.** `compJAirs` in Lean and `compJ.rs` in Rust, the
-   ten tables of §4 with the tree of §5, compared by `lake exe circuit
-   compare-compJ`.
+4. **The circuit as data.** *Done, 2026-09-30.* `compJAirs` in
+   lean-ski's `Ski/Circuit/CompJAir.lean` and `bench/plonky3/src/compj.rs`,
+   the ten tables of §4 with the tree of §5. `lake exe circuit compare-compJ
+   SRC -` checks the statement, the jet table (`Air.jetStmtC`) and the ten
+   AIRs, constraint for constraint and preprocessed row for row, on every
+   verification. Proved and verified under hiding (`ski-air compj-prove`,
+   `compj-verify`): `split8` in 11,599 CPU rows, 8,614 POP and 12,363
+   INSTW at heights `2^17 2^18 2^14 2^14`, in 11 s; `csplit8` at
+   `2^18 2^19 2^17 2^17`, where without jets it needs `2^19 2^20`, in 26 s
+   against 42; and the three-segment `and` and `or`, whose segments restart
+   between instantiations. Wrong, clear, non-Boolean and forged witnesses,
+   a wrong budget and an unbalanced blinding tree are refused. For
+   milestone 5, `compJAirs_composed` (memory, program, witness and segments
+   are the composed circuit's) and `withBlocks_cons` (a blinded table keeps
+   its own constraints and messages first).
 5. **Soundness.** `kind_ofCJ`, `composedJ_sound`, `chead_K`,
    `compJExport_sound`, and the checker `checkCJ`.
 6. **Completeness.** `compJ_complete_log`.
@@ -396,9 +429,14 @@ the tree; its height is a public budget like POP's.
 - **Eight blinded tables take seven tuples,** five more than the composed
   circuit's two, and ten more blocks, 50 columns. They are small beside
   POP and INSTW themselves.
-- **The CPU union is wide:** the jet CPU is 131 columns, and the composed
-  CPU adds its restart and blinding columns. Width costs commitment time,
+- **The CPU union is wide:** 149 columns, the jet CPU's 131 with three
+  blinding blocks and the restart columns. Width costs commitment time,
   not rows.
+- **The composed facts move.** The restart columns sit at 146–148, not the
+  composed CPU's 131–133, so the composed CPU's row lemmas (`CompRow`,
+  `CompKind`) must be restated for the union, or generalized over the
+  restart's base column, in milestone 5. The jet columns keep their
+  indices, so `JetCore` applies as it is.
 - **The closure rule narrows the jets.** A template whose closed subterm
   occurs only in cells that reach private addresses gets no global, and a
   root whose term reaches them is not licensed. On `split8` in the clear
