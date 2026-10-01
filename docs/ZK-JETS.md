@@ -1,10 +1,10 @@
 # Jets under hiding
 
-> **Status (2026-09-30).** Being built: milestones 1–4 of §9 are done.
+> **Status (2026-09-30).** Being built: milestones 1–5 of §9 are done.
 > The circuit exists as data in Lean and in Rust, the two agree constraint
-> for constraint, and its honest proofs verify under hiding; its
-> soundness, completeness and zero knowledge (milestones 5–7) are not yet
-> proved. It joins two circuits that lean-ski has proved separately, the
+> for constraint, its honest proofs verify under hiding, and its soundness
+> is proved (`compJExport_sound`); its completeness and zero knowledge
+> (milestones 6–7) are not yet. It joins two circuits that lean-ski has proved separately, the
 > composed statement in zero knowledge and the supercombinator jet
 > circuit, into one circuit whose proofs hide the witness and instantiate
 > licensed templates. Each claim below about
@@ -277,7 +277,8 @@ the value, keeping its head and arity (`jet_run_shape`, lean-ski
 `Ski/SmallLemma.lean`: `∃ v', Eval t v' ∧ chead v' = chead v`). A segment
 that halts at `K` over the empty stack has value `K`, of arity 0, so the
 unjetted value has head `K` and arity 0 and is `K`. *Obligation:*
-`chead_K`: `chead v' = chead K → Whnf v' → v' = K`.
+`chead_K`: `chead v' = chead K → Whnf v' → v' = K` (proved, milestone 5,
+without the `Whnf` hypothesis).
 
 *Obligations, soundness:*
 - `jet_run_shape` is stated for runs from `load t`; the composed machine
@@ -411,8 +412,19 @@ the tree; its height is a public budget like POP's.
    milestone 5, `compJAirs_composed` (memory, program, witness and segments
    are the composed circuit's) and `withBlocks_cons` (a blinded table keeps
    its own constraints and messages first).
-5. **Soundness.** `kind_ofCJ`, `composedJ_sound`, `chead_K`,
-   `compJExport_sound`, and the checker `checkCJ`.
+5. **Soundness.** *Done, 2026-09-30,* in lean-ski's `Ski/ComposedJ.lean`
+   and `Ski/Circuit/CompJ*.lean`, axiom-clean. `kind_ofCJ` numbers the
+   kinds `0`–`10`, `INST` `11` and the restart `12`. `composedJ_sound`
+   runs each segment as jetted steps; `chead_K` needs no `Whnf`
+   hypothesis (an application has arity at least 1). The jet circuit's
+   instantiation argument carries over whole (`CJOK.core : JetCore`, so
+   `JetCore.inst`). `compJExport_sound`: for a jet table `jetStmtC`
+   accepts and whose numbers fit, an accepted proof's memory holds bits
+   and a region whose witness makes every term evaluate to `K`, exactly
+   `compExportG_sound`'s conclusion; `predJExport_sound` for a predicate.
+   The checker `checkCJ` (`checkCJ_sound`, `lake exe composed check-cj`)
+   accepts the honest tables of `split8`, `and` and `or` and rejects
+   tampered ones.
 6. **Completeness.** `compJ_complete_log`.
 7. **Zero knowledge.** `compJ_transcript`.
 8. **Avon.** Public budgets, the composed machine, and
