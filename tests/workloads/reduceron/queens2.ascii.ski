@@ -1,0 +1,62 @@
+-- Reduceron's Queens2 (Naylor and Runciman, JFP 2012): the 11-queens
+-- solutions by Runciman's symbolic masks.
+bool === False | True
+nat  === Zero | Suc nat
+tag  === L | R | D
+tl   === TNil | TCons tag tl
+ml   === MNil | MCons tl ml
+fl   === FNil | FCons ml fl
+sl   === SNil | SCons fl sl
+
+pred n = n |> { Zero Zero ; Suc m m }
+add m n = natAdd m n
+eqNat m n = natIfEq m n True False
+
+eq x y = x |> { L (y |> { L True ; R False ; D False }) ; R (y |> { L False ; R True ; D False }) ; D (y |> { L False ; R False ; D True }) }
+
+tail xs = xs |> { MNil MNil ; MCons x r r }
+
+one p xs = xs |> { TNil TNil ; TCons x r (p x |> { False one p r ; True TCons x TNil }) }
+
+mapM f xs = xs |> { MNil MNil ; MCons x r MCons (f x) (mapM f r) }
+mapF f xs = xs |> { FNil FNil ; FCons x r FCons (f x) (mapF f r) }
+mapS f xs = xs |> { SNil SNil ; SCons x r SCons (f x) (mapS f r) }
+
+appendT xs ys = xs |> { TNil ys ; TCons x r TCons x (appendT r ys) }
+appendF xs ys = xs |> { FNil ys ; FCons x r FCons x (appendF r ys) }
+appendS xs ys = xs |> { SNil ys ; SCons x r SCons x (appendS r ys) }
+
+concatMap f xs = xs |> { FNil SNil ; FCons x r appendS (f x) (concatMap f r) }
+
+length xs = lengthAcc Zero xs
+lengthAcc acc xs = xs |> { SNil acc ; SCons x r lengthAcc (Suc acc) r }
+
+replicate n = n |> { Zero MNil ; Suc m MCons TNil (replicate m) }
+
+left xs = mapM (one (eq L)) (tail xs)
+right xs = MCons TNil (mapM (one (eq R)) xs)
+down xs = mapM (one (eq D)) xs
+
+merge xs ys = xs |> { MNil MNil ; MCons x r (ys |> { MNil MCons x r ; MCons y s MCons (appendT x y) (merge r s) }) }
+
+next mask = merge (merge (down mask) (left mask)) (right mask)
+
+fill xs = xs |> { MNil FNil ; MCons x r appendF (lrd x r) (mapF (MCons x) (fill r)) }
+
+lrd x ys = x |> { TNil FCons (MCons (TCons L (TCons R (TCons D TNil))) ys) FNil ; TCons a b FNil }
+
+solve n mask = n |> { Zero SCons FNil SNil ; Suc m concatMap (sol m) (fill mask) }
+
+sol n row = mapS (FCons row) (solve n (next row))
+
+nqueens n = length (solve n (replicate n))
+
+n10 = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))))
+mul m n = natMul m n
+
+n2 = Suc (Suc Zero)
+n6 = add n2 (add n2 n2)
+n8 = add n2 n6
+
+-- 11 queens have 2,680 solutions: 100 * 26 + 80
+main = eqNat (nqueens (Suc n10)) (add (mul (mul n10 n10) (add (mul n2 n10) n6)) (mul n8 n10))

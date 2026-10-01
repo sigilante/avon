@@ -1,0 +1,34 @@
+-- Reduceron's PermSort (Naylor and Runciman, JFP 2012): sort ten numbers
+-- by taking the first ordered permutation.  Numbers are Scott numerals
+-- where the original has integers, so <= takes up to ten steps, not one.
+bool === False | True
+nat  === Zero | Suc nat
+nl   === Nil | Cons nat nl
+nll  === LNil | LCons nl nll
+
+and a b = a |> { False False ; True b }
+leNat m n = natIfLe m n True False
+eqNat m n = natIfEq m n True False
+
+head xs = xs |> { LNil Nil ; LCons x r x }
+mapCons y xs = xs |> { LNil LNil ; LCons x r LCons (Cons y x) (mapCons y r) }
+appendL xs ys = xs |> { LNil ys ; LCons x r LCons x (appendL r ys) }
+concatMap f xs = xs |> { LNil LNil ; LCons x r appendL (f x) (concatMap f r) }
+filter p xs = xs |> { LNil LNil ; LCons x r (p x |> { True LCons x (filter p r) ; False filter p r }) }
+
+place x ys = ys |> { Nil LCons (Cons x Nil) LNil ; Cons y r LCons (Cons x ys) (mapCons y (place x r)) }
+perm xs = xs |> { Nil LCons Nil LNil ; Cons x r concatMap (place x) (perm r) }
+
+ord xs = xs |> { Nil True ; Cons x r ord1 x r }
+ord1 x r = r |> { Nil True ; Cons y s and (leNat x y) (ord1 y s) }
+
+permSort xs = head (filter ord (perm xs))
+
+eqList xs ys = xs |> { Nil (ys |> { Nil True ; Cons y s False }) ; Cons x r (ys |> { Nil False ; Cons y s and (eqNat x y) (eqList r s) }) }
+countdown n = n |> { Zero Nil ; Suc m Cons n (countdown m) }
+upto k n = eqNat k n |> { True Cons n Nil ; False Cons k (upto (Suc k) n) }
+
+n10 = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))))
+
+-- the sorted list is 1 .. 10
+main = eqList (permSort (countdown n10)) (upto (Suc Zero) n10)

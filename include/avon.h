@@ -33,7 +33,15 @@ typedef struct { uint32_t l, r; } av_node;
  *  dashboard's (shared, never to be written) or its own (docs/DESIGN.md
  *  §6.5: share mode writes only nodes its run created). */
 #define AV_JET_SHARED (1u << 29)
-#define AV_JET_ID(l)  ((l) & (AV_JET_SHARED - 1))
+
+/*  A word (docs/DESIGN.md §6.10) is a jet node too, flagged here, and seen
+ *  through by av_view like any jet node: W n, the numeral n >= 1 held as a
+ *  number, its term SUC (W (n-1)), W 0 being K, so the predecessor is
+ *  always its term's right child.  The id field of a word holds n; of any
+ *  other jet node, the jet id. */
+#define AV_JET_WORD   (1u << 28)
+#define AV_JET_ID(l)  ((l) & (AV_JET_WORD - 1))
+#define AV_WORD_MAX   (AV_JET_WORD - 1u)
 
 /*  The most arguments a residual jet takes (§6.5).  Joy's words are
  *  constructors of a 12-way sum; Lit and Quote carry a field, so take 13. */
@@ -108,6 +116,10 @@ typedef struct {
     uint32_t   tmpl_scratch_cap;
     uint32_t   compiler[9];     /* the compiler jet's terms (§20.3), roots:
                                    abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
+    uint32_t   word_suc;        /* words' successor term (§6.10), a root;
+                                   0 while words are off                  */
+    bool       fix_on;          /* Y unfolds in one step (§6.11): the next
+                                   template load registers it             */
     struct av_pma *pma;         /* the persistent image (§19.1), or NULL  */
     uint64_t   lookups;         /* scries answered natively from it      */
 } av_arena;
@@ -148,6 +160,20 @@ static inline uint32_t av_right(const av_arena *a, uint32_t i) {
 static inline uint32_t av_res(const av_arena *a, uint32_t i) {
     while (av_tag(a, i) == AV_IND) i = av_left(a, i);
     return i;
+}
+
+/*  A word (§6.10), and its value; a numeral held natively: K is 0. */
+static inline bool av_is_word(const av_arena *a, uint32_t i) {
+    return av_tag(a, i) == AV_JET && (a->nodes[i].l & AV_JET_WORD);
+}
+static inline uint32_t av_word_value(const av_arena *a, uint32_t i) {
+    return a->nodes[i].l & AV_WORD_MAX;
+}
+static inline bool av_numeral(const av_arena *a, uint32_t i, uint32_t *n) {
+    i = av_res(a, i);
+    if (i == AV_NODE_K) { *n = 0; return true; }
+    if (av_is_word(a, i)) { *n = av_word_value(a, i); return true; }
+    return false;
 }
 
 /*  Follow indirections and jet wrappers: the term a node denotes.  Every
@@ -312,6 +338,8 @@ typedef struct {
     uint64_t    jet_check;      /* check every Nth fire against the
                                    unjetted run (§6.6); 0 never */
     struct av_census *census;   /* copy mode: record calls; NULL off */
+    struct av_trace *trace;     /* copy mode: observe the head run (§22);
+                                   NULL off                               */
     struct av_profile *profile; /* share mode: charge each contraction to
                                    a named term (§6.7); NULL off */
     struct av_jetstats *jetstats;   /* count each jet's fires, misses and
@@ -319,6 +347,11 @@ typedef struct {
                                    (§6.7); NULL off */
     bool        templates;      /* share mode: instantiate supercombinator
                                    templates (§6.9); copy mode ignores it */
+    bool        data;           /* share mode: data jets (§6.10), numeral
+                                   operations on words and constructor
+                                   dispatch; copy mode ignores it         */
+    bool        fix;            /* share mode: Y g unfolds to g (Y g) in
+                                   one step (§6.11); copy mode ignores it */
 } av_opts;
 
 typedef struct {
@@ -331,6 +364,15 @@ typedef struct {
     bool      jet_fault;    /* a jet check disagreed: status INTERRUPTED  */
     uint64_t  tmpl_calls;   /* template instantiations, one step each,
                                among steps (§6.9)                         */
+    uint64_t  dispatches;   /* data jets (§6.10): a word or a constructor
+                               template meeting its continuations, one
+                               step each, among steps                     */
+    uint64_t  fused;        /* dispatches that instantiated the branch's
+                               template in the same step, among them      */
+    uint64_t  word_ops;     /* numeral operations run on words, one step
+                               each, among steps                          */
+    uint64_t  fix_calls;    /* Y unfolded (§6.11), one step each, among
+                               steps                                      */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -596,6 +638,10 @@ bool av_prefix(const av_arena *a, uint32_t t, size_t budget, av_buf *out);
 /*  Parse the prefix form: S, K, I, and ` before an application's function
  *  and argument, surrounding whitespace allowed.  AV_NONE on anything else.
  */
+/*  The DAG form, `dag <id>=<rhs> ... @<root>` on one line (docs/RUNTIME.md,
+ *  "Frame traces"): AV_NONE with *msg on anything malformed. */
+uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg);
+
 uint32_t av_parse_prefix(av_arena *a, const char *src, size_t len,
                          const char **err);
 
@@ -669,7 +715,13 @@ typedef struct av_jet {
     bool      unquote;          /* the unquoter, UQ (§20.2): install      */
     bool      compiler;         /* the compiler's abstraction (§20.3)     */
     uint32_t  tmpl;             /* 1 + its template in a->tmpls (§6.9), or 0 */
+    uint8_t   word_op;          /* a numeral operation on words (§6.10):
+                                   an AV_WOP_*, or 0                      */
+    bool      fix;              /* Curry's Y (§6.11): Y g unfolds to g (Y g) */
 } av_jet;
+
+/*  The numeral operations (§6.10), skijack's natAdd .. natIfLe. */
+enum { AV_WOP_ADD = 1, AV_WOP_SUB, AV_WOP_MUL, AV_WOP_IFEQ, AV_WOP_IFLE };
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
  *  no arity up to AV_JET_ARITY_MAX at which an atom reaches the head within max_steps, or
@@ -782,7 +834,17 @@ typedef struct av_tmpl {
     uint32_t  nconsts;
     uint32_t  root;             /* the operand the instance is            */
     uint32_t  key;              /* its term, canonical at load            */
+    bool      root_last;        /* the root is the last instruction: an
+                                   instance may write it over the redex   */
     bool      globals_made;
+    uint8_t  *sucop;            /* per instruction: it applies SUC, so an
+                                   instance may build a word (§6.10); NULL
+                                   when none does                         */
+    uint32_t  nsuc;             /* such instructions: an instance takes
+                                   nops + nsuc nodes at most              */
+    av_ctor   ctor;             /* a Scott constructor's shape (§6.8), if
+                                   its body is v_h v0 .. v(m-1): data jets
+                                   dispatch it (§6.10)                    */
 } av_tmpl;
 
 typedef struct av_tmplset av_tmplset;
@@ -797,6 +859,65 @@ bool        av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t);
 void        av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,
                                 long *skipped, long *unbound);
 void        av_templates_free(av_tmplset *ts);
+/*  Numeral operations (§6.10) the templates' DIR/words.tsv offered: those
+ *  admitted, and those whose terms failed their probes. */
+void        av_templates_word_counts(const av_tmplset *ts, long *admitted, long *refused);
+/*  Whether the load registered Y (§6.11): av_fix_on was called first. */
+bool        av_templates_fix(const av_tmplset *ts);
+
+/*  ------------------------------------------------------------ words
+ *
+ *  Data jets on numerals (docs/DESIGN.md §6.10).  Turn words on before
+ *  av_templates_load, which then reads DIR/words.tsv, skijack's numeral
+ *  operations; after av_templates_bind, av_words_scan turns the closed
+ *  numerals of t and of the templates' globals into words, in place, and
+ *  av_words_mark finds the template instructions that apply SUC.  With
+ *  av_opts.data, share mode runs an operation natively when its operands
+ *  are words already, and otherwise runs its term.  A word meeting its
+ *  continuations dispatches in one step whether or not the option is on:
+ *  it exists only where these calls made it.
+ */
+bool av_words_on(av_arena *a);
+
+/*  ------------------------------------------------------------ frame traces
+ *
+ *  An observer of copy mode's head run (docs/DESIGN.md §22), for the pure S
+ *  calculus with one opaque atom, the passenger: before each S contraction
+ *  a line `n L positions d D event arity` (docs/RUNTIME.md, "Frame
+ *  traces"), frames dumped as a node table at chosen steps, and, at the
+ *  end, the halt and the records.  It decides nothing.  Set av_opts.trace
+ *  with av_opts.no_collect, strategy copy and whnf_only.
+ */
+typedef struct av_trace av_trace;
+typedef struct {
+    const char *kind;           /* HALT-X HALT-B OPEN FUEL -              */
+    size_t      nconf;          /* confirmed records                      */
+    int64_t     last_restart;   /* -1: none                               */
+} av_trace_summary;
+/*  out NULL: a silent pass (steps and records only, for a second pass). */
+av_trace *av_trace_new(av_arena *a, const char *passenger, bool steps_out, FILE *out);
+void      av_trace_free(av_trace *t);
+/*  Whether every node of the term is S, the passenger, or an application. */
+bool      av_trace_check(av_trace *t, const av_arena *a, uint32_t root);
+bool      av_trace_dump_at(av_trace *t, const uint64_t *steps, size_t n);
+void      av_trace_dump_halt(av_trace *t, bool on);
+bool      av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t steps,
+                       uint32_t term, size_t conf, bool want_records, av_trace_summary *sum);
+/*  The confirmed records' steps n and n+1, for a second pass; malloc'd. */
+size_t    av_trace_record_steps(const av_trace *t, size_t conf, uint64_t **out);
+/*  The frames the census reads over the confirmed records, in its order
+ *  (docs/RUNTIME.md, "Frame traces": --frame-dump=census); malloc'd. */
+size_t    av_trace_census_steps(const av_trace *t, size_t conf, uint64_t **out);
+uint64_t  av_trace_steps_seen(const av_trace *t);
+void      av_trace_flush(av_trace *t);
+/*  Y unfolded in one step (docs/DESIGN.md §6.11): call before
+ *  av_templates_load, which then registers Curry's Y, found in the loaded
+ *  term and the templates' globals by tree identity.  With av_opts.fix,
+ *  share mode rewrites Y g, Y at the head with an argument, to g (Y g), a
+ *  fresh Y g: convertible, acyclic, one step. */
+void av_fix_on(av_arena *a);
+long av_words_scan(av_arena *a, uint32_t t);    /* words made, or -1 */
+bool av_words_mark(av_arena *a);
 
 /*  ------------------------------------------------------------ jet stats
  *
@@ -855,10 +976,11 @@ uint32_t av_front0_input(av_arena *a, const av_front0 *f, const char *src, size_
 /*  Reduce t, from av_front0_input, reading its result by probing with
  *  collection on: a line `name TAB hash` per name, in its order, or
  *  `RErr`.  0 for ROk, 1 for RErr, -1 with *err if it does not read.
- *  *steps counts every probe's contractions, and *tmpl_calls (if not
- *  NULL) the template instantiations among them (§6.9). */
+ *  *steps counts every probe's contractions, and *tally (if not NULL)
+ *  sums them with the template instantiations (§6.9), dispatches and
+ *  numeral operations (§6.10) among them. */
 int      av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
-                        uint64_t *steps, uint64_t *tmpl_calls, const char **err);
+                        uint64_t *steps, av_result *tally, const char **err);
 
 /*  ---------------------------------------------------------------- profile
  *

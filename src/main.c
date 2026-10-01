@@ -61,8 +61,8 @@
  *                                     calls file through DIR/abs.skit, or its
  *                                     jet, checked against Python's by hash
  *      avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]
- *                  [--templates=DIR] [--names=FILE]... [--fuel=N] [--max-nodes=N]
- *                  DIR SOURCE
+ *                  [--templates=DIR [--data] [--fix]] [--names=FILE]... [--fuel=N]
+ *                  [--max-nodes=N] DIR SOURCE
  *                                     the SKIjack-0 front end (docs/DESIGN.md
  *                                     §20.3) on SOURCE: DIR/front.skit and the
  *                                     input's constructors; each name and its
@@ -83,8 +83,12 @@
  *  --profile=NAMES (share mode: each contraction charged to the named term
  *  whose code it runs, reported on stderr, §6.7), --templates=DIR (share
  *  mode: DIR/templates.tsv and DIR/template_terms.tsv, supercombinator
- *  templates checked against the terms and instantiated, §6.9;
- *  docs/RUNTIME.md is the user's guide).
+ *  templates checked against the terms and instantiated, §6.9), --data
+ *  (with --templates: data jets, §6.10: constructor templates dispatched,
+ *  fused into the branch's template, numerals held as words, and
+ *  DIR/words.tsv's numeral operations run on them natively), --fix (with
+ *  --templates: Y g unfolded to g (Y g) in one step, §6.11).
+ *  docs/RUNTIME.md is the user's guide.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -114,7 +118,16 @@ typedef struct {
     uint64_t    jet_floor;
     const char *profile;          /* --profile: a names file, or NULL */
     const char *templates;        /* --templates: a directory, or NULL */
+    bool        data;             /* --data: data jets (§6.10) */
+    bool        fix;              /* --fix: Y unfolded in one step (§6.11) */
     const char *file;
+    /* frame traces (§22) */
+    int         trace;            /* 0 off, 1 summary, 2 a line per step */
+    const char *passenger;
+    size_t      records;          /* the confirmation window; 0: no records */
+    uint64_t    dump_steps[64];   /* --frame-dump steps */
+    size_t      ndump;
+    bool        dump_records, dump_halt, dump_restart, dump_census;
 } args;
 
 static int usage(void) {
@@ -130,7 +143,7 @@ static int usage(void) {
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
-        "        --profile=NAMES --templates=DIR)\n"
+        "        --profile=NAMES --templates=DIR --data --fix)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"
@@ -144,8 +157,12 @@ static int usage(void) {
         "       (boot, poke, peek, load accept --strategy=, --fuel=, --budget=)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
-        "                   [--templates=DIR]\n"
+        "                   [--templates=DIR [--data] [--fix]]\n"
         "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
+        "       avon enum N [--start=K] [--count=M]\n"
+        "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"
+        "       (reduce and batch accept --trace-frame[=summary] --passenger=NAME\n"
+        "        --records[=CONF] --frame-dump=STEPS|records|census|halt|last-restart)\n"
         "       avon --version\n");
     return 2;
 }
@@ -168,6 +185,8 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->interp = NULL;
     g->profile = NULL;
     g->templates = NULL;
+    g->data = false;
+    g->fix = false;
     g->jet_table = NULL;
     g->plan = NULL;
     g->statement = NULL;
@@ -175,6 +194,11 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->rows = 1u << 21;          /* bench/plonky3's MAX_LOG_HEIGHT */
     g->cells = 1u << 21;
     g->file = NULL;
+    g->trace = 0;
+    g->passenger = "X";
+    g->records = 0;
+    g->ndump = 0;
+    g->dump_records = g->dump_halt = g->dump_restart = g->dump_census = false;
     for (int i = 2; i < argc; i++) {
         const char *s = argv[i];
         uint64_t v;
@@ -200,6 +224,8 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--no-jets") == 0)        g->o.jets = false;
         else if (strncmp(s, "--profile=", 10) == 0 && s[10]) g->profile = s + 10;
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) g->templates = s + 12;
+        else if (strcmp(s, "--data") == 0)           g->data = true;
+        else if (strcmp(s, "--fix") == 0)            g->fix = true;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
             g->o.interp_jets = true;
@@ -224,6 +250,34 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--cells=", 8) == 0 && number(s + 8, &v)
                  && v <= AV_MAX_NODES)
             g->cells = v;
+        else if (strcmp(s, "--trace-frame") == 0)    g->trace = 2;
+        else if (strcmp(s, "--trace-frame=summary") == 0) g->trace = 1;
+        else if (strncmp(s, "--passenger=", 12) == 0 && s[12]) g->passenger = s + 12;
+        else if (strcmp(s, "--records") == 0)        g->records = 150;
+        else if (strncmp(s, "--records=", 10) == 0 && number(s + 10, &v) && v)
+            g->records = (size_t)v;
+        else if (strncmp(s, "--frame-dump=", 13) == 0 && s[13]) {
+            /* a comma list of steps and the keywords records, halt, last-restart */
+            const char *q = s + 13;
+            while (*q) {
+                const char *e = strchr(q, ',');
+                size_t n = e ? (size_t)(e - q) : strlen(q);
+                if (n == 7 && memcmp(q, "records", 7) == 0) g->dump_records = true;
+                else if (n == 6 && memcmp(q, "census", 6) == 0) g->dump_census = true;
+                else if (n == 4 && memcmp(q, "halt", 4) == 0) g->dump_halt = true;
+                else if (n == 12 && memcmp(q, "last-restart", 12) == 0) g->dump_restart = true;
+                else {
+                    char tmp[32];
+                    if (n == 0 || n >= sizeof tmp || g->ndump == 64) return false;
+                    memcpy(tmp, q, n);
+                    tmp[n] = '\0';
+                    if (!number(tmp, &v)) return false;
+                    g->dump_steps[g->ndump++] = v;
+                }
+                q += n;
+                if (*q == ',') q++;
+            }
+        }
         else if (s[0] != '-' && !g->file) g->file = s;
         else return false;
     }
@@ -255,6 +309,12 @@ static uint32_t load(av_arena *a, const char *src, size_t len) {
         const char *msg = NULL;
         uint32_t t = av_parse_prefix(a, src, len, &msg);
         if (t == AV_NONE) fprintf(stderr, "avon: bad prefix term: %s\n", msg);
+        return t;
+    }
+    if (len - lead >= 4 && memcmp(src + lead, "dag ", 4) == 0) {
+        const char *msg = NULL;
+        uint32_t t = av_parse_dag(a, src + lead, len - lead, &msg);
+        if (t == AV_NONE) fprintf(stderr, "avon: bad dag term: %s\n", msg);
         return t;
     }
     if (len >= 4 && memcmp(src, "SKIT", 4) == 0) {
@@ -328,22 +388,142 @@ static av_profile *profile_load(const char *path, const av_arena *a, uint32_t t)
 /*  Supercombinator templates from dir (§6.9), loaded after every other jet,
  *  then *t matched and the templates bound to it.  counts: accepted,
  *  refused, skipped, unbound.  False, with a message, on failure. */
-static bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4]) {
+static bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
+                          bool data, long wc[3], bool fix) {
     const char *err = NULL;
+    if (fix) av_fix_on(a);
+    if (data && !av_words_on(a)) {
+        fprintf(stderr, "avon: out of memory\n");
+        return false;
+    }
     av_tmplset *ts = av_templates_load(a, dir, &err);
     if (!ts) {
         fprintf(stderr, "avon: %s: %s\n", dir, err ? err : "cannot load templates");
+        return false;
+    }
+    if (fix && !av_templates_fix(ts)) {
+        fprintf(stderr, "avon: Y is already another jet; --fix cannot register it\n");
+        av_templates_free(ts);
         return false;
     }
     *t = av_jets_match(a, *t);
     bool ok = *t != AV_NONE && av_templates_bind(a, ts, *t);
     if (ok) av_templates_counts(ts, &counts[0], &counts[1], &counts[2], &counts[3]);
     else fprintf(stderr, "avon: could not bind the templates\n");
+    if (ok && data) {           /* data jets (§6.10): the numerals, as words */
+        av_templates_word_counts(ts, &wc[0], &wc[1]);
+        wc[2] = av_words_scan(a, *t);
+        ok = wc[2] >= 0 && av_words_mark(a);
+        if (!ok) fprintf(stderr, "avon: out of memory\n");
+    }
     av_templates_free(ts);
     return ok;
 }
 
+/*  The data jets' report line (§6.10). */
+static void report_data(const long wc[3], const av_result *r) {
+    fprintf(stderr, "data: %ld numeral operations admitted, %ld refused; %ld numerals "
+            "made words; %llu dispatches (%llu fused), %llu numeral operations "
+            "among the contractions\n", wc[0], wc[1], wc[2],
+            (unsigned long long)r->dispatches, (unsigned long long)r->fused,
+            (unsigned long long)r->word_ops);
+}
+
+/*  The unfolding's report line (§6.11). */
+static void report_fix(const av_result *r) {
+    fprintf(stderr, "fix: %llu unfoldings of Y among the contractions\n",
+            (unsigned long long)r->fix_calls);
+}
+
+/*  The input line a term came from: 1 for reduce, counted by batch. */
+static uint64_t term_line = 1;
+
+/*  One frame-trace run (§22): copy mode, the head run, no collection. */
+static bool trace_pass(const args *g, const char *src, size_t len, bool out,
+                       const uint64_t *dumps, size_t ndumps, bool dump_halt,
+                       uint64_t **rec_steps, size_t *nrec, int64_t *restart, bool census) {
+    av_arena *a = av_arena_new(1u << 16);
+    if (!a) { fprintf(stderr, "avon: out of memory\n"); return false; }
+    a->allow_bird_atoms = g->birds;
+    uint32_t t = load(a, src, len);
+    av_trace *tr = t == AV_NONE ? NULL
+                 : av_trace_new(a, g->passenger, out && g->trace == 2, out ? stdout : NULL);
+    bool ok = tr != NULL;
+    if (ok && !av_trace_check(tr, a, t)) {
+        fprintf(stderr, "avon: --trace-frame takes terms of S and the passenger %s only\n",
+                g->passenger);
+        ok = false;
+    }
+    if (ok && ndumps && !av_trace_dump_at(tr, dumps, ndumps)) ok = false;
+    if (ok) {
+        av_trace_dump_halt(tr, dump_halt);
+        av_opts o = g->o;
+        o.strategy = AV_COPY;
+        o.whnf_only = true;
+        o.no_collect = true;
+        o.jets = false;
+        o.trace = tr;
+        av_result r = av_reduce(a, t, &o);
+        av_trace_summary sum;
+        if (r.status == AV_INTERRUPTED ||
+            !av_trace_end(tr, a, r.status, r.steps, r.term, g->records, out && g->records, &sum)) {
+            fprintf(stderr, "avon: the trace could not follow the run\n");
+            ok = false;
+        }
+        /* records only for a run that reached the horizon, as the census */
+        if (ok && rec_steps && r.status == AV_FUEL)
+            *nrec = census ? av_trace_census_steps(tr, g->records ? g->records : 150, rec_steps)
+                           : av_trace_record_steps(tr, g->records ? g->records : 150, rec_steps);
+        if (ok && restart) *restart = sum.last_restart;
+        av_trace_flush(tr);
+    }
+    av_trace_free(tr);
+    av_arena_free(a);
+    return ok;
+}
+
+/*  --trace-frame: a pass for the steps the keywords name, when any does,
+ *  then the pass that prints; copy mode is deterministic and never
+ *  collects here, so node ids are the same in both. */
+static int run_trace(const args *g, const char *src, size_t len) {
+    uint64_t *dumps = NULL;
+    size_t nd = g->ndump;
+    bool ok = true;
+    printf("> %llu\n", (unsigned long long)term_line);     /* every block framed */
+    fflush(stdout);
+    if (g->dump_records || g->dump_census || g->dump_restart) {
+        uint64_t *rec = NULL;
+        size_t nrec = 0;
+        int64_t restart = -1;
+        ok = trace_pass(g, src, len, false, NULL, 0, false,
+                        g->dump_records || g->dump_census ? &rec : NULL, &nrec, &restart,
+                        g->dump_census && !g->dump_records);
+        if (ok) {
+            dumps = malloc((nd + nrec + 1) * sizeof *dumps);
+            if (!dumps) ok = false;
+        }
+        if (ok) {
+            memcpy(dumps, g->dump_steps, nd * sizeof *dumps);
+            if (rec) memcpy(dumps + nd, rec, nrec * sizeof *dumps);
+            nd += nrec;
+            if (g->dump_restart && restart >= 0) dumps[nd++] = (uint64_t)restart;
+        }
+        free(rec);
+    } else if (nd) {
+        dumps = malloc(nd * sizeof *dumps);
+        if (!dumps) ok = false;
+        else memcpy(dumps, g->dump_steps, nd * sizeof *dumps);
+    }
+    if (ok) ok = trace_pass(g, src, len, true, dumps, nd, g->dump_halt, NULL, NULL, NULL, false);
+    free(dumps);
+    if (!ok) printf("! no trace\n");
+    printf("$\n");                                         /* the block ends */
+    fflush(stdout);
+    return ok ? 0 : 1;
+}
+
 static int run_one(const args *g, const char *src, size_t len, char sep) {
+    if (g->trace) return run_trace(g, src, len);
     av_arena *a = new_arena(g, 1u << 16);
     if (!a) return 1;
     uint32_t t = load(a, src, len);
@@ -354,14 +534,24 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_root_pop(a);
         if (ctors < 0) t = AV_NONE;
     }
-    long tc[4] = { 0, 0, 0, 0 };
+    long tc[4] = { 0, 0, 0, 0 }, wc[3] = { 0, 0, 0 };
     if (g->templates && g->o.strategy != AV_SHARE) {
         fprintf(stderr, "avon: --templates runs in share mode only; copy mode keeps its counts\n");
         av_arena_free(a);
         return 1;
     }
+    if (g->data && !g->templates) {
+        fprintf(stderr, "avon: --data needs --templates=DIR, which holds words.tsv\n");
+        av_arena_free(a);
+        return 1;
+    }
+    if (g->fix && !g->templates) {
+        fprintf(stderr, "avon: --fix needs --templates=DIR: Y is registered with them\n");
+        av_arena_free(a);
+        return 1;
+    }
     if (t != AV_NONE && g->templates) {
-        if (!use_templates(a, g->templates, &t, tc)) t = AV_NONE;
+        if (!use_templates(a, g->templates, &t, tc, g->data, wc, g->fix)) t = AV_NONE;
     } else if (t != AV_NONE && (g->njets || g->ctors)) {
         t = av_jets_match(a, t);
     }
@@ -371,6 +561,8 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     }
     av_opts o = g->o;
     o.templates = g->templates != NULL;
+    o.data = g->data;
+    o.fix = g->fix;
     av_profile *prof = NULL;
     if (g->profile && o.strategy != AV_SHARE) {
         fprintf(stderr, "avon: --profile charges share-mode contractions only\n");
@@ -397,6 +589,8 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         fprintf(stderr, "templates: %ld accepted, %ld refused, %ld skipped, %ld unbound; "
                 "%llu instantiations among the contractions\n", tc[0], tc[1], tc[2], tc[3],
                 (unsigned long long)r.tmpl_calls);
+    if (g->data) report_data(wc, &r);
+    if (g->fix) report_fix(&r);
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE && av_print(a, r.term, g->budget, &b);
     printf("%s %" PRIu64 "%c%s%s\n", av_status_name(r.status), r.steps, sep,
@@ -1389,6 +1583,7 @@ static void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, si
  *  `RErr`, and the contractions on stderr. */
 static int front0_main(int argc, char **argv) {
     const char *dir = NULL, *source = NULL, *profile = NULL, *templates = NULL;
+    bool data = false, fix = false;
     char *dicts[16], *namefiles[64];
     int nd = 0, nn = 0;
     uint64_t ctors = 0, stats_top = 0;
@@ -1402,6 +1597,8 @@ static int front0_main(int argc, char **argv) {
         else if (strcmp(s, "--ctors") == 0) ctors = 64;
         else if (strncmp(s, "--ctors=", 8) == 0 && number(s + 8, &v) && v) ctors = v;
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) templates = s + 12;
+        else if (strcmp(s, "--data") == 0) data = true;
+        else if (strcmp(s, "--fix") == 0) fix = true;
         else if (strncmp(s, "--names=", 8) == 0 && s[8] && nn < 64) namefiles[nn++] = argv[i] + 8;
         else if (strcmp(s, "--jet-stats") == 0) stats_top = 40;
         else if (strncmp(s, "--jet-stats=", 12) == 0 && number(s + 12, &v)) stats_top = v;
@@ -1412,7 +1609,7 @@ static int front0_main(int argc, char **argv) {
         else if (s[0] != '-' && !source) source = s;
         else return usage();
     }
-    if (!dir || !source) return usage();
+    if (!dir || !source || ((data || fix) && !templates)) return usage();
     FILE *sf = fopen(source, "rb");
     if (!sf) { perror(source); return 1; }
     size_t slen;
@@ -1459,11 +1656,13 @@ static int front0_main(int argc, char **argv) {
         }
     }
     av_root_pop(a);
-    long tc[4] = { 0, 0, 0, 0 };
+    long tc[4] = { 0, 0, 0, 0 }, wc[3] = { 0, 0, 0 };
     if (jets_ok && templates) {
-        jets_ok = use_templates(a, templates, &t, tc);
+        jets_ok = use_templates(a, templates, &t, tc, data, wc, fix);
         o.jets = true;
         o.templates = true;
+        o.data = data;
+        o.fix = fix;
     } else if (jets_ok && a->njets) {
         t = av_jets_match(a, t);
         o.jets = true;
@@ -1480,13 +1679,15 @@ static int front0_main(int argc, char **argv) {
     o.profile = prof;
     uint64_t steps = 0;
     const char *err = NULL;
-    uint64_t tmpl_calls = 0;
-    int rc = av_front0_read(a, t, &o, stdout, &steps, &tmpl_calls, &err);
+    av_result tally = { 0 };
+    int rc = av_front0_read(a, t, &o, stdout, &steps, &tally, &err);
     fprintf(stderr, "contractions %llu\n", (unsigned long long)steps);
     if (templates)
         fprintf(stderr, "templates: %ld accepted, %ld refused, %ld skipped, %ld unbound; "
                 "%llu instantiations among the contractions\n", tc[0], tc[1], tc[2], tc[3],
-                (unsigned long long)tmpl_calls);
+                (unsigned long long)tally.tmpl_calls);
+    if (data) report_data(wc, &tally);
+    if (fix) report_fix(&tally);
     if (stats) {
         drow *rows = NULL;
         size_t nr = 0, nlabels = 0;
@@ -1589,6 +1790,141 @@ static int jetstat_main(int argc, char **argv) {
     return wrong ? 1 : 0;
 }
 
+/*  avon enum: closed S-terms, streamed (docs/RUNTIME.md, "Frame traces").
+ *
+ *  enum N [--start=K] [--count=M]   every closed term of size N (leaves), in
+ *      the order of the census's V.trees(n): the left size from 1 to N-1,
+ *      then the left tree, then the right; the trees below N are kept, one
+ *      node each, and size N is printed as it is made.
+ *  enum --base=FILE --shape=SHAPES  for every ordered pair (a, q) of the
+ *      file's terms, in file order, each shape: sxy  S a q;  ssaq  S (S a) q;
+ *      hide  S (S (S (S S) (S a))) q.
+ */
+static int enum_main(int argc, char **argv) {
+    uint64_t N = 0, start = 0, count = UINT64_MAX, v;
+    const char *base = NULL, *shapes = NULL;
+    for (int i = 2; i < argc; i++) {
+        const char *s = argv[i];
+        if (strncmp(s, "--start=", 8) == 0 && number(s + 8, &v)) start = v;
+        else if (strncmp(s, "--count=", 8) == 0 && number(s + 8, &v)) count = v;
+        else if (strncmp(s, "--base=", 7) == 0 && s[7]) base = s + 7;
+        else if (strncmp(s, "--shape=", 8) == 0 && s[8]) shapes = s + 8;
+        else if (s[0] != '-' && number(s, &v) && v >= 1 && v <= 24) N = v;
+        else return usage();
+    }
+    if (!N == !base || (base && !shapes)) return usage();
+    av_arena *a = av_arena_new(1u << 20);
+    if (!a) { fprintf(stderr, "avon: out of memory\n"); return 1; }
+    av_buf b = { 0 };
+    uint64_t emitted = 0, index = 0;
+    int rc = 0;
+#define EMIT(node)                                                              \
+    do {                                                                        \
+        if (index >= start && emitted < count) {                                \
+            b.len = 0;                                                          \
+            if (!av_print(a, (node), 1u << 20, &b)) { rc = 1; goto done; }      \
+            fwrite(b.s, 1, b.len, stdout);                                      \
+            fputc('\n', stdout);                                                \
+            if (++emitted % 100000 == 0)                                        \
+                fprintf(stderr, "enum: %llu terms\n", (unsigned long long)emitted); \
+        }                                                                       \
+        index++;                                                                \
+    } while (0)
+    if (N) {
+        /* trees[k]: every tree of size k < N, in the census's order */
+        uint32_t *trees[25] = { 0 };
+        size_t ntrees[25] = { 0 };
+        trees[1] = malloc(sizeof **trees);
+        if (!trees[1]) { rc = 1; goto done; }
+        trees[1][0] = AV_NODE_S;
+        ntrees[1] = 1;
+        for (uint64_t n = 2; n < N; n++) {
+            size_t total = 0;
+            for (uint64_t k = 1; k < n; k++) total += ntrees[k] * ntrees[n - k];
+            trees[n] = malloc((total ? total : 1) * sizeof **trees);
+            if (!trees[n]) { rc = 1; goto done; }
+            size_t m = 0;
+            for (uint64_t k = 1; k < n; k++)
+                for (size_t l = 0; l < ntrees[k]; l++)
+                    for (size_t r = 0; r < ntrees[n - k]; r++) {
+                        uint32_t x = av_app(a, trees[k][l], trees[n - k][r]);
+                        if (x == AV_NONE) { rc = 1; goto done; }
+                        trees[n][m++] = x;
+                    }
+            ntrees[n] = m;
+        }
+        if (N == 1) {
+            EMIT(AV_NODE_S);
+        } else {
+            for (uint64_t k = 1; k < N && emitted < count; k++)
+                for (size_t l = 0; l < ntrees[k] && emitted < count; l++)
+                    for (size_t r = 0; r < ntrees[N - k] && emitted < count; r++) {
+                        if (index < start) { index++; continue; }
+                        uint32_t used = a->used;
+                        uint32_t x = av_app(a, trees[k][l], trees[N - k][r]);
+                        if (x == AV_NONE) { rc = 1; goto done; }
+                        EMIT(x);
+                        a->used = used;         /* the node is printed: reuse it */
+                    }
+        }
+        for (int k = 0; k < 25; k++) free(trees[k]);
+    } else {
+        FILE *f = fopen(base, "rb");
+        if (!f) { perror(base); rc = 1; goto done; }
+        uint32_t *terms = NULL;
+        size_t nt = 0, tcap = 0;
+        char *line = NULL;
+        size_t lcap = 0;
+        ssize_t n;
+        while ((n = getline(&line, &lcap, f)) > 0) {
+            size_t len = (size_t)n;
+            while (len && (line[len - 1] == '\n' || line[len - 1] == '\r' || line[len - 1] == ' '))
+                len--;
+            if (!len) continue;
+            uint32_t t = load(a, line, len);
+            if (t == AV_NONE) { rc = 1; break; }
+            if (nt == tcap) {
+                uint32_t *q = realloc(terms, (tcap = tcap ? 2 * tcap : 64) * sizeof *q);
+                if (!q) { rc = 1; break; }
+                terms = q;
+            }
+            terms[nt++] = t;
+        }
+        free(line);
+        fclose(f);
+        uint32_t S = AV_NODE_S, SS = av_app(a, S, S);
+        for (size_t i = 0; rc == 0 && i < nt; i++)
+            for (size_t j = 0; rc == 0 && j < nt && emitted < count; j++) {
+                const char *q = shapes;
+                while (*q && rc == 0) {
+                    const char *e = strchr(q, ',');
+                    size_t len = e ? (size_t)(e - q) : strlen(q);
+                    uint32_t x = AV_NONE, p = terms[i], r = terms[j];
+                    uint32_t used = a->used;
+                    if (len == 3 && memcmp(q, "sxy", 3) == 0)
+                        x = av_app(a, av_app(a, S, p), r);
+                    else if (len == 4 && memcmp(q, "ssaq", 4) == 0)
+                        x = av_app(a, av_app(a, S, av_app(a, S, p)), r);
+                    else if (len == 4 && memcmp(q, "hide", 4) == 0)
+                        x = av_app(a, av_app(a, S, av_app(a, S, av_app(a, av_app(a, S, SS),
+                                                                     av_app(a, S, p)))), r);
+                    else { fprintf(stderr, "avon: unknown shape %.*s\n", (int)len, q); rc = 1; break; }
+                    if (x == AV_NONE) { rc = 1; break; }
+                    EMIT(x);
+                    a->used = used;
+                    q += len;
+                    if (*q == ',') q++;
+                }
+            }
+        free(terms);
+    }
+#undef EMIT
+done:
+    fflush(stdout);
+    av_buf_free(&b);
+    av_arena_free(a);
+    return rc;
+}
 
 /*  avon witness --statement=PUBLIC --jet-table=JETS: the composed table
  *  with jets for the witness wsrc, on stdout. */
@@ -1669,6 +2005,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "scry") == 0) return scry_main(argc, argv);
     if (strcmp(argv[1], "selfhost") == 0) return selfhost_main(argc, argv);
     if (strcmp(argv[1], "front0") == 0) return front0_main(argc, argv);
+    if (strcmp(argv[1], "enum") == 0) return enum_main(argc, argv);
     if (strcmp(argv[1], "boot") == 0 || strcmp(argv[1], "poke") == 0 ||
         strcmp(argv[1], "peek") == 0 || strcmp(argv[1], "load") == 0)
         return kernel_main(argc, argv);
@@ -1791,7 +2128,9 @@ int main(int argc, char **argv) {
         size_t cap = 0;
         int rc = 0;
         ssize_t n;
+        term_line = 0;
         while ((n = getline(&line, &cap, stdin)) > 0) {
+            term_line++;
             if (run_one(&g, line, (size_t)n, ' ')) rc = 1;
             fflush(stdout);
         }

@@ -1,0 +1,28 @@
+-- Reduceron's OrdList (Naylor and Runciman, JFP 2012): insertion keeps
+-- every boolean list of length 12 ordered.
+bool  === False | True
+nat   === Zero | Suc nat
+bools === Nil | Cons bool bools
+lists === LNil | LCons bools lists
+
+implies x y = x |> { False True ; True y }
+and x y = x |> { False False ; True y }
+
+andList xs = xs |> { Nil True ; Cons x r and x (andList r) }
+appendB xs ys = xs |> { Nil ys ; Cons x r Cons x (appendB r ys) }
+append xs ys = xs |> { LNil ys ; LCons x r LCons x (append r ys) }
+consAll b xs = xs |> { LNil LNil ; LCons x r LCons (Cons b x) (consAll b r) }
+mapProp b xs = xs |> { LNil Nil ; LCons x r Cons (prop b x) (mapProp b r) }
+
+ord xs = xs |> { Nil True ; Cons x r ord1 x r }
+ord1 x r = r |> { Nil True ; Cons y s and (implies x y) (ord1 y s) }
+
+insert x xs = xs |> { Nil Cons x Nil ; Cons y r (implies x y |> { False Cons y (insert x r) ; True Cons x (Cons y r) }) }
+
+prop x xs = implies (ord xs) (ord (insert x xs))
+
+boolList n = n |> { Zero LCons Nil LNil ; Suc m append (boolList m) (append (consAll False (boolList m)) (consAll True (boolList m))) }
+
+top n = andList (appendB (mapProp True (boolList n)) (mapProp False (boolList n)))
+
+main = top (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero))))))))))))

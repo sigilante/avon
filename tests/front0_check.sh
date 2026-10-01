@@ -9,8 +9,9 @@
 #   3. accepts or refuses every edge program as spec0 does;
 #
 # and then all three again with the front end's supercombinator templates
-# (docs/DESIGN.md §6.9), which Avon checks against the terms before using:
-# the same terms, from fewer contractions.
+# (docs/DESIGN.md §6.9), which Avon checks against the terms before using,
+# with the templates and data jets (§6.10), and with those and Y unfolded
+# in one step (§6.11): the same terms, from fewer contractions.
 #
 # Run from the repository root after `make`.  SKIJACK defaults to
 # ~/skijack, on a branch with python/skijack/selfhost/.
@@ -26,13 +27,14 @@ if [ ! -f "$SKIJACK/python/skijack/selfhost/run0.py" ]; then
     exit 1
 fi
 fail=0
-for mode in "" --templates; do
-    echo "--- the front end${mode:+, with its templates}"
+for mode in "" "--templates" "--templates --data" "--templates --data --fix"; do
+    echo "--- the front end${mode:+, with $mode}"
+    # shellcheck disable=SC2086
     PYTHONPATH="$SKIJACK/python" python3 -m skijack.selfhost.run0 \
         --avon "$AVON" --edges --random "$RANDOM_PROGRAMS" $mode || fail=1
 done
 if [ "$fail" = 0 ]; then
-    echo "front0 check passed: the front end compiles its own source, and every program checked, as Python does, with and without templates"
+    echo "front0 check passed: the front end compiles its own source, and every program checked, as Python does: as SKI, with templates, with data jets, and with Y unfolded"
 else
     echo "FRONT0 CHECK FAILED"
     exit 1

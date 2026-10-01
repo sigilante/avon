@@ -25,9 +25,7 @@
  *  fail unless a `need` count is wrong, which the debug build catches.
  */
 static inline uint32_t reserved_app(av_arena *a, uint32_t f, uint32_t x) {
-    uint32_t i = av_app(a, f, x);
-    assert(i != AV_NONE && "allocation past what ensure() reserved");
-    return i;
+    return arena_app_reserved(a, f, x);
 }
 
 typedef struct { uint32_t head; size_t base, n, i; } frame;
@@ -54,9 +52,13 @@ typedef struct {
 
     uint64_t       jet_calls, jet_steps;
     uint64_t       tmpl_calls;
+    uint64_t       dispatches, fused, word_ops, fix_calls;
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
+    bool           normal;      /* share: making the normal form, or the
+                                   root's term's head normal form, where a
+                                   word must become its term's            */
 } R;
 
 /*  ---------------------------------------------------------------- memory */
@@ -263,6 +265,13 @@ static unsigned fire_nargs(const R *r, uint32_t id) {
     return a->interps[a->jets[id].interp].nparams + 2;
 }
 
+/*  Whether jet id has any of try_interp's roles: most jets have none, and
+ *  the reducers skip the call for them. */
+static inline bool interp_role(const av_arena *a, uint32_t id) {
+    const av_jet *j = &a->jets[id];
+    return j->unquote || j->compiler || j->interp >= 0;
+}
+
 static int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
                       uint32_t *outp) {
     av_arena *a = r->a;
@@ -324,6 +333,11 @@ static av_status run_copy(R *r) {
         for (;;) {
             if (interrupted(r)) return AV_INTERRUPTED;
             if (r->steps >= o->max_steps) return AV_FUEL;
+            if (av_tag(a, r->head) == AV_JET && (av_left(a, r->head) & AV_JET_WORD)) {
+                /* a word (§6.10): copy mode runs its term */
+                if (!decompose(r, av_right(a, r->head))) return AV_SIZE;
+                continue;
+            }
             if (av_tag(a, r->head) == AV_JET) {
                 av_status ist;
                 uint32_t out;
@@ -356,6 +370,9 @@ static av_status run_copy(R *r) {
             if (k == 0 || r->top - r->base < k) break;
             uint32_t x;
             if (c == SKI_S) {                   /* S x y z -> x z (y z) */
+                if (o->trace && r->nfr == 0 &&
+                    !trace_step(o->trace, a, r->stk, r->base, r->top, r->steps))
+                    return AV_INTERRUPTED;      /* the trace cannot follow */
                 if (!ensure(r, 1)) return AV_SIZE;
                 x = r->stk[r->top - 1];
                 uint32_t y = r->stk[r->top - 2], z = r->stk[r->top - 3];
@@ -418,6 +435,133 @@ static av_status run_copy(R *r) {
 
 /*  ----------------------------------------------------------------- share */
 
+/*  The most nodes one numeral operation builds (§6.10).  Beyond it the
+ *  operation runs its term, which builds its result lazily: a product
+ *  nobody reads past its first successor should not cost its whole size. */
+#define WORD_BUILD_MAX (1u << 20)
+
+/*  Data jets (§6.10): a constructor template at the head with its fields
+ *  and continuations, and the continuation its index selects, applied to
+ *  the fields, replaces the redex root: one step.  When that continuation
+ *  is a template's key applied to exactly the arguments that, with the
+ *  fields, it takes -- a case branch, lifted with what it captured -- that
+ *  template is instantiated in the same step, fused.  Otherwise the redex
+ *  root is rewritten in place, as S rewrites. */
+typedef struct {
+    uint32_t       field[AV_JET_ARITY_MAX];
+    uint32_t       cont;                    /* the selected continuation */
+    const av_tmpl *U;                       /* its template, when fused   */
+    uint32_t       uarg[AV_JET_ARITY_MAX];
+} disp;
+
+/*  Read the dispatch at the top of the stack: fields, continuation, and
+ *  whether it fuses.  Reads only; the indices hold until a collection. */
+static void dispatch_read(const R *r, av_ctor sh, disp *d) {
+    const av_arena *a = r->a;
+    unsigned m = sh.fields;
+    for (unsigned j = 0; j < m; j++)
+        d->field[j] = av_res(a, av_right(a, r->stk[r->top - 1 - j]));
+    d->cont = av_res(a, av_right(a, r->stk[r->top - 1 - m - sh.index]));
+    /* the continuation's spine: a template key and what it captured.  Not
+     * for a nullary constructor: its continuation, applied to nothing, is
+     * the redex itself, and must be updated where it stands, as shared */
+    d->U = NULL;
+    if (m == 0) return;
+    uint32_t c = d->cont, cap[AV_JET_ARITY_MAX];
+    unsigned j = 0;
+    while (av_tag(a, c) == AV_APP) {
+        if (j == AV_JET_ARITY_MAX) return;
+        cap[j++] = av_res(a, av_right(a, c));
+        c = av_res(a, av_left(a, c));
+    }
+    if (av_tag(a, c) != AV_JET || (av_left(a, c) & AV_JET_WORD) ||
+        !a->jets[AV_JET_ID(av_left(a, c))].tmpl)
+        return;
+    const av_tmpl *U = &a->tmpls[a->jets[AV_JET_ID(av_left(a, c))].tmpl - 1];
+    if (U->k != j + m) return;
+    for (unsigned i = 0; i < j; i++) d->uarg[i] = cap[j - 1 - i];      /* in order */
+    for (unsigned i = 0; i < m; i++) d->uarg[j + i] = d->field[i];
+    d->U = U;
+}
+
+/*  The dispatch: k = m + n arguments, the redex root stk[top-k]. */
+static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
+    av_arena *a = r->a;
+    disp d;
+    dispatch_read(r, sh, &d);
+    size_t need = d.U ? d.U->nops + d.U->nsuc : (sh.fields ? sh.fields - 1 : 0);
+    if (need && a->cap - a->used < need) {
+        if (!ensure(r, need)) return AV_SIZE;
+        dispatch_read(r, sh, &d);                   /* the collection moved them */
+    }
+    uint32_t nd = r->stk[r->top - k];
+    if (d.U) {
+        if (r->o->profile) profile_rewrote(r->o->profile, nd);
+        uint32_t inst = tmpl_instance(a, d.U, d.uarg, nd);
+        assert(inst != AV_NONE && "allocation past what ensure() reserved");
+        if (inst == AV_NONE) return AV_SIZE;
+        r->fused++;
+    } else if (sh.fields == 0) {
+        arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | d.cont, 0 });
+    } else {
+        uint32_t t = d.cont;
+        for (unsigned j = 0; j + 1 < sh.fields; j++) t = reserved_app(a, t, d.field[j]);
+        if (r->o->profile) profile_rewrote(r->o->profile, nd);
+        arena_set(a, nd, (av_node){ t, d.field[sh.fields - 1] });
+    }
+    r->top -= k;
+    *curp = nd;
+    r->steps++;
+    r->dispatches++;
+    return AV_WHNF;
+}
+
+/*  A numeral operation (§6.10) at the head with its k operands, the two
+ *  numerals first: 1 fired, both being held already (K or words), the
+ *  redex root now its result; 0 declined, to run its term; -1 SIZE. */
+static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
+    av_arena *a = r->a;
+    uint32_t m, n;
+    if (!av_numeral(a, av_right(a, r->stk[r->top - 1]), &m) ||
+        !av_numeral(a, av_right(a, r->stk[r->top - 2]), &n))
+        return 0;
+    uint64_t v = 0, need = 0;
+    if (op == AV_WOP_ADD) { v = (uint64_t)m + n; need = 2 * (uint64_t)n; }
+    if (op == AV_WOP_MUL) { v = (uint64_t)m * n; need = 2 * v; }
+    if (v > AV_WORD_MAX || need > WORD_BUILD_MAX) return 0;
+    if (need && !ensure(r, (size_t)need)) return -1;
+    uint32_t x = av_res(a, av_right(a, r->stk[r->top - 1]));     /* m: reread */
+    switch (op) {
+    case AV_WOP_ADD:
+        for (uint32_t i = 0; i < n; i++) x = word_succ(a, x);
+        break;
+    case AV_WOP_SUB:
+        for (uint32_t i = 0; i < n && x != AV_NODE_K; i++) x = word_pred(a, x);
+        break;
+    case AV_WOP_MUL:
+        x = AV_NODE_K;
+        for (uint64_t i = 0; i < v; i++) x = word_succ(a, x);
+        break;
+    case AV_WOP_IFEQ:
+        x = av_res(a, av_right(a, r->stk[r->top - (m == n ? 3 : 4)]));
+        break;
+    case AV_WOP_IFLE:
+        x = av_res(a, av_right(a, r->stk[r->top - (m <= n ? 3 : 4)]));
+        break;
+    default:
+        return 0;
+    }
+    assert(x != AV_NONE && "allocation past what ensure() reserved");
+    if (x == AV_NONE) return -1;
+    uint32_t nd = r->stk[r->top - k];               /* the redex root */
+    arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
+    r->top -= k;
+    *curp = nd;
+    r->steps++;
+    r->word_ops++;
+    return 1;
+}
+
 /*  Reduce r->cur to weak head normal form in place.  The spine lives on
  *  r->stk above its entry height, which is restored on success.
  */
@@ -440,11 +584,37 @@ static av_status whnf_share(R *r) {
         }
         if (interrupted(r)) return AV_INTERRUPTED;
         if (r->steps >= o->max_steps) return AV_FUEL;
+        if (av_tag(a, cur) == AV_JET && (av_left(a, cur) & AV_JET_WORD)) {
+            /* a word (§6.10): with its two continuations, W n z s is
+             * s (W (n-1)), written over the redex root; short of them, a
+             * value -- but, making the normal form, its term SUC (W (n-1)),
+             * a redex, fresh so the word's own stays whole */
+            if (r->top - bottom < 2) {
+                if (!r->normal) break;
+                r->jnode = cur;
+                if (!ensure(r, 1)) return AV_SIZE;
+                cur = r->jnode;
+                r->jnode = AV_NONE;
+                uint32_t t = reserved_app(a, a->word_suc, word_pred(a, cur));
+                arena_set(a, cur, (av_node){ (AV_IND << AV_TAG_SHIFT) | t, 0 });
+                cur = t;
+                continue;
+            }
+            uint32_t n = r->stk[r->top - 2];
+            uint32_t sk = av_res(a, av_right(a, n));
+            if (o->profile) profile_rewrote(o->profile, n);
+            arena_set(a, n, (av_node){ sk, word_pred(a, cur) });
+            r->top -= 2;
+            cur = n;
+            r->steps++;
+            r->dispatches++;
+            continue;
+        }
         if (av_tag(a, cur) == AV_JET) {
             uint32_t id = AV_JET_ID(av_left(a, cur));
             av_status ist;
             uint32_t iout;
-            int ir = try_interp(r, &cur, r->top - bottom, &ist, &iout);
+            int ir = interp_role(a, id) ? try_interp(r, &cur, r->top - bottom, &ist, &iout) : 0;
             if (ir < 0) return ist;
             if (ir > 0) {                       /* the redex root becomes it */
                 unsigned k = fire_nargs(r, id);
@@ -454,22 +624,63 @@ static av_status whnf_share(R *r) {
                 cur = n;
                 continue;
             }
+            if (o->fix && a->jets[id].fix) {
+                /* Y (§6.11): with its argument, Y g is rewritten to
+                 * g (Y g), a fresh Y g, one step -- convertible, not a
+                 * reduct, and acyclic; short of it, its term */
+                if (r->top - bottom >= 1) {
+                    if (!ensure(r, 1)) return AV_SIZE;
+                    uint32_t n = r->stk[r->top - 1];        /* the redex root, reread */
+                    uint32_t y = reserved_app(a, av_left(a, n), av_right(a, n));
+                    if (o->profile) profile_rewrote(o->profile, n);
+                    arena_set(a, n, (av_node){ av_res(a, av_right(a, n)), y });
+                    r->top -= 1;
+                    cur = n;
+                    r->steps++;
+                    r->fix_calls++;
+                    continue;
+                }
+                if (!(av_left(a, cur) & AV_JET_SHARED)) {
+                    cur = av_right(a, cur);
+                    continue;
+                }
+            }
+            if (o->data && a->jets[id].word_op) {
+                /* a numeral operation (§6.10): natively on words; else its
+                 * term, the node kept for the next call */
+                unsigned op = a->jets[id].word_op, k = op >= AV_WOP_IFEQ ? 4u : 2u;
+                if (r->top - bottom >= k) {
+                    int wf = word_fire(r, op, k, &cur);
+                    if (wf < 0) return AV_SIZE;
+                    if (wf > 0) continue;
+                }
+                if (!(av_left(a, cur) & AV_JET_SHARED)) {
+                    cur = av_right(a, cur);
+                    continue;
+                }
+            }
             if (o->templates && a->jets[id].tmpl) {
                 /* a supercombinator template (§6.9): its body over the
                  * arguments, one step; short of them, its term, the node
                  * left a root for the next full application */
                 const av_tmpl *T = &a->tmpls[a->jets[id].tmpl - 1];
+                if (o->data && av_ctor_is(T->ctor) && r->top - bottom >= T->k) {
+                    /* a constructor with every argument (§6.10) */
+                    av_status ds = dispatch(r, T->ctor, T->k, &cur);
+                    if (ds != AV_WHNF) return ds;
+                    continue;
+                }
                 if (r->top - bottom >= T->k) {
                     if (o->jetstats) jetstats_fire(o->jetstats, cur, id);
-                    if (!ensure(r, T->nops)) return AV_SIZE;
+                    if (!ensure(r, T->nops + T->nsuc)) return AV_SIZE;
                     uint32_t args[AV_JET_ARITY_MAX];
                     for (unsigned i = 0; i < T->k; i++)
                         args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
-                    uint32_t inst = tmpl_instance(a, T, args);
+                    uint32_t n = r->stk[r->top - T->k];     /* the redex root */
+                    if (o->profile) profile_rewrote(o->profile, n);
+                    uint32_t inst = tmpl_instance(a, T, args, n);
                     assert(inst != AV_NONE && "allocation past what ensure() reserved");
                     if (inst == AV_NONE) return AV_SIZE;
-                    uint32_t n = r->stk[r->top - T->k];     /* the redex root */
-                    arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | inst, 0 });
                     r->top -= T->k;
                     cur = n;
                     r->steps++;
@@ -565,15 +776,30 @@ static av_status whnf_share(R *r) {
     return AV_WHNF;
 }
 
+/*  Whether t's head is a word (§6.10). */
+static bool word_head(const av_arena *a, uint32_t t) {
+    t = av_res(a, t);
+    while (av_tag(a, t) == AV_APP) t = av_res(a, av_left(a, t));
+    return av_is_word(a, t);
+}
+
 static av_status run_share(R *r) {
     const av_arena *a = r->a;
     r->top = 0;
     r->cur = r->root;
     av_status s = whnf_share(r);
+    if (s == AV_WHNF && r->o->whnf_only && word_head(a, r->root)) {
+        /* a word at the head: the state reported is its term's weak head
+         * normal form, the one the unjetted run reaches */
+        r->normal = true;
+        r->cur = r->root;
+        s = whnf_share(r);
+    }
     if (s != AV_WHNF || r->o->whnf_only) return s;
 
     /* normalize every argument of every spine, left to right, each shared
      * node once */
+    r->normal = true;
     r->nwork = 0;
     if (!grow(&r->work, &r->workcap, 1)) return AV_SIZE;
     r->work[r->nwork++] = r->root;
@@ -612,9 +838,12 @@ av_opts av_opts_default(void) {
         .compile_jets = false,
         .jet_check = 0,
         .census    = NULL,
+        .trace     = NULL,
         .profile   = NULL,
         .jetstats  = NULL,
         .templates = false,
+        .data      = false,
+        .fix       = false,
     };
 }
 
@@ -644,5 +873,6 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.work);
     free(r.marks);
     return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls,
-                        r.jet_steps, r.jet_fault, r.tmpl_calls };
+                        r.jet_steps, r.jet_fault, r.tmpl_calls,
+                        r.dispatches, r.fused, r.word_ops, r.fix_calls };
 }

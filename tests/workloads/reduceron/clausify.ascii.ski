@@ -1,0 +1,87 @@
+-- Reduceron's Clausify (Naylor and Runciman, JFP 2012): the clausal form
+-- of a proposition of 80 conjuncts.  Symbols are Scott numerals where the
+-- original has integers, and the binary connectives hold a pair (a type
+-- has one binary self-reference).  The answer is one clause, ([0], []).
+bool === False | True
+nat  === Zero | Suc nat
+prop === Sym nat | Neg prop | Con pr | Dis pr
+pr   === Pr prop prop
+ns   === Nil | Cons nat ns
+cl   === Cl ns ns
+cs   === CNil | CCons cl cs
+ps   === PNil | PCons prop ps
+
+con p q = Con (Pr p q)
+dis p q = Dis (Pr p q)
+
+eqNat m n = natIfEq m n True False
+leNat m n = natIfLe m n True False
+add m n = natAdd m n
+
+or a b = a |> { False b ; True True }
+and a b = a |> { False False ; True b }
+not a = a |> { False True ; True False }
+comp f g x = f (g x)
+
+mapC f xs = xs |> { PNil CNil ; PCons x r CCons (f x) (mapC f r) }
+clauses ps = mapC (clause (Cl Nil Nil)) ps
+
+clause ca p = p |> { Sym s (ca |> { Cl c a Cl (ins s c) a }) ; Neg q (q |> { Sym s (ca |> { Cl c a Cl c (ins s a) }) ; Neg r ca ; Con r ca ; Dis r ca }) ; Con r ca ; Dis qr (qr |> { Pr q r clause (clause ca q) r }) }
+
+containsN xs y = xs |> { Nil False ; Cons x r or (eqNat x y) (containsN r y) }
+containsC xs y = xs |> { CNil False ; CCons x r or (eqClause x y) (containsC r y) }
+
+disin p = p |> { Sym s p ; Neg q p ; Con qr (qr |> { Pr q r con (disin q) (disin r) }) ; Dis qr (qr |> { Pr q r din (disin q) (disin r) }) }
+din p r = p |> { Con ab (ab |> { Pr a b con (din a r) (din b r) }) ; Dis ab din2 p r ; Neg a din2 p r ; Sym s din2 p r }
+din2 p q = q |> { Con ab (ab |> { Pr a b con (din p a) (din p b) }) ; Dis ab dis p q ; Neg a dis p q ; Sym s dis p q }
+
+ins x ys = ys |> { Nil Cons x Nil ; Cons y r (eqNat x y |> { True ys ; False (leNat x y |> { True Cons x ys ; False Cons y (ins x r) }) }) }
+
+filterN p xs = xs |> { Nil Nil ; Cons x r (p x |> { True Cons x (filterN p r) ; False filterN p r }) }
+filterC p xs = xs |> { CNil CNil ; CCons x r (p x |> { True CCons x (filterC p r) ; False filterC p r }) }
+
+inter xs ys = filterN (containsN xs) ys
+
+negin p = p |> { Neg q (q |> { Con ab (ab |> { Pr a b dis (negin (Neg a)) (negin (Neg b)) }) ; Dis ab (ab |> { Pr a b con (negin (Neg a)) (negin (Neg b)) }) ; Neg r negin r ; Sym s p }) ; Dis ab (ab |> { Pr a b dis (negin a) (negin b) }) ; Con ab (ab |> { Pr a b con (negin a) (negin b) }) ; Sym s p }
+
+nonTaut cs = filterC notTaut cs
+
+eqList xs ys = xs |> { Nil (ys |> { Nil True ; Cons y s False }) ; Cons x r (ys |> { Nil False ; Cons y s and (eqNat x y) (eqList r s) }) }
+eqClause p q = p |> { Cl a b (q |> { Cl c d and (eqList a c) (eqList b d) }) }
+
+null xs = xs |> { Nil True ; Cons x r False }
+notTaut ca = ca |> { Cl c a null (inter c a) }
+
+clausify p = uniq (nonTaut (clauses (split (disin (negin p)))))
+
+split p = spl PNil p
+spl a p = p |> { Con qr (qr |> { Pr q r spl (spl a q) r }) ; Dis qr PCons p a ; Neg q PCons p a ; Sym s PCons p a }
+
+appendC xs ys = xs |> { CNil ys ; CCons x r CCons x (appendC r ys) }
+union xs ys = appendC xs (filterC (comp not (containsC xs)) ys)
+singleton x = CCons x CNil
+foldrC f z xs = xs |> { CNil z ; CCons x r f x (foldrC f z r) }
+foldrP f z xs = xs |> { PNil z ; PCons x r f x (foldrP f z r) }
+uniq xs = foldrC (comp union singleton) CNil xs
+
+display xs = xs |> { CNil Zero ; CCons c r add (emitClause c) (display r) }
+emitClause ca = ca |> { Cl c a add (sum c) (sum a) }
+sum xs = sumAcc Zero xs
+sumAcc acc xs = xs |> { Nil acc ; Cons x r sumAcc (add acc x) r }
+
+eqv a b = con (dis (Neg a) b) (dis (Neg b) a)
+
+replicate n a = n |> { Zero PNil ; Suc m PCons a (replicate m a) }
+
+n10 = Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))))
+n80 = add n10 (add n10 (add n10 (add n10 (add n10 (add n10 (add n10 n10))))))
+
+atom = Sym Zero
+prop1 = eqv atom (eqv atom atom)
+bigp = eqv prop1 (eqv prop1 prop1)
+
+-- one clause, ([0], [])
+answer r = r |> { CNil False ; CCons c rest (rest |> { CNil eqClause c (Cl (Cons Zero Nil) Nil) ; CCons d s False }) }
+check r = and (eqNat (display r) Zero) (answer r)
+
+main = check (clausify (foldrP con atom (replicate n80 bigp)))

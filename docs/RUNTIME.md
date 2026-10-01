@@ -93,6 +93,8 @@ differently (§6).
 | `--no-jets` | match nothing | | |
 | `--interp=FILE` | `interpreters.tsv`: interpreter jets (§7); needs `--jets` | both | changes counts; off unless asked |
 | `--templates=DIR` | `DIR/templates.tsv` and `DIR/template_terms.tsv`: supercombinator templates (§6.9) | `share` only; `copy` refuses | one step per instantiation, reported |
+| `--data` | with `--templates`: data jets (§6.10), constructor dispatch and numerals held as words, and `DIR/words.tsv`'s numeral operations | `share` only | one step per dispatch or operation, reported |
+| `--fix` | with `--templates`: Curry's Y at the head with an argument, `Y g`, rewritten to `g (Y g)` in one step (§6.11) | `share` only | one step per unfolding, reported |
 
 ```sh
 build/avon reduce --strategy=copy --jets=tests/conformance/dictionary.tsv --jet-check=1 \
@@ -113,6 +115,37 @@ templates: 641 accepted, 0 refused, 352 skipped, 0 unbound; 18930884 instantiati
 malformed lines; `skipped` counts duplicates, η-templates, open bodies,
 bare-leaf keys, and templates of more than 32 formals (a constructor of a
 128-way type takes 128), the most one fire takes.
+
+**Data jets** (`--data`, §6.10) add three things to templates, and print a
+second line:
+
+```
+data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dispatches (1395 fused), 8 numeral operations among the contractions
+```
+
+- A constructor's template -- its body a formal applied to the fields --
+  meeting its continuations dispatches: the selected continuation applied
+  to the fields replaces the redex, one step. When that continuation is a
+  case branch's template with what it captured, the branch is
+  instantiated in the same step, `fused`.
+- Closed numerals (`Suc (Suc Zero)`, whatever the type is called) become
+  words, numbers whose term is still the numeral; a word meeting its two
+  continuations dispatches without allocating.
+- skijack's numeral operations (`natAdd`, `natSub`, `natMul`, `natIfEq`,
+  `natIfLe`), listed in `words.tsv` by the §5 hash of their terms, run
+  natively when both operands are words already, and otherwise run as
+  their terms. Each is `admitted` only after its term, run on the numerals
+  0 to 5, agrees with the native operation; one that does not is
+  `refused` and runs as its term.
+
+Normal forms are the unjetted ones, byte for byte; a WHNF state is
+templates' (which may differ from SKI's in form, not value).
+
+**Y unfolded** (`--fix`, §6.11) prints a third line,
+`fix: 124279 unfoldings of Y among the contractions`. The rewrite is
+convertible, not a reduct: normal forms and answers are SKI's, a term
+without a normal form still stops at FUEL, and a WHNF state may differ in
+form (`Y K` stops at `K (Y K)`).
 
 ## Measuring
 
@@ -163,10 +196,11 @@ drives the checks:
 ```sh
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --edges --random 1000
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templates --edges --random 1000
+PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templates --data --edges --random 1000
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --profile
 ```
 
-`front0` also takes `--templates=DIR`, `--profile=NAMES`, `--jets=DICT`,
+`front0` also takes `--templates=DIR`, `--data`, `--fix`, `--profile=NAMES`, `--jets=DICT`,
 `--ctors[=N]`, `--jet-stats[=N]`, `--names=FILE`, `--fuel=N` and
 `--max-nodes=N`.
 
@@ -221,6 +255,69 @@ prover (§17); `--jet-table=JETS` adds lean-ski's jet file for the term
 (§18.1), `--plan=PLAN` probe segments. `--rows=N` and `--cells=N` are
 budgets. `make witness-check` runs the corpus through lean-ski.
 
+## Frame traces: `--trace-frame`, `enum`
+
+For the pure-S paper's hider census (§22): an observation of copy mode's
+head run on a term of S and one opaque atom, the passenger (`X` unless
+`--passenger=NAME`). Verdicts and certificates stay with the census's
+scripts; `tests/hider/client.py` runs the census through Avon:
+`python3 tests/hider/client.py 16 build/avon 16` is the census of size 16
+(`N AVON NMIN`), about six minutes.
+
+```sh
+echo "S (S S) (S S) S X" | build/avon reduce --trace-frame --fuel=600
+build/avon enum 12 | sed 's/$/ X/' | build/avon batch --trace-frame=summary --fuel=600 \
+    --records --frame-dump=census,halt
+```
+
+`--trace-frame` runs copy mode, head run only, never collecting, whatever
+`--strategy` and `--whnf` say; a term with K, I or another atom is refused.
+Each term gives one block:
+
+```
+> 1                       the term's input line
+0 4 1 0 0 - 1             per step, before it: n L positions d D event arity
+...
+4 3 3 2 0 o 0
+. WHNF 5 OPEN             status, contractions, exit: HALT-X HALT-B OPEN FUEL
+R 3 9 ...                 records (--records), when the run reaches the horizon
+C 3 9 ...                 the confirmed ones: n + CONF <= H (CONF 150)
+K 3 4 2 0                 each confirmed record: n, L, the lowest X-headed position (- none),
+                          and 1 if an X-headed item sits at L-1
+d 7=X                     dumped nodes, once each, children first:
+d 9=5.7                   S, X, or <left>.<right>
+f 2 9 10                  a dumped frame: its step, then its items from the x-seat
+$                         the block ends
+```
+
+- The frame is the S head's arguments, the first at the x-seat; positions
+  count from the end, 1 the last item; `-` none.
+- With exactly one X-headed item, the passenger P: `d = pos(P) - 1`, the
+  stack depth, and `D` = the front items with sigma >= 1 plus the stack
+  items with sigma >= 2, sigma(u) the X-headed items among u's head's
+  arguments; otherwise `- -`.
+- The event is the front-most passenger's seat: `o` the x-seat (OPEN: the
+  census stops here; Avon takes one more step, to X at the head), `y` the
+  y-seat, `z` the z-seat, `-` deeper. The arity is the front item's
+  argument count (1 shed, >= 2 free at a y-step). A restart is a line with
+  L = 3 and position 1.
+- A halt (L < 3) is HALT-X with an X-headed item, HALT-B without.
+- `--trace-frame=summary` omits the per-step lines.
+- `--frame-dump=` takes steps and the keywords `records` (each confirmed
+  record n and n+1: a second pass), `census` (only the frames the census
+  reads, in its order over the confirmed records: frame n where an
+  X-headed item sits at or below L-3, and it stops; else frame n+1, and it
+  stops if one sits at L-1; also a second pass), `halt` (the final frame
+  at a halt) and `last-restart`. `census` chooses frames, not verdicts.
+- `reduce` and `batch` also read the DAG form, `dag 0=S 1=X 2=0.1 ... @2`
+  on one line, ids local to the line: a dumped term handed back without
+  unfolding it.
+
+`avon enum N` prints every closed S-term of size N in the census's order
+(`--start=K --count=M` for a slice; progress on stderr every 10⁵); `avon
+enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
+`S (S (S (S S) (S a))) q` for every ordered pair of the file's terms.
+
 ## The files Avon reads
 
 | file | what it is | written by |
@@ -231,7 +328,10 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 | `interpreters.tsv` | interpreter jets' specs | the same |
 | `namespaces.tsv` | the resume loop's runs | the same |
 | `templates.tsv`, `template_terms.tsv` | supercombinator templates and the terms they reference | the same; `run0` for the front end |
+| `words.tsv` | numeral operations: `hash op atoms printed-term`, written only when a program names one | skijack `templates.write_words` |
+| `tests/data/*` | data-jet fixtures: two programs, their templates, words and names printed | `tests/data/export.py` |
 | `tests/workloads/skilark/manifest.tsv` | SKIlark's workloads | skilark's export |
+| `tests/workloads/reduceron/*.ascii.ski` | five Reduceron benchmarks in SKIjack; `run.py` compiles, runs and times them (`docs/BENCHMARK.md`) | written by hand |
 | `jets/birds.tsv`, `jets/joy.tsv` | bird and Joy dictionaries; `*_names.tsv` label them | `jets/birds.py`, `jets/joy.py` |
 | `tests/selfhost/*` | the compiler core's terms and calls | `tests/selfhost/export.py` |
 | `tests/kernel/*` | kernel pills, events, expected values | `tests/kernel/export.py` |
@@ -243,7 +343,8 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 |---|---|---|
 | `make check` | every unit test, under ASan and UBSan | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
-| `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does, with and without templates | skijack |
+| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`) |
+| `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | skijack |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |
 | `make jet-witness-check` | the same, jetted (§18) | lean-ski |
 | `make probe-witness-check` | the same, with probe segments | lean-ski |

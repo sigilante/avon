@@ -1,0 +1,16 @@
+skijack-1:07a97809db8f9c81	38	S (S (K S) (S (K K) (S (K S) K))) (K (S (K (S (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))) K))
+skijack-1:0a9bea03c09bf005	2	K I
+skijack-1:2975a90e8374aacb	85	S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S (K (S I (K K))))) (S (S (K S) (S (S (K S) (S (S (K S) K) (K (S (S (S I (K (K I))) (K K)) (K K))))) (K (S (S (S I (K K)) (K (K I))) (K K))))) (K (S (S (S I (K K)) (K K)) (K (K I))))))))))))) (S (K K) (S (K K)))
+skijack-1:2dd783b12fa692e9	3	K (K K)
+skijack-1:2e8dee1030211cf2	49	S (S (K S) (S (S (K S) (S (S (K S) K) (K (S (S (S I (K (K I))) (K K)) (K K))))) (K (S (S (S I (K K)) (K (K I))) (K K))))) (K (S (S (S I (K K)) (K K)) (K (K I))))
+skijack-1:331e34bbd6748b29	4	S I (K K)
+skijack-1:46412d09fb89cbc9	22	S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))
+skijack-1:53630665a3cb211f	69	S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S S)) (S (K K) (S (K (S (K (S (S (K S) (S (K K) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))))))) (S (K (S (K K))) (S (S (K S) (S (K K) S)) (K K))))))
+skijack-1:764510bb2928775e	107	S (K (S (S (K S) (S (K K) (S (K S) (S (K K) (S I (K K)))))))) (S (K K) (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S (K (S I (K K))))) (S (S (K S) (S (S (K S) (S (S (K S) K) (K (S (S (S I (K (K I))) (K K)) (K K))))) (K (S (S (S I (K K)) (K (K I))) (K K))))) (K (S (S (S I (K K)) (K K)) (K (K I))))))))))))) (S (K K) (S (K K)))))
+skijack-1:86be9a55762d316a	1	K
+skijack-1:b0a11f602e9d0d02	69	S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S I)) K)))) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) K))) (K (S (K (S (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))) K))))) K
+skijack-1:ce8f9d06ec5f927f	17	S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K)
+skijack-1:d1728ef0d63652a7	55	S (S (K S) (S (K K) (S (K S) (S (K (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))))) (K K)
+skijack-1:d472ada64739eaa2	67	S (S (K S) (S (K K) S)) (K (S (K K) (S (S (K S) (S (K K) (S (K S) (S (K (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))))) (K K))))
+skijack-1:e7621922b4b26638	48	S (K (S (K (S (S (K S) (S (K K) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))))))) (S (K (S (K K))) (S (S (K S) (S (K K) S)) (K K)))
+skijack-1:e971ba41141921a3	140	S (K (S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S S)) (S (K K) (S (K (S (K (S (S (K S) (S (K K) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))))))) (S (K (S (K K))) (S (S (K S) (S (K K) S)) (K K)))))))) (S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S I)) K)))) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) K))) (K (S (K (S (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))))) K))))) K)

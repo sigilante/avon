@@ -1,0 +1,30 @@
+skijack-1:ce8f9d06ec5f927f	prelude	pair	3	0,1,2	``v2 v0 v1
+skijack-1:331e34bbd6748b29	prelude	hd	1	0	`v0 K
+skijack-1:8d1a3ebf2f9e6ee7	prelude	tl	1	0	`v0 `K I
+skijack-1:86be9a55762d316a	prelude	nil	2	0,1	v0
+skijack-1:46412d09fb89cbc9	prelude	cons	4	0,1,2,3	``v3 v0 v1
+skijack-1:86be9a55762d316a	prelude	zero	2	0,1	v0
+skijack-1:f978ff1a0137879e	prelude	suc	3	0,1,2	`v2 v0
+skijack-1:02f3acff61b5dd88	prelude	natAdd	3	0,1,2	``v2 v1 ``#694b3fe238157624 v0 v1
+skijack-1:694b3fe238157624	prelude	natAdd	3	0,1,2	`#f978ff1a0137879e ``v0 v1 v2
+skijack-1:b34466ac44104611	prelude	natSub	3	0,1,2	``v2 v1 ``#69a0477c4fad4bc0 v0 v1
+skijack-1:69a0477c4fad4bc0	prelude	natSub	3	0,1,2	``v0 ``v1 #86be9a55762d316a I v2
+skijack-1:bd599cc112d6bfe7	prelude	natMul	3	0,1,2	``v2 #86be9a55762d316a ``#018284e263d909a3 v0 v1
+skijack-1:018284e263d909a3	prelude	natMul	3	0,1,2	``#3ed8ae12557cfc63 v1 ``v0 v1 v2
+skijack-1:77869370bc447864	prelude	natIfEq	5	0,1,2,3,4	``v1 ``v2 v3 `K v4 ````#2723a45ee278fc12 v0 v2 v3 v4
+skijack-1:2723a45ee278fc12	prelude	natIfEq	5	0,1,2,3,4	``v1 v3 ````#286535a8196fa3bd v0 v2 v3 v4
+skijack-1:286535a8196fa3bd	prelude	natIfEq	5	0,1,2,3,4	````v0 v3 v4 v1 v2
+skijack-1:0fd1c3e2f9e452ed	prelude	natIfLe	5	0,1,2,3,4	``v1 v3 ````#2723a45ee278fc12 v0 v2 v3 v4
+skijack-1:2723a45ee278fc12	prelude	natIfLe	5	0,1,2,3,4	``v1 v3 ````#286535a8196fa3bd v0 v2 v3 v4
+skijack-1:286535a8196fa3bd	prelude	natIfLe	5	0,1,2,3,4	````v0 v3 v4 v1 v2
+skijack-1:86be9a55762d316a	ctor	False	2	0,1	v0
+skijack-1:0a9bea03c09bf005	ctor	True	2	0,1	v1
+skijack-1:86be9a55762d316a	ctor	Zero	2	0,1	v0
+skijack-1:f978ff1a0137879e	ctor	Suc	3	0,1,2	`v2 v0
+skijack-1:9d9b63fceecc83cc	eq	sq	1	0	``#6260cc66d2fe291a v0 v0
+skijack-1:754d650c6ac6a13a	lift	tri	3	0,1,2	``#3ed8ae12557cfc63 v1 `v0 v2
+skijack-1:55672c86aa4d20ea	rec	tri	2	0,1	``v1 #86be9a55762d316a ``#754d650c6ac6a13a v0 v1
+skijack-1:d9344670f366b858	lift	countOnto	3	0,1,2	``v0 `#f978ff1a0137879e v1 v2
+skijack-1:830cbe9e27d60e06	rec	countOnto	3	0,1,2	``v2 v1 ``#d9344670f366b858 v0 v1
+skijack-1:a83dd0ccbffe39d0	rec	loop	2	0,1	`v0 v1
+skijack-1:5b74a44b19903d6e	lift	lazy	1	0	#0a9bea03c09bf005

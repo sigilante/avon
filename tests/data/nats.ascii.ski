@@ -1,0 +1,22 @@
+-- Data jets on numerals (docs/DESIGN.md §6.10): the prelude's numeral
+-- operations, and a divergent operand the operations must not force.
+bool === False | True
+nat  === Zero | Suc nat
+
+n2  = Suc (Suc Zero)
+n5  = Suc (Suc (Suc (Suc (Suc Zero))))
+n10 = natAdd n5 n5
+sq n = natMul n n
+tri n = n |> { Zero Zero ; Suc m natAdd n (tri m) }
+count n = countOnto Zero n
+countOnto acc n = n |> { Zero acc ; Suc m countOnto (Suc acc) m }
+
+-- 100 + 55 - 5 = 150 = 15 * 10; 12 <= 13; count 10 = 10
+main = natIfEq (natSub (natAdd (sq n10) (tri n10)) n5) (natMul (natAdd n10 n5) n10) (natIfLe (natAdd n10 n2) (natAdd n10 (Suc n2)) (natIfEq (count n10) n10 True False) False) False
+
+-- natAdd of a divergent numeral and one: a successor, never forcing the loop
+loop n = loop n
+lazy = natAdd (loop Zero) (Suc Zero) |> { Zero False ; Suc k True }
+
+-- a numeral's normal form, for comparing printed normal forms
+out = natSub (natMul n10 n5) (tri n5)

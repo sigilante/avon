@@ -1050,6 +1050,175 @@ are the larger part, and what would shrink them is strictness: an
 argument a body forces evaluated where it is needed, not written as a
 cell (SKA's data requirements).
 
+### 6.10 Data jets: constructors dispatched, numerals held as numbers
+
+**Data jets make a `case` and a numeral cheaper in share mode, and change
+no answer.** With templates (§6.9), `--data` adds two: a constructor
+meeting its continuations dispatches straight into the branch it selects,
+and a numeral is held as a number, on which skijack's numeral operations
+run natively. The program is still the pure SKI term: copy mode, the
+witness, and a run without `--data` are what they were, and normal forms
+are the unjetted ones byte for byte.
+
+**A `case` was three steps; it is two.** Scott encoding makes a `case` an
+application of the scrutinee to one continuation per constructor, and
+skijack lifts each branch that binds fields into a rule over what it
+captures and the fields. With templates, `case xs of Cons x r -> e` took
+the function's own instantiation, the constructor's (`Cons x r n c` to `c
+x r`), and the branch's. A constructor's template is recognized by its
+body, a formal applied to the fields -- `v_h v0 .. v(m-1)`, the shape
+`(m, h - m, k - m)` of §6.8 and lean-ski's `ctorO` -- and with every
+argument it dispatches: the continuation its index selects, applied to the
+fields, replaces the redex root, one step. When that continuation is a
+template's key applied to exactly the arguments that, with the fields, it
+takes, the branch is instantiated in the same step, *fused*: a `case` is
+the function and the branch, as it is the Reduceron's function application
+and case alternative. A nullary constructor never fuses: its continuation,
+applied to nothing, is itself the redex, and must be updated where it
+stands, since it may be shared.
+
+**A word is a numeral held as a number, and every reader still sees the
+numeral.** `W n`, for n >= 1, is a jet node flagged `AV_JET_WORD`: its id
+field holds n and its term is `SUC (W (n-1))`, `W 0` being `K`, where SUC
+is skijack's successor `S (K K) (S (K (S I)) K)`, the term every `Zero |
+Suc t` type compiles to, whatever it is called. `av_view` sees through it
+as through any jet node, so printing, the §5 hash, `jam`, snapshots and
+the witness read the numeral itself; the predecessor is its term's right
+child. A word meeting its two continuations dispatches with no allocation:
+`W n z s` becomes `s (W (n-1))` in place. A word is a value but its term
+is not in normal form -- `SUC x` is a redex -- so making a normal form,
+or reporting a weak head normal form with a word at the head, reduces a
+fresh copy of the term, as the unjetted run would. Copy mode runs the term.
+
+**Words come from where a numeral is already whole; nothing is forced to
+make one.** The loaded program's closed numerals become words in place
+(`av_words_scan`, after binding); a template instruction applying SUC to
+a numeral already held builds a word (`av_words_mark`); and the numeral
+operations return words.
+
+**The numeral operations are skijack's terms, found by hash and checked
+by running.** `natAdd`, `natSub` (truncated), `natMul`, `natIfEq` and
+`natIfLe` join skijack's prelude when a program names one (skijack
+`SPEC.md` §4); `words.tsv` lists each by the §5 hash of its term. Avon
+loads a row only if the term matches its hash, and admits it only if the
+term, run in share mode on private copies over the numerals 0 to 5, agrees
+with the native operation on all 36 pairs; one that does not runs as its
+term. A match on 36 pairs is a test, not a proof: each admitted operation
+is native code the runtime trusts, as a Vere jet is, and its licence for
+a proof is §18.2's word-level theorem, owed per operation. An operation
+fires only when both numeral operands are words already, as the
+Reduceron's primitive-redex speculation fires only on evaluated
+operands; otherwise its node runs its term, kept for the next call. So an
+operation forces nothing its term would not: `natAdd ⊥ 1` is a successor.
+One that would build more than 2^20 nodes runs its term too, which builds
+its result lazily. A word's value fits the 28 bits of a jet node's id
+field, so a numeral past 2^28 - 1 stays SKI, and jet ids, sharing the
+field, are capped at 2^28.
+
+**What was not built.** The plan (2026-09-29) also made a constructor
+value reduced on its own a node that keeps its dispatch, a DATA node. In
+lazy share-mode reduction a constructor value is reduced without its
+continuations only at the top of a run or while the normal form is
+made, and both must report the SKI term, so a DATA node would be made
+only to be undone; on the five Reduceron ports no constructor template
+missed once. It was built, found idle, and taken out. Types of more than
+32 constructors still dispatch as SKI: a template past 32 formals cannot
+be checked with the 32 markers the hash-cons table has.
+
+**Counts are reported apart; only time is the measure.** A dispatch, fused
+or not, and a numeral operation are each one step of fuel, and are
+reported beside the contractions (`data:` on stderr), never folded into
+the instantiations. That a fused dispatch is one step and not two says
+how Avon counts, not that it does less; the claim rests on user time.
+
+**Results, 2026-09-29** (avon `f414272`, skijack
+`8b34529`; user CPU, best of five, interleaved). The
+front end compiling itself, all 492 names the same:
+
+| | contractions | instantiations | dispatches (fused) | user time |
+|---|---:|---:|---:|---:|
+| templates | 21,238,890 | 18,930,884 | -- | 0.96 s |
+| templates and data | 17,389,998 | 6,554,787 | 8,527,205 (3,848,892) | 0.92 s |
+
+Of each time, about 0.39 s loads the templates. The five Reduceron ports
+(`docs/BENCHMARK.md`), their integers now the prelude's operations: data
+jets take 1.10 to 1.19 times less time than templates alone on the four
+without arithmetic to speak of, and PermSort, whose comparisons run on
+words, 2.12 times less. The corpus's 43 halting runs, to weak head normal
+form: 43,348 steps with templates, 33,244 with data jets, 13,627 of them
+dispatches. Every normal form is SKI's and every weak head normal form
+templates' (`tests/test_data.c`, `make front0-check`).
+
+**What is left.** The profile of Milestone 0 (Queens2, templates):
+`whnf_share` 47% of samples, `av_app` 23%, `tmpl_instance` 21%,
+`try_interp` 5%, the collector 3%. Building instances -- an out-of-line
+allocation per node -- is two fifths of the time, and every jet head asks
+`try_interp` first. Those, and strictness (§6.9), are the next levers.
+
+### 6.11 Y unfolded in one step
+
+**With `--fix`, share mode rewrites `Y g` to `g (Y g)` in one step.** Y is
+Curry's `S (K (S I I)) (S (S (K S) K) (K (S I I)))`, the term skijack ties
+every recursion with. Without the rewrite, each recursive call re-derives
+Y's unfolding in five or six S, K and I steps (`docs/BENCHMARK.md`, "What
+the gap is made of"). `av_fix_on` before the template load registers Y as
+the numeral operations are registered (§6.10), found in the term and in
+the templates' globals by tree identity. Y at the head with an argument
+rewrites the redex root to `App(g, y)`, `y` a fresh `App(Y, g)`: one step,
+one node, no indirection, and every pointer still points backward.
+
+**It is convertible, not a reduct, so it keeps values, not states.**
+With `M = S I I` and `Q = S (S (K S) K) (K M)`, `Y g` reduces to
+`g (M (Q g))` and on to `g (g (M (Q g)))`, which `g (Y g)` reduces to as
+well; neither of the two reduces to the other. So:
+
+- normal forms are SKI's, byte for byte, and a term without one still
+  stops at FUEL (`Y K`, `Y I`, `Y (S I I)`, `tests/test_fix.c`);
+- answers read by probing are unchanged;
+- a weak head normal form state may differ in form: `Y K` stops at
+  `K (Y K)` where SKI stops at `K (K (S I I) K (I (S (K K) (K (S I I) K))))`.
+
+lean-ski's simulation already allows for this: `Tr` "is a relation, not a
+function" because Y unrolls to a self-reference that behaves as `Y ⬝ F`
+(`Simulation.lean`, `Tr.self`).
+
+**Not a cycle.** The experiment of `e74e581` (branch `experiment-knot`)
+rewrote `Y g` to the cycle `n = g n`, and a cycle is what Avon cannot keep:
+
+- it changes answers: `Y K` reports NORMAL, where SKI stops at FUEL;
+- it hangs: `Y I` writes an indirection to itself and spins in `av_res`,
+  `Y (S I I)` makes the spine cycle, both where no fuel is checked, and
+  copy mode hangs;
+- most of the runtime's graph walks loop on it -- the §5 hash, `hc_canon`,
+  `match`, snapshots, `--profile` -- against §2's and §4.2's acyclic arena;
+- the witness cannot hold it: lean-ski's heap points only backward, its
+  `termAt` gives a cycle no meaning, and every soundness theorem needs
+  `decode` to succeed.
+
+The one-step rewrite writes a cell that points backward, so a witness row
+for it fits the write-once memory as it stands: at a loaded Y address with
+a C cell, one cell `App(g, r)`, `r` the `App(Y, g)` the stack holds. Its
+licence would be a simulation theorem relating the run to the plain one
+by `Tr`, owed in lean-ski; not built.
+
+**Results, 2026-09-30** (avon `fix-jet`; `docs/BENCHMARK.md`, "Y unfolded
+in one step"). The steps fall almost as far as the cycle's -- PermSort
+116.8 million against the cycle's 112.9, from 132.8 -- but the time does
+not: 1.03 times less than data jets alone by geometric mean, against the
+cycle's 1.20. The difference is memory. The cycle shares one node for a
+function's recursion; each one-step unfolding makes a fresh `Y g`, and a
+lazy structure keeps each copy it captured alive. PermSort peaks at 266 MB
+with the rewrite, 244 MB without, 3.5 MB with the cycle; OrdList at 244,
+236 and 3.4 MB.
+
+So the sharing, not the steps, is what the cycle was worth, and an
+acyclic unfolding cannot share an infinite term. What would recover it
+is a cycle made safe: black holes, so that a cyclic redex that needs
+itself stops at FUEL as SKI does; walks that tolerate cycles, or a proof
+that none reaches them; copy mode left without it; and, before a witness
+could use one, a lean-ski heap semantics for cycles. That is its own
+plan. `--fix` stays: it is correct, cheap, and fits the witness.
+
 ## 7. The interpreter jet
 
 **It is Avon's level-1 interpreter, not an optimization of one.** Vere runs
@@ -2087,7 +2256,13 @@ residual jets off. When it gains proof jets, it should:
 ### 18.2 Data jets: native values at the boundary
 
 Arithmetic on Scott numerals is unary, so a jet for it pays only over
-native values. That needs a word cell `W n`: an inert leaf with a
+native values. Share mode holds them already (§6.10): a word `W n` is this
+cell's value in the clear, its term the numeral, and its operations are
+admitted by testing, which is all share mode needs. A proof needs more:
+share mode's word is a jet node over its numeral term, which the witness
+has no cell for, and its operations are trusted, not proved.
+
+A proof needs a word cell `W n`: an inert leaf with a
 field-element payload, whose meaning is a term, `⟦W n⟧` being the numeral
 `n`. Each jet then gets a table that proves its function on words (`ADD`,
 with range checks, and so on), joined to the CPU by a bus.
@@ -2110,6 +2285,10 @@ allowed. It is the last tier and has the largest payoff.
 
 - §6.5: a jetted witness reports jet calls beside contractions, and has
   fewer rows, not the same count.
+- §6.11: Y's one-step unfolding would be a row writing one backward cell,
+  `App(g, r)`, licensed by a simulation theorem up to lean-ski's `Tr`
+  (owed); a witnessed recursive call now pays Y's plumbing in S, K and I
+  rows.
 - §6.6: testing stays the admission rule for `share` mode. In `witness`
   mode a jet is admitted only when its tier's theorem is proved: 18.1
   once, 18.2 per jet, 18.3 once.
@@ -2544,3 +2723,52 @@ was read in the source; lessons for Avon are marked as such.*
   jammed kernel. Avon takes NockApp's form (§20.1): one term, not events,
   since Avon has no boot sequence beyond applying the pill to its subject.
   Its kernel is Arvo's door, pulled Nock 9's way (§9).
+
+## 22. Frame traces for the hider census
+
+**Avon observes copy mode's head run for the pure-S paper's hider census;
+it decides nothing.** The census (`fixed_points_hider.py`: `run`,
+`descend`, `classify`) runs `f X`, X an opaque passenger, and classifies `f`
+by the fate of the X-headed items. It needs more than an endpoint: the frame
+length and the passenger's seat at every step, counts its defect and y-step
+lemmas use, and the frames at confirmed record times for the fold
+certificate and the descent. `--trace-frame` gives these (`docs/RUNTIME.md`,
+"Frame traces"); the verdicts, the fold lookup and the descent stay in the
+census's Python, called unchanged (`tests/hider/client.py`). So Avon's output
+can widen the evidence or exhibit a term, and a certified exit is a proof
+only through the census's own certificate.
+
+**The frame is copy mode's argument slots.** The census's frame `[u_1 .. u_L]`
+is the S head's arguments, `u_1` at the x-seat; a step pops `(x, y, z)` and
+pushes `spine(x) ++ [z, y·z]`. That is `run_copy`'s S contraction on the
+slots `stk[base..top)`, `u_1 = stk[top-1]`, so the trace is a hook beside
+the census's (§6.7), called before each S contraction of the head run.
+Positions count from the end, 1 the last item.
+
+**It costs what the run costs.** These terms become DAGs within a few
+hundred steps, and anything recursive over paths is exponential on them. A
+trace run never collects, so every application's children are older than
+it, and the per-node facts -- X-headed, contains X, sigma (the X-headed
+items among the head's arguments) and arity -- are filled in index order
+on demand. A step changes only the slots above its top three, so prefix
+counts over the slots are recomputed only there; the passengers are found
+by binary search on them, and the defect is a difference of two prefixes.
+A 10⁵-step run is linear (`tests/test_trace.c`).
+
+**Frames go out as a node table, shared.** A frame printed as a tree would
+unfold the DAG; a dump prints each node once per term, children first, and
+the frame as node ids, and the DAG input form (`dag ... @root`) takes a
+record mint back for the descent's sub-run in its size. Dumps at the
+confirmed records need the records first, so Avon runs such a term twice:
+copy mode is deterministic and these runs never collect, so the node ids
+of the two passes are the same.
+
+**Parity, 2026-09-30** (`make hider-check`, the paper's scripts at
+`HIDER_SCRIPTS`). `avon enum` gives the census's closed terms in its order
+for every size to 12; on all 82,500 closed terms of size 1 to 12 (the
+58,786 of size 12 among them), horizon 600, Avon's trace of `f X` equals
+the census's run line for line -- length and X-headed positions against
+its `hist`, the depth, defect, event and front arity against the
+definitions -- and its exit and step; the census through Avon gives the
+census's verdict, exit and trail; and the five named cases hold, through
+both.

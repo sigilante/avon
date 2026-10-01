@@ -257,6 +257,8 @@ struct av_tmplset {
     uint64_t collections;       /* the arena's, at load: the table's node
                                    ids hold only until the next one */
     long     accepted, refused, eta, open, duplicate, wide, unbound;
+    long     words, words_refused;      /* numeral operations (§6.10) */
+    bool     fix;                       /* Y registered (§6.11) */
 };
 
 static bool global_push(av_arena *a, uint32_t node, uint32_t *ix) {
@@ -370,8 +372,27 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
         }
     }
     T->root = opnd[root];
+    T->root_last = T->nops && T->root == TMPL_OPND(TMPL_RES, T->nops - 1);
     T->key = t;
     free(opnd);
+    /* a constructor (§6.10): the body is argument h applied to the first
+     * m arguments in order, h past them; its shape (m, h - m, k - m) */
+    {
+        uint32_t x = T->root, m = 0;
+        bool shape = true;
+        while (shape && x >> 30 == TMPL_RES) {
+            uint32_t j = x & AV_PAYLOAD, arg = T->ops[2 * j + 1];
+            shape = arg >> 30 == TMPL_ARG && j == T->nops - 1 - m;
+            x = T->ops[2 * j];
+            m++;
+        }
+        /* the arguments, innermost first, must be 0 .. m-1 */
+        for (uint32_t j = 0; shape && j < m; j++)
+            shape = T->ops[2 * j + 1] == TMPL_OPND(TMPL_ARG, j);
+        if (shape && m == T->nops && x >> 30 == TMPL_ARG &&
+            (x & AV_PAYLOAD) >= m && (x & AV_PAYLOAD) < k)
+            T->ctor = (av_ctor){ m, (x & AV_PAYLOAD) - m, k - m };
+    }
     a->jets[id].tmpl = ++a->ntmpls;
 done:
     free(cn);
@@ -548,7 +569,79 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         else if (why == 3 || why == 5) ts->eta++;
         else ts->duplicate++;
     }
+    /* the numeral operations (§6.10), when words are on: each term checked
+     * against its hash, then run on small numerals before it is keyed */
+    free(text);
+    text = NULL;
+    snprintf(path, sizeof path, "%s/words.tsv", dir);
+    if (a->word_suc && (text = slurp_path(path, &len)) != NULL) {
+        for (char *line = text, *nl; *line; line = nl ? nl + 1 : line + strlen(line)) {
+            nl = strchr(line, '\n');
+            if (nl) *nl = '\0';
+            char *fld[4];
+            int k = 0;
+            for (char *q = line; k < 4 && q; k++) {
+                fld[k] = q;
+                q = strchr(q, '\t');
+                if (q) *q++ = '\0';
+            }
+            if (k < 4) { if (*line) { msg = "malformed words.tsv line"; goto fail; } continue; }
+            static const char *const opname[] = { "", "add", "sub", "mul", "ifeq", "ifle" };
+            unsigned op = 0;
+            for (unsigned i = 1; i < sizeof opname / sizeof *opname; i++)
+                if (strcmp(fld[1], opname[i]) == 0) op = i;
+            uint64_t want;
+            if (!op || !av_hash_parse(fld[0], &want)) { msg = "malformed words.tsv line"; goto fail; }
+            av_parse_error pe;
+            uint32_t t = av_parse(a, fld[3], strlen(fld[3]), &pe);
+            if (t == AV_NONE) { msg = "unparsable term in words.tsv"; goto fail; }
+            uint32_t c = hc_canon(a, &ts->h, t);
+            uint64_t d, have;
+            if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
+            if (d != want) { msg = "a word operation does not match its hash"; goto fail; }
+            if (nmap_get(&ts->key_jet, c, &have) || !word_admit(a, c, op)) {
+                ts->words_refused++;
+                continue;
+            }
+            uint32_t id = jet_entry_for(a, want, c);
+            if (id == AV_NONE) goto fail;
+            if (a->jets[id].tmpl || a->jets[id].word_op) { ts->words_refused++; continue; }
+            if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
+            a->jets[id].word_op = (uint8_t)op;
+            ts->words++;
+        }
+    }
+    /* Curry's Y (§6.11), when asked for: keyed like a numeral operation, so
+     * its occurrences in the term and in the globals are wrapped */
+    if (a->fix_on) {
+        static const char Y[] = "S (K (S I I)) (S (S (K S) K) (K (S I I)))";
+        av_parse_error pe;
+        uint32_t t = av_parse(a, Y, sizeof Y - 1, &pe);
+        uint32_t c = t == AV_NONE ? AV_NONE : hc_canon(a, &ts->h, t);
+        uint64_t d, have;
+        if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
+        if (!nmap_get(&ts->key_jet, c, &have)) {
+            uint32_t id = jet_entry_for(a, d, c);
+            if (id == AV_NONE) goto fail;
+            if (!a->jets[id].tmpl && !a->jets[id].word_op) {
+                if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
+                a->jets[id].fix = true;
+                ts->fix = true;
+            }
+        }
+    }
     if (!make_globals(a, ts)) goto fail;
+    /* one scratch for every instance: the largest template's results and
+     * constants, so a fire checks nothing */
+    for (uint32_t ti = 0; ti < a->ntmpls; ti++) {
+        uint32_t need = a->tmpls[ti].nops + a->tmpls[ti].nconsts;
+        if (need > a->tmpl_scratch_cap) {
+            uint32_t *q = realloc(a->tmpl_scratch, need * sizeof *q);
+            if (!q) goto fail;
+            a->tmpl_scratch = q;
+            a->tmpl_scratch_cap = need;
+        }
+    }
     free(text);
     free(refs);
     free(b.n);
@@ -576,10 +669,20 @@ bool av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t) {
         uint64_t v;
         if (nmap_get(&seen, x, &v)) continue;
         if (!(ok = nmap_put(&seen, x, 1))) break;
+        if (av_is_word(a, x)) continue;
         if (av_tag(a, x) == AV_JET) {
             uint32_t id = AV_JET_ID(av_left(a, x));
             uint32_t inner = av_right(a, x);
-            if (a->jets[id].tmpl) {
+            if (a->jets[id].word_op || a->jets[id].fix) {
+                /* a numeral operation or Y, likewise, on its own term only */
+                uint32_t c = hc_canon(a, &ts->h, inner);
+                uint64_t have;
+                if (c == AV_NONE) { ok = false; break; }
+                if (!nmap_get(&ts->key_jet, c, &have) || have != (uint64_t)id + 1) {
+                    arena_set(a, x, (av_node){ (AV_IND << AV_TAG_SHIFT) | inner, 0 });
+                    ts->unbound++;
+                }
+            } else if (a->jets[id].tmpl) {
                 /* the template fires here only on its own term */
                 uint32_t c = hc_canon(a, &ts->h, inner);
                 if (c == AV_NONE) { ok = false; break; }
@@ -611,32 +714,19 @@ void av_templates_free(av_tmplset *ts) {
     free(ts);
 }
 
+bool av_templates_fix(const av_tmplset *ts) {
+    return ts->fix;
+}
+
+void av_templates_word_counts(const av_tmplset *ts, long *admitted, long *refused) {
+    *admitted = ts->words;
+    *refused = ts->words_refused;
+}
+
 void av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,
                          long *skipped, long *unbound) {
     *accepted = ts->accepted;
     *refused = ts->refused;
     *skipped = ts->eta + ts->open + ts->duplicate + ts->wide;
     *unbound = ts->unbound;
-}
-
-/*  ------------------------------------------------------------ instances */
-
-uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args) {
-    if (a->tmpl_scratch_cap < T->nops) {
-        uint32_t *s = realloc(a->tmpl_scratch, T->nops * sizeof *s);
-        if (!s) return AV_NONE;
-        a->tmpl_scratch = s;
-        a->tmpl_scratch_cap = T->nops;
-    }
-    uint32_t *out = a->tmpl_scratch;
-#define TOPERAND(x) ((x) >> 30 == TMPL_CONST ? a->tmpl_globals[T->consts[(x) & AV_PAYLOAD]] \
-                   : (x) >> 30 == TMPL_ARG   ? args[(x) & AV_PAYLOAD]                       \
-                                             : out[(x) & AV_PAYLOAD])
-    for (uint32_t i = 0; i < T->nops; i++) {
-        uint32_t n = av_app(a, TOPERAND(T->ops[2 * i]), TOPERAND(T->ops[2 * i + 1]));
-        if (n == AV_NONE) return AV_NONE;
-        out[i] = n;
-    }
-    return TOPERAND(T->root);
-#undef TOPERAND
 }
