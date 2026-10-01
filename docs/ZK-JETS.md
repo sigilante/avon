@@ -1,10 +1,11 @@
 # Jets under hiding
 
-> **Status (2026-09-30).** Being built: milestones 1–6 of §9 are done.
+> **Status (2026-09-30).** Being built: milestones 1–7 of §9 are done.
 > The circuit exists as data in Lean and in Rust, the two agree constraint
 > for constraint, its honest proofs verify under hiding, and its soundness
-> (`compJExport_sound`) and completeness (`compJ_complete_log`) are
-> proved; its zero knowledge (milestone 7) is not yet. It joins two circuits that lean-ski has proved separately, the
+> (`compJExport_sound`), completeness (`compJ_complete_log`) and zero
+> knowledge (`compJ_transcript`) are proved. Avon (milestone 8) and the
+> release (milestone 9) remain. It joins two circuits that lean-ski has proved separately, the
 > composed statement in zero knowledge and the supercombinator jet
 > circuit, into one circuit whose proofs hide the witness and instantiate
 > licensed templates. Each claim below about
@@ -318,7 +319,7 @@ composed one what `checkJA` is to `checkA`.
   The per-tuple shift lemmas (`shift_term`, `unshift_shift`) carry over.
 - `transcript_zkN` (proved, milestone 2): `transcript_zk` over `n`
   terminals, with the `n − 1`-fold count.
-- `compJ_transcript`: the instance.
+- `compJ_transcript`: the instance (proved, milestone 7).
 
 ## 7. The prover's side, and Avon's
 
@@ -328,13 +329,16 @@ the POP and INSTW chains and the provider multiplicities, pads to the
 statement's heights, and writes the seven blinding tuples before proving.
 It proves under `HidingFriPcs` with the composed prover's configuration.
 Its verifier:
-- pins every height to the statement's. *Built (milestone 4):* the CPU's
-  and memory's come from the statement's `log R M`; POP's and INSTW's are
-  the verifier's arguments `LP` and `LI`, each in `[8, 20]`, not yet lines
-  of the statement. Soundness does not depend on them (Plonky3 bounds the
-  LogUp multiplicities by the real heights). Zero knowledge does: a prover
-  who chose them per run would publish the size of its instantiations, so
-  the statement must carry them (`log R M Lp Li`, §4) before milestone 7;
+- pins every height to the statement's. *Built (milestones 4 and 7):*
+  all four free heights come from the statement's `log R M Lp Li`, each in
+  `[8, 20]` (lean-ski's `ComposedText.statementOfTextJ`, `lake exe composed
+  statement-jets`; `composed budget` writes it from a composed statement).
+  A composed statement and one with jets are each refused by the other's
+  check. Soundness does not depend on the budgets (Plonky3 bounds the
+  LogUp multiplicities by the real heights). Zero knowledge does: the
+  verifier fixes the statement, budgets included, and the templates'
+  source before the witness, or a prover who chose them would publish the
+  sizes of its run;
 - runs the Lean statement check, which compares the jet table with the
   one Lean recomputes and checks the roots;
 - compares its AIRs with Lean's `compJAirs`.
@@ -439,7 +443,20 @@ the tree; its height is a public budget like POP's.
    tables `compJAirs` accepts at those heights, with the public program
    and segment tables, decoding back to the memory and the run;
    `compJStmt_complete_log` takes `jetStmtC` in place of the license.
-7. **Zero knowledge.** `compJ_transcript`.
+7. **Zero knowledge.** *Done, 2026-09-30,* in lean-ski's
+   `Ski/ZK/CompJ.lean`, axiom-clean. `compJ_transcript` is
+   `transcript_zkN` for the tree of eight private tables and seven tuples
+   that `compj.rs` blinds (`jetPar`, `jetBus`, `jetSg`). Each blinded
+   table's terminal is computed (`terminal_wb2`, `terminal_cpuCJ`), the
+   published terminals are the tree's view of the unblinded ones
+   (`compJ_chain`), and those sum to minus the public program and segment
+   tables' (`compJ_sum`). `CRun.honest_zk`: milestone 6's honest tables
+   meet the hypotheses. The statement carries POP's and INSTW's budgets
+   (`log R M Lp Li`), and `compj-prove`, `-verify` and `-tamper` read them
+   from it. The model is honest-verifier zero knowledge over uniform
+   challenges, with the simulator fixed by the statement; Fiat–Shamir is
+   the random-oracle step, and `PCSCloseN` carries the committed traces'
+   hiding.
 8. **Avon.** Public budgets, the composed machine, and
    `zk-jet-witness-check`.
 9. **Release.** `split8` and `csplit8` proved with jets under hiding, in
