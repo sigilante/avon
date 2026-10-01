@@ -247,4 +247,5 @@ budgets. `make witness-check` runs the corpus through lean-ski.
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |
 | `make jet-witness-check` | the same, jetted (§18) | lean-ski |
 | `make probe-witness-check` | the same, with probe segments | lean-ski |
+| `make zk-jet-witness-check` | composed statements with jets: Avon's tables are ski-air's, accepted by `check-cj`, proved under hiding and verified; bad witnesses and budgets refused (`docs/ZK-JETS.md`) | lean-ski |
 | `tests/diff_aviary.py` | `copy` mode against `aviary_kernel` on random terms | aviary-kernel |

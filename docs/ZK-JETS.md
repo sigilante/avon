@@ -1,11 +1,12 @@
 # Jets under hiding
 
-> **Status (2026-09-30).** Being built: milestones 1–7 of §9 are done.
+> **Status (2026-09-30).** Being built: milestones 1–8 of §9 are done.
 > The circuit exists as data in Lean and in Rust, the two agree constraint
 > for constraint, its honest proofs verify under hiding, and its soundness
 > (`compJExport_sound`), completeness (`compJ_complete_log`) and zero
-> knowledge (`compJ_transcript`) are proved. Avon (milestone 8) and the
-> release (milestone 9) remain. It joins two circuits that lean-ski has proved separately, the
+> knowledge (`compJ_transcript`) are proved. Avon writes the witness
+> tables, byte for byte ski-air's (milestone 8). The release (milestone
+> 9) remains. It joins two circuits that lean-ski has proved separately, the
 > composed statement in zero knowledge and the supercombinator jet
 > circuit, into one circuit whose proofs hide the witness and instantiate
 > licensed templates. Each claim below about
@@ -343,10 +344,11 @@ Its verifier:
   one Lean recomputes and checks the roots;
 - compares its AIRs with Lean's `compJAirs`.
 
-**Avon** writes the witness table, as it does for jetted runs today
+**Avon** writes the witness table, as it does for jetted runs
 (`avon witness --jet-table`, `src/witness.c`): the CPU rows and the
 memory, from which ski-air derives the rest (`DESIGN.md` §18.1). Three
-changes:
+changes, *built (milestone 8)* as `avon witness --statement=PUBLIC
+--jet-table=JETS WITNESS`:
 
 1. **Public budgets.** Pad to the statement's heights, not to the next
    power of two above the run (`pow2_at_least`, which pads every Avon
@@ -362,7 +364,10 @@ changes:
 
 *Check:* `make zk-jet-witness-check` compares Avon's table with ski-air's
 own, byte for byte, as `jet-witness-check` does (`tests/jet_witness_check.sh`),
-and runs the jetted composed checker (`checkCJ`, §6) on it.
+and runs the jetted composed checker (`checkCJ`, §6) on it. ski-air then
+proves Avon's table under hiding (`ski-air compj-prove-table`, which reads
+the instantiation rows from the table as `jet-prove` does) and verifies the
+proof from the public files alone.
 
 ## 8. Later: probes and data jets under hiding
 
@@ -457,8 +462,19 @@ the tree; its height is a public budget like POP's.
    challenges, with the simulator fixed by the statement; Fiat–Shamir is
    the random-oracle step, and `PCSCloseN` carries the committed traces'
    hiding.
-8. **Avon.** Public budgets, the composed machine, and
-   `zk-jet-witness-check`.
+8. **Avon.** *Done, 2026-09-30.* `avon witness --statement=PUBLIC
+   --jet-table=JETS WITNESS` (`av_cstmt_read`, `av_witness_run_composed`,
+   `av_composed_table`): the statement's heap with the witness's bits and
+   region, one jetted segment per root over the public nil, each to `K`
+   over the nil, padded to the statement's heights; a run over any of the
+   four budgets is refused. `make zk-jet-witness-check` on lean-ski's
+   `and`, `or` and `split8`, with `split8`'s templates: each table
+   byte-identical to ski-air's, accepted by `check-cj`, proved under
+   hiding by `ski-air compj-prove-table` and verified alone. The wrong,
+   clear and non-Boolean witnesses are refused by both, the forged
+   region's table is rejected by `check-cj` and does not prove, and a POP
+   budget below the run's is refused by both. `split8`: 11,599 rows,
+   2,250 instantiations, 8,614 pops, 12,363 written cells.
 9. **Release.** `split8` and `csplit8` proved with jets under hiding, in
    lean-ski's `release/skilark`, checked by `release/verify.sh`.
 

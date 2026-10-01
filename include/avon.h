@@ -407,6 +407,8 @@ typedef struct {
     size_t    loaded;           /* cells of Mach.load t, the nil included */
     uint32_t  hd0, stk0;
     uint64_t  contractions;     /* rows whose head is not an application */
+    uint64_t  pops, wcells;     /* instantiations' argument pops and written
+                                   cells: POP's and INSTW's rows */
 } av_witness;
 
 /*  Load t and run it to weak head normal form.  AV_WHNF on success;
@@ -520,6 +522,64 @@ void      av_probe_free(av_probe *pr);
  *  segment its count and pointers.  min_log as the table's. */
 bool av_probe_table(const av_witness *w, const av_probe *pr, unsigned min_log,
                     av_buf *out);
+
+/*  ------------------------------------------- composed statements, jetted
+ *
+ *  lean-ski's composed statement (`public.txt`, ComposedText.publicTextC):
+ *  a header line, the region size, the log heights, the bit count, the
+ *  segments' roots, the nil, the registers, and the composed machine's
+ *  heap with its private cells -- the bits at 3 and the region after them
+ *  -- blank (`W`).  A statement for the circuit with jets
+ *  (docs/ZK-JETS.md, milestone 8) names four log heights, `log R M Lp Li`:
+ *  the CPU's, the memory's, POP's and INSTW's, its public budgets.  Avon
+ *  decides nothing here: lean-ski's `composed statement-jets` checks the
+ *  statement, `composed check-cj` the table.
+ */
+typedef struct {
+    char     *header;           /* the first line, as written */
+    uint32_t  w, nbits;
+    unsigned  log_rows, log_mem;
+    unsigned  log_pop, log_instw;   /* 0: the statement names no budgets */
+    uint32_t *roots;
+    size_t    nroots;
+    uint32_t  nil, hd0, stk0, ctr0;
+    av_cell  *cells;            /* ctr0 cells; the private ones are nil */
+} av_cstmt;
+
+/*  Read a statement, as bench/plonky3's parse_public does: every log
+ *  height in [8, 20], a two-height line only when it is not the default
+ *  (11, 11), and exactly the cells [3, 3 + nbits + w) blank.  False, with
+ *  *err, otherwise. */
+bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err);
+void av_cstmt_free(av_cstmt *s);
+
+/*  Read a witness for s: nbits + w nonempty lines, the bits `1` (K) or `0`
+ *  (A 0 1) or any cell, then the region's cells, into priv (nbits + w
+ *  cells).  False, with *err, on anything malformed. */
+bool av_cwitness_read(const char *src, size_t len, const av_cstmt *s, av_cell *priv,
+                      const char **err);
+
+/*  The composed machine with jets (bench/plonky3's compj run): the
+ *  statement's heap with the private cells filled in, then per root a
+ *  jetted run from the root over the nil to a halt, the next segment
+ *  starting on the row after.  Each segment must halt at K over a nil.
+ *  *ends gets the halted rows' indices (nroots of them, malloc'd).  AV_WHNF
+ *  on success; AV_INTERRUPTED, with *err, when a segment halts elsewhere
+ *  (the witness does not satisfy the statement); AV_SIZE, with *err, on a
+ *  budget: the statement's 2^R rows, 2^M cells, 2^Lp pops, 2^Li written
+ *  cells, or a statement with no budgets. */
+av_status av_witness_run_composed(const av_cstmt *s, const av_cell *priv, const av_jettable *jt,
+                                  av_witness *w, size_t **ends, uint64_t *insts,
+                                  const char **err);
+
+/*  The table in lean-ski's `composed check-cj` format, as bench/plonky3's
+ *  compj-prove writes it: the header, `W w`, the memory padded with nil
+ *  cells to 2^M, `ends n` and the segments' ends -- the restarts, then the
+ *  padded table's last row -- and the rows padded to 2^R by repeating the
+ *  last.  The statement's heights, not the run's: they are its public
+ *  budgets (docs/DESIGN.md §17.2). */
+bool av_composed_table(const av_cstmt *s, const av_witness *w, const size_t *ends,
+                       av_buf *out);
 
 /*  The table in Ski/AirCheck.lean's format: the term in prefix form (`
  *  for application), the memory table, the rows.  Both are padded to a

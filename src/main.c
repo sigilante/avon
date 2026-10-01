@@ -15,6 +15,12 @@
  *                                     lean-ski's aircheck and plonky3 (§17);
  *                                     with JETS, lean-ski's jet file for the
  *                                     term, instantiation rows (§18.1)
+ *      avon witness --statement=PUBLIC --jet-table=JETS [WITNESS]
+ *                                     a composed statement with jets: the
+ *                                     witness's bits and region in the
+ *                                     statement's heap, one jetted segment
+ *                                     per root, padded to the statement's
+ *                                     heights (docs/ZK-JETS.md, milestone 8)
  *      avon census [--select=N] [--top=N] [--min-atoms=N] [--all]
  *                  [--names=FILE]... [--emit=DICT] MANIFEST...
  *                                     which terms the manifests' runs call,
@@ -104,6 +110,7 @@ typedef struct {
     const char *interp;           /* interpreters.tsv, or NULL */
     const char *jet_table;        /* lean-ski's jet file, or NULL */
     const char *plan;             /* lean-ski's probe plan, or NULL */
+    const char *statement;        /* lean-ski's composed statement, or NULL */
     uint64_t    jet_floor;
     const char *profile;          /* --profile: a names file, or NULL */
     const char *templates;        /* --templates: a directory, or NULL */
@@ -119,6 +126,7 @@ static int usage(void) {
         "       avon cue    [--budget=N] [FILE]\n"
         "       avon prefix [FILE]\n"
         "       avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [--plan=PLAN]\n"
+        "       avon witness --statement=PUBLIC --jet-table=JETS [WITNESS]\n"
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
@@ -162,6 +170,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->templates = NULL;
     g->jet_table = NULL;
     g->plan = NULL;
+    g->statement = NULL;
     g->jet_floor = 8;
     g->rows = 1u << 21;          /* bench/plonky3's MAX_LOG_HEIGHT */
     g->cells = 1u << 21;
@@ -197,6 +206,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         }
         else if (strncmp(s, "--jet-table=", 12) == 0 && s[12]) g->jet_table = s + 12;
         else if (strncmp(s, "--plan=", 7) == 0 && s[7]) g->plan = s + 7;
+        else if (strncmp(s, "--statement=", 12) == 0 && s[12]) g->statement = s + 12;
         else if (strncmp(s, "--jet-floor=", 12) == 0 && number(s + 12, &v))
             g->jet_floor = v;
         else if (strncmp(s, "--jet-check=", 12) == 0 && number(s + 12, &v))
@@ -1579,6 +1589,75 @@ static int jetstat_main(int argc, char **argv) {
     return wrong ? 1 : 0;
 }
 
+
+/*  avon witness --statement=PUBLIC --jet-table=JETS: the composed table
+ *  with jets for the witness wsrc, on stdout. */
+static char *read_text(const char *path, size_t *len) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    char *s = slurp(f, len);
+    fclose(f);
+    return s;
+}
+
+static int composed_witness(const args *g, const char *wsrc, size_t wlen) {
+    if (!g->jet_table) {
+        fprintf(stderr, "avon: --statement needs --jet-table\n");
+        return 1;
+    }
+    size_t slen = 0, jlen = 0;
+    char *ssrc = read_text(g->statement, &slen);
+    char *jsrc = read_text(g->jet_table, &jlen);
+    av_cstmt st;
+    av_jettable jt;
+    bool have_st = false, have_jt = false;
+    av_cell *priv = NULL;
+    size_t *ends = NULL;
+    av_witness w = { 0 };
+    av_buf b = { 0 };
+    uint64_t insts = 0;
+    const char *msg = NULL;
+    int rc = 1;
+    if (!ssrc) { fprintf(stderr, "avon: cannot read %s\n", g->statement); goto out; }
+    if (!jsrc) { fprintf(stderr, "avon: cannot read %s\n", g->jet_table); goto out; }
+    if (!(have_st = av_cstmt_read(ssrc, slen, &st, &msg))) {
+        fprintf(stderr, "avon: %s: %s\n", g->statement, msg);
+        goto out;
+    }
+    if (!(have_jt = av_jettable_read(jsrc, jlen, &jt, &msg))) {
+        fprintf(stderr, "avon: %s: %s\n", g->jet_table, msg);
+        goto out;
+    }
+    priv = calloc((size_t)st.nbits + st.w + 1, sizeof *priv);
+    if (!priv) { fprintf(stderr, "avon: out of memory\n"); goto out; }
+    if (!av_cwitness_read(wsrc, wlen, &st, priv, &msg)) {
+        fprintf(stderr, "avon: the witness: %s\n", msg);
+        goto out;
+    }
+    av_status s = av_witness_run_composed(&st, priv, &jt, &w, &ends, &insts, &msg);
+    if (s != AV_WHNF) {
+        fprintf(stderr, "avon: no witness: %s\n", msg);
+    } else if (!av_composed_table(&st, &w, ends, &b)) {
+        fprintf(stderr, "avon: could not write the table\n");
+    } else {
+        fwrite(b.s, 1, b.len, stdout);
+        fprintf(stderr, "rows %zu cells %zu segments %zu insts %llu pops %llu written %llu\n",
+                w.nrows, w.nmem, st.nroots, (unsigned long long)insts,
+                (unsigned long long)w.pops, (unsigned long long)w.wcells);
+        rc = 0;
+    }
+out:
+    av_witness_free(&w);
+    free(ends);
+    free(priv);
+    if (have_jt) av_jettable_free(&jt);
+    if (have_st) av_cstmt_free(&st);
+    av_buf_free(&b);
+    free(ssrc);
+    free(jsrc);
+    return rc;
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
         printf("avon %s\n", AVON_VERSION);
@@ -1609,6 +1688,8 @@ int main(int argc, char **argv) {
         int rc;
         if (strcmp(cmd, "reduce") == 0) {
             rc = run_one(&g, src, len, '\n');
+        } else if (strcmp(cmd, "witness") == 0 && g.statement) {
+            rc = composed_witness(&g, src, len);
         } else if (strcmp(cmd, "witness") == 0) {
             av_arena *a = new_arena(&g, 1u << 16);
             uint32_t t = a ? load(a, src, len) : AV_NONE;

@@ -348,6 +348,116 @@ TEST(a_malformed_plan_is_refused) {
     av_plan_free(&p);
 }
 
+/*  ------------------------------------------- composed statements, jetted */
+
+/*  A statement by hand (Avon decides nothing of its meaning): a bit at 3, a
+ *  region cell at 4, the nil at 5, and two segments, from `A 1 0` (I K)
+ *  and from the region cell. */
+static const char STMT[] =
+    "formula test\nW 1\nlog 8 8 8 8\nbits 1\nroots 6 4\nnil 5\n6 5 7\n"
+    "K\nI\nA 0 1\nW\nW\nN\nA 1 0\n";
+
+static av_status composed_of(const char *stmt, const char *jets, const char *wit,
+                             av_buf *out, uint64_t *insts, const char **err) {
+    av_cstmt st;
+    av_jettable jt;
+    av_witness w = { 0 };
+    size_t *ends = NULL;
+    av_cell priv[8];
+    av_status r = AV_SIZE;
+    if (!av_cstmt_read(stmt, strlen(stmt), &st, err)) return r;
+    if (av_jettable_read(jets, strlen(jets), &jt, err)) {
+        if (av_cwitness_read(wit, strlen(wit), &st, priv, err)) {
+            r = av_witness_run_composed(&st, priv, &jt, &w, &ends, insts, err);
+            if (r == AV_WHNF && out && !av_composed_table(&st, &w, ends, out)) r = AV_SIZE;
+        }
+        av_jettable_free(&jt);
+    }
+    av_witness_free(&w);
+    free(ends);
+    av_cstmt_free(&st);
+    return r;
+}
+
+/*  I K over the nil: unwind, I, a halt at K; the region cell K halts at
+ *  once.  The rows and memory pad to 2^8, the ends are the restart and the
+ *  padded table's last row. */
+TEST(a_composed_table_pads_to_the_statements_heights) {
+    av_buf b = { 0 };
+    uint64_t insts = 9;
+    const char *err = NULL;
+    CHECK_EQ(composed_of(STMT, "roots 0\njets 0\n", "1\nK\n", &b, &insts, &err), AV_WHNF);
+    CHECK_EQ(insts, 0);
+    const char head[] = "formula test\nW 1\n256\nK\nI\nA 0 1\nK\nK\nN\nA 1 0\nC 0 5\nN\n";
+    CHECK(b.s && strncmp(b.s, head, strlen(head)) == 0);
+    const char *ends = b.s ? strstr(b.s, "ends 2\n2\n255\n256\n6 5 7\n1 7 8\n0 5 8\n4 5 8\n4 5 8\n") : NULL;
+    CHECK(ends != NULL);
+    size_t rows = 0;
+    for (const char *p = ends; p && *p; p++) rows += *p == '\n';
+    CHECK_EQ(rows, 4 + 256);                    /* ends 2, two ends, 256, the rows */
+    av_buf_free(&b);
+}
+
+/*  A jet of arity 0 at the first root: one instantiation row, its root the
+ *  global K. */
+TEST(a_composed_run_instantiates_at_a_root) {
+    av_buf b = { 0 };
+    uint64_t insts = 0;
+    CHECK_EQ(composed_of(STMT, "roots 1\n6 0\njets 1\n0 0 G 0\n", "0\nK\n", &b, &insts, NULL), AV_WHNF);
+    CHECK_EQ(insts, 1);
+    CHECK(b.s && strstr(b.s, "ends 2\n1\n255\n256\n6 5 7\n0 5 7\n4 5 7\n") != NULL);
+    av_buf_free(&b);
+}
+
+TEST(a_composed_witness_must_satisfy_the_statement) {
+    const char *err = NULL;
+    /* the region cell S: the second segment halts at S */
+    CHECK_EQ(composed_of(STMT, "roots 0\njets 0\n", "1\nS\n", NULL, NULL, &err), AV_INTERRUPTED);
+    CHECK(err != NULL);
+    /* no budgets: a composed statement, not one with jets */
+    char plain[sizeof STMT];
+    memcpy(plain, STMT, sizeof STMT);
+    memcpy(strstr(plain, "log 8 8 8 8"), "log 8 9", 7);
+    memmove(strstr(plain, "log 8 9") + 7, strstr(plain, "log 8 9") + 11, strlen(strstr(plain, "log 8 9") + 11) + 1);
+    err = NULL;
+    CHECK_EQ(composed_of(plain, "roots 0\njets 0\n", "1\nK\n", NULL, NULL, &err), AV_SIZE);
+    CHECK(err != NULL && strstr(err, "budgets") != NULL);
+    /* a witness of the wrong length */
+    err = NULL;
+    CHECK_EQ(composed_of(STMT, "roots 0\njets 0\n", "1\n", NULL, NULL, &err), AV_SIZE);
+    CHECK(err != NULL);
+}
+
+TEST(a_malformed_statement_is_refused) {
+    const char *bad[] = {
+        "formula test\nW 1\nlog 7 8 8 8\nbits 1\nroots 6 4\nnil 5\n6 5 7\nK\nI\nA 0 1\nW\nW\nN\nA 1 0\n",
+        "formula test\nW 1\nlog 11 11\nbits 1\nroots 6 4\nnil 5\n6 5 7\nK\nI\nA 0 1\nW\nW\nN\nA 1 0\n",
+        "formula test\nW 1\nlog 8 8 8\nbits 1\nroots 6 4\nnil 5\n6 5 7\nK\nI\nA 0 1\nW\nW\nN\nA 1 0\n",
+        "formula test\nW 1\nlog 8 8 8 8\nbits 1\nroots 6 4\nnil 5\n6 5 7\nK\nI\nA 0 1\nW\nW\nW\nA 1 0\n",
+        "formula test\nW 1\nlog 8 8 8 8\nbits 1\nroots 6 4\nnil 5\n6 5 7\nK\nI\nA 0 1\nW\nN\nN\nA 1 0\n",
+        "formula test\nW 1\nlog 8 8 8 8\nbits 1\nroots\nnil 5\n6 5 7\nK\nI\nA 0 1\nW\nW\nN\nA 1 0\n",
+        "formula test\nW 1\nlog 8 8 8 8\nbits 1\nroots 6 4\nnil 5\n6 5 7\nK\nI\nA 0 1\nW\nW\nN\n",
+        "theorem test\nW 1\nlog 8 8 8 8\nbits 1\nroots 6 4\nnil 5\n6 5 7\nK\nI\nA 0 1\nW\nW\nN\nA 1 0\n",
+    };
+    for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+        av_cstmt st;
+        const char *err = NULL;
+        CHECK(!av_cstmt_read(bad[i], strlen(bad[i]), &st, &err));
+        CHECK(err != NULL);
+    }
+    av_cstmt st;
+    const char *err = NULL;
+    const char trunc[] = "formula test\nW 1\nlog 8 8 8 8\nbits 1\nroots 6 4\nnil 5\n6 5 7\nK\nI\n";
+    CHECK(!av_cstmt_read(trunc, strlen(trunc), &st, &err));
+    CHECK(err && strcmp(err, "a truncated statement") == 0);
+    const char nul[] = "formula a\0b\nW 1\n";
+    CHECK(!av_cstmt_read(nul, sizeof nul - 1, &st, &err));
+    CHECK(av_cstmt_read(STMT, strlen(STMT), &st, NULL));
+    CHECK(st.log_rows == 8 && st.log_mem == 8 && st.log_pop == 8 && st.log_instw == 8);
+    CHECK(st.nroots == 2 && st.roots[0] == 6 && st.roots[1] == 4 && st.ctr0 == 7);
+    av_cstmt_free(&st);
+}
+
 TEST_MAIN(
     TEST_CASE(i_k_is_lean_skis_table),
     TEST_CASE(s_k_k_s_writes_three_cells_per_s),
@@ -361,4 +471,8 @@ TEST_MAIN(
     TEST_CASE(a_probe_binds_k_as_zero),
     TEST_CASE(a_probe_refuses_another_outcome),
     TEST_CASE(a_malformed_plan_is_refused),
+    TEST_CASE(a_composed_table_pads_to_the_statements_heights),
+    TEST_CASE(a_composed_run_instantiates_at_a_root),
+    TEST_CASE(a_composed_witness_must_satisfy_the_statement),
+    TEST_CASE(a_malformed_statement_is_refused),
 )
