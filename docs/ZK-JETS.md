@@ -1,6 +1,6 @@
 # Jets under hiding
 
-> **Status (2026-09-30).** Built: milestones 1–9 of §9 are done.
+> **Status (2026-10-02).** Built: milestones 1–9 of §9 are done, and every proof's hiding randomness now comes from one 128-bit seed, expanded by ChaCha20 (§7, lean-ski `52244a3`).
 > The circuit exists as data in Lean and in Rust, the two agree constraint
 > for constraint, its honest proofs verify under hiding, and its soundness
 > (`compJExport_sound`), completeness (`compJ_complete_log`) and zero
@@ -322,6 +322,13 @@ composed one what `checkJA` is to `checkA`.
 - `transcript_zkN` (proved, milestone 2): `transcript_zk` over `n`
   terminals, with the `n − 1`-fold count.
 - `compJ_transcript`: the instance (proved, milestone 7).
+- `transcript_prg` (proved, lean-ski `52244a3`, `Ski/ZK/PRG.lean`): the
+  theorems above count over uniform draws; `prg_transfer` carries them to
+  draws expanded from the 128-bit seed at the generator's advantage, under
+  `PRGClose`, the assumption that ChaCha20 under the seed is
+  indistinguishable from uniform. A single key search costs `2^128`; a
+  batch search over `N` proofs, whose opened salts are known ChaCha20
+  output, about `2^128 / N`.
 
 ## 7. The prover's side, and Avon's
 
@@ -362,6 +369,32 @@ changes, *built (milestone 8)* as `avon witness --statement=PUBLIC
 3. **No randomness.** Avon's table has no blinding columns. ski-air adds
    them, with the flags clear (lean-ski's `Unblinded`), and draws the
    tuples when it proves.
+
+**The prover's seed** (lean-ski `52244a3`, `bench/plonky3/src/seed.rs`).
+Every secret draw of a proof comes from one 128-bit seed, fresh from the
+operating system for that proof:
+
+| ChaCha20 stream | draws |
+|---|---|
+| 1 | the LogUp blinding tuples, by Plonky3's exactly uniform field sampler |
+| 2 | the Merkle leaf salts |
+| 3 | the random codewords that mask the committed polynomials |
+
+The key is the seed in its low 16 bytes and the domain constant
+`ski-air prover\0\1` in its high 16. Splitting the seed into its streams
+consumes it, so no stream serves two proofs. A reused seed would publish
+the difference of two proofs' traces, the masking being linear; on one
+witness it would only link the two proofs. The preprocessed tables are
+public and the verifier rebuilds their commitment, so both sides commit
+them under the fixed `PUBLIC_SEED` (`StdRng`); only the traces are
+committed under the secret seed.
+
+Avon's side of this is to stay out of it. Avon draws no randomness for a
+proof, writes no blinding values, and takes no seed: its table is the
+unblinded table, byte for byte ski-air's (`make zk-jet-witness-check`). The
+seed is outside the statement, and no kernel entropy event (`DESIGN.md`
+§9) feeds it: kernel entropy sits in the event log, as secret as the pier,
+and a proof's hiding must not rest on that.
 
 *Check:* `make zk-jet-witness-check` compares Avon's table with ski-air's
 own, byte for byte, as `jet-witness-check` does (`tests/jet_witness_check.sh`),
