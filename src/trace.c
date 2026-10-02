@@ -469,7 +469,9 @@ bool av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t ste
     if (term != AV_NONE && !fr) return false;
     const char *kind = "-";
     if (status == AV_FUEL) {
-        kind = "FUEL";
+        /* X at the head after the last step: step H-1 opened, and the
+         * census reports OPEN there, though the horizon stopped the halt */
+        kind = head == t->pass ? "OPEN" : "FUEL";
     } else if (status == AV_WHNF && head == t->pass) {
         kind = "OPEN";
     } else if (status == AV_WHNF && head == AV_NODE_S && n < 3) {
@@ -496,7 +498,7 @@ bool av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t ste
         return false;
     }
     free(fr);
-    if (want_records && status == AV_FUEL) {
+    if (want_records && kind[0] == 'F') {
         /* records: L_n < L_m for every later step m; confirmed: n + conf <= H */
         size_t H = t->nlen;
         uint8_t *rec = calloc(H ? H : 1, 1);

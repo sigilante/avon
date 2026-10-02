@@ -6,8 +6,11 @@ census makes is made here the way it makes it, on the oracle's own objects
 and with the oracle's own functions: the frames avon dumps are rebuilt as
 the oracle's tuples (S the string 'S', X the oracle's passenger), sharing
 by node as its tuples share by identity, and FROZEN is decided by the
-oracle's certified_frozen -- the fold lookup, unchanged.  So avon supplies
-the run, and only the run.
+oracle's certified_frozen -- the fold lookup, unchanged.  Avon supplies the
+run: its exit, its confirmed records, and the positions at each.  Every
+position a decision rests on is checked against the dumped frames before
+the certificate is asked (decide); the exits and record times are Avon's
+reduction, equal to the census's on sizes 1 to 12 (docs/DESIGN.md §22).
 """
 
 import subprocess
@@ -53,6 +56,10 @@ def read_block(lines, HD, what=""):
             frames[int(t[1])] = [node[int(x)] for x in t[2:]]
         elif c == "!":
             raise RuntimeError("avon gave no trace for " + what[:200])
+    else:
+        raise RuntimeError("avon ended inside a block" + (" for " + what[:200] if what else ""))
+    if end is None:
+        raise RuntimeError("avon's block has no end line" + (" for " + what[:200] if what else ""))
     return end, conf, frames
 
 
@@ -77,10 +84,16 @@ class Avon:
         records' facts [(n, L, lowest X-headed position or 0, X-headed at
         L-1)], and the frames the census reads, {step: [items]} rebuilt as
         the oracle's objects."""
-        self.p.stdin.write(line + "\n")
-        self.p.stdin.flush()
+        try:
+            self.p.stdin.write(line + "\n")
+            self.p.stdin.flush()
+        except OSError as ex:
+            raise RuntimeError(f"avon batch died before {line[:200]}: {ex!r}") from ex
         self.runs += 1
-        return read_block(self.lines, self.HD, line)
+        for raw in self.lines:              # to the block's start
+            if raw[0] == ">":
+                return read_block(self.lines, self.HD, line)
+        raise RuntimeError("avon batch ended before " + line[:200])
 
 
 def dag(u, HD):
@@ -131,15 +144,30 @@ def decide(HD, block):
     assert kind == "FUEL", kind
     # the census's loop over the confirmed records, its decisions on the
     # positions avon reports: the deep items are those at or below L-3, so
-    # the lowest X-headed position is min(deep) when there are any
+    # the lowest X-headed position is min(deep) when there are any.  Each
+    # position a decision rests on is checked on the dumped frames first:
+    # frame n+1 keeps frame n's positions 1..L-3, and since every later
+    # length exceeds a record's, no later step touches them, so `clean`
+    # (positions 1..clean hold no X-headed item) only grows.
     mints = []
+    clean = 0
     for n, L, low, ym1 in conf:
         if low and low <= L - 3:
-            return ("FROZEN-c" if HD.certified_frozen(frames[n], low) else "FROZEN-u"), n, []
-        if ym1:
-            return ("FROZEN-c" if HD.certified_frozen(frames[n + 1], L - 2) else "FROZEN-u"), n, []
-        m = frames[n + 1][-(L - 2)]
-        mints.append((m, HD.certified_frozen(frames[n + 1], L - 2)))
+            fr = frames[n]
+            if (len(fr) != L or not HD.xheaded(fr[-low])
+                    or any(HD.xheaded(fr[-p]) for p in range(clean + 1, low))):
+                raise RuntimeError(f"avon's lowest X-headed position {low} at step {n} "
+                                   "disagrees with its frame")
+            return ("FROZEN-c" if HD.certified_frozen(fr, low) else "FROZEN-u"), n, []
+        nxt = frames[n + 1]
+        if (len(nxt) < L - 2 or any(HD.xheaded(nxt[-p]) for p in range(clean + 1, L - 2))
+                or HD.xheaded(nxt[-(L - 2)]) != ym1):
+            raise RuntimeError(f"avon's record facts at step {n} disagree with its frame")
+        clean = max(clean, L - 3)
+        if ym1:     # y X-headed at L-1 in frame n: y.z, at L-2 in frame n+1, is
+            return ("FROZEN-c" if HD.certified_frozen(nxt, L - 2) else "FROZEN-u"), n, []
+        m = nxt[-(L - 2)]
+        mints.append((m, HD.certified_frozen(nxt, L - 2)))
     return "RIDE", None, mints
 
 
@@ -192,18 +220,30 @@ def verdicts(avon, HD, N, NMIN=1):
     it."""
     lev0 = subprocess.Popen([avon, "batch", *OPTS], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, text=True, bufsize=1 << 20)
+    failed = []                                 # what went wrong in the feeder
 
     def feed():
-        for n in range(NMIN, N + 1):
-            e = subprocess.Popen([avon, "enum", str(n)], stdout=subprocess.PIPE,
-                                 stderr=subprocess.DEVNULL, text=True, bufsize=1 << 20)
-            for line in e.stdout:
-                lev0.stdin.write(line[:-1] + " X\n")
-            e.wait()
-        lev0.stdin.close()
-    threading.Thread(target=feed, daemon=True).start()
+        try:
+            for n in range(NMIN, N + 1):
+                e = subprocess.Popen([avon, "enum", str(n)], stdout=subprocess.PIPE,
+                                     text=True, bufsize=1 << 20)
+                for line in e.stdout:
+                    lev0.stdin.write(line[:-1] + " X\n")
+                if e.wait() != 0:
+                    failed.append(f"avon enum {n} exited {e.returncode}")
+                    break
+        except Exception as ex:                 # a dead batch: a broken pipe
+            failed.append(f"feeding avon batch: {ex!r}")
+        finally:
+            try:
+                lev0.stdin.close()
+            except OSError:
+                pass
+    feeder = threading.Thread(target=feed, daemon=True)
+    feeder.start()
     av = Avon(avon, HD)                         # the descents
     lines = iter(lev0.stdout)
+    count = 0
     for raw in lines:
         if raw[0] != ">":
             continue
@@ -211,10 +251,28 @@ def verdicts(avon, HD, N, NMIN=1):
             HD.clear_memos()
         HD.KEEP.clear()
         v, _info, sub = decide(HD, read_block(lines, HD))
+        count += 1
         yield finish(av, HD, v, sub)
-    lev0.wait()
+    feeder.join()
+    if lev0.wait() != 0:
+        failed.append(f"avon batch exited {lev0.returncode}")
     av.close()
+    if av.p.returncode != 0:
+        failed.append(f"avon batch (descents) exited {av.p.returncode}")
+    want = sum(catalan(n - 1) for n in range(NMIN, N + 1))
+    if count != want:
+        failed.append(f"{count} terms classified, {want} expected")
+    if failed:
+        raise RuntimeError("the census through avon is incomplete: " + "; ".join(failed))
     verdicts.descents = av.runs
+
+
+def catalan(n):
+    """The number of closed S-terms of size n+1."""
+    c = 1
+    for k in range(n):
+        c = c * 2 * (2 * k + 1) // (k + 2)
+    return c
 
 
 def census(avon, N, NMIN=1):
@@ -223,6 +281,8 @@ def census(avon, N, NMIN=1):
     import time
     import oracle
     HD = oracle.load()
+    if HD is None:
+        raise SystemExit(f"no hider census at {oracle.SCRIPTS} (set HIDER_SCRIPTS)")
     t0 = time.time()
     counts = {}
     total = 0

@@ -270,9 +270,12 @@ build/avon enum 12 | sed 's/$/ X/' | build/avon batch --trace-frame=summary --fu
     --records --frame-dump=census,halt
 ```
 
-`--trace-frame` runs copy mode, head run only, never collecting, whatever
-`--strategy` and `--whnf` say; a term with K, I or another atom is refused.
-Each term gives one block:
+`--trace-frame` runs copy mode, head run only, never collecting, with no
+jets; a term with K, I or another atom is refused. Options it would ignore
+are refused: `--strategy=share`, `--jets`, `--ctors`, `--interp`,
+`--jet-floor`, `--jet-check`, `--templates`, `--data`, `--fix`,
+`--profile`. So are `--passenger`, `--records` and `--frame-dump` without
+it. Each term gives one block:
 
 ```
 > 1                       the term's input line
@@ -280,6 +283,7 @@ Each term gives one block:
 ...
 4 3 3 2 0 o 0
 . WHNF 5 OPEN             status, contractions, exit: HALT-X HALT-B OPEN FUEL
+                          (FUEL H OPEN: the opening contraction spent the last fuel)
 R 3 9 ...                 records (--records), when the run reaches the horizon
 C 3 9 ...                 the confirmed ones: n + CONF <= H (CONF 150)
 K 3 4 2 0                 each confirmed record: n, L, the lowest X-headed position (- none),
@@ -310,11 +314,20 @@ $                         the block ends
   stops if one sits at L-1; also a second pass), `halt` (the final frame
   at a halt) and `last-restart`. `census` chooses frames, not verdicts.
 - `reduce` and `batch` also read the DAG form, `dag 0=S 1=X 2=0.1 ... @2`
-  on one line, ids local to the line: a dumped term handed back without
-  unfolding it.
+  on one line: a dumped term handed back without unfolding it. Ids are
+  numbers below 2^64-1, local to the term, each defined once and before
+  its use; the root comes last, and only blanks may follow it. Input that
+  begins `dag ` is always read in this form, so an atom named `dag` cannot
+  head a printed term there.
+- `client.py` checks every position the census decides on against the
+  dumped frames, and stops with an error, rather than a short count, if
+  any avon process dies or the terms classified fall short of the
+  Catalan count.
 
-`avon enum N` prints every closed S-term of size N in the census's order
-(`--start=K --count=M` for a slice; progress on stderr every 10⁵); `avon
+`avon enum N` prints every closed S-term of size N in the census's order,
+N from 1 to 20: it keeps every tree below N as a node, 6.4 x 10⁸ of them
+(6 GB) for N = 20 (`--start=K --count=M` for a slice; progress on stderr
+every 10⁵); `avon
 enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
 `S (S (S (S S) (S a))) q` for every ordered pair of the file's terms.
 
@@ -343,7 +356,7 @@ enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
 |---|---|---|
 | `make check` | every unit test, under ASan and UBSan | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
-| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`) |
+| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line, and of size <= 10 at horizons 1 to 21; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`) |
 | `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | skijack |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |
 | `make jet-witness-check` | the same, jetted (§18) | lean-ski |

@@ -4,7 +4,8 @@
 #
 #   1. enumeration: avon enum N gives the census's closed terms, in its order;
 #   2. traces: every closed f of size 1..N, avon's trace of f X equals the
-#      census's run line for line, and its exit;
+#      census's run line for line, and its exit; then sizes 1..10 at short
+#      horizons, where runs end on the horizon's edge (an OPEN at step H-1);
 #   3. verdicts: the census through avon (tests/hider/client.py) gives the
 #      census's classify(f), verdict, exit and trail;
 #   4. the streaming census (avon enum into avon, as client.py census runs)
@@ -26,6 +27,7 @@ export HIDER_SCRIPTS="$SCRIPTS"
 P="python3 tests/hider/parity.py"
 $P enum "$N" --avon "$AVON"
 $P trace "$N" --avon "$AVON"
+for H in 1 2 3 4 5 6 7 8 10 13 21; do $P trace 10 "$H" --avon "$AVON"; done
 $P verdict "$N" --avon "$AVON"
 $P stream "$N" --avon "$AVON"
 $P named --avon "$AVON"

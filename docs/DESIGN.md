@@ -1,6 +1,6 @@
 # Avon: the native runtime, planned
 
-> **Status (2026-09-27).** Design note written 2026-09-16. The compiler it targets is now implemented as `python/skijack`; the runtime it plans is not built, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
+> **Status (2026-10-01).** Built: stages 0 to 7 and 9 of §11 are done, and stage 8 has the compiler's core and the SKIjack-0 front end; the full language's front end remains (§11.1). Beyond the stages, share mode runs supercombinator templates, data jets and Y's one-step unfolding (§6.9 to §6.11), all outside the proof; jets under hiding are built (`ZK-JETS.md`); frame traces serve the pure-S paper's census (§22). What the proofs do not yet cover is listed in §11.1, "Open". The note was written 2026-09-16, before any of it; the compiler it targets is `python/skijack`, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
 
 *2026-09-16. The build plan for the C runtime named in `RUNTIME-DESIGN.md`
 §3a. Its constraints come from three places: the reference host
@@ -8,7 +8,8 @@
 compiler (`python/skijack`, which is what produces the terms), and the
 paper's measured targets. §1 reports a measurement that changes one of
 `RUNTIME-DESIGN.md`'s stated acceptance criteria, and most of what follows
-is downstream of it. Nothing here is built; `avon/` is empty.*
+is downstream of it. When this was written, nothing was built and
+`avon/` was empty; §11.1 records what has been built since.*
 
 ## 0. What Avon is, and what it is not
 
@@ -1149,11 +1150,15 @@ form: 43,348 steps with templates, 33,244 with data jets, 13,627 of them
 dispatches. Every normal form is SKI's and every weak head normal form
 templates' (`tests/test_data.c`, `make front0-check`).
 
-**What is left.** The profile of Milestone 0 (Queens2, templates):
-`whnf_share` 47% of samples, `av_app` 23%, `tmpl_instance` 21%,
-`try_interp` 5%, the collector 3%. Building instances -- an out-of-line
-allocation per node -- is two fifths of the time, and every jet head asks
-`try_interp` first. Those, and strictness (§6.9), are the next levers.
+**What is left.** The profile of Milestone 0 (Queens2, templates) put
+`whnf_share` at 47% of samples, `av_app` 23%, `tmpl_instance` 21%,
+`try_interp` 5% and the collector 3%. The two levers it named are pulled
+(avon `aeae3c9`, `docs/BENCHMARK.md`): `tmpl_instance` is inlined into
+`src/jets.h` and allocates from a reservation, writing the root over the
+redex root, and only jets with an interpreter's role call `try_interp`. A
+step of Queens2 with data jets fell from 568 instructions to 401, a
+one-node fire from 314 to 193. Strictness (§6.9) is the lever still
+unpulled.
 
 ### 6.11 Y unfolded in one step
 
@@ -1172,9 +1177,15 @@ With `M = S I I` and `Q = S (S (K S) K) (K M)`, `Y g` reduces to
 `g (M (Q g))` and on to `g (g (M (Q g)))`, which `g (Y g)` reduces to as
 well; neither of the two reduces to the other. So:
 
-- normal forms are SKI's, byte for byte, and a term without one still
+- a normal form `--fix` reaches is SKI's, byte for byte (by Church-Rosser,
+  since the rewrite stays within conversion), and a term without one still
   stops at FUEL (`Y K`, `Y I`, `Y (S I I)`, `tests/test_fix.c`);
-- answers read by probing are unchanged;
+- that `--fix` reaches every normal form SKI's reduction reaches is shown
+  by tests (`tests/test_fix.c`, `make front0-check`, the Reduceron ports),
+  not proved: no argument here covers lazy share reduction plus the rule;
+- answers read by probing are unchanged on every test; `Y g` and its
+  unfolding have the same Böhm tree, which makes it expected, but the
+  argument is not written out;
 - a weak head normal form state may differ in form: `Y K` stops at
   `K (Y K)` where SKI stops at `K (K (S I I) K (I (S (K K) (K (S I I) K))))`.
 
@@ -1196,7 +1207,7 @@ rewrote `Y g` to the cycle `n = g n`, and a cycle is what Avon cannot keep:
   `decode` to succeed.
 
 The one-step rewrite writes a cell that points backward, so a witness row
-for it fits the write-once memory as it stands: at a loaded Y address with
+for it could fit the write-once memory as it stands: at a loaded Y address with
 a C cell, one cell `App(g, r)`, `r` the `App(Y, g)` the stack holds. Its
 licence would be a simulation theorem relating the run to the plain one
 by `Tr`, owed in lean-ski; not built.
@@ -1217,7 +1228,9 @@ is a cycle made safe: black holes, so that a cyclic redex that needs
 itself stops at FUEL as SKI does; walks that tolerate cycles, or a proof
 that none reaches them; copy mode left without it; and, before a witness
 could use one, a lean-ski heap semantics for cycles. That is its own
-plan. `--fix` stays: it is correct, cheap, and fits the witness.
+plan. `--fix` stays: it agrees with SKI on every test, it is cheap, and
+a witness row for it could be built. Today `avon witness` refuses `--fix`,
+as it refuses `--templates` and `--data`: the witness runs plain SKI.
 
 ## 7. The interpreter jet
 
@@ -1827,6 +1840,44 @@ in stage 8"):
 - `make check`, the witness, jetted-witness and probe-witness checks and
   the selfhost check pass; the CLI's pier on the arena runs the events
   kernel as the snapshot pier does, leak-free.
+
+**Beyond the stages: speed in share mode.** None of it enters copy mode
+or a witness; `avon witness` refuses all three options.
+
+- **Supercombinator templates** (§6.9, 2026-09-29): the front end compiles
+  itself in 21.2 million steps against SKI's 307.0 million, 4.5 times
+  faster, every name's hash unchanged.
+- **Data jets** (§6.10): constructor dispatch fused into the branch, and
+  numerals held as words. PermSort takes 2.12 times less time than with
+  templates alone, the other four Reduceron ports 1.10 to 1.19.
+- **Cheaper instances** (§6.10, "What is left"; avon `aeae3c9`): a step of
+  Queens2 fell from 568 instructions to 401.
+- **Y unfolded in one step** (§6.11, `--fix`): 1.03 times less time by
+  geometric mean. The steps fall, but each unfolding copies `Y g` where a
+  cycle would share it.
+- **Against the Reduceron** (`docs/BENCHMARK.md`): Avon takes 1.6 to 3.0
+  times its time on the five ports. Per step it keeps the Reduceron's
+  pace; it takes more steps, most of them Y re-deriving its unfolding.
+
+**Beyond the stages: proofs and the paper.**
+
+- **Jets under hiding** (`ZK-JETS.md`, milestones 1 to 9, 2026-09-30):
+  Avon writes composed statements' witness tables with jets, byte for byte
+  ski-air's, and lean-ski proves `split8` with jets under hiding.
+- **Frame traces** (§22): the pure-S paper's hider census runs through
+  Avon, every trace and verdict equal to the census's on the 82,500 terms
+  of size 1 to 12, and sizes 13 to 16 (13.3 million terms) in eight
+  minutes.
+
+**Open.**
+
+- *Stage 8:* the full language's front end.
+- *Proofs* (to lean-ski): witnesses refuse terms with atoms (§17.3); scry
+  proves only a resume loop's final run; Fiat-Shamir is assumed; data jets
+  and the one-step Y have no witness rows, and the Y row's simulation
+  theorem (`Tr`) is owed (§6.11, `ZK-JETS.md` §8).
+- *Speed:* strictness (§6.9), and the sharing a safe cycle would give Y
+  (§6.11).
 
 ## 12. What Avon must not do
 
@@ -2727,16 +2778,38 @@ was read in the source; lessons for Avon are marked as such.*
 ## 22. Frame traces for the hider census
 
 **Avon observes copy mode's head run for the pure-S paper's hider census;
-it decides nothing.** The census (`fixed_points_hider.py`: `run`,
+the census decides.** The census (`fixed_points_hider.py`: `run`,
 `descend`, `classify`) runs `f X`, X an opaque passenger, and classifies `f`
 by the fate of the X-headed items. It needs more than an endpoint: the frame
 length and the passenger's seat at every step, counts its defect and y-step
 lemmas use, and the frames at confirmed record times for the fold
 certificate and the descent. `--trace-frame` gives these (`docs/RUNTIME.md`,
 "Frame traces"); the verdicts, the fold lookup and the descent stay in the
-census's Python, called unchanged (`tests/hider/client.py`). So Avon's output
-can widen the evidence or exhibit a term, and a certified exit is a proof
-only through the census's own certificate.
+census's Python, called unchanged (`tests/hider/client.py`). A certified
+exit is a proof only through the census's own certificate.
+
+**What the census takes from Avon, and what it checks.** Avon reports
+the run's exit, the confirmed records, and at each its lowest X-headed
+position and whether an X-headed item sits at L-1. The client checks every
+position a decision rests on against the dumped frames before it asks the
+certificate: the item at the reported position is X-headed, none below it
+is, and the mint's X-headedness equals the L-1 flag. Records are strict
+future minima, so a record's positions 1..L-3 are never touched again, and
+the check grows with the frame, not the run. A falsified position or flag
+either fails the check or leaves the verdict unchanged (1,776 falsified
+records tried on size 10). The record times and the exits HALT-X and OPEN
+are taken from Avon's run unreplayed; on sizes 1 to 12 they equal the
+census's own, and past 12 they are Avon's reduction, not new evidence.
+
+**The horizon's edge.** The census stops at an OPEN before stepping; Avon
+takes the opening contraction, which leaves X at the head. A term that
+opens at step H-1 so spends the last fuel, and Avon reports `FUEL H OPEN`:
+the exit is OPEN, at step H-1, as the census's. Trace parity at horizons
+1 to 21 holds this edge (`make hider-check`); before the fix, 80 of the
+2,056 terms of size 1 to 9 differed at horizon 5. At horizon 600 no term
+of size 1 to 16 opens at step 599: the census of sizes 13 to 16, rerun
+with the fix and the position checks, gives the counts it gave before,
+every term classified and every check passed.
 
 **The frame is copy mode's argument slots.** The census's frame `[u_1 .. u_L]`
 is the S head's arguments, `u_1` at the x-seat; a step pops `(x, y, z)` and

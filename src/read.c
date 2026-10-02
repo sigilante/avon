@@ -121,9 +121,23 @@ done:
 
 /*  `dag <id>=<rhs> ... @<root>`: a shared graph on one line, the form frame
  *  dumps print (docs/RUNTIME.md, "Frame traces").  <rhs> is a leaf name (S,
- *  K, I or an atom) or <l>.<r>, two ids defined before it; ids are any
- *  numbers, local to the line.  The graph is rebuilt node for node, so a
+ *  K, I or an atom) or <l>.<r>, two ids defined before it; ids are numbers
+ *  below 2^64-1, local to the term, each defined once.  The root comes
+ *  last: only blanks may follow it.  The graph is rebuilt node for node, so a
  *  term the tree printer would unfold exponentially is read in its size. */
+/*  A dag id at src[*i]: digits, below 2^64 - 1 (the table keys id + 1). */
+static bool dag_id(const char *src, size_t len, size_t *i, uint64_t *id) {
+    size_t s = *i;
+    uint64_t v = 0;
+    while (*i < len && src[*i] >= '0' && src[*i] <= '9') {
+        uint64_t d = (uint64_t)(src[(*i)++] - '0');
+        if (v > (UINT64_MAX - 1 - d) / 10) return false;
+        v = v * 10 + d;
+    }
+    *id = v;
+    return *i > s;
+}
+
 uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg) {
     size_t i = 0;
     while (i < len && (src[i] == ' ' || src[i] == '\t')) i++;
@@ -146,30 +160,32 @@ uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg
         if (i >= len || src[i] == '\n' || src[i] == '\r') break;
         if (src[i] == '@') {
             i++;
-            uint64_t id = 0;
-            size_t s = i;
-            while (i < len && src[i] >= '0' && src[i] <= '9') id = id * 10 + (uint64_t)(src[i++] - '0');
-            if (i == s) { *msg = "a root id expected after '@'"; goto out; }
+            uint64_t id;
+            if (!dag_id(src, len, &i, &id)) { *msg = "a root id expected after '@'"; goto out; }
             size_t slot;
             FIND(id, slot);
             if (!key[slot]) { *msg = "the root is not defined"; goto out; }
             root = val[slot];
-            continue;
+            /* the root ends the term: nothing but blanks may follow */
+            while (i < len && (src[i] == ' ' || src[i] == '\t' || src[i] == '\n' || src[i] == '\r')) i++;
+            if (i < len) { *msg = "text after the root"; goto out; }
+            break;
         }
-        uint64_t id = 0;
-        size_t s = i;
-        while (i < len && src[i] >= '0' && src[i] <= '9') id = id * 10 + (uint64_t)(src[i++] - '0');
-        if (i == s || i >= len || src[i] != '=') { *msg = "<id>= expected"; goto out; }
+        uint64_t id;
+        if (!dag_id(src, len, &i, &id) || i >= len || src[i] != '=') {
+            *msg = "<id>= expected, the id below 2^64-1";
+            goto out;
+        }
         i++;
         uint32_t node;
         if (i < len && src[i] >= '0' && src[i] <= '9') {
-            uint64_t l = 0, r = 0;
-            while (i < len && src[i] >= '0' && src[i] <= '9') l = l * 10 + (uint64_t)(src[i++] - '0');
-            if (i >= len || src[i] != '.') { *msg = "<l>.<r> expected"; goto out; }
+            uint64_t l, r;
+            if (!dag_id(src, len, &i, &l) || i >= len || src[i] != '.') {
+                *msg = "<l>.<r> expected";
+                goto out;
+            }
             i++;
-            size_t s2 = i;
-            while (i < len && src[i] >= '0' && src[i] <= '9') r = r * 10 + (uint64_t)(src[i++] - '0');
-            if (i == s2) { *msg = "<l>.<r> expected"; goto out; }
+            if (!dag_id(src, len, &i, &r)) { *msg = "<l>.<r> expected"; goto out; }
             size_t sl, sr;
             FIND(l, sl);
             FIND(r, sr);

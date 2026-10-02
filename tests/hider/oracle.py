@@ -13,7 +13,10 @@ SCRIPTS = os.environ.get("HIDER_SCRIPTS", os.path.expanduser(
 
 
 def load():
-    """The oracle module, or None when the paper's scripts are absent."""
+    """The oracle module, or None when the paper's scripts are absent.
+    Importing it puts the scripts' directory and its parent on sys.path,
+    raises the recursion limit to 100,000 (the census recurses on terms)
+    and hides sys.argv from the module's own argument parsing."""
     if not os.path.exists(os.path.join(SCRIPTS, "fixed_points_hider.py")):
         return None
     root = os.path.dirname(SCRIPTS)

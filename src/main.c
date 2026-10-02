@@ -67,6 +67,11 @@
  *                                     §20.3) on SOURCE: DIR/front.skit and the
  *                                     input's constructors; each name and its
  *                                     term's hash, read by probing
+ *      avon enum N [--start=K] [--count=M]
+ *      avon enum --base=FILE --shape=sxy,ssaq,hide
+ *                                     the pure-S census's closed terms of
+ *                                     size N (1 to 20), in its order, or
+ *                                     shapes built on a file's terms (§22)
  *      avon --version
  *
  *  A FILE may be in the printed form, a SKIT container (docs/DESIGN.md
@@ -87,7 +92,11 @@
  *  (with --templates: data jets, §6.10: constructor templates dispatched,
  *  fused into the branch's template, numerals held as words, and
  *  DIR/words.tsv's numeral operations run on them natively), --fix (with
- *  --templates: Y g unfolded to g (Y g) in one step, §6.11).
+ *  --templates: Y g unfolded to g (Y g) in one step, §6.11).  reduce and
+ *  batch take --trace-frame[=summary] (copy mode's head run observed for
+ *  the hider census, §22) with --passenger=NAME, --records[=CONF] and
+ *  --frame-dump=SPEC; options_fit refuses an option the command would
+ *  ignore.  A term may also be in the DAG form, `dag <id>=... @<root>`.
  *  docs/RUNTIME.md is the user's guide.
  */
 
@@ -128,6 +137,7 @@ typedef struct {
     uint64_t    dump_steps[64];   /* --frame-dump steps */
     size_t      ndump;
     bool        dump_records, dump_halt, dump_restart, dump_census;
+    bool        share, passenger_set, jet_tuning;   /* asked for, for options_fit */
 } args;
 
 static int usage(void) {
@@ -159,7 +169,7 @@ static int usage(void) {
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
         "                   [--templates=DIR [--data] [--fix]]\n"
         "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
-        "       avon enum N [--start=K] [--count=M]\n"
+        "       avon enum N [--start=K] [--count=M]      (N from 1 to 20)\n"
         "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"
         "       (reduce and batch accept --trace-frame[=summary] --passenger=NAME\n"
         "        --records[=CONF] --frame-dump=STEPS|records|census|halt|last-restart)\n"
@@ -167,8 +177,11 @@ static int usage(void) {
     return 2;
 }
 
+/*  A decimal number, digits only: strtoull alone would take a sign or
+ *  leading space, and wrap -1 to 2^64-1. */
 static bool number(const char *s, uint64_t *out) {
     char *end;
+    if (*s < '0' || *s > '9') return false;
     errno = 0;
     unsigned long long v = strtoull(s, &end, 10);
     if (errno || end == s || *end) return false;
@@ -199,11 +212,12 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->records = 0;
     g->ndump = 0;
     g->dump_records = g->dump_halt = g->dump_restart = g->dump_census = false;
+    g->share = g->passenger_set = g->jet_tuning = false;
     for (int i = 2; i < argc; i++) {
         const char *s = argv[i];
         uint64_t v;
         if (strcmp(s, "--strategy=copy") == 0)       g->o.strategy = AV_COPY;
-        else if (strcmp(s, "--strategy=share") == 0) g->o.strategy = AV_SHARE;
+        else if (strcmp(s, "--strategy=share") == 0) { g->o.strategy = AV_SHARE; g->share = true; }
         else if (strcmp(s, "--whnf") == 0)           g->o.whnf_only = true;
         else if (strcmp(s, "--allow-bird-atoms") == 0) g->birds = true;
         else if (strncmp(s, "--jets=", 7) == 0 && s[7]) {
@@ -234,9 +248,9 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--plan=", 7) == 0 && s[7]) g->plan = s + 7;
         else if (strncmp(s, "--statement=", 12) == 0 && s[12]) g->statement = s + 12;
         else if (strncmp(s, "--jet-floor=", 12) == 0 && number(s + 12, &v))
-            g->jet_floor = v;
+            g->jet_floor = v, g->jet_tuning = true;
         else if (strncmp(s, "--jet-check=", 12) == 0 && number(s + 12, &v))
-            g->o.jet_check = v;
+            g->o.jet_check = v, g->jet_tuning = true;
         else if (strncmp(s, "--fuel=", 7) == 0 && number(s + 7, &v))
             g->o.max_steps = v;
         else if (strncmp(s, "--max-nodes=", 12) == 0 && number(s + 12, &v)
@@ -252,7 +266,8 @@ static bool parse_args(int argc, char **argv, args *g) {
             g->cells = v;
         else if (strcmp(s, "--trace-frame") == 0)    g->trace = 2;
         else if (strcmp(s, "--trace-frame=summary") == 0) g->trace = 1;
-        else if (strncmp(s, "--passenger=", 12) == 0 && s[12]) g->passenger = s + 12;
+        else if (strncmp(s, "--passenger=", 12) == 0 && s[12])
+            g->passenger = s + 12, g->passenger_set = true;
         else if (strcmp(s, "--records") == 0)        g->records = 150;
         else if (strncmp(s, "--records=", 10) == 0 && number(s + 10, &v) && v)
             g->records = (size_t)v;
@@ -282,6 +297,43 @@ static bool parse_args(int argc, char **argv, args *g) {
         else return false;
     }
     return true;
+}
+
+/*  Refuse an option the command would ignore: --trace-frame runs copy
+ *  mode's head run with no jets, templates or profile, the frame-trace
+ *  options mean nothing without it, and witness reads neither. */
+static bool options_fit(const args *g, const char *cmd) {
+    bool reduce = strcmp(cmd, "reduce") == 0 || strcmp(cmd, "batch") == 0;
+    bool traced = reduce && g->trace;
+    const char *bad = NULL;
+    if (traced || strcmp(cmd, "witness") == 0) {
+        if (g->templates) bad = "--templates";
+        else if (g->data) bad = "--data";
+        else if (g->fix) bad = "--fix";
+        else if (g->profile) bad = "--profile";
+    }
+    if (!bad && traced) {
+        if (g->share) bad = "--strategy=share";
+        else if (g->njets) bad = "--jets";
+        else if (g->ctors) bad = "--ctors";
+        else if (g->interp) bad = "--interp";
+        else if (g->jet_tuning) bad = "--jet-floor or --jet-check";
+    }
+    if (!bad && !traced) {
+        if (g->trace) bad = "--trace-frame";
+        else if (g->passenger_set) bad = "--passenger";
+        else if (g->records) bad = "--records";
+        else if (g->ndump || g->dump_records || g->dump_halt || g->dump_restart ||
+                 g->dump_census) bad = "--frame-dump";
+    }
+    if (!bad) return true;
+    fprintf(stderr, "avon: %s has no effect %s\n", bad,
+            traced ? "with --trace-frame" :
+            g->trace || g->passenger_set || g->records || g->ndump || g->dump_records ||
+            g->dump_halt || g->dump_restart || g->dump_census
+                ? (reduce ? "without --trace-frame" : "outside reduce and batch")
+                : "on witness");
+    return false;
 }
 
 static char *slurp(FILE *f, size_t *len) {
@@ -471,7 +523,7 @@ static bool trace_pass(const args *g, const char *src, size_t len, bool out,
             ok = false;
         }
         /* records only for a run that reached the horizon, as the census */
-        if (ok && rec_steps && r.status == AV_FUEL)
+        if (ok && rec_steps && sum.kind[0] == 'F')
             *nrec = census ? av_trace_census_steps(tr, g->records ? g->records : 150, rec_steps)
                            : av_trace_record_steps(tr, g->records ? g->records : 150, rec_steps);
         if (ok && restart) *restart = sum.last_restart;
@@ -1800,6 +1852,8 @@ static int jetstat_main(int argc, char **argv) {
  *      file's terms, in file order, each shape: sxy  S a q;  ssaq  S (S a) q;
  *      hide  S (S (S (S S) (S a))) q.
  */
+#define ENUM_MAX 20
+
 static int enum_main(int argc, char **argv) {
     uint64_t N = 0, start = 0, count = UINT64_MAX, v;
     const char *base = NULL, *shapes = NULL;
@@ -1809,8 +1863,14 @@ static int enum_main(int argc, char **argv) {
         else if (strncmp(s, "--count=", 8) == 0 && number(s + 8, &v)) count = v;
         else if (strncmp(s, "--base=", 7) == 0 && s[7]) base = s + 7;
         else if (strncmp(s, "--shape=", 8) == 0 && s[8]) shapes = s + 8;
-        else if (s[0] != '-' && number(s, &v) && v >= 1 && v <= 24) N = v;
+        else if (s[0] != '-' && number(s, &v) && v >= 1) N = v;
         else return usage();
+    }
+    if (N > ENUM_MAX) {
+        /* size N pairs every tree below it, each kept as a node: 6.4e8
+         * nodes (6 GB) for N = 20, 2.4e9 for N = 21, past the arena's 2^30 */
+        fprintf(stderr, "avon: enum takes sizes 1 to %d\n", ENUM_MAX);
+        return 2;
     }
     if (!N == !base || (base && !shapes)) return usage();
     av_arena *a = av_arena_new(1u << 20);
@@ -1818,6 +1878,7 @@ static int enum_main(int argc, char **argv) {
     av_buf b = { 0 };
     uint64_t emitted = 0, index = 0;
     int rc = 0;
+    uint32_t *trees[ENUM_MAX + 1] = { 0 };     /* trees[k]: every tree of size k < N */
 #define EMIT(node)                                                              \
     do {                                                                        \
         if (index >= start && emitted < count) {                                \
@@ -1831,9 +1892,8 @@ static int enum_main(int argc, char **argv) {
         index++;                                                                \
     } while (0)
     if (N) {
-        /* trees[k]: every tree of size k < N, in the census's order */
-        uint32_t *trees[25] = { 0 };
-        size_t ntrees[25] = { 0 };
+        /* trees[k] in the census's order */
+        size_t ntrees[ENUM_MAX + 1] = { 0 };
         trees[1] = malloc(sizeof **trees);
         if (!trees[1]) { rc = 1; goto done; }
         trees[1][0] = AV_NODE_S;
@@ -1867,7 +1927,6 @@ static int enum_main(int argc, char **argv) {
                         a->used = used;         /* the node is printed: reuse it */
                     }
         }
-        for (int k = 0; k < 25; k++) free(trees[k]);
     } else {
         FILE *f = fopen(base, "rb");
         if (!f) { perror(base); rc = 1; goto done; }
@@ -1920,6 +1979,9 @@ static int enum_main(int argc, char **argv) {
     }
 #undef EMIT
 done:
+    for (int k = 0; k <= ENUM_MAX; k++) free(trees[k]);
+    if (rc && !ferror(stdout))
+        fprintf(stderr, "avon: enum stopped: out of memory or nodes\n");
     fflush(stdout);
     av_buf_free(&b);
     av_arena_free(a);
@@ -2011,6 +2073,7 @@ int main(int argc, char **argv) {
         return kernel_main(argc, argv);
     args g;
     if (!parse_args(argc, argv, &g)) return usage();
+    if (!options_fit(&g, argv[1])) return 2;
 
     const char *cmd = argv[1];
     if (strcmp(cmd, "reduce") == 0 || strcmp(cmd, "jam") == 0 ||
