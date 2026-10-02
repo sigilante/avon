@@ -1873,7 +1873,9 @@ or a witness; `avon witness` refuses all three options.
 
 - *Stage 8:* the full language's front end.
 - *Proofs* (to lean-ski): witnesses refuse terms with atoms (§17.3); scry
-  proves only a resume loop's final run; Fiat-Shamir is assumed; data jets
+  proves only a resume loop's final run; Fiat-Shamir and ChaCha20's
+  pseudorandomness are assumed (one 128-bit prover seed per proof,
+  `ZK-JETS.md` §7); data jets
   and the one-step Y have no witness rows, and the Y row's simulation
   theorem (`Tr`) is owed (§6.11, `ZK-JETS.md` §8).
 - *Speed:* strictness (§6.9), and the sharing a safe cycle would give Y
@@ -2113,7 +2115,12 @@ run would publish the run's size.
   blinding. lean-ski now proves honest-verifier zero knowledge for its
   hiding circuits, assuming a statistically hiding PCS (`transcript_zk`,
   `PCSClose`); Fiat–Shamir is assumed, not proved. Jets under hiding are
-  designed in `ZK-JETS.md`.
+  designed in `ZK-JETS.md`. The prover draws all of a proof's hiding
+  randomness from one fresh 128-bit seed, expanded by ChaCha20 with one
+  stream each for blinding tuples, leaf salts and masking codewords;
+  that ChaCha20 is indistinguishable from uniform is assumed
+  (`transcript_prg`, `ZK-JETS.md` §7). Avon takes no part: its tables are
+  unblinded, and kernel entropy never feeds the seed.
 - **Scry.** Only a resume loop's final run is proved, with the final fact
   store as a committed private input (§8).
 
