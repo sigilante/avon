@@ -384,6 +384,11 @@ hand-reduction every 1/(rate x 96 MHz)):
 A step takes about 90 cycles of a 4.5 GHz core; a hand-reduction takes
 the Reduceron 2.3 cycles at 96 MHz.
 
+A step here is Avon's step: an S, K or I contraction, an instantiation, a
+fused dispatch or a numeral operation, each counted as one ("Counts",
+above). A fused dispatch does the work of two template steps, so the pace
+per step depends on that rule; the times in the first column do not.
+
 **Recursion re-derives its fixed point.** One-line loops, per element (the
 difference of runs over 200 and 100), with templates and data jets:
 

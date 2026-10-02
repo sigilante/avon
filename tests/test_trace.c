@@ -5,12 +5,14 @@
  *
  *  - Hand-traced runs give their lines: a z-step then a halt with X at the
  *    head (HALT-X), a y-step, an OPEN, a HALT-B.
+ *  - An OPEN at the horizon's last step is OPEN, not FUEL.
  *  - Every line's positions, d, D and front arity equal a recount from the
  *    frame dumped at that step, through a long run.
  *  - The records are the strict future minima of the printed lengths, and
  *    the confirmed ones those with n + CONF <= H.
  *  - A dumped frame read back in the DAG form is the frame.
- *  - A term with K or I is refused; a long run stays linear.
+ *  - A term with K or I is refused; a malformed DAG term is refused; a
+ *    long run stays linear.
  */
 
 #include <stdio.h>
@@ -97,6 +99,23 @@ TEST(hand_traced_runs_give_their_lines) {
         }
         free(r.text);
     }
+}
+
+/*  An OPEN at the horizon's last step: the census's run of S(SS)(SS)S . X
+ *  opens at step 4, so at H = 5 the opening contraction spends the last
+ *  fuel.  The exit is OPEN, as the census's, and no records follow; at
+ *  H = 4 the run never sees the open, and the exit is FUEL. */
+TEST(an_open_at_the_last_step_is_open) {
+    const char *src = "S (S S) (S S) S X";
+    traced r = trace(src, 5, 1, NULL, 0, NULL);
+    CHECK(r.status == AV_FUEL && r.steps == 5);
+    CHECK(strstr(r.text, "4 3 3 2 0 o 0\n. FUEL 5 OPEN\n") != NULL);
+    CHECK(strstr(r.text, "\nR") == NULL && strstr(r.text, "\nK") == NULL);
+    free(r.text);
+    r = trace(src, 4, 1, NULL, 0, NULL);
+    CHECK(strstr(r.text, ". FUEL 4 FUEL\n") != NULL);
+    CHECK(strstr(r.text, "\nR") != NULL);
+    free(r.text);
 }
 
 /*  ------------------------------------------- a recount from the dumps */
@@ -312,6 +331,40 @@ TEST(k_and_i_are_refused) {
     free(s.text);
 }
 
+/*  The DAG form refuses what it cannot read exactly: ids at or past
+ *  2^64-1 (they would wrap or alias the table's empty key), text after
+ *  the root, a second root, an id defined twice, a forward reference. */
+TEST(malformed_dag_terms_are_refused) {
+    const char *bad[] = {
+        "dag 18446744073709551615=S @18446744073709551615",
+        "dag 99999999999999999999999=S @99999999999999999999999",
+        "dag 18446744073709551616=S 0=K 1=0.0 @0",
+        "dag 1=S @1 2=K @2",
+        "dag 1=S 2=1.1 @2\nS K\n",
+        "dag 1=S 2=1.1 @2 junk",
+        "dag 1=S 1=K @1",
+        "dag 1=2.1 @1",
+        "dag 1=S",
+        "dag ",
+    };
+    av_arena *a = av_arena_new(1u << 12);
+    for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+        const char *msg = NULL;
+        uint32_t t = av_parse_dag(a, bad[i], strlen(bad[i]), &msg);
+        CHECK(t == AV_NONE && msg != NULL);
+        if (t != AV_NONE) fprintf(stderr, "  accepted: %s\n", bad[i]);
+    }
+    const char *good[] = {
+        "dag 18446744073709551614=S @18446744073709551614",
+        "dag 1=S 2=1.1 @2\n\n",
+    };
+    for (size_t i = 0; i < sizeof good / sizeof *good; i++) {
+        const char *msg = NULL;
+        CHECK(av_parse_dag(a, good[i], strlen(good[i]), &msg) != AV_NONE);
+    }
+    av_arena_free(a);
+}
+
 TEST(a_long_run_stays_linear) {
     clock_t t0 = clock();
     traced r = trace(R10 " X", 100000, 150, NULL, 0, NULL);
@@ -324,10 +377,12 @@ TEST(a_long_run_stays_linear) {
 
 TEST_MAIN(
     TEST_CASE(hand_traced_runs_give_their_lines),
+    TEST_CASE(an_open_at_the_last_step_is_open),
     TEST_CASE(every_line_equals_a_recount_from_its_frame),
     TEST_CASE(records_are_the_strict_future_minima),
     TEST_CASE(census_dumps_are_the_frames_the_census_reads),
     TEST_CASE(a_dumped_frame_reads_back_in_the_dag_form),
     TEST_CASE(k_and_i_are_refused),
+    TEST_CASE(malformed_dag_terms_are_refused),
     TEST_CASE(a_long_run_stays_linear)
 )
