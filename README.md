@@ -4,10 +4,30 @@
 
 Avon is a solid-state $SKI$ interpreter runtime with accelerated supercombinator support.  It is particularly designed to evaluate [SKIjack](https://github.com/sigilante/SKIjack) and [SKIlark](https://github.com/sigilante/SKIlark) programs.
 
-Avon supports a "solid-state" event loop, by which we mean that it has a kernel with a persistent state that can be queried and updated, using a poke and peek operation respectively.
+Avon serves as a reducer for the pure $SKI$ combinator calculus in which every acceleration carries a licence; thus one term can run fast, run conformant to the published counts, or run as a zero-knowledge proof, with the three provably in agreement.
+
+Avon further supports a "solid-state" event loop, by which we mean that it has a kernel with a persistent state that can be queried and updated, using a poke and peek operation respectively.
 
 Avon was inspired by [Urbit](https://urbit.org), [NockApp](https://github.com/nockchain/nockchain/tree/master/crates/nockapp), and [PLAN](https://github.com/sol-plunder/reaver).  The underlying $SKI$ work was originally inspired by Stephen Wolfram's [_Combinators:  A Centennial View_](https://writings.stephenwolfram.com/2020/12/combinators-a-centennial-view/).
 
+## Details
+
+Avon reduces closed $SKI$ terms, plus inert atoms, using three strategies:
+- Copy mode reproduces the $SKI$ self-interpreter paper's contraction counts exactly. This is the conformance contract.
+- Share mode is graph reduction with update in place, for speed.
+- Witness mode writes the tables lean-ski proves, byte for byte what [lean-ski](https://github.com/sigilante/lean-ski)'s own prover (ski-air) writes.
+
+Around those it supports:
+- code jets, including an interpreter jet;
+- supercombinator templates;
+- data jets;
+- a bound scry namespace that running code reads from; abd
+- a kernel loop with a persistent arena.
+
+## References
+
+* N E Davis (2027, in review) A Self-Interpreter for $SKI$: Authoring Semantics for New Symbols. *Journal of Functional Programming*.  doi:10.5281/zenodo.22867957
+* N E Davis (2027a, in review) SKIjack: A Low-Level Native Language for the $SKI$ Calculus.  *The Art, Science, and Engineering of Programming*.
 
 ## Building
 
