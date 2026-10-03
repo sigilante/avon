@@ -430,8 +430,10 @@ slots and pushes the outputs' 496 bits for `k` (lean-ski's `P2Jet.p2Row`).
 byte for byte ski-air's, and `ski-air compp-prove-table` proves it
 (`make p2-witness-check`). lean-ski proves the circuit sound
 (`Circuit.p2preExport_sound`: an accepted proof's memory holds a preimage
-of `h`). The four jet tables carry no blinding yet, so this is not yet
-zero knowledge.
+of `h`). P2IN, P2OUT and P2 carry blinding blocks, the tree's edges
+`CPU —c— P2IN —d— P2OUT —e— P2`, and lean-ski proves the transcript
+simulatable (`Circuit.compP_transcript`); Avon's table is unchanged, the
+blinding being ski-air's alone, as for the jets (§7).
 
 ## 9. Milestones
 
