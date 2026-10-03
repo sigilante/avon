@@ -1153,6 +1153,24 @@ form: 43,348 steps with templates, 33,244 with data jets, 13,627 of them
 dispatches. Every normal form is SKI's and every weak head normal form
 templates' (`tests/test_data.c`, `make front0-check`).
 
+**A case joined to its instance** (2026-10-02, `case_kind` and
+`case_join` in `src/reduce.c`). A template whose body is one of its
+formals applied to p operands is a case, found at load: the root is the
+last instruction, and each application of its spine below the root is
+used by its parent alone. When an instance of it meets that formal as a
+value the next step would dispatch on -- a constructor with its fields and
+p continuations, or, with two, a word or zero (`K`) -- the instance writes
+the body's other applications but not its spine or root. The dispatch
+then writes over the redex root what it would have written there after
+the instance. So the graph is the same but for the spine, which no one
+else could reach. The two steps are counted as two, and a join is made
+only when the fuel covers both, so every count and every state a run can
+stop in is what it was. It is made only when the free nodes cover both
+writes without a collection; otherwise the instance runs as before.
+`tests/test_data.c` holds runs with and without joins equal in every
+count and state, at every fuel from 0 to 400 and through collections.
+The results are in `docs/BENCHMARK.md`, "A case joined to its instance".
+
 **What is left.** The profile of Milestone 0 (Queens2, templates) put
 `whnf_share` at 47% of samples, `av_app` 23%, `tmpl_instance` 21%,
 `try_interp` 5% and the collector 3%. The two levers it named are pulled

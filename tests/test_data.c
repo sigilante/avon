@@ -14,6 +14,8 @@
  *    whose operands are not words yet runs its term; a divergent operand is
  *    never forced; a term that is not the operation it claims is refused.
  *  - Collections keep words; fuel stops a run.
+ *  - A case joined to its instance is the instance and the dispatch after
+ *    it: every count and state the same with joins and without.
  */
 
 #include <stdio.h>
@@ -43,13 +45,15 @@ typedef enum { SKI, TEMPLATES, DATA } mode;
 
 typedef struct {
     av_status status;
-    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, collections;
+    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, collections, joins;
     long      admitted, refused, words;
     char      nf[1 << 17];
 } outcome;
 
 /*  src reduced in share mode (or copy), with dir's templates and, in DATA,
  *  its data jets: the load avon reduce does. */
+static bool no_join;    /* run() joins cases to instances unless set */
+
 static outcome run(const char *src, const char *dir, mode md, av_strategy st, bool whnf,
                    uint64_t fuel, uint32_t cap) {
     static outcome out;
@@ -80,6 +84,7 @@ static outcome run(const char *src, const char *dir, mode md, av_strategy st, bo
     o.max_steps = fuel;
     o.templates = md != SKI;
     o.data = md == DATA;
+    o.no_join = no_join;
     av_root_push(a, &t);
     av_result r = av_reduce(a, t, &o);
     av_root_pop(a);
@@ -89,6 +94,7 @@ static outcome run(const char *src, const char *dir, mode md, av_strategy st, bo
     out.dispatches = r.dispatches;
     out.fused = r.fused;
     out.word_ops = r.word_ops;
+    out.joins = r.joins;
     out.collections = a->collections;
     av_buf b = { 0 };
     if (r.term != AV_NONE && av_print(a, r.term, 10000000, &b) && b.len < sizeof out.nf)
@@ -382,8 +388,56 @@ TEST(collections_keep_words_and_fuel_stops) {
     free(src);
 }
 
+/*  A case joined to its instance (§6.10) is the instance and the dispatch
+ *  after it, minus the spine: with joins and without, every count and
+ *  every state the same -- to normal form, to weak head normal form, at
+ *  every fuel from 0 to 400 (a join is made only when both its steps
+ *  fit), and through collections. */
+static bool same(const outcome *x, const outcome *y) {
+    return x->status == y->status && x->steps == y->steps && x->tmpl_calls == y->tmpl_calls &&
+           x->dispatches == y->dispatches && x->fused == y->fused &&
+           x->word_ops == y->word_ops && strcmp(x->nf, y->nf) == 0;
+}
+
+TEST(a_joined_case_is_its_instance_and_dispatch) {
+    const char *progs[4][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+                                { "lists", "out" } };
+    uint64_t collected = 0;
+    for (int i = 0; i < 4; i++) {
+        char dir[64];
+        snprintf(dir, sizeof dir, "tests/data/%s", progs[i][0]);
+        char *src = fixture(progs[i][0], progs[i][1]);
+        if (!src) continue;
+        bool whnf = strcmp(progs[i][1], "out") != 0;
+        static outcome off;
+        no_join = true;
+        off = run(src, dir, DATA, AV_SHARE, whnf, 100000000, 1u << 12);
+        no_join = false;
+        outcome on = run(src, dir, DATA, AV_SHARE, whnf, 100000000, 1u << 12);
+        CHECK(same(&on, &off));
+        CHECK_EQ(off.joins, 0);
+        CHECK(on.joins > 0);
+        on = run(src, dir, DATA, AV_SHARE, whnf, 100000000, 1u << 8);    /* collecting */
+        CHECK(same(&on, &off));
+        collected += on.collections;
+        for (uint64_t fuel = 0; fuel <= 400; fuel++) {
+            no_join = true;
+            off = run(src, dir, DATA, AV_SHARE, whnf, fuel, 1u << 12);
+            no_join = false;
+            on = run(src, dir, DATA, AV_SHARE, whnf, fuel, 1u << 12);
+            CHECK(same(&on, &off));
+            if (!same(&on, &off))
+                fprintf(stderr, "  %s/%s at fuel %llu\n", progs[i][0], progs[i][1],
+                        (unsigned long long)fuel);
+        }
+        free(src);
+    }
+    CHECK(collected > 0);       /* the small arena collected, in some run */
+}
+
 TEST_MAIN(
     TEST_CASE(every_mode_gives_the_same_answer),
+    TEST_CASE(a_joined_case_is_its_instance_and_dispatch),
     TEST_CASE(normal_forms_are_the_unjetted_ones),
     TEST_CASE(a_word_prints_hashes_and_jams_as_its_numeral),
     TEST_CASE(a_word_dispatches_in_one_step_and_copy_mode_runs_its_term),
