@@ -7,7 +7,9 @@
 # four need a lean-ski checkout), `make selfhost-check` runs
 # tests/selfhost_check.sh and `make front0-check` runs
 # tests/front0_check.sh (both need a skijack checkout), `make hider-check`
-# runs tests/hider_check.sh (needs the pure-S paper's scripts), `make clean`
+# runs tests/hider_check.sh (needs the pure-S paper's scripts), `make stats`
+# builds build/stats/avon, which reports what becomes of template instances'
+# cells (src/sstats.h), `make clean`
 # removes build/.  Requires GNU Make 3.81+.
 
 CC      := clang
@@ -29,7 +31,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
-.PHONY: all check clean witness-check jet-witness-check probe-witness-check zk-jet-witness-check \
+.PHONY: all check clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check \
 	selfhost-check front0-check hider-check
 .SECONDARY:
 
@@ -42,6 +44,20 @@ $(BUILD)/avon: src/main.c $(REL_OBJ) $(HDRS)
 $(BUILD)/dbg/avon: src/main.c $(DBG_OBJ) $(HDRS)
 	@mkdir -p $(@D)
 	$(CC) $(CSTD) $(WARN) $(INC) $(DEBUG) -o $@ src/main.c $(DBG_OBJ)
+
+# build/stats/avon: the release build counting what becomes of template
+# instances' cells (src/sstats.h), for one reduce or front0 run at a time.
+STATS_OBJ := $(patsubst src/%.c,$(BUILD)/stats/%.o,$(LIB_SRC))
+
+stats: $(BUILD)/stats/avon
+
+$(BUILD)/stats/avon: src/main.c $(STATS_OBJ) $(HDRS)
+	@mkdir -p $(@D)
+	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -DAV_STRICT_STATS -o $@ src/main.c $(STATS_OBJ)
+
+$(BUILD)/stats/%.o: src/%.c $(HDRS)
+	@mkdir -p $(@D)
+	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -DAV_STRICT_STATS -c -o $@ $<
 
 $(BUILD)/rel/%.o: src/%.c $(HDRS)
 	@mkdir -p $(@D)

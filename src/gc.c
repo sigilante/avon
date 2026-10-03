@@ -10,6 +10,7 @@
 
 #include "avon.h"
 #include "jets.h"
+#include "sstats.h"
 
 struct av_gc {
     const av_node *from;
@@ -104,6 +105,9 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
     if (after) after(&g, ctx);
     for (av_active *r = a->active; r; r = r->next)
         if (r->after) r->after(&g, r->ctx);
+#ifdef AV_STRICT_STATS
+    sstats_collect(a, g.fwd, a->used, g.top);
+#endif
     free(g.fwd);
     if (a->pma) {                       /* back into the mapping: all of it dirty */
         pma_collected(a, g.to, g.top);
