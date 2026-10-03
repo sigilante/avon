@@ -3,8 +3,9 @@
 # tests/diff_aviary.py, `make witness-check` runs tests/witness_check.sh,
 # `make jet-witness-check` runs tests/jet_witness_check.sh,
 # `make probe-witness-check` runs tests/probe_witness_check.sh,
-# `make zk-jet-witness-check` runs tests/zk_jet_witness_check.sh (the last
-# four need a lean-ski checkout), `make selfhost-check` runs
+# `make zk-jet-witness-check` runs tests/zk_jet_witness_check.sh,
+# `make p2-witness-check` runs tests/p2_witness_check.sh (the last five
+# need a lean-ski checkout), `make selfhost-check` runs
 # tests/selfhost_check.sh and `make front0-check` runs
 # tests/front0_check.sh (both need a skijack checkout), `make hider-check`
 # runs tests/hider_check.sh (needs the pure-S paper's scripts), `make stats`
@@ -31,7 +32,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
-.PHONY: all check clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check \
+.PHONY: all check clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check \
 	selfhost-check front0-check hider-check
 .SECONDARY:
 
@@ -87,6 +88,9 @@ probe-witness-check: $(BUILD)/avon
 
 zk-jet-witness-check: $(BUILD)/avon
 	tests/zk_jet_witness_check.sh
+
+p2-witness-check: $(BUILD)/avon
+	tests/p2_witness_check.sh
 
 selfhost-check: $(BUILD)/avon
 	tests/selfhost_check.sh

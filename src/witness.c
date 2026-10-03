@@ -233,12 +233,55 @@ static uint32_t resolve(av_jop op, uint32_t c, const uint32_t *ps) {
     return op.kind == AV_JOP_LOCAL ? c + op.val : op.kind == AV_JOP_ARG ? ps[op.val] : op.val;
 }
 
+/*  The Poseidon2 jet's step at (hd, stk), counter c (lean-ski's
+ *  P2Jet.p2Row, bench/plonky3's p2_step): 1 taken, 0 not applicable, -1 on
+ *  the cell budget. */
+#define AV_P2_BITS 496u
+static int p2_step(av_witness *w, const av_cstmt *s, uint32_t hd, uint32_t stk, uint32_t c,
+                   size_t max_cells, uint32_t *nhd, uint32_t *nstk, const char **msg) {
+    const av_cell *h = get(w, hd);
+    if (!h || h->tag != AV_CELL_ATOM || h->a != s->p2_j) return 0;
+    if (w->nmem < 3 + AV_P2_BITS) return 0;
+    const av_cell *m = w->mem;
+    if (m[0].tag != AV_CELL_K || m[1].tag != AV_CELL_I ||
+        m[2].tag != AV_CELL_APP || m[2].a != 0 || m[2].b != 1)
+        return 0;
+    const av_cell *s1 = cons_at(w, stk);
+    if (!s1) return 0;
+    const av_cell *s2 = cons_at(w, s1->b);
+    if (!s2 || s2->a != s->p2_root) return 0;
+    uint32_t k = s1->a, rest = s2->b;
+    uint32_t st[16] = { 0 };
+    for (uint32_t l = 0; l < AV_P2_BITS; l++) {
+        const av_cell *x = &m[3 + l];
+        uint32_t bit;
+        if (x->tag == AV_CELL_K) bit = 1;
+        else if (x->tag == AV_CELL_APP && x->a == 0 && x->b == 1) bit = 0;
+        else return 0;
+        st[l / 31] |= bit << (l % 31);
+    }
+    av_p2_permute(st);
+    if (w->nmem + AV_P2_BITS > max_cells) { *msg = "the run exceeds the cell budget"; return -1; }
+    for (uint32_t q = 0; q < AV_P2_BITS; q++) {
+        uint32_t l = AV_P2_BITS - 1 - q;     /* the cell at c + q holds output bit l */
+        uint32_t bit = (st[l / 31] >> (l % 31)) & 1u;
+        if (!put_cell(w, AV_CELL_CONS, bit ? 0 : 2, q == 0 ? rest : c + q - 1)) {
+            *msg = "out of memory";
+            return -1;
+        }
+    }
+    *nhd = k;
+    *nstk = c + AV_P2_BITS - 1;
+    w->p2calls++;
+    return 1;
+}
+
 /*  The jetted machine from (*hd, *stk) to a halt, one row per state: at a
  *  licensed root with enough arguments an instantiation, else Air.stepG.
  *  The halted state's row is the last.  False, with *msg, on a budget. */
 static bool run_to_halt(av_witness *w, const av_jettable *jt, const uint32_t *root_of,
                         uint32_t *ps, uint32_t *hdp, uint32_t *stkp, size_t max_rows,
-                        size_t max_cells, uint64_t *insts, const char **msg) {
+                        size_t max_cells, uint64_t *insts, const av_cstmt *p2, const char **msg) {
     uint32_t hd = *hdp, stk = *stkp;
     for (;;) {
         if (w->nrows >= max_rows) { *msg = "the run exceeds the row budget"; return false; }
@@ -271,6 +314,18 @@ static bool run_to_halt(av_witness *w, const av_jettable *jt, const uint32_t *ro
                 if (insts) (*insts)++;
                 w->pops += J->k;
                 w->wcells += J->ncells;
+                continue;
+            }
+        }
+
+        /* The Poseidon2 jet's step, at its atom. */
+        if (p2) {
+            uint32_t jhd, jstk;
+            int r = p2_step(w, p2, hd, stk, c, max_cells, &jhd, &jstk, msg);
+            if (r < 0) return false;
+            if (r > 0) {
+                hd = jhd;
+                stk = jstk;
                 continue;
             }
         }
@@ -363,7 +418,7 @@ av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *
     av_status st = AV_SIZE;
     const char *msg = load_jetted(a, t, jt, max_cells, w, &root_of, &ps);
     uint32_t hd = w->hd0, stk = w->stk0;
-    if (!msg && run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, &msg))
+    if (!msg && run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, NULL, &msg))
         st = AV_WHNF;
     free(root_of);
     free(ps);
@@ -512,7 +567,7 @@ av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable 
         if (!put_cell(w, AV_CELL_NIL, 0, 0)) { msg = "out of memory"; goto out; }
         hd = f;
         stk = (uint32_t)c + g->k;
-        if (!run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, &msg))
+        if (!run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, NULL, &msg))
             goto out;
         w->nrows--;                             /* the halted row is not pushed */
         /* the end: the segment's marker at the head, exactly its fields */
@@ -790,9 +845,16 @@ bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err) {
     uint32_t v[4];
     const char *msg = "a truncated statement";
     if (!next_line(&L, &l, &n)) goto fail;
-    if (!((n >= 8 && memcmp(l, "formula ", 8) == 0) || (n >= 10 && memcmp(l, "predicate ", 10) == 0))) {
-        msg = "expected `formula …` or `predicate …`";
+    s->p2 = n >= 6 && memcmp(l, "p2pre ", 6) == 0;
+    if (!((n >= 8 && memcmp(l, "formula ", 8) == 0) || (n >= 10 && memcmp(l, "predicate ", 10) == 0) || s->p2)) {
+        msg = "expected `formula …`, `predicate …` or `p2pre …`";
         goto fail;
+    }
+    if (s->p2) {
+        /* `p2pre h J ROOT` */
+        if (!nums_line(l, n, "p2pre", v, 3, &k) || k != 3) { msg = "a malformed header"; goto fail; }
+        s->p2_j = v[1];
+        s->p2_root = v[2];
     }
     if (memchr(l, '\0', n)) { msg = "a NUL in the header"; goto fail; }
     s->header = malloc(n + 1);
@@ -805,7 +867,21 @@ bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err) {
     if (!next_line(&L, &l, &n)) goto fail;
     s->log_rows = 11;
     s->log_mem = 11;
-    if (n >= 4 && memcmp(l, "log ", 4) == 0) {
+    if (s->p2) {
+        /* the jet's statement always names five heights: R M Lin Lout L2 */
+        uint32_t u[5];
+        if (!nums_line(l, n, "log", u, 5, &k) || k != 5 || !log_ok(u[0]) || !log_ok(u[1]) || !log_ok(u[2]) ||
+            !log_ok(u[3]) || !log_ok(u[4])) {
+            msg = "a bad `log` line";
+            goto fail;
+        }
+        s->log_rows = u[0];
+        s->log_mem = u[1];
+        s->log_pin = u[2];
+        s->log_pout = u[3];
+        s->log_p2 = u[4];
+        if (!next_line(&L, &l, &n)) goto fail;
+    } else if (n >= 4 && memcmp(l, "log ", 4) == 0) {
         if (!nums_line(l, n, "log", v, 4, &k)) { msg = "a bad `log` line"; goto fail; }
         if (k == 2 && log_ok(v[0]) && log_ok(v[1]) && !(v[0] == 11 && v[1] == 11)) {
             s->log_rows = v[0];
@@ -858,7 +934,8 @@ bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err) {
         msg = "the bits and the region are not exactly the blank cells";
         goto fail;
     }
-    if ((uint64_t)s->nbits + s->w > 256) { msg = "too many private cells"; goto fail; }
+    /* the composed circuit's witness table has 2^8 rows; the jet's grows */
+    if ((uint64_t)s->nbits + s->w > (s->p2 ? (uint64_t)1 << 20 : 256)) { msg = "too many private cells"; goto fail; }
     return true;
 fail:
     if (err) *err = msg;
@@ -917,7 +994,7 @@ av_status av_witness_run_composed(const av_cstmt *s, const av_cell *priv, const 
     }
     for (size_t j = 0; j < s->nroots; j++) {
         uint32_t hd = s->roots[j], stk = s->nil;
-        if (!run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, &msg)) goto out;
+        if (!run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, NULL, &msg)) goto out;
         (*ends)[j] = w->nrows - 1;
         const av_cell *h = get(w, hd), *t = get(w, stk);
         if (!h || h->tag != AV_CELL_K || !t || t->tag != AV_CELL_NIL) {
@@ -932,6 +1009,49 @@ av_status av_witness_run_composed(const av_cstmt *s, const av_cell *priv, const 
 out:
     free(root_of);
     free(ps);
+    if (st != AV_WHNF) {
+        free(*ends);
+        *ends = NULL;
+        if (err) *err = msg;
+    }
+    return st;
+}
+
+av_status av_witness_run_p2(const av_cstmt *s, const av_cell *priv, av_witness *w, size_t **ends,
+                            const char **err) {
+    memset(w, 0, sizeof *w);
+    *ends = NULL;
+    const char *msg = NULL;
+    av_status st = AV_SIZE;
+    if (!s->p2) { msg = "not a statement with the Poseidon2 jet"; goto out; }
+    size_t max_rows = (size_t)1 << s->log_rows, max_cells = (size_t)1 << s->log_mem;
+    for (uint32_t i = 0; i < s->ctr0; i++) {
+        bool p = i >= 3 && i < 3 + (uint64_t)s->nbits + s->w;
+        if (!put_cell(w, p ? priv[i - 3].tag : s->cells[i].tag, p ? priv[i - 3].a : s->cells[i].a,
+                      p ? priv[i - 3].b : s->cells[i].b)) { msg = "out of memory"; goto out; }
+    }
+    w->loaded = w->nmem;
+    w->hd0 = s->hd0;
+    w->stk0 = s->stk0;
+    if (w->nmem > max_cells) { msg = "the run exceeds the statement's memory"; goto out; }
+    *ends = calloc(s->nroots, sizeof **ends);
+    if (!*ends) { msg = "out of memory"; goto out; }
+    for (size_t j = 0; j < s->nroots; j++) {
+        uint32_t hd = s->roots[j], stk = s->nil;
+        if (!run_to_halt(w, NULL, NULL, NULL, &hd, &stk, max_rows, max_cells, NULL, s, &msg)) goto out;
+        (*ends)[j] = w->nrows - 1;
+        const av_cell *h = get(w, hd), *t = get(w, stk);
+        if (!h || h->tag != AV_CELL_K || !t || t->tag != AV_CELL_NIL) {
+            msg = "a segment does not end at K over a nil: the witness does not satisfy the statement";
+            st = AV_INTERRUPTED;
+            goto out;
+        }
+    }
+    unsigned lbits = s->log_pin < s->log_pout ? s->log_pin : s->log_pout;
+    if (w->p2calls * AV_P2_BITS > ((uint64_t)1 << lbits)) { msg = "the run's jet bits exceed P2IN's or P2OUT's budget"; goto out; }
+    if (w->p2calls > ((uint64_t)1 << s->log_p2)) { msg = "the run's jet calls exceed P2's budget"; goto out; }
+    st = AV_WHNF;
+out:
     if (st != AV_WHNF) {
         free(*ends);
         *ends = NULL;
