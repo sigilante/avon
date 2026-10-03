@@ -20,6 +20,11 @@
 
 #include "avon.h"
 #include "jets.h"
+#include "sstats.h"
+
+#ifdef AV_STRICT_STATS
+av_sstats *sstats_g;
+#endif
 
 /*  An allocation that ensure() has already reserved room for.  It cannot
  *  fail unless a `need` count is wrong, which the debug build catches.
@@ -500,6 +505,7 @@ static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
         uint32_t inst = tmpl_instance(a, d.U, d.uarg, nd);
         assert(inst != AV_NONE && "allocation past what ensure() reserved");
         if (inst == AV_NONE) return AV_SIZE;
+        SSTATS_INSTANCE(a, d.U, d.uarg, r->steps);
         r->fused++;
     } else if (sh.fields == 0) {
         arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | d.cont, 0 });
@@ -574,6 +580,7 @@ static av_status whnf_share(R *r) {
     for (;;) {
         cur = av_res(a, cur);
         if (av_tag(a, cur) == AV_APP) {
+            SSTATS_FORCE(a, cur, r->steps);
             if (!push(r, cur)) return AV_SIZE;
             /* path compression: point past an indirection for good, or
              * chains grow by one per contraction and walks go quadratic */
@@ -681,6 +688,7 @@ static av_status whnf_share(R *r) {
                     uint32_t inst = tmpl_instance(a, T, args, n);
                     assert(inst != AV_NONE && "allocation past what ensure() reserved");
                     if (inst == AV_NONE) return AV_SIZE;
+                    SSTATS_INSTANCE(a, T, args, r->steps);
                     r->top -= T->k;
                     cur = n;
                     r->steps++;

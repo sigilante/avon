@@ -109,6 +109,7 @@
 #include <string.h>
 
 #include "avon.h"
+#include "sstats.h"
 
 #define AVON_VERSION "0.1.0"
 
@@ -2057,6 +2058,10 @@ out:
 }
 
 int main(int argc, char **argv) {
+#ifdef AV_STRICT_STATS
+    sstats_begin();                 /* build/stats/avon: one run's cells (sstats.h) */
+    atexit(sstats_report);
+#endif
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
         printf("avon %s\n", AVON_VERSION);
         return 0;

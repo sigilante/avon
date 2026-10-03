@@ -509,6 +509,49 @@ Compiled with skijack's inlining, the geometric means are 2.04, 1.98 and
 --skijack ~/skijack` (its `fix` mode); the cycle from `e74e581`'s binary
 with `--templates=DIR --data --knot`.
 
+## What becomes of an instance's cells
+
+**Strictness has little to save here; the spine does.** Avon `strictness`
+branch, `make stats` (`build/stats/avon`, `src/sstats.h`), share mode with
+templates and data jets, each run's steps and answer equal to the release
+binary's. An instance writes its body's open applications. A *spine* cell
+is only ever the function part of another application in the body, so it
+is unwound as soon as the instance is. An *argument thunk* is an argument
+cell that is a redex when written. It is *forced* when the reducer first
+unwinds through it, and *never forced* when the collector finds it dead or
+the run ends with it.
+
+| program | instances | cells | spine | argument thunks | thunks forced | case on a known value (of instances) | speculable ops |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| OrdList | 62.1M | 185.3M | 62% | 34.1M (18%) | 91% | 10.9M (18%) | 0 |
+| Queens2 | 58.1M | 244.9M | 63% | 45.1M (18%) | 69% | 15.8M (27%) | 0 |
+| Taut | 41.1M | 182.1M | 63% | 37.0M (20%) | 69% | 19.4M (47%) | 0 |
+| Clausify | 54.4M | 257.7M | 61% | 20.8M (8%) | 60% | 19.7M (36%) | 1 |
+| PermSort | 92.3M | 352.6M | 65% | 49.8M (14%) | 85% | 14.3M (16%) | 0 |
+| the front end | 10.4M | 54.5M | 65% | 10.4M (19%) | 50% | 5.8M (56%) | 0 |
+
+- **Speculation has nothing to take.** Not one numeral operation in the
+  five ports meets both its numerals already held when its cell is
+  written, and only Clausify has one. The operands are thunks themselves.
+  An instance already makes a word of SUC applied to a word (§6.10), and
+  SUC applied to a thunk is rare (93,224 times in the front end, 32,960 in
+  Queens2, none elsewhere).
+- **Thunks are 8 to 20% of the cells, and 50 to 91% of them are forced.**
+  Most are forced 10 to 100 steps after they are written. Update in place
+  already writes a forced thunk's value over its own cell, so forcing it
+  early would save the revisit, not the node. The 9 to 50% never forced
+  are what laziness saves, and an eager evaluation could not skip them
+  without a proof that they are needed.
+- **A body that cases on a formal that arrived as a value** -- a
+  constructor short of its continuations, or a numeral -- is 16 to 56% of
+  instances. The next step dispatches on it; joining that dispatch to the
+  instance would save a step and the root's write each time.
+- **Spine cells are 61 to 65% of everything an instance writes.** The
+  Reduceron writes no spine: it pushes the body's spine onto the stack and
+  writes only the other applications to the heap, updating a shared redex
+  root when its value is reached. Avon writes the whole result over the
+  redex root at once, so that every pointer to it sees the value.
+
 ## The hider census through frame traces
 
 The pure-S paper's passenger census (`fixed_points_hider.py census 12`)

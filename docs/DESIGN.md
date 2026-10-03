@@ -1047,9 +1047,12 @@ thousand random programs and the fixed point both ways.
 What is left of the self-compile is 18.9 million instantiations, each
 writing a template's open part in full, and 2.3 million S, K and I
 contractions outside any template, not yet profiled. The instantiations
-are the larger part, and what would shrink them is strictness: an
-argument a body forces evaluated where it is needed, not written as a
-cell (SKA's data requirements).
+are the larger part. Strictness was the expected lever, and measurement
+says otherwise (`docs/BENCHMARK.md`, "What becomes of an instance's
+cells"): of the cells instances write, 8 to 20% are argument thunks and
+61 to 65% are spine, unwound at once; and 16 to 56% of instances case on
+a formal that arrived already a value, a dispatch that could join the
+instance.
 
 ### 6.10 Data jets: constructors dispatched, numerals held as numbers
 
@@ -1157,8 +1160,10 @@ templates' (`tests/test_data.c`, `make front0-check`).
 `src/jets.h` and allocates from a reservation, writing the root over the
 redex root, and only jets with an interpreter's role call `try_interp`. A
 step of Queens2 with data jets fell from 568 instructions to 401, a
-one-node fire from 314 to 193. Strictness (§6.9) is the lever still
-unpulled.
+one-node fire from 314 to 193. The levers measured since (§6.9, and
+`docs/BENCHMARK.md`, "What becomes of an instance's cells") are a case
+on a known value joined to its instance, and the spine cells, 61 to 65%
+of what instances write.
 
 ### 6.11 Y unfolded in one step
 
@@ -1878,7 +1883,9 @@ or a witness; `avon witness` refuses all three options.
   `ZK-JETS.md` §7); data jets
   and the one-step Y have no witness rows, and the Y row's simulation
   theorem (`Tr`) is owed (§6.11, `ZK-JETS.md` §8).
-- *Speed:* strictness (§6.9), and the sharing a safe cycle would give Y
+- *Speed:* a case on a known value joined to its instance, the spine
+  cells instances write (§6.9; `docs/WORKLIST.md`), and the sharing a
+  safe cycle would give Y
   (§6.11).
 
 ## 12. What Avon must not do
