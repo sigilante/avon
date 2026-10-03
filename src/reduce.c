@@ -57,7 +57,7 @@ typedef struct {
 
     uint64_t       jet_calls, jet_steps;
     uint64_t       tmpl_calls;
-    uint64_t       dispatches, fused, word_ops, fix_calls;
+    uint64_t       dispatches, fused, word_ops, fix_calls, joins;
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
@@ -461,12 +461,21 @@ typedef struct {
 
 /*  Read the dispatch at the top of the stack: fields, continuation, and
  *  whether it fuses.  Reads only; the indices hold until a collection. */
+static inline void dispatch_fuse(const av_arena *a, av_ctor sh, disp *d);
+
 static void dispatch_read(const R *r, av_ctor sh, disp *d) {
     const av_arena *a = r->a;
     unsigned m = sh.fields;
     for (unsigned j = 0; j < m; j++)
         d->field[j] = av_res(a, av_right(a, r->stk[r->top - 1 - j]));
     d->cont = av_res(a, av_right(a, r->stk[r->top - 1 - m - sh.index]));
+    dispatch_fuse(a, sh, d);
+}
+
+/*  Whether the dispatch of d's fields and continuation fuses, and how. */
+static inline __attribute__((always_inline))
+void dispatch_fuse(const av_arena *a, av_ctor sh, disp *d) {
+    unsigned m = sh.fields;
     /* the continuation's spine: a template key and what it captured.  Not
      * for a nullary constructor: its continuation, applied to nothing, is
      * the redex itself, and must be updated where it stands, as shared */
@@ -489,6 +498,28 @@ static void dispatch_read(const R *r, av_ctor sh, disp *d) {
     d->U = U;
 }
 
+/*  The dispatch's write over the redex root nd, its nodes reserved. */
+static inline __attribute__((always_inline))
+bool dispatch_write(R *r, av_ctor sh, const disp *d, uint32_t nd) {
+    av_arena *a = r->a;
+    if (d->U) {
+        if (r->o->profile) profile_rewrote(r->o->profile, nd);
+        uint32_t inst = tmpl_instance(a, d->U, d->uarg, nd);
+        assert(inst != AV_NONE && "allocation past what ensure() reserved");
+        if (inst == AV_NONE) return false;
+        SSTATS_INSTANCE(a, d->U, d->uarg, r->steps);
+        r->fused++;
+    } else if (sh.fields == 0) {
+        arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | d->cont, 0 });
+    } else {
+        uint32_t t = d->cont;
+        for (unsigned j = 0; j + 1 < sh.fields; j++) t = reserved_app(a, t, d->field[j]);
+        if (r->o->profile) profile_rewrote(r->o->profile, nd);
+        arena_set(a, nd, (av_node){ t, d->field[sh.fields - 1] });
+    }
+    return true;
+}
+
 /*  The dispatch: k = m + n arguments, the redex root stk[top-k]. */
 static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
     av_arena *a = r->a;
@@ -500,21 +531,7 @@ static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
         dispatch_read(r, sh, &d);                   /* the collection moved them */
     }
     uint32_t nd = r->stk[r->top - k];
-    if (d.U) {
-        if (r->o->profile) profile_rewrote(r->o->profile, nd);
-        uint32_t inst = tmpl_instance(a, d.U, d.uarg, nd);
-        assert(inst != AV_NONE && "allocation past what ensure() reserved");
-        if (inst == AV_NONE) return AV_SIZE;
-        SSTATS_INSTANCE(a, d.U, d.uarg, r->steps);
-        r->fused++;
-    } else if (sh.fields == 0) {
-        arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | d.cont, 0 });
-    } else {
-        uint32_t t = d.cont;
-        for (unsigned j = 0; j + 1 < sh.fields; j++) t = reserved_app(a, t, d.field[j]);
-        if (r->o->profile) profile_rewrote(r->o->profile, nd);
-        arena_set(a, nd, (av_node){ t, d.field[sh.fields - 1] });
-    }
+    if (!dispatch_write(r, sh, &d, nd)) return AV_SIZE;
     r->top -= k;
     *curp = nd;
     r->steps++;
@@ -566,6 +583,99 @@ static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
     r->steps++;
     r->word_ops++;
     return 1;
+}
+
+/*  A case joined to its instance (§6.10).  T's body is its formal h
+ *  applied to p operands (T->case_h, T->case_p), and h arrived as a value
+ *  the step after the instance would dispatch on: a constructor with its
+ *  fields and p continuations, or, with two, a word or zero (K).  The
+ *  instance writes the body's other applications, not its spine or root,
+ *  and the dispatch writes over the redex root nd what it would have
+ *  written there after the instance: the same graph but for the spine,
+ *  the same two steps, each counted as before.  False, nothing written,
+ *  when h is no such value or the free nodes do not cover both writes
+ *  without a collection; the caller then instantiates as before. */
+enum { CJ_NONE, CJ_CTOR, CJ_WORD, CJ_ZERO };
+
+/*  Which value, if any, T's case meets its formal as: CJ_NONE, or the kind
+ *  case_join takes.  Inline: it is asked at nearly every instance of a
+ *  case, and most answers are no. */
+static inline __attribute__((always_inline))
+unsigned case_kind(const av_arena *a, const av_tmpl *T, const uint32_t *args) {
+    uint32_t h = av_res(a, args[T->case_h - 1]);
+    unsigned m = 0, p = T->case_p;
+    while (av_tag(a, h) == AV_APP) {
+        if (++m > AV_JET_ARITY_MAX) return CJ_NONE;
+        h = av_res(a, av_left(a, h));
+    }
+    uint32_t l = a->nodes[h].l;
+    if (l >> AV_TAG_SHIFT == AV_JET) {
+        if (l & AV_JET_WORD) return m == 0 && p == 2 ? CJ_WORD : CJ_NONE;
+        uint32_t t = a->jets[AV_JET_ID(l)].tmpl;
+        if (!t) return CJ_NONE;
+        av_ctor sh = a->tmpls[t - 1].ctor;
+        return av_ctor_is(sh) && sh.fields == m && sh.count == p ? CJ_CTOR : CJ_NONE;
+    }
+    return h == AV_NODE_K && m == 0 && p == 2 ? CJ_ZERO : CJ_NONE;
+}
+
+__attribute__((noinline))
+static bool case_join(R *r, const av_tmpl *T, const uint32_t *args, uint32_t nd, unsigned kind) {
+    av_arena *a = r->a;
+    unsigned p = T->case_p;
+    uint32_t h = av_res(a, args[T->case_h - 1]);
+    uint32_t sp[AV_JET_ARITY_MAX];      /* its arguments, outermost first */
+    unsigned m = 0;
+    while (av_tag(a, h) == AV_APP) {
+        sp[m++] = av_right(a, h);
+        h = av_res(a, av_left(a, h));
+    }
+    av_ctor sh = { 0, 0, 0 };
+    if (kind == CJ_CTOR) sh = a->tmpls[a->jets[AV_JET_ID(av_left(a, h))].tmpl - 1].ctor;
+    /* both writes from the free nodes: the instance's T->nops + T->nsuc at
+     * most, the dispatch's a fused template's (at most twice the scratch
+     * every template fits) or its fields' applications */
+    size_t need = (size_t)T->nops + T->nsuc + 2 * (size_t)a->tmpl_scratch_cap + AV_JET_ARITY_MAX;
+    if (a->cap - a->used < need) return false;
+
+    /* the instance, its spine and root left out */
+    uint32_t *out = a->tmpl_scratch, *cv = out + T->nops;
+    for (uint32_t j = 0; j < T->nconsts; j++) cv[j] = a->tmpl_globals[T->consts[j]];
+    const uint32_t *const base[3] = { cv, args, out };
+#define OPND(x) (base[(x) >> 30][(x) & AV_PAYLOAD])
+    const uint32_t *ops = T->ops;
+    for (uint32_t i = 0; i < T->nops; i++) {
+        if (T->case_spine[i]) continue;
+        uint32_t f = OPND(ops[2 * i]), x = OPND(ops[2 * i + 1]), w;
+        out[i] = T->sucop && T->sucop[i] && av_numeral(a, x, &w) && w < AV_WORD_MAX
+               ? word_succ(a, x) : arena_app_reserved(a, f, x);
+    }
+    /* the p operands h is applied to, in order, from the root down */
+    uint32_t c[AV_JET_ARITY_MAX];
+    uint32_t j = T->nops - 1;
+    for (unsigned q = p; q-- > 0;) {
+        c[q] = av_res(a, OPND(ops[2 * j + 1]));
+        if (q) j = ops[2 * j] & AV_PAYLOAD;
+    }
+#undef OPND
+    r->steps++;                                 /* the instance */
+    r->tmpl_calls++;
+    if (kind == CJ_ZERO) {                      /* K z s -> z */
+        arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | c[0], 0 });
+    } else if (kind == CJ_WORD) {               /* W n z s -> s (W (n-1)) */
+        arena_set(a, nd, (av_node){ c[1], word_pred(a, h) });
+        r->dispatches++;
+    } else {
+        disp d;
+        for (unsigned i = 0; i < m; i++) d.field[i] = av_res(a, sp[m - 1 - i]);
+        d.cont = c[sh.index];
+        dispatch_fuse(a, sh, &d);
+        if (!dispatch_write(r, sh, &d, nd)) return false;
+        r->dispatches++;
+    }
+    r->steps++;                                 /* the dispatch */
+    r->joins++;
+    return true;
 }
 
 /*  Reduce r->cur to weak head normal form in place.  The spine lives on
@@ -684,6 +794,14 @@ static av_status whnf_share(R *r) {
                     for (unsigned i = 0; i < T->k; i++)
                         args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
                     uint32_t n = r->stk[r->top - T->k];     /* the redex root */
+                    unsigned ck;
+                    if (o->data && T->case_p && !o->no_join && !o->profile && !o->jetstats &&
+                        o->max_steps - r->steps >= 2 &&
+                        (ck = case_kind(a, T, args)) != CJ_NONE && case_join(r, T, args, n, ck)) {
+                        r->top -= T->k;
+                        cur = n;
+                        continue;
+                    }
                     if (o->profile) profile_rewrote(o->profile, n);
                     uint32_t inst = tmpl_instance(a, T, args, n);
                     assert(inst != AV_NONE && "allocation past what ensure() reserved");
@@ -852,6 +970,7 @@ av_opts av_opts_default(void) {
         .templates = false,
         .data      = false,
         .fix       = false,
+        .no_join   = false,
     };
 }
 
@@ -882,5 +1001,5 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.marks);
     return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls,
                         r.jet_steps, r.jet_fault, r.tmpl_calls,
-                        r.dispatches, r.fused, r.word_ops, r.fix_calls };
+                        r.dispatches, r.fused, r.word_ops, r.fix_calls, r.joins };
 }

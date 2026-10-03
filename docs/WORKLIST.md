@@ -15,9 +15,11 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
 - **Head strictness:** not now. Thunks are 8 to 20% of cells, 50 to 91% are forced,
   and update in place already writes a forced value over its cell, so eager evaluation
   would save a revisit, not a node.
-- **Case of a known value: next.** 16 to 56% of instances case on a formal that
-  arrived as a constructor value or a numeral. Joining the dispatch to the instance
-  saves a step and the root's write each time. It is exact and needs no analysis.
+- **Case of a known value: built** (2026-10-02, `DESIGN.md` §6.10, "A case joined to
+  its instance"). It is exact: every count and state is unchanged. It runs 0 to 9%
+  faster (`BENCHMARK.md`, "A case joined to its instance"), but retires more
+  instructions where most attempts fail. A cheaper test for "the formal is
+  unevaluated" would recover them.
 - **Spine cells: a design question.** They are 61 to 65% of the cells instances
   write. The Reduceron pushes the spine onto the stack and updates shared redex
   roots lazily. Avon writes the whole result over the redex root at once. Leaving

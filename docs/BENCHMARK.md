@@ -552,6 +552,44 @@ the run ends with it.
   root when its value is reached. Avon writes the whole result over the
   redex root at once, so that every pointer to it sees the value.
 
+## A case joined to its instance
+
+**Joining a case to its instance saves time, not instructions.** Avon
+`case-join` branch against `cd3c73a`, both built clean, share mode with
+templates and data jets, user time best of 5. The ratio is the base
+binary's time over the joined one's, from paired runs. Every answer,
+step, instantiation, dispatch and fused count is the base's, with and
+without `--fix` (`DESIGN.md` §6.10, "A case joined to its instance").
+
+| program | joins | base, s | joined, s | ratio | instructions | peak memory, MB |
+|---|---:|---:|---:|---:|---:|---:|
+| OrdList | 6,222,282 | 2.33 | 2.33 | 1.00 | +5.9% | 230 → 222 |
+| Queens2 | 15,824,179 | 2.08 | 1.99 | 1.05 | +2.8% | 5 → 5 |
+| Taut | 15,018,246 | 1.76 | 1.66 | 1.06 | +0.1% | 58 → 70 |
+| Clausify | 12,511,833 | 2.25 | 2.08 | 1.08 | −1.8% | 56 → 66 |
+| PermSort | 10,681,769 | 4.06 | 4.04 | 1.01 | +4.3% | 234 → 225 |
+| the front end | 4,040,346 | 0.85 | 0.78 | 1.09 | −2.0% | 166 → 159 |
+
+A repeat of the five ports' timing gave ratios within 0.008 of these.
+The front end's time includes 0.39 s of loading templates.
+
+- **Where the instructions go.** Nearly every instance of these programs
+  is of a case template, and most meet their formal unevaluated: OrdList
+  tries 36.2 million joins and makes 6.2 million, PermSort 46.6 million
+  and 10.7 million. On a build instrumented to count them, a join saved
+  about 180 to 210 instructions. Each attempt that fails spends its test,
+  so OrdList and PermSort retire more instructions than before.
+- **Where the time comes from.** Joins are 16% of instantiations in
+  OrdList, 20% in PermSort, 47% in Queens2, 48% in Clausify, 59% in Taut
+  and 62% in the front end. The time falls where that share is high and
+  holds level where it is low. A join writes no spine and no root
+  application, and the reducer does not unwind them; fewer nodes through
+  the cache is the likely cause, not measured here.
+- **Memory.** Fewer nodes are written, yet peak memory falls on three
+  programs and rises on two. Peak memory follows when the arena doubles,
+  which a different allocation pattern moves; that is the likely cause,
+  not measured here.
+
 ## The hider census through frame traces
 
 The pure-S paper's passenger census (`fixed_points_hider.py census 12`)

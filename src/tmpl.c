@@ -393,6 +393,36 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
             (x & AV_PAYLOAD) >= m && (x & AV_PAYLOAD) < k)
             T->ctor = (av_ctor){ m, (x & AV_PAYLOAD) - m, k - m };
     }
+    /* a case (§6.10): the body is a formal applied to p operands, its root
+     * the last instruction, each application of its spine below the root
+     * used by its parent alone; an instance meeting that formal as a value
+     * joins the dispatch after it (reduce.c, case_join) */
+    if (T->root_last && !av_ctor_is(T->ctor)) {
+        uint32_t *uses = calloc(T->nops, sizeof *uses);
+        if (uses) {
+            for (uint32_t i = 0; i < 2 * T->nops; i++)
+                if (T->ops[i] >> 30 == TMPL_RES) uses[T->ops[i] & AV_PAYLOAD]++;
+            uint32_t j = T->nops - 1, f = T->ops[2 * j], p = 1;
+            bool ok = true;
+            while (ok && f >> 30 == TMPL_RES) {
+                j = f & AV_PAYLOAD;
+                ok = uses[j] == 1 && ++p <= AV_JET_ARITY_MAX;
+                f = T->ops[2 * j];
+            }
+            if (ok && f >> 30 == TMPL_ARG && p <= AV_JET_ARITY_MAX &&
+                (T->case_spine = calloc(T->nops, 1))) {
+                T->case_h = (uint8_t)((f & AV_PAYLOAD) + 1);
+                T->case_p = (uint8_t)p;
+                for (uint32_t i = T->nops - 1, g = i;; ) {
+                    T->case_spine[i] = 1;
+                    g = T->ops[2 * i];
+                    if (g >> 30 != TMPL_RES) break;
+                    i = g & AV_PAYLOAD;
+                }
+            }
+            free(uses);
+        }
+    }
     a->jets[id].tmpl = ++a->ntmpls;
 done:
     free(cn);

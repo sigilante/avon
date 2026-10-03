@@ -352,6 +352,9 @@ typedef struct {
                                    dispatch; copy mode ignores it         */
     bool        fix;            /* share mode: Y g unfolds to g (Y g) in
                                    one step (§6.11); copy mode ignores it */
+    bool        no_join;        /* with data: never join a case to its
+                                   instance (§6.10), for tests comparing
+                                   the two; every count is the same       */
 } av_opts;
 
 typedef struct {
@@ -373,6 +376,9 @@ typedef struct {
                                each, among steps                          */
     uint64_t  fix_calls;    /* Y unfolded (§6.11), one step each, among
                                steps                                      */
+    uint64_t  joins;        /* cases joined to their instances (§6.10):
+                               an instantiation and the dispatch after
+                               it, two steps each, among steps            */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -845,6 +851,11 @@ typedef struct av_tmpl {
     av_ctor   ctor;             /* a Scott constructor's shape (§6.8), if
                                    its body is v_h v0 .. v(m-1): data jets
                                    dispatch it (§6.10)                    */
+    uint8_t   case_h, case_p;   /* a case (§6.10): the body is formal
+                                   case_h - 1 applied to case_p operands,
+                                   written over the redex root; 0 none    */
+    uint8_t  *case_spine;       /* per instruction: on that spine, used by
+                                   its parent alone; NULL when no case    */
 } av_tmpl;
 
 typedef struct av_tmplset av_tmplset;

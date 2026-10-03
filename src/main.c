@@ -477,9 +477,10 @@ static bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts
 static void report_data(const long wc[3], const av_result *r) {
     fprintf(stderr, "data: %ld numeral operations admitted, %ld refused; %ld numerals "
             "made words; %llu dispatches (%llu fused), %llu numeral operations "
-            "among the contractions\n", wc[0], wc[1], wc[2],
+            "among the contractions; %llu cases joined to their instances\n",
+            wc[0], wc[1], wc[2],
             (unsigned long long)r->dispatches, (unsigned long long)r->fused,
-            (unsigned long long)r->word_ops);
+            (unsigned long long)r->word_ops, (unsigned long long)r->joins);
 }
 
 /*  The unfolding's report line (§6.11). */
