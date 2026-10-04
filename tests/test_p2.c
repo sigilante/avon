@@ -66,8 +66,50 @@ TEST(malformed_p2pre_statements_are_refused) {
                                                                    /* a bit cell not blank */
 }
 
+/*  A `p2commit` statement's header: `p2commit c0 … c7 PATTERN J ROOT`,
+ *  the pattern 496 entries of `.`, `0`, `1`.  head is the header's words
+ *  before the pattern, tail after it; pat_len entries, the first `bad`. */
+static bool reads_commit(const char *head, size_t pat_len, char first, const char *tail) {
+    char buf[1200];
+    size_t n = (size_t)snprintf(buf, sizeof buf, "%s ", head);
+    for (size_t i = 0; i < pat_len && n < sizeof buf - 200; i++) buf[n++] = i == 0 ? first : (i % 3 ? '.' : '1');
+    snprintf(buf + n, sizeof buf - n, " %s\nW 1\n" LOG_OK REST, tail);
+    return reads(buf);
+}
+
+TEST(a_p2commit_statement_is_read) {
+    CHECK(reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99 4"));
+    char buf[1200];
+    size_t n = (size_t)snprintf(buf, sizeof buf, "p2commit 1 2 3 4 5 6 7 8 ");
+    for (size_t i = 0; i < 496; i++) buf[n++] = '.';
+    snprintf(buf + n, sizeof buf - n, " 99 4\nW 1\n" LOG_OK REST);
+    av_cstmt st;
+    if (av_cstmt_read(buf, strlen(buf), &st, NULL)) {
+        CHECK(st.p2);
+        CHECK_EQ(st.p2_j, 99);
+        CHECK_EQ(st.p2_root, 4);
+        av_cstmt_free(&st);
+    } else {
+        CHECK(false);
+    }
+}
+
+TEST(malformed_p2commit_statements_are_refused) {
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 495, '0', "99 4"));     /* a short pattern */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 497, '0', "99 4"));     /* a long one */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, 'x', "99 4"));     /* a bad entry */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7", 496, '0', "99 4"));       /* seven elements */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8 9", 496, '0', "99 4"));   /* nine */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 x", 496, '0', "99 4"));     /* not a number */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99"));       /* no root */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99 4 5"));   /* an extra word */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99  4"));    /* an empty word */
+}
+
 TEST_MAIN(
     TEST_CASE(the_test_vectors),
+    TEST_CASE(a_p2commit_statement_is_read),
+    TEST_CASE(malformed_p2commit_statements_are_refused),
     TEST_CASE(inputs_permute_as_their_residues),
     TEST_CASE(a_p2pre_statement_is_read),
     TEST_CASE(malformed_p2pre_statements_are_refused),

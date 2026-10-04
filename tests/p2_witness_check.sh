@@ -15,7 +15,13 @@
 #      compp-verify` checks the proof from the statement alone
 #      (Circuit.p2preExport_sound: the memory holds a preimage of h);
 #   5. a witness with one bit flipped does not satisfy the statement, and
-#      Avon refuses it as ski-air does.
+#      Avon refuses it as ski-air does;
+#   6. the hidden hand-off (`lake exe composed emit-handoff`): for each of
+#      the two `p2commit c pat` statements Avon's table is byte-identical to
+#      ski-air's, `compp-prove-table` proves it, and `ski-air compp-chain`
+#      verifies the two proofs as a chain (lean-ski's
+#      Circuit.p2commit_chainB); a header with a 495-entry pattern is
+#      refused.
 #
 # Avon and ski-air read a false bit only as the cell A 0 1; lean-ski's
 # p2Row also accepts any A f x with f at K and x at I.  The narrower reading
@@ -74,6 +80,36 @@ if "$SKI_AIR" compp-prove "$stmt" "$OUT/stmt/bad.witness.txt" "$OUT/proofs/bad.p
     fail=1
 else
     echo "ski-air refuses: $(cat "$OUT/ski-air/bad.err")"
+fi
+
+echo "--- the hidden hand-off: two p2commit statements over one commitment"
+(cd "$LEAN_SKI" && lake exe composed emit-handoff "$OUT/stmt" > /dev/null)
+for n in handoff1 handoff2; do
+    "$AVON" witness --statement="$OUT/stmt/$n.public.txt" "$OUT/stmt/handoff.witness.txt" > "$OUT/avon/$n.txt" \
+        2> "$OUT/avon/$n.err" || { echo "FAIL: Avon ($n): $(cat "$OUT/avon/$n.err")"; fail=1; continue; }
+    echo "avon ($n): $(cat "$OUT/avon/$n.err")"
+    "$SKI_AIR" compp-prove "$OUT/stmt/$n.public.txt" "$OUT/stmt/handoff.witness.txt" "$OUT/proofs/$n.ski-air.proof" \
+        --table="$OUT/ski-air/$n.txt" > /dev/null
+    if cmp -s "$OUT/avon/$n.txt" "$OUT/ski-air/$n.txt"; then
+        echo "$n: byte-identical to ski-air's table"
+    else
+        echo "FAIL: $n: Avon's table differs from ski-air's"
+        fail=1
+    fi
+    "$SKI_AIR" compp-prove-table "$OUT/stmt/$n.public.txt" "$OUT/avon/$n.txt" "$OUT/proofs/$n.proof" | tail -n 1 | cut -c1-100 \
+        || fail=1
+done
+# Avon's two proofs verify as a chain (lean-ski's Circuit.p2commit_chainB).
+"$SKI_AIR" compp-chain "$OUT/stmt/handoff1.public.txt" "$OUT/proofs/handoff1.proof" \
+    "$OUT/stmt/handoff2.public.txt" "$OUT/proofs/handoff2.proof" | tail -n 1 | grep '^CHAIN OK' || fail=1
+# A p2commit header with a 495-entry pattern is no statement.
+awk 'NR == 1 { n = split($0, w, " "); w[10] = substr(w[10], 2); s = w[1]; for (i = 2; i <= n; i++) s = s " " w[i]; $0 = s } { print }' \
+    "$OUT/stmt/handoff1.public.txt" > "$OUT/stmt/short.public.txt"
+if "$AVON" witness --statement="$OUT/stmt/short.public.txt" "$OUT/stmt/handoff.witness.txt" > /dev/null 2> "$OUT/avon/short.err"; then
+    echo "FAIL: Avon read a p2commit header with a 495-entry pattern"
+    fail=1
+else
+    echo "avon refuses a malformed p2commit header: $(cat "$OUT/avon/short.err")"
 fi
 
 if [ "$fail" -eq 0 ]; then echo "PASS"; else echo "FAIL"; exit 1; fi

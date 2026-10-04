@@ -22,8 +22,9 @@
  *                                     per root, padded to the statement's
  *                                     heights (docs/ZK-JETS.md, milestone 8)
  *      avon witness --statement=PUBLIC [WITNESS]
- *                                     a `p2pre` statement: the composed
- *                                     machine with the Poseidon2 jet
+ *                                     a `p2pre` or `p2commit` statement:
+ *                                     the composed machine with the
+ *                                     Poseidon2 jet
  *                                     (lean-ski's P2Jet.p2Row), its table
  *                                     as bench/plonky3's compp-prove writes it
  *      avon census [--select=N] [--top=N] [--min-atoms=N] [--all]
@@ -1998,7 +1999,8 @@ done:
 
 /*  avon witness --statement=PUBLIC [--jet-table=JETS]: the composed table
  *  for the witness wsrc, on stdout: with code jets from JETS, or, for a
- *  `p2pre` statement and no jet table, with the Poseidon2 jet. */
+ *  `p2pre` or `p2commit` statement and no jet table, with the Poseidon2
+ *  jet. */
 static char *read_text(const char *path, size_t *len) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
