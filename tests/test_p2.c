@@ -104,6 +104,12 @@ TEST(malformed_p2commit_statements_are_refused) {
     CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99"));       /* no root */
     CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99 4 5"));   /* an extra word */
     CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99  4"));    /* an empty word */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99 4 "));    /* a trailing space */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99\t4"));    /* a tab */
+    CHECK(!reads_commit("p2commit 1 2 3 4 5 6 7\t8", 496, '0', "99 4"));
+    CHECK(!reads_commit(" p2commit 1 2 3 4 5 6 7 8", 496, '0', "99 4"));    /* a leading space */
+    /* a CR before the newline is a line end, as for every line read */
+    CHECK(reads_commit("p2commit 1 2 3 4 5 6 7 8", 496, '0', "99 4\r"));
 }
 
 TEST_MAIN(
