@@ -435,6 +435,16 @@ of `h`). P2IN, P2OUT and P2 carry blinding blocks, the tree's edges
 simulatable (`Circuit.compP_transcript`); Avon's table is unchanged, the
 blinding being ski-air's alone, as for the jets (§7).
 
+*Built (in the clear): the hidden hand-off.* lean-ski's statement
+`p2commit c pat` ("a value and randomness, eight 31-bit elements each,
+whose compression is `c`, the 496 bits meeting `pat`") runs the same jet.
+Avon reads its header (`p2commit c₀ … c₇ PATTERN J ROOT`) and writes its
+table, byte for byte ski-air's, for both of lean-ski's demo stages over one
+commitment; ski-air proves Avon's two tables and verifies them as a chain
+(`ski-air compp-chain`; lean-ski's `Circuit.p2commit_chainB`: one value
+meets both patterns, or the two proofs' tables encode a collision of the
+compression).
+
 ## 9. Milestones
 
 1. **Measure.** *Done, 2026-09-29* (§1): 11,483 rows jetted against

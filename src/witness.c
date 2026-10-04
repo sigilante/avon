@@ -837,6 +837,43 @@ void av_cstmt_free(av_cstmt *s) {
 
 static bool log_ok(uint32_t x) { return x >= 8 && x <= 20; }
 
+/*  A u32 in decimal: exactly the n bytes at w. */
+static bool u32_word(const char *w, size_t n, uint32_t *out) {
+    if (n == 0) return false;
+    uint64_t v = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (w[i] < '0' || w[i] > '9') return false;
+        v = v * 10 + (uint64_t)(w[i] - '0');
+        if (v > UINT32_MAX) return false;
+    }
+    *out = (uint32_t)v;
+    return true;
+}
+
+/*  `p2commit c0 … c7 PATTERN J ROOT`: eight numbers, the pattern's 496
+ *  entries (`.`, `0`, `1`), the jet's atom and the comb's root.  Avon takes
+ *  J and ROOT; lean-ski's `composed statement-p2` checks the whole text. */
+static bool p2commit_line(const char *l, size_t n, uint32_t *j, uint32_t *root) {
+    const char *w[12];
+    size_t wn[12], k = 0, i = 0;
+    while (i <= n) {
+        size_t start = i;
+        while (i < n && l[i] != ' ') i++;
+        if (k == 12 || i == start) return false;
+        w[k] = l + start;
+        wn[k++] = i - start;
+        i++;
+    }
+    if (k != 12 || wn[0] != 8 || memcmp(w[0], "p2commit", 8) != 0) return false;
+    uint32_t c;
+    for (size_t e = 1; e <= 8; e++)
+        if (!u32_word(w[e], wn[e], &c)) return false;
+    if (wn[9] != 496) return false;
+    for (size_t t = 0; t < 496; t++)
+        if (w[9][t] != '.' && w[9][t] != '0' && w[9][t] != '1') return false;
+    return u32_word(w[10], wn[10], j) && u32_word(w[11], wn[11], root);
+}
+
 bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err) {
     memset(s, 0, sizeof *s);
     lines L = { src, len, 0 };
@@ -845,16 +882,20 @@ bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err) {
     uint32_t v[4];
     const char *msg = "a truncated statement";
     if (!next_line(&L, &l, &n)) goto fail;
-    s->p2 = n >= 6 && memcmp(l, "p2pre ", 6) == 0;
+    bool pre = n >= 6 && memcmp(l, "p2pre ", 6) == 0;
+    bool commit = n >= 9 && memcmp(l, "p2commit ", 9) == 0;
+    s->p2 = pre || commit;
     if (!((n >= 8 && memcmp(l, "formula ", 8) == 0) || (n >= 10 && memcmp(l, "predicate ", 10) == 0) || s->p2)) {
-        msg = "expected `formula …`, `predicate …` or `p2pre …`";
+        msg = "expected `formula …`, `predicate …`, `p2pre …` or `p2commit …`";
         goto fail;
     }
-    if (s->p2) {
+    if (pre) {
         /* `p2pre h J ROOT` */
         if (!nums_line(l, n, "p2pre", v, 3, &k) || k != 3) { msg = "a malformed header"; goto fail; }
         s->p2_j = v[1];
         s->p2_root = v[2];
+    } else if (commit) {
+        if (!p2commit_line(l, n, &s->p2_j, &s->p2_root)) { msg = "a malformed header"; goto fail; }
     }
     if (memchr(l, '\0', n)) { msg = "a NUL in the header"; goto fail; }
     s->header = malloc(n + 1);
