@@ -1265,6 +1265,36 @@ and the permutation out (lean-ski's `P_specN`). That theorem is the
 licence, and the jet is its right-hand side computed in C (`src/p2.c`,
 `av_p2_permute`).
 
+**The C is printed from a proof.** `lean/P2Prog.lean`, checked against
+lean-ski, prints `src/p2_prog.h` and proves what it prints
+(`AvonP2.permuteC`). On every state of sixteen `uint32_t` values, the
+printed program run with C's arithmetic gives `permute`. The proof has two
+parts:
+
+- **The program is the specification.** It is fifty-two layers of
+  sixteen expressions each. The layers are lean-ski's own (`mat4LE`,
+  `mixLE`, `sboxLE`, `sbox0LE`, `intLinLE`), the expressions from which
+  her term `P` and the Poseidon2 AIR are proved, and her bridges join them
+  into `permute` (`run_prog`).
+- **C computes the program exactly.** A bound on every subexpression
+  stays below 2^64, so no `uint64_t` sum or product wraps; every variable
+  is one of the sixteen elements; and every layer's results stay below
+  2^31 (`bnd`, `fits`, `prog_ok`, checked by the kernel). The printed
+  S-box, reducing its input and then each of its four products modulo p,
+  gives `x^7 mod p` (`sboxC_eq`).
+
+The proof uses only `propext` and `Quot.sound`. What is trusted is C11's
+unsigned arithmetic, exact modulo 2^64 (6.2.5p9), and the printer: one
+line of C per constructor of the expression type (`cExpr`); a layer's
+sixteen results computed from the old state before any is stored
+(`cBody`); each distinct layer printed once and the layers called in the
+program's order (`header`); and the S-box's text, which `sboxC` models
+step for step. `make
+p2-witness-check` reruns the proof and requires its print to be
+`src/p2_prog.h`, byte for byte. The printed C matches the hand-written
+permutation it replaced on 10^7 random states, at the same speed: 0.70 µs
+a permutation against 0.73.
+
 **`P` is pinned, and keyed by tree identity, not by digest alone.**
 FILE is the user's input, and the jet would assert a false equation for
 any other term. So `av_p2_register` refuses FILE unless its full digest

@@ -648,8 +648,10 @@ av_status av_witness_run_p2(const av_cstmt *s, const av_cell *priv, av_witness *
                             const char **err);
 
 /*  Poseidon2 over BabyBear, width 16, as lean-ski's Ski/ZK/Poseidon2.lean
- *  specifies it (src/p2.c); the self-test checks the specification's three
- *  test vectors. */
+ *  specifies it: C printed by lean/P2Prog.lean, which proves it equal to
+ *  the specification on every state of sixteen uint32_t values
+ *  (AvonP2.permuteC).  The self-test checks the specification's three test
+ *  vectors. */
 void av_p2_permute(uint32_t s[16]);
 bool av_p2_selftest(void);
 

@@ -425,8 +425,9 @@ puts the jet at an atom `J` of an open verifier. At `J`, with `k` and the
 comb's public root on the stack, the machine reads the 496 bits from their
 slots and pushes the outputs' 496 bits for `k` (lean-ski's `P2Jet.p2Row`).
 `avon witness --statement=P2PUBLIC WITNESS` runs it with Poseidon2 in C
-(`src/p2.c`, the specification's constants printed by lean-ski's
-`bench/P2C.lean`, checked against its three test vectors). Its table is
+(`src/p2.c`; the C is printed by `lean/P2Prog.lean`, which proves it equal
+to lean-ski's specification on every state of sixteen `uint32_t` values,
+`DESIGN.md` §6.12). Its table is
 byte for byte ski-air's, and `ski-air compp-prove-table` proves it
 (`make p2-witness-check`). lean-ski proves the circuit sound
 (`Circuit.p2preExport_sound`: an accepted proof's memory holds a preimage
