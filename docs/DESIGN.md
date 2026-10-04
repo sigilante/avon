@@ -1,6 +1,6 @@
 # Avon: the native runtime, planned
 
-> **Status (2026-10-01).** Built: stages 0 to 7 and 9 of §11 are done, and stage 8 has the compiler's core and the SKIjack-0 front end; the full language's front end remains (§11.1). Beyond the stages, share mode runs supercombinator templates, data jets and Y's one-step unfolding (§6.9 to §6.11), all outside the proof; jets under hiding are built (`ZK-JETS.md`); frame traces serve the pure-S paper's census (§22). What the proofs do not yet cover is listed in §11.1, "Open". The note was written 2026-09-16, before any of it; the compiler it targets is `python/skijack`, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
+> **Status (2026-10-01).** Built: stages 0 to 7 and 9 of §11 are done, and stage 8 has the compiler's core and the SKIjack-0 front end; the full language's front end remains (§11.1). Beyond the stages, share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively (§6.9 to §6.12), all outside the proof; jets under hiding are built (`ZK-JETS.md`); frame traces serve the pure-S paper's census (§22). What the proofs do not yet cover is listed in §11.1, "Open". The note was written 2026-09-16, before any of it; the compiler it targets is `python/skijack`, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
 
 *2026-09-16. The build plan for the C runtime named in `RUNTIME-DESIGN.md`
 §3a. Its constraints come from three places: the reference host
@@ -1255,6 +1255,70 @@ plan. `--fix` stays: it agrees with SKI on every test, it is cheap, and
 a witness row for it could be built. Today `avon witness` refuses `--fix`,
 as it refuses `--templates` and `--data`: the witness runs plain SKI.
 
+### 6.12 Poseidon2 run natively
+
+**With `--p2=FILE`, share mode runs lean-ski's Poseidon2 term natively.**
+FILE holds the term `P` (`Ski/ZK/Poseidon2SKI.lean`) in the DAG form that
+`lake exe p2run K OUTDIR` writes as `OUTDIR/P.dag`. `P` applied to a state
+`stateN vs` reduces to `stateN (permute vs)`, sixteen 31-bit elements in
+and the permutation out (lean-ski's `P_specN`). That theorem is the
+licence, and the jet is its right-hand side computed in C (`src/p2.c`,
+`av_p2_permute`).
+
+**`P` is pinned, and keyed by tree identity, not by digest alone.**
+FILE is the user's input, and the jet would assert a false equation for
+any other term. So `av_p2_register` refuses FILE unless its full digest
+is `P`'s, compiled in (`AV_P2_SHA256`). The full digest is §5's Merkle
+hash with every digest kept whole, 256 bits, over S, K and I only. The
+§5 digest alone, 64 bits, would admit a forged FILE after about 2^50
+hashes: an atom whose name hashes to one of `P`'s 12,753 subterms'
+digests, put in its place. Registration also refuses a digest that
+another jet already holds under another role or another term.
+
+`av_jets_match` wraps each occurrence of `P` in the program, which may be
+hostile. `av_p2_bind` compares each wrapped term with FILE's, node for
+node (`av_equal`), unbinding any that differs. Every fire checks its jet
+node's term again, so a jet node made after the bind is held to the same
+rule; such nodes arise in a copy of another jet's term, a template's
+globals, or a run-time match. The comparison visits each pair of nodes
+once, and answers no past eight pairs per node of `P`'s term. A 64-bit
+collision in the program therefore cannot reach the native step, which
+would otherwise replace an arbitrary term's reduction with a
+permutation. The check costs under 0.01 s a fire.
+
+**The jet fires only on a state as it stands.** At the head with an
+argument, `P` reads the argument through indirections and jet nodes
+(`av_p2_state_read`). The argument must be exactly `stateN vs`:
+
+- each element `bitsT 31 v` holds 31 pairs `S (S I (K b)) (K rest)`;
+- each bit is `K` (1) or `K I` (0), least significant first;
+- each element and the state end in `K`, with sixteen elements.
+
+The redex root then becomes the permuted state, 2,562 fresh nodes, in one
+step. Any other argument runs a fresh copy of `P`'s term, counted as a
+decline: a thunk, a malformed state, or `P`'s own unreduced output. The
+copy keeps the jet node's own term unwritten, so a shared `P` stays `P`
+for its next call. A jet node unbound at a fire is counted too. So
+`P (P x)` permutes the inner call natively and the outer one in S, K and
+I, because lazy reduction meets the outer call first: 981 million steps
+and 11 s for test vector 1, one decline reported, whether the two `P`s
+are one node or two. Words (§6.10) work the same way: an operation fires
+only on operands already held. A chain fires natively only when each
+state is built before it is passed on.
+
+**Counts change, as for the other share-mode jets.** A fire is one step,
+reported as `p2: … permutations run natively`. Fuel counts those steps,
+not the 962 million the term takes. The normal form is SKI's, byte for
+byte, because `P_specN` gives it. The weak head normal form state differs
+in form only where the jet fired. Copy mode refuses `--p2`, and so does
+`avon witness`: a proof licenses the jet through its own table (lean-ski's
+`P2Jet.p2Row`; `ZK-JETS.md`), not through this rewrite.
+
+**Results, 2026-10-03.** Plonky3's three test vectors (`make
+p2-witness-check`, step 7) each reach Plonky3's output in one step. Test
+vector 1 unjetted takes 962,192,547 steps, 10.1 s and 66 MB. With `--p2`
+it finishes in under 0.01 s.
+
 ## 7. The interpreter jet
 
 **It is Avon's level-1 interpreter, not an optimization of one.** Vere runs
@@ -1878,6 +1942,8 @@ or a witness; `avon witness` refuses all three options.
 - **Y unfolded in one step** (§6.11, `--fix`): 1.03 times less time by
   geometric mean. The steps fall, but each unfolding copies `Y g` where a
   cycle would share it.
+- **Poseidon2 run natively** (§6.12, `--p2`): `P ⬝ stateN x` in one step,
+  against 962 million steps and 10.1 s unjetted.
 - **Against the Reduceron** (`docs/BENCHMARK.md`): Avon takes 1.6 to 3.0
   times its time on the five ports. Per step it keeps the Reduceron's
   pace; it takes more steps, most of them Y re-deriving its unfolding.

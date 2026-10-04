@@ -58,6 +58,7 @@ typedef struct {
     uint64_t       jet_calls, jet_steps;
     uint64_t       tmpl_calls;
     uint64_t       dispatches, fused, word_ops, fix_calls, joins;
+    uint64_t       p2_calls, p2_declines, p2_unbound;
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
@@ -585,6 +586,39 @@ static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
     return 1;
 }
 
+/*  The Poseidon2 jet (§6.12), jet node jn of jet id at the head with its
+ *  argument: 1 fired, the redex root now the permuted state; 0 declined,
+ *  the argument not a state as it stands, to run P's term; 2 unbound, jn's
+ *  term not P's, jn now an indirection to it; -1 SIZE.  P_specN is the
+ *  licence: P applied to stateN vs, sixteen 31-bit elements, reduces to
+ *  stateN (permute vs). */
+static int p2_fire(R *r, uint32_t jn, uint32_t id, uint32_t *curp) {
+    av_arena *a = r->a;
+    uint32_t s[16];
+    if (!av_p2_state_read(a, av_right(a, r->stk[r->top - 1]), s)) {
+        r->p2_declines++;
+        return 0;
+    }
+    /* the term checked at every fire: a jet node may have been made after
+     * av_p2_bind, in a copy of another jet's term */
+    if (!p2_same(a, av_right(a, jn), id)) {
+        arena_set(a, jn, (av_node){ (AV_IND << AV_TAG_SHIFT) | av_right(a, jn), 0 });
+        r->p2_unbound++;
+        return 2;
+    }
+    av_p2_permute(s);
+    if (!ensure(r, P2_STATE_NODES)) return -1;
+    uint32_t x = p2_state_build(a, s);
+    uint32_t nd = r->stk[r->top - 1];               /* the redex root, reread */
+    if (r->o->profile) profile_rewrote(r->o->profile, nd);
+    arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
+    r->top -= 1;
+    *curp = nd;
+    r->steps++;
+    r->p2_calls++;
+    return 1;
+}
+
 /*  A case joined to its instance (§6.10).  T's body is its formal h
  *  applied to p operands (T->case_h, T->case_p), and h arrived as a value
  *  the step after the instance would dispatch on: a constructor with its
@@ -761,6 +795,23 @@ static av_status whnf_share(R *r) {
                     cur = av_right(a, cur);
                     continue;
                 }
+            }
+            if (o->p2 && a->jets[id].p2) {
+                /* the Poseidon2 jet (§6.12): natively on a state as it
+                 * stands; else a fresh copy of P's term, so the node's own
+                 * term is never written and stays P's for the next call */
+                if (r->top - bottom >= 1) {
+                    int pf = p2_fire(r, cur, id, &cur);
+                    if (pf < 0) return AV_SIZE;
+                    if (pf > 0) continue;       /* fired, or unbound */
+                }
+                r->jnode = cur;
+                if (!ensure(r, a->jets[id].term_nodes)) return AV_SIZE;
+                r->jnode = AV_NONE;
+                cur = jet_term_copy(a, id);
+                assert(cur != AV_NONE && "allocation past what ensure() reserved");
+                if (cur == AV_NONE) return AV_SIZE;
+                continue;
             }
             if (o->data && a->jets[id].word_op) {
                 /* a numeral operation (§6.10): natively on words; else its
@@ -1001,5 +1052,6 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.marks);
     return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls,
                         r.jet_steps, r.jet_fault, r.tmpl_calls,
-                        r.dispatches, r.fused, r.word_ops, r.fix_calls, r.joins };
+                        r.dispatches, r.fused, r.word_ops, r.fix_calls, r.joins,
+                        r.p2_calls, r.p2_declines, r.p2_unbound };
 }

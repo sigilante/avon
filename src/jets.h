@@ -113,6 +113,16 @@ int  compile_fire(av_arena *a, const uint32_t *argv, const av_opts *o, uint64_t 
                   uint32_t *out, uint64_t *charge);
 bool compile_check(av_arena *a, uint32_t node, const uint32_t *argv, uint32_t out);
 
+/*  The Poseidon2 jet's output (p2.c, §6.12): stateN s in P2_STATE_NODES
+ *  reserved nodes at most; it never collects. */
+#define P2_STATE_NODES (2u + 16u * 32u * 5u)
+uint32_t p2_state_build(av_arena *a, const uint32_t s[16]);
+/*  P's registration without the digest pin, for tests with a stand-in
+ *  term; and whether x is jet id's term, node for node, within eight
+ *  pairs per node of it (false past them, or out of memory). */
+uint32_t p2_register(av_arena *a, uint32_t p, bool pin, const char **err);
+bool     p2_same(const av_arena *a, uint32_t x, uint32_t id);
+
 /*  The census's hook (census.c): x was put in function position with
  *  `avail` arguments at the head. */
 void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail);

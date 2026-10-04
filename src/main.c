@@ -98,7 +98,9 @@
  *  (with --templates: data jets, §6.10: constructor templates dispatched,
  *  fused into the branch's template, numerals held as words, and
  *  DIR/words.tsv's numeral operations run on them natively), --fix (with
- *  --templates: Y g unfolded to g (Y g) in one step, §6.11).  reduce and
+ *  --templates: Y g unfolded to g (Y g) in one step, §6.11), --p2=FILE
+ *  (share mode: FILE holds lean-ski's Poseidon2 term P, as `lake exe
+ *  p2run` prints it; P applied to a state runs natively, §6.12).  reduce and
  *  batch take --trace-frame[=summary] (copy mode's head run observed for
  *  the hider census, §22) with --passenger=NAME, --records[=CONF] and
  *  --frame-dump=SPEC; options_fit refuses an option the command would
@@ -136,6 +138,7 @@ typedef struct {
     const char *templates;        /* --templates: a directory, or NULL */
     bool        data;             /* --data: data jets (§6.10) */
     bool        fix;              /* --fix: Y unfolded in one step (§6.11) */
+    const char *p2;               /* --p2: P's term, a file (§6.12), or NULL */
     const char *file;
     /* frame traces (§22) */
     int         trace;            /* 0 off, 1 summary, 2 a line per step */
@@ -161,7 +164,7 @@ static int usage(void) {
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
-        "        --profile=NAMES --templates=DIR --data --fix)\n"
+        "        --profile=NAMES --templates=DIR --data --fix --p2=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"
@@ -208,6 +211,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->templates = NULL;
     g->data = false;
     g->fix = false;
+    g->p2 = NULL;
     g->jet_table = NULL;
     g->plan = NULL;
     g->statement = NULL;
@@ -248,6 +252,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) g->templates = s + 12;
         else if (strcmp(s, "--data") == 0)           g->data = true;
         else if (strcmp(s, "--fix") == 0)            g->fix = true;
+        else if (strncmp(s, "--p2=", 5) == 0 && s[5])  g->p2 = s + 5;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
             g->o.interp_jets = true;
@@ -318,6 +323,7 @@ static bool options_fit(const args *g, const char *cmd) {
         if (g->templates) bad = "--templates";
         else if (g->data) bad = "--data";
         else if (g->fix) bad = "--fix";
+        else if (g->p2) bad = "--p2";
         else if (g->profile) bad = "--profile";
     }
     if (!bad && traced) {
@@ -480,6 +486,30 @@ static bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts
     return ok;
 }
 
+/*  The Poseidon2 jet (§6.12): P's term from path, registered.  Its id, or
+ *  AV_NONE with a message. */
+static uint32_t use_p2(av_arena *a, const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "avon: %s: cannot open\n", path);
+        return AV_NONE;
+    }
+    size_t len;
+    char *src = slurp(f, &len);
+    fclose(f);
+    if (!src) {
+        fprintf(stderr, "avon: out of memory\n");
+        return AV_NONE;
+    }
+    uint32_t p = load(a, src, len);
+    free(src);
+    if (p == AV_NONE) return AV_NONE;
+    const char *err = NULL;
+    uint32_t id = av_p2_register(a, p, &err);
+    if (id == AV_NONE) fprintf(stderr, "avon: %s: %s\n", path, err);
+    return id;
+}
+
 /*  The data jets' report line (§6.10). */
 static void report_data(const long wc[3], const av_result *r) {
     fprintf(stderr, "data: %ld numeral operations admitted, %ld refused; %ld numerals "
@@ -611,10 +641,27 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_arena_free(a);
         return 1;
     }
+    if (g->p2 && g->o.strategy != AV_SHARE) {
+        fprintf(stderr, "avon: --p2 runs in share mode only\n");
+        av_arena_free(a);
+        return 1;
+    }
+    uint32_t p2id = AV_NONE;
+    if (t != AV_NONE && g->p2) {
+        av_root_push(a, &t);
+        p2id = use_p2(a, g->p2);
+        av_root_pop(a);
+        if (p2id == AV_NONE) t = AV_NONE;
+    }
     if (t != AV_NONE && g->templates) {
         if (!use_templates(a, g->templates, &t, tc, g->data, wc, g->fix)) t = AV_NONE;
-    } else if (t != AV_NONE && (g->njets || g->ctors)) {
+    } else if (t != AV_NONE && (g->njets || g->ctors || g->p2)) {
         t = av_jets_match(a, t);
+    }
+    long p2kept = 0;
+    if (t != AV_NONE && g->p2 && (p2kept = av_p2_bind(a, t, p2id)) < 0) {
+        fprintf(stderr, "avon: out of memory\n");
+        t = AV_NONE;
     }
     if (t == AV_NONE) {
         av_arena_free(a);
@@ -624,6 +671,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     o.templates = g->templates != NULL;
     o.data = g->data;
     o.fix = g->fix;
+    o.p2 = g->p2 != NULL;
     av_profile *prof = NULL;
     if (g->profile && o.strategy != AV_SHARE) {
         fprintf(stderr, "avon: --profile charges share-mode contractions only\n");
@@ -652,6 +700,12 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
                 (unsigned long long)r.tmpl_calls);
     if (g->data) report_data(wc, &r);
     if (g->fix) report_fix(&r);
+    if (g->p2)
+        fprintf(stderr, "p2: %ld occurrences of P bound (%s); %llu permutations run natively "
+                "among the contractions, %llu declined (an argument not a state as it stands), "
+                "%llu unbound at a fire\n",
+                p2kept, AV_P2_DIGEST, (unsigned long long)r.p2_calls,
+                (unsigned long long)r.p2_declines, (unsigned long long)r.p2_unbound);
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE && av_print(a, r.term, g->budget, &b);
     printf("%s %" PRIu64 "%c%s%s\n", av_status_name(r.status), r.steps, sep,

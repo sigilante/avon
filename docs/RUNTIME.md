@@ -95,6 +95,7 @@ differently (§6).
 | `--templates=DIR` | `DIR/templates.tsv` and `DIR/template_terms.tsv`: supercombinator templates (§6.9) | `share` only; `copy` refuses | one step per instantiation, reported |
 | `--data` | with `--templates`: data jets (§6.10), constructor dispatch and numerals held as words, and `DIR/words.tsv`'s numeral operations | `share` only | one step per dispatch or operation, reported |
 | `--fix` | with `--templates`: Curry's Y at the head with an argument, `Y g`, rewritten to `g (Y g)` in one step (§6.11) | `share` only | one step per unfolding, reported |
+| `--p2=FILE` | lean-ski's Poseidon2 term `P` (`lake exe p2run` writes `P.dag`): `P` applied to a state of sixteen 31-bit elements runs natively (§6.12) | `share` only; `copy` refuses | one step per permutation, reported |
 
 ```sh
 build/avon reduce --strategy=copy --jets=tests/conformance/dictionary.tsv --jet-check=1 \
@@ -146,6 +147,21 @@ templates' (which may differ from SKI's in form, not value).
 convertible, not a reduct: normal forms and answers are SKI's, a term
 without a normal form still stops at FUEL, and a WHNF state may differ in
 form (`Y K` stops at `K (Y K)`).
+
+**Poseidon2 run natively** (`--p2=FILE`, §6.12) prints
+`p2: 1 occurrences of P bound (skijack-1:43f97c21e068ebe7); 1
+permutations run natively among the contractions, 0 declined (an argument
+not a state as it stands), 0 unbound at a fire`. FILE must hold
+lean-ski's `P`: Avon pins its 256-bit digest and refuses any other term. Only a jet node whose term is `P`'s,
+node for node, fires. `P` fires on a state as it stands and runs its term
+on anything else, counted as a decline, so the normal form is SKI's. A
+chain `P (P x)` declines the outer call, which then takes SKI's 10^9
+steps: build each state before passing it on.
+
+```sh
+(cd ~/lean-ski && lake exe p2run 1 /tmp/p2)
+build/avon reduce --p2=/tmp/p2/P.dag /tmp/p2/p2.dag   # NORMAL 1, then p2.expected
+```
 
 ## Measuring
 
