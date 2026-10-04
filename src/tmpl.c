@@ -423,6 +423,21 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
             free(uses);
         }
     }
+    /* the root's spine (reduce.c, "Deferred roots"): each application below
+     * the root along its function parts, used by its parent alone.  Out of
+     * memory, the template has none, and its instances write every node */
+    uint32_t *uses = T->root_last ? calloc(T->nops, sizeof *uses) : NULL;
+    if (uses) {
+        for (uint32_t i = 0; i < 2 * T->nops; i++)
+            if (T->ops[i] >> 30 == TMPL_RES) uses[T->ops[i] & AV_PAYLOAD]++;
+        for (uint32_t f = T->ops[2 * (T->nops - 1)];
+             f >> 30 == TMPL_RES && uses[f & AV_PAYLOAD] == 1; f = T->ops[2 * (f & AV_PAYLOAD)]) {
+            if (!T->vspine && !(T->vspine = calloc(T->nops, 1))) break;
+            T->vspine[f & AV_PAYLOAD] = 1;
+            T->nvspine++;
+        }
+        free(uses);
+    }
     a->jets[id].tmpl = ++a->ntmpls;
 done:
     free(cn);

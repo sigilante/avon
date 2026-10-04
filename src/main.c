@@ -67,7 +67,7 @@
  *                                     calls file through DIR/abs.skit, or its
  *                                     jet, checked against Python's by hash
  *      avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]
- *                  [--templates=DIR [--data] [--fix]] [--names=FILE]... [--fuel=N]
+ *                  [--templates=DIR [--data] [--fix] [--no-defer]] [--names=FILE]... [--fuel=N]
  *                  [--max-nodes=N] DIR SOURCE
  *                                     the SKIjack-0 front end (docs/DESIGN.md
  *                                     §20.3) on SOURCE: DIR/front.skit and the
@@ -98,7 +98,9 @@
  *  (with --templates: data jets, §6.10: constructor templates dispatched,
  *  fused into the branch's template, numerals held as words, and
  *  DIR/words.tsv's numeral operations run on them natively), --fix (with
- *  --templates: Y g unfolded to g (Y g) in one step, §6.11), --p2=FILE
+ *  --templates: Y g unfolded to g (Y g) in one step, §6.11), --no-defer
+ *  (with --templates: every instance's root and spine written at once,
+ *  §6.13, for comparing the two), --p2=FILE
  *  (share mode: FILE holds lean-ski's Poseidon2 term P, as `lake exe
  *  p2run` prints it; P applied to a state runs natively, §6.12).  reduce and
  *  batch take --trace-frame[=summary] (copy mode's head run observed for
@@ -164,7 +166,7 @@ static int usage(void) {
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
-        "        --profile=NAMES --templates=DIR --data --fix --p2=FILE)\n"
+        "        --profile=NAMES --templates=DIR --data --fix --no-defer --p2=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"
@@ -178,7 +180,7 @@ static int usage(void) {
         "       (boot, poke, peek, load accept --strategy=, --fuel=, --budget=)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
-        "                   [--templates=DIR [--data] [--fix]]\n"
+        "                   [--templates=DIR [--data] [--fix] [--no-defer]]\n"
         "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
         "       avon enum N [--start=K] [--count=M]      (N from 1 to 20)\n"
         "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"
@@ -252,6 +254,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) g->templates = s + 12;
         else if (strcmp(s, "--data") == 0)           g->data = true;
         else if (strcmp(s, "--fix") == 0)            g->fix = true;
+        else if (strcmp(s, "--no-defer") == 0)       g->o.no_defer = true;
         else if (strncmp(s, "--p2=", 5) == 0 && s[5])  g->p2 = s + 5;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
@@ -323,6 +326,7 @@ static bool options_fit(const args *g, const char *cmd) {
         if (g->templates) bad = "--templates";
         else if (g->data) bad = "--data";
         else if (g->fix) bad = "--fix";
+        else if (g->o.no_defer) bad = "--no-defer";
         else if (g->p2) bad = "--p2";
         else if (g->profile) bad = "--profile";
     }
@@ -1714,6 +1718,7 @@ static int front0_main(int argc, char **argv) {
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) templates = s + 12;
         else if (strcmp(s, "--data") == 0) data = true;
         else if (strcmp(s, "--fix") == 0) fix = true;
+        else if (strcmp(s, "--no-defer") == 0) o.no_defer = true;
         else if (strncmp(s, "--names=", 8) == 0 && s[8] && nn < 64) namefiles[nn++] = argv[i] + 8;
         else if (strcmp(s, "--jet-stats") == 0) stats_top = 40;
         else if (strncmp(s, "--jet-stats=", 12) == 0 && number(s + 12, &v)) stats_top = v;
@@ -1941,6 +1946,7 @@ static int enum_main(int argc, char **argv) {
     av_buf b = { 0 };
     uint64_t emitted = 0, index = 0;
     int rc = 0;
+    bool said = false;              /* a specific error is already printed */
     uint32_t *trees[ENUM_MAX + 1] = { 0 };     /* trees[k]: every tree of size k < N */
 #define EMIT(node)                                                              \
     do {                                                                        \
@@ -1992,19 +1998,25 @@ static int enum_main(int argc, char **argv) {
         }
     } else {
         FILE *f = fopen(base, "rb");
-        if (!f) { perror(base); rc = 1; goto done; }
+        if (!f) { perror(base); said = true; rc = 1; goto done; }
         uint32_t *terms = NULL;
         size_t nt = 0, tcap = 0;
         char *line = NULL;
-        size_t lcap = 0;
+        size_t lcap = 0, lineno = 0;
         ssize_t n;
         while ((n = getline(&line, &lcap, f)) > 0) {
             size_t len = (size_t)n;
+            lineno++;
             while (len && (line[len - 1] == '\n' || line[len - 1] == '\r' || line[len - 1] == ' '))
                 len--;
             if (!len) continue;
             uint32_t t = load(a, line, len);
-            if (t == AV_NONE) { rc = 1; break; }
+            if (t == AV_NONE) {
+                fprintf(stderr, "avon: %s: line %zu is not a term\n", base, lineno);
+                said = true;
+                rc = 1;
+                break;
+            }
             if (nt == tcap) {
                 uint32_t *q = realloc(terms, (tcap = tcap ? 2 * tcap : 64) * sizeof *q);
                 if (!q) { rc = 1; break; }
@@ -2014,6 +2026,7 @@ static int enum_main(int argc, char **argv) {
         }
         free(line);
         fclose(f);
+        if (rc == 0 && nt == 0) fprintf(stderr, "avon: %s holds no terms\n", base);
         uint32_t S = AV_NODE_S, SS = av_app(a, S, S);
         for (size_t i = 0; rc == 0 && i < nt; i++)
             for (size_t j = 0; rc == 0 && j < nt && emitted < count; j++) {
@@ -2030,7 +2043,12 @@ static int enum_main(int argc, char **argv) {
                     else if (len == 4 && memcmp(q, "hide", 4) == 0)
                         x = av_app(a, av_app(a, S, av_app(a, S, av_app(a, av_app(a, S, SS),
                                                                      av_app(a, S, p)))), r);
-                    else { fprintf(stderr, "avon: unknown shape %.*s\n", (int)len, q); rc = 1; break; }
+                    else {
+                        fprintf(stderr, "avon: unknown shape %.*s\n", (int)len, q);
+                        said = true;
+                        rc = 1;
+                        break;
+                    }
                     if (x == AV_NONE) { rc = 1; break; }
                     EMIT(x);
                     a->used = used;
@@ -2043,7 +2061,7 @@ static int enum_main(int argc, char **argv) {
 #undef EMIT
 done:
     for (int k = 0; k <= ENUM_MAX; k++) free(trees[k]);
-    if (rc && !ferror(stdout))
+    if (rc && !said && !ferror(stdout))
         fprintf(stderr, "avon: enum stopped: out of memory or nodes\n");
     fflush(stdout);
     av_buf_free(&b);

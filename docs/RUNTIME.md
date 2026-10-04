@@ -95,6 +95,7 @@ differently (§6).
 | `--templates=DIR` | `DIR/templates.tsv` and `DIR/template_terms.tsv`: supercombinator templates (§6.9) | `share` only; `copy` refuses | one step per instantiation, reported |
 | `--data` | with `--templates`: data jets (§6.10), constructor dispatch and numerals held as words, and `DIR/words.tsv`'s numeral operations | `share` only | one step per dispatch or operation, reported |
 | `--fix` | with `--templates`: Curry's Y at the head with an argument, `Y g`, rewritten to `g (Y g)` in one step (§6.11) | `share` only | one step per unfolding, reported |
+| `--no-defer` | with `--templates`: every instance writes its root and spine at once, as before deferred roots (§6.13), for comparing the two | `share` only | none: every count and state is the same |
 | `--p2=FILE` | lean-ski's Poseidon2 term `P` (`lake exe p2run` writes `P.dag`): `P` applied to a state of sixteen 31-bit elements runs natively (§6.12) | `share` only; `copy` refuses | one step per permutation, reported |
 
 ```sh

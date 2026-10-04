@@ -402,7 +402,7 @@ The S, K and I are `Y`'s: skijack ties recursion as `Y g`, and SKI's Y
 cannot share its unfolding -- a pure term has no cycle -- so every
 recursive call unfolds it again.
 
-**Taken apart** (avon `e74e581`, branch `experiment-knot`, not for
+**Taken apart** (avon `e74e581`, tag `experiment/knot`, not for
 merging; `tests/workloads/reduceron/variants/measure.py` there). Three
 changes, measured alone and together, each port answering True, best of
 three, the time as a multiple of the Reduceron's:
@@ -472,7 +472,7 @@ other, user CPU, best of five, load average about 2; every answer True.
 ## Y unfolded in one step
 
 `--fix` (DESIGN §6.11) rewrites `Y g` to `g (Y g)` in one step, against the
-true cycle `n = g n` of `e74e581` (branch `experiment-knot`, built from the
+true cycle `n = g n` of `e74e581` (tag `experiment/knot`, built from the
 same code plus `--knot`). Avon `fix-jet` over `68a19a4`; every mode with
 templates and data jets; user CPU, best of five, interleaved; load average
 2 to 3; every answer True. Each cell: time, steps, time as a multiple of
@@ -552,6 +552,32 @@ the run ends with it.
   root when its value is reached. Avon writes the whole result over the
   redex root at once, so that every pointer to it sees the value.
 
+**Most spine cells are contracted through at once** (measured
+2026-10-04, `make stats`, the same runs with the case join on; a joined
+instance writes no spine and is not counted). An instance's spine is
+*under a saturated head* when the body's head, with the arguments it
+already holds and the body's own, can step at once: the reducer then
+unwinds the spine it has just written and contracts through it, writes a
+deferred update of the redex root would skip. The rest belong to an
+instance that is a value, or that waits for arguments its context
+supplies; some of those may be skippable too, so the first column is a
+lower bound on what deferral could save.
+
+| program | spine cells | under a saturated head | a value or awaiting arguments |
+|---|---:|---:|---:|
+| OrdList | 105.1M | 58.4M (55.5%) | 46.8M |
+| Queens2 | 99.9M | 71.6M (71.7%) | 28.2M |
+| Taut | 61.8M | 51.3M (83.0%) | 10.5M |
+| Clausify | 107.3M | 96.7M (90.1%) | 10.7M |
+| PermSort | 199.3M | 122.9M (61.7%) | 76.4M |
+| the front end | 19.5M | 18.5M (94.9%) | 1.0M |
+
+So deferring the root's update could skip at least 55 to 95% of spine
+cells, which are 61 to 65% of what instances write: a third to three
+fifths of all instance cells. What it would cost is a frame per deferred
+root and a write when a shared root reaches its value; the time saved
+is not measured.
+
 ## A case joined to its instance
 
 **Joining a case to its instance saves time, not instructions.** Avon
@@ -589,6 +615,57 @@ The front end's time includes 0.39 s of loading templates.
   programs and rises on two. Peak memory follows when the arena doubles,
   which a different allocation pattern moves; that is the likely cause,
   not measured here.
+
+## Deferred roots
+
+**Leaving an instance's root and spine in the stack runs 5.8 to 14.5%
+faster.** Avon `worklist-oct4` with deferred roots (`DESIGN.md` §6.13)
+against the same binary with `--no-defer`, share mode with templates and
+data jets, user time best of 5, interleaved. Every answer, step,
+instantiation, dispatch, fusion and join is the same in the two runs, and
+so are the runs with templates alone and with `--fix`.
+
+| program | no-defer, s | deferred, s | ratio | instructions | peak memory, MB |
+|---|---:|---:|---:|---:|---:|
+| OrdList | 2.32 | 2.10 | 1.104 | +10.6% | 213 → 252 |
+| Queens2 | 1.99 | 1.86 | 1.069 | +10.0% | 4 → 4 |
+| Taut | 1.63 | 1.54 | 1.058 | +6.0% | 67 → 59 |
+| Clausify | 2.05 | 1.79 | 1.145 | +3.5% | 58 → 66 |
+| PermSort | 4.03 | 3.53 | 1.141 | +7.8% | 225 → 256 |
+
+- **Time falls where instructions rise.** Deferral retires 3.5 to 10.6%
+  more instructions, for its bookkeeping, and writes fewer nodes, so
+  fewer collections run: OrdList collects 168 times against 197, PermSort
+  253 against 308, Clausify 454 against 570. The likely cause of the time
+  saved is the cache traffic of the nodes not written, not measured here.
+- **A deferred node first kept its old redex, and so kept alive what the
+  undeferred reducer lets go.** An adversarial review found the live set
+  up to 2.3 times the undeferred one on a lazy list consumed in a loop,
+  and 15% larger on Clausify. A deferred node is now overwritten with
+  `I I` when it is deferred. The smallest node cap a run fits within is
+  then the same within 1.3%: `tests/data/nats` 1,241 nodes against 1,225,
+  where the version that kept the redex needed 1,470. On the lazy list the
+  deferred run fits in 2,337 against 2,590. `tests/test_data.c` checks
+  that a cap the undeferred run fits within by 10% fits both.
+- **Peak memory still rises on three programs, by 8 to 39 MB.** The
+  largest live set after a collection is the same within 0.1% on OrdList,
+  PermSort and Clausify, the arena reaches the same size, and on OrdList
+  malloc's heap in use peaks at 160 MB in both runs; the extra is memory
+  the allocator keeps. Why it differs is not measured here.
+- **Near a node cap the outcome can differ.** A run that stops writes its
+  deferred roots, and the arena keeps a node free for every virtual entry
+  so that this cannot fail, so when `--max-nodes` binds the deferred run
+  may stop at SIZE a few steps sooner or later than the undeferred one.
+  Away from a binding cap every state is the same.
+- **The first version gained 0.5 to 11%.** It kept two arrays beside the
+  stack, an entry's kind and argument, and called `free` on every
+  deferred instance. Keeping the kind in a node index's two spare bits,
+  and the argument in the entry or beside the deferred entry's index, cut
+  the deferred runs' instructions by 9 to 13%.
+- **Joins no longer depend on the arena.** A join now reserves its nodes
+  before it asks (`DESIGN.md` §6.13), so cases join slightly more often
+  than in "A case joined to its instance": OrdList 6,222,685 against
+  6,222,282, PermSort 10,682,340 against 10,681,769.
 
 ## The hider census through frame traces
 
@@ -659,6 +736,35 @@ normal form, fuel ten times the manifest's. With templates they take
 43,348 steps; with data jets 33,244, of them 13,627 dispatches, 10,104
 fused. Every weak head normal form is templates', and every normal form
 is SKI's.
+
+## The interpreter jet's wall clock
+
+**The tower collapses in time as well as in steps, by 4.8 times on T2.**
+Avon `worklist-oct4`, in process: the arena loaded with the conformance
+dictionary and interpreter specs, then `av_reduce` alone timed, the best
+of 21 runs, to weak head normal form.
+
+| target | strategy | plain | residual jets | interpreter jet |
+|---|---|---:|---:|---:|
+| T1 | copy | 91,556 steps, 0.291 ms | 91,556, 0.284 ms | 109, 0.051 ms |
+| T2 | copy | 504,930 steps, 1.977 ms | 504,930, 1.583 ms | 342, 0.410 ms |
+| T1 | share | 63,520 steps, 0.592 ms | 81,825, 0.451 ms | 109, 0.051 ms |
+| T2 | share | 314,309 steps, 3.764 ms | 412,300, 2.282 ms | 342, 0.413 ms |
+
+- **Steps fall 1,476 times on T2, time 4.8 times.** A fire decodes the
+  quoted interpreter and its object term by probing, matches jets in the
+  live term, runs it and re-encodes the value. Those costs are not
+  contractions, so the step count overstates the saving; the time is the
+  honest figure.
+- **Half of a fire was allocation, now removed.** The decoder compares
+  each node with each constructor (`av_equal`), and each comparison used
+  to `calloc` an 8 KB set and a 2 KB stack. Keeping the first 64 set slots
+  and 32 stack entries on the C stack, and moving to the heap only when
+  they grow, took T2 from 0.95 ms to 0.41 ms and T1 from 0.123 ms to
+  0.051 ms. Results and the budget's count are unchanged. Of what remains
+  inside a fire, about half is matching jets in the decoded term (SHA-256
+  hashing), which the design needs.
+- T0 costs microseconds in every mode.
 
 ## Earlier measurements
 

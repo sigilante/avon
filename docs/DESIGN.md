@@ -1,6 +1,6 @@
 # Avon: the native runtime, planned
 
-> **Status (2026-10-01).** Built: stages 0 to 7 and 9 of §11 are done, and stage 8 has the compiler's core and the SKIjack-0 front end; the full language's front end remains (§11.1). Beyond the stages, share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively (§6.9 to §6.12), all outside the proof; jets under hiding are built (`ZK-JETS.md`); frame traces serve the pure-S paper's census (§22). What the proofs do not yet cover is listed in §11.1, "Open". The note was written 2026-09-16, before any of it; the compiler it targets is `python/skijack`, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
+> **Status (2026-10-01).** Built: stages 0 to 7 and 9 of §11 are done, and stage 8 has the compiler's core and the SKIjack-0 front end; the full language's front end remains (§11.1). Beyond the stages, share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof; jets under hiding are built (`ZK-JETS.md`); frame traces serve the pure-S paper's census (§22). What the proofs do not yet cover is listed in §11.1, "Open". The note was written 2026-09-16, before any of it; the compiler it targets is `python/skijack`, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
 
 *2026-09-16. The build plan for the C runtime named in `RUNTIME-DESIGN.md`
 §3a. Its constraints come from three places: the reference host
@@ -1216,7 +1216,7 @@ lean-ski's simulation already allows for this: `Tr` "is a relation, not a
 function" because Y unrolls to a self-reference that behaves as `Y ⬝ F`
 (`Simulation.lean`, `Tr.self`).
 
-**Not a cycle.** The experiment of `e74e581` (branch `experiment-knot`)
+**Not a cycle.** The experiment of `e74e581` (tag `experiment/knot`)
 rewrote `Y g` to the cycle `n = g n`, and a cycle is what Avon cannot keep:
 
 - it changes answers: `Y K` reports NORMAL, where SKI stops at FUEL;
@@ -1348,6 +1348,96 @@ in form only where the jet fired. Copy mode refuses `--p2`, and so does
 p2-witness-check`, step 7) each reach Plonky3's output in one step. Test
 vector 1 unjetted takes 962,192,547 steps, 10.1 s and 66 MB. With `--p2`
 it finishes in under 0.01 s.
+
+### 6.13 Deferred roots
+
+**An instance no longer writes the spine the reducer is about to unwind.**
+A template instance used to write its body over the redex root at once,
+spine and all, and the reducer then walked straight back down that
+spine. Spine cells are 61 to 65% of what instances write, and 55 to 95%
+of them sit under a head that steps at once (`BENCHMARK.md`, "Most spine
+cells are contracted through at once"). Now, in share mode with
+templates, an instance leaves its root and spine in the reducer's stack,
+as the Reduceron does (`src/reduce.c`, "Deferred roots").
+
+**The stack holds three kinds of entry.**
+
+- **A real entry** is a node of the graph, as before.
+- **A deferred entry** is the redex root's node, left as it was. The
+  entry holds the body's outermost argument, and the entry above it is
+  the function part.
+- **A virtual entry** is an application with no node: the entry above it
+  applied to the argument it holds. An instance pushes one for each
+  application on its root's spine that only its parent uses
+  (`av_tmpl.vspine`, found at load).
+
+An entry's kind sits in a node index's two spare bits. A virtual entry
+holds its argument in the same word, and a deferred entry's argument
+sits beside its index on a second stack, so the stack takes no more
+memory than before.
+
+A contraction whose redex root is virtual builds no node for it. An
+indirection's target becomes the head; an application's argument stays in
+the entry, and its function becomes the head. A dispatch defers the same
+way: a fused branch's instance, or the continuation applied to the
+fields.
+
+**A deferred root is written before anything else could read it.** The
+graph is acyclic (§2), so while a root is being reduced nothing can reach
+it by another path. It is written with the application its entries stand
+for:
+
+- before a contraction consumes it as a function part. It is then a
+  value, its head short of arguments, and the graph shares it as the
+  undeferred reducer would have;
+- when the reduction stops: at a weak head normal form, at FUEL or
+  INTERRUPTED, or at SIZE when there is room;
+- before the steps that read the stack as nodes: interpreter, Poseidon2
+  and residual jets. These write everything deferred first, then run
+  unchanged.
+
+A contraction whose redex root it is writes it, as it writes any root.
+
+**A deferred node keeps nothing alive.** When a root is deferred its node
+is overwritten with `I I`, since nothing reads it before it is written.
+Left as it was, its old redex kept alive what the undeferred reducer
+lets go: an adversarial review measured the live set up to 2.3 times the
+undeferred one on a lazy list consumed in a loop. Overwriting it is safe
+because writing the deferred roots never fails: the arena keeps a free
+node for every virtual entry (`R.nvirt`), and every allocation while one
+exists reserves them too.
+
+**Nothing but the nodes changes.** Every contraction is the one the
+undeferred reducer makes, at the same step. Steps, instantiations,
+dispatches, fusions, joins and every state reported are the same, byte for
+byte, unless a node cap (`--max-nodes`) binds: a stopping run writes its
+deferred roots, and the reserve moves the collections, so near the cap the
+deferred run may stop at SIZE a few steps sooner or later.
+`tests/test_data.c` checks this with and without data jets, at every fuel
+from 0 to 400 and in an arena small enough to collect, and checks that a
+cap the undeferred run fits within by 10% fits both. Three bugs planted in
+the deferral each fail it. `--no-defer` writes every instance at once, for
+the comparison.
+
+**A join no longer depends on the arena's fill.** A case joined to its
+instance (§6.10) declined when the free nodes did not cover both writes.
+With fewer nodes written, collections fall at other moments, so the joins
+differed with deferral and without. The caller now reserves both writes
+before it asks, so a case joins whenever its formal is a value. OrdList
+joins 6,222,685 cases where it joined 6,222,282.
+
+**Off where nodes are counted.** A profile and the jet stats key on the
+nodes rewritten, and the stats build (`make stats`) counts the cells
+instances write, so deferral is off under all three. A template that
+makes words from SUC (`av_tmpl.sucop`) is instantiated as before.
+
+**Results, 2026-10-04** (`BENCHMARK.md`, "Deferred roots"). On the five
+Reduceron ports with templates and data jets, deferral runs 5.8 to 14.5%
+faster: Clausify 1.79 s against 2.05, PermSort 3.53 against 4.03. It
+retires 3.5 to 10.6% more instructions and runs 15 to 20% fewer
+collections. Peak memory rises on three ports, by 8 to 39 MB, while the
+largest live set is the same within 0.1%. The SKIjack-0 front end still compiles
+its 492 names hash for hash in every mode (`make front0-check`).
 
 ## 7. The interpreter jet
 
@@ -1652,6 +1742,72 @@ events, through eleven collections. A pier crashed after three events,
 with a torn fourth record, reopens from its snapshot at two to the same
 kernel hash by hash; after a failed event, an upgrade to the install
 kernel's battery and its `Run`, it reopens to the same kernel again.
+
+### 9.1 Entropy
+
+*Written 2026-10-04. Decided: the bits, the delivery and the rule that
+entropy is data. Proposed, to agree with SKIjack: the shapes of the
+request and the reply (SPEC §4.1).*
+
+**A kernel gets randomness only as event data.** Reduction stays a
+function of its term: no combinator, jet or scry yields fresh bits.
+Replay, the conformance counts, every jet's licence and every proof rest
+on that. Entropy reaches a kernel the way Vere's reaches Arvo, as events
+the pier writes to the log before it applies them, so a replayed pier
+sees the same bits.
+
+**Decided:**
+
+- **128 bits an event.** This is a research proof of concept, not
+  production security, and 128 bits keeps the log and a proof's private
+  witness small.
+- **Per request.** A kernel emits an effect asking for entropy, and the
+  pier answers with an event carrying fresh bits from `getentropy(2)`,
+  logged before it is applied. Boot answers one request of its own: the
+  first event after boot is a reply, so a kernel starts with a seed. The
+  kernel keeps no ratchet; it asks again when it needs more.
+- **`--entropy=FILE`** replaces `getentropy` with a file's bytes, read in
+  order, for reproducible tests. Proposed: a file that runs out stops the
+  pier, rather than falling back to `getentropy`.
+- **The log is as secret as the bits it holds,** and so is the pier's
+  directory.
+- **In a proved poke the bits are a private witness** (lean-ski). A proof
+  of one event from an installed kernel already treats its event as
+  witness data (§17).
+- **Kernel entropy never feeds the prover's seed** (`ZK-JETS.md` §7).
+  The two are separate draws from `getentropy`.
+
+**Encoding, recommended: 128 Scott Booleans in a list,** `cons b₁ (cons
+b₂ … nil)` with each `bᵢ` `K` or `K I` (SPEC §4). It is pure SKI, so
+copy, share and witness modes all carry it, and it is the shape of
+lean-ski's private bits. The alternative, data-jet words, is compact but
+exists only in share mode (§6.10), so a proved poke could not take it.
+
+**The shapes: two candidates.** The runtime must recognize a request
+among a kernel's effects without reading a name (§9), and must not
+mistake a program's own effect for one.
+
+- **A, a tagged pair under an opt-in (recommended).** A request is the
+  cell `[0 id]`, with `0` the Scott numeral and `id` a numeral the kernel
+  chooses. The reply is the event `[0 [id bits]]`. The runtime reads both
+  by probing, as it reads a kernel (§9). The pier acts on requests only
+  for a kernel booted with `--entropy`. A kernel written for the
+  convention cannot collide with it by accident, and any other kernel's
+  effects pass through untouched.
+- **B, a prelude term recognized by key.** SKIjack's prelude gains
+  `entropyReq id`, and Avon recognizes its compiled term by structural
+  hash, as it recognizes a jet (§6.1). Collisions are then impossible
+  without an opt-in, but the runtime depends on a prelude term's key, and
+  a change to the compiler's output changes the key.
+
+A costs SKIjack one paragraph of SPEC §4.1 and Avon a probe. B costs a
+prelude change and a key the runtime must track. Both leave the door's
+four axes as they are.
+
+**Steps.** Agree the shape with SKIjack. Then build the pier's
+request-and-reply loop, the boot reply and `--entropy=FILE`, with kernel
+tests: replay gives the same bits, each request is answered once, and a
+kernel booted without `--entropy` has its effects passed through.
 
 ## 10. The conformance harness
 

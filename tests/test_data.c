@@ -16,6 +16,11 @@
  *  - Collections keep words; fuel stops a run.
  *  - A case joined to its instance is the instance and the dispatch after
  *    it: every count and state the same with joins and without.
+ *  - An instance whose root is deferred (§6.13) leaves only nodes unwritten:
+ *    every count and state the same with deferral and without, at every
+ *    fuel to 400 and in an arena small enough to collect; and a deferred
+ *    node keeps nothing alive, so a node cap the undeferred run fits within
+ *    by 10% fits the deferred run too.
  */
 
 #include <stdio.h>
@@ -45,7 +50,7 @@ typedef enum { SKI, TEMPLATES, DATA } mode;
 
 typedef struct {
     av_status status;
-    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, collections, joins;
+    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, collections, joins, deferred;
     long      admitted, refused, words;
     char      nf[1 << 17];
 } outcome;
@@ -53,6 +58,8 @@ typedef struct {
 /*  src reduced in share mode (or copy), with dir's templates and, in DATA,
  *  its data jets: the load avon reduce does. */
 static bool no_join;    /* run() joins cases to instances unless set */
+static bool no_defer;   /* run() defers instances' roots unless set */
+static uint32_t max_nodes;  /* run()'s node cap; 0: none */
 
 static outcome run(const char *src, const char *dir, mode md, av_strategy st, bool whnf,
                    uint64_t fuel, uint32_t cap) {
@@ -85,6 +92,8 @@ static outcome run(const char *src, const char *dir, mode md, av_strategy st, bo
     o.templates = md != SKI;
     o.data = md == DATA;
     o.no_join = no_join;
+    o.no_defer = no_defer;
+    if (max_nodes) o.max_nodes = max_nodes;
     av_root_push(a, &t);
     av_result r = av_reduce(a, t, &o);
     av_root_pop(a);
@@ -95,6 +104,7 @@ static outcome run(const char *src, const char *dir, mode md, av_strategy st, bo
     out.fused = r.fused;
     out.word_ops = r.word_ops;
     out.joins = r.joins;
+    out.deferred = r.deferred;
     out.collections = a->collections;
     av_buf b = { 0 };
     if (r.term != AV_NONE && av_print(a, r.term, 10000000, &b) && b.len < sizeof out.nf)
@@ -435,9 +445,80 @@ TEST(a_joined_case_is_its_instance_and_dispatch) {
     CHECK(collected > 0);       /* the small arena collected, in some run */
 }
 
+/*  Deferral off and on, in mode md, for every fixture: the same outcome,
+ *  joins too, with deferral at work; again in a small arena, collecting;
+ *  and at every fuel to 400, where the state reported is the stopped one. */
+static void deferral_changes_nothing(mode md) {
+    const char *progs[4][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+                                { "lists", "out" } };
+    uint64_t collected = 0, deferred = 0;
+    for (int i = 0; i < 4; i++) {
+        char dir[64];
+        snprintf(dir, sizeof dir, "tests/data/%s", progs[i][0]);
+        char *src = fixture(progs[i][0], progs[i][1]);
+        if (!src) continue;
+        bool whnf = strcmp(progs[i][1], "out") != 0;
+        static outcome off;
+        no_defer = true;
+        off = run(src, dir, md, AV_SHARE, whnf, 100000000, 1u << 12);
+        no_defer = false;
+        outcome on = run(src, dir, md, AV_SHARE, whnf, 100000000, 1u << 12);
+        CHECK(same(&on, &off));
+        CHECK_EQ(on.joins, off.joins);
+        CHECK_EQ(off.deferred, 0);
+        deferred += on.deferred;
+        on = run(src, dir, md, AV_SHARE, whnf, 100000000, 1u << 8);    /* collecting */
+        CHECK(same(&on, &off));
+        CHECK_EQ(on.joins, off.joins);
+        collected += on.collections;
+        for (uint64_t fuel = 0; fuel <= 400; fuel++) {
+            no_defer = true;
+            off = run(src, dir, md, AV_SHARE, whnf, fuel, 1u << 12);
+            no_defer = false;
+            on = run(src, dir, md, AV_SHARE, whnf, fuel, 1u << 12);
+            CHECK(same(&on, &off));
+            CHECK_EQ(on.joins, off.joins);
+            if (!same(&on, &off) || on.joins != off.joins)
+                fprintf(stderr, "  %s/%s at fuel %llu\n", progs[i][0], progs[i][1],
+                        (unsigned long long)fuel);
+            on = run(src, dir, md, AV_SHARE, whnf, fuel, 1u << 8);
+            CHECK(same(&on, &off));
+        }
+        free(src);
+    }
+    CHECK(deferred > 0);        /* deferral was at work */
+    CHECK(collected > 0);       /* the small arena collected, in some run */
+}
+
+TEST(a_deferred_root_changes_no_count_or_state_with_templates) { deferral_changes_nothing(TEMPLATES); }
+TEST(a_deferred_root_changes_no_count_or_state_with_data_jets) { deferral_changes_nothing(DATA); }
+
+/*  A deferred root's node holds no stale redex: nats/main's normal form,
+ *  which the undeferred run reaches within 1,225 live nodes, is reached by
+ *  both runs under a cap of 1,350.  A deferred node that kept its redex
+ *  needed 1,470. */
+TEST(a_deferred_node_keeps_nothing_alive) {
+    char *src = fixture("nats", "main");
+    if (!src) return;
+    static outcome off;
+    max_nodes = 1350;
+    no_defer = true;
+    off = run(src, "tests/data/nats", DATA, AV_SHARE, false, 100000000, 1u << 8);
+    no_defer = false;
+    outcome on = run(src, "tests/data/nats", DATA, AV_SHARE, false, 100000000, 1u << 8);
+    max_nodes = 0;
+    CHECK_EQ(off.status, AV_NORMAL);
+    CHECK(same(&on, &off));
+    CHECK(on.deferred > 0);
+    free(src);
+}
+
 TEST_MAIN(
     TEST_CASE(every_mode_gives_the_same_answer),
     TEST_CASE(a_joined_case_is_its_instance_and_dispatch),
+    TEST_CASE(a_deferred_root_changes_no_count_or_state_with_templates),
+    TEST_CASE(a_deferred_root_changes_no_count_or_state_with_data_jets),
+    TEST_CASE(a_deferred_node_keeps_nothing_alive),
     TEST_CASE(normal_forms_are_the_unjetted_ones),
     TEST_CASE(a_word_prints_hashes_and_jams_as_its_numeral),
     TEST_CASE(a_word_dispatches_in_one_step_and_copy_mode_runs_its_term),
