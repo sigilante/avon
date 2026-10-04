@@ -25,7 +25,11 @@
 #   7. the native jet (docs/DESIGN.md §6.12): for each test vector x,
 #      `avon reduce --p2=P.dag` on lean-ski's `P ⬝ stateN x` (`lake exe
 #      p2run`) reaches `stateN (permute x)`, Plonky3's output, in one step,
-#      one permutation run natively (lean-ski's P_specN licenses it).
+#      one permutation run natively (lean-ski's P_specN licenses it);
+#   8. the permutation itself: lean/P2Prog.lean, checked against lean-ski,
+#      proves its program equal to the specification with C's arithmetic
+#      (AvonP2.permuteC, on lean-ski's axioms only) and prints it; the print
+#      must be src/p2_prog.h, byte for byte.
 #
 # Avon and ski-air read a false bit only as the cell A 0 1; lean-ski's
 # p2Row also accepts any A f x with f at K and x at I.  The narrower reading
@@ -131,5 +135,21 @@ for k in 0 1 2; do
         fail=1
     fi
 done
+
+echo "--- the permutation, printed from its proof"
+mkdir -p "$OUT/prog"
+ROOT=$(pwd)
+if (cd "$LEAN_SKI" && lake env lean --run "$ROOT/lean/P2Prog.lean" "$OUT/prog/p2_prog.h") > "$OUT/prog/lean.txt" 2>&1 &&
+    grep -qx "'AvonP2.permuteC' depends on axioms: \[propext, Quot.sound\]" "$OUT/prog/lean.txt"; then
+    if cmp -s "$OUT/prog/p2_prog.h" src/p2_prog.h; then
+        echo "AvonP2.permuteC checked; src/p2_prog.h is its print, byte for byte"
+    else
+        echo "FAIL: src/p2_prog.h is not lean/P2Prog.lean's print"
+        fail=1
+    fi
+else
+    echo "FAIL: lean/P2Prog.lean: $(head -c 400 "$OUT/prog/lean.txt")"
+    fail=1
+fi
 
 if [ "$fail" -eq 0 ]; then echo "PASS"; else echo "FAIL"; exit 1; fi
