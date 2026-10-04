@@ -433,6 +433,10 @@ bool trace_step(av_trace *t, const av_arena *a, const uint32_t *stk, size_t base
     return true;
 }
 
+/*  A record at step n is confirmed when n + conf <= H, written so that a
+ *  window as large as --records accepts cannot wrap. */
+static bool confirmed(size_t n, size_t conf, size_t H) { return conf <= H && n <= H - conf; }
+
 /*  ------------------------------------------------------------ the end */
 
 /*  The final frame: the arguments of the result's head, x-seat first. */
@@ -511,7 +515,7 @@ bool av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t ste
             if (rec[i]) { emit(t, " ", 1); emit_u64(t, i); }
         emit(t, "\nC", 2);
         for (size_t i = 0; i < H; i++)
-            if (rec[i] && i + conf <= H) {
+            if (rec[i] && confirmed(i, conf, H)) {
                 emit(t, " ", 1);
                 emit_u64(t, i);
                 sum->nconf++;
@@ -520,7 +524,7 @@ bool av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t ste
         /* each confirmed record's facts the census decides on: L, the
          * lowest X-headed position (- none), and an X-headed item at L-1 */
         for (size_t i = 0; i < H; i++)
-            if (rec[i] && i + conf <= H) {
+            if (rec[i] && confirmed(i, conf, H)) {
                 emit(t, "K ", 2);
                 emit_u64(t, i);
                 emit(t, " ", 1);
@@ -545,7 +549,7 @@ size_t av_trace_record_steps(const av_trace *t, size_t conf, uint64_t **out) {
     for (size_t i = H; i-- > 0;)
         if (t->len[i] < minL) { rec[i] = 1; minL = t->len[i]; }
     for (size_t i = 0; i < H; i++)
-        if (rec[i] && i + conf <= H) { v[k++] = i; v[k++] = i + 1; }
+        if (rec[i] && confirmed(i, conf, H)) { v[k++] = i; v[k++] = i + 1; }
     free(rec);
     *out = v;
     return k;
@@ -565,7 +569,7 @@ size_t av_trace_census_steps(const av_trace *t, size_t conf, uint64_t **out) {
     for (size_t i = H; i-- > 0;)
         if (t->len[i] < minL) { rec[i] = 1; minL = t->len[i]; }
     for (size_t i = 0; i < H; i++) {
-        if (!rec[i] || i + conf > H) continue;
+        if (!rec[i] || !confirmed(i, conf, H)) continue;
         if (t->minpos[i] && t->minpos[i] + 3 <= t->len[i]) { v[k++] = i; break; }
         v[k++] = i + 1;
         if (t->ym1[i]) break;

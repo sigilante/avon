@@ -244,6 +244,20 @@ TEST(records_are_the_strict_future_minima) {
     free(r.text);
 }
 
+/*  A window wider than the horizon confirms nothing, however wide: n + CONF
+ *  is never formed, so SIZE_MAX cannot wrap into confirming every record. */
+TEST(a_window_past_the_horizon_confirms_nothing) {
+    const size_t wide[] = { 401, (size_t)1 << 40, SIZE_MAX - 1, SIZE_MAX };
+    for (size_t k = 0; k < sizeof wide / sizeof *wide; k++) {
+        traced r = trace(R10 " X", 400, wide[k], NULL, 0, NULL);
+        CHECK_EQ(r.status, AV_FUEL);
+        CHECK(strstr(r.text, "\nR ") != NULL);          /* records exist */
+        CHECK(strstr(r.text, "\nC\n") != NULL);         /* none confirmed */
+        CHECK(strstr(r.text, "\nK ") == NULL);
+        free(r.text);
+    }
+}
+
 TEST(census_dumps_are_the_frames_the_census_reads) {
     /* r10 X rides: no confirmed record has an X-headed item at or below
      * L-3 or at L-1, so the census reads frame n+1 of every one, for its
@@ -380,6 +394,7 @@ TEST_MAIN(
     TEST_CASE(an_open_at_the_last_step_is_open),
     TEST_CASE(every_line_equals_a_recount_from_its_frame),
     TEST_CASE(records_are_the_strict_future_minima),
+    TEST_CASE(a_window_past_the_horizon_confirms_nothing),
     TEST_CASE(census_dumps_are_the_frames_the_census_reads),
     TEST_CASE(a_dumped_frame_reads_back_in_the_dag_form),
     TEST_CASE(k_and_i_are_refused),
