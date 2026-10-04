@@ -457,6 +457,8 @@ typedef struct {
     uint64_t  contractions;     /* rows whose head is not an application */
     uint64_t  pops, wcells;     /* instantiations' argument pops and written
                                    cells: POP's and INSTW's rows */
+    uint64_t  p2calls;          /* Poseidon2 jet steps: P2's rows, and 496
+                                   rows each of P2IN and P2OUT */
 } av_witness;
 
 /*  Load t and run it to weak head normal form.  AV_WHNF on success;
@@ -588,6 +590,10 @@ typedef struct {
     uint32_t  w, nbits;
     unsigned  log_rows, log_mem;
     unsigned  log_pop, log_instw;   /* 0: the statement names no budgets */
+    bool      p2;               /* a `p2pre h J ROOT` statement: the Poseidon2
+                                   jet at the atom J, the comb's root ROOT */
+    uint32_t  p2_j, p2_root;
+    unsigned  log_pin, log_pout, log_p2;   /* its jet tables' budgets */
     uint32_t *roots;
     size_t    nroots;
     uint32_t  nil, hd0, stk0, ctr0;
@@ -619,6 +625,24 @@ bool av_cwitness_read(const char *src, size_t len, const av_cstmt *s, av_cell *p
 av_status av_witness_run_composed(const av_cstmt *s, const av_cell *priv, const av_jettable *jt,
                                   av_witness *w, size_t **ends, uint64_t *insts,
                                   const char **err);
+
+/*  The composed machine with the Poseidon2 jet (bench/plonky3's compp
+ *  run, lean-ski's P2Jet.p2Row): as av_witness_run_composed with no code
+ *  jets, and at the atom J, with k and the comb's root on the stack, the
+ *  slots in place and each bit's slot K or A 0 1, the jet's step: the
+ *  sixteen 31-bit elements of the slots' bits permuted (av_p2_permute),
+ *  the outputs' 496 bits pushed for k as stack cells pointing at the K
+ *  slot (0) or the K I slot (2).  Budgets: the statement's 2^R rows, 2^M
+ *  cells, 496 jet bits per call within 2^Lin and 2^Lout, calls within
+ *  2^L2.  Returns as av_witness_run_composed. */
+av_status av_witness_run_p2(const av_cstmt *s, const av_cell *priv, av_witness *w, size_t **ends,
+                            const char **err);
+
+/*  Poseidon2 over BabyBear, width 16, as lean-ski's Ski/ZK/Poseidon2.lean
+ *  specifies it (src/p2.c); the self-test checks the specification's three
+ *  test vectors. */
+void av_p2_permute(uint32_t s[16]);
+bool av_p2_selftest(void);
 
 /*  The table in lean-ski's `composed check-cj` format, as bench/plonky3's
  *  compj-prove writes it: the header, `W w`, the memory padded with nil

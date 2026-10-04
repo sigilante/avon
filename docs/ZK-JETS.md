@@ -419,6 +419,22 @@ BabyBear with a Lean specification, which closes lean-ski's commitment
 step at real parameters. Each data-jet table has private rows and joins
 the tree; its height is a public budget like POP's.
 
+*Built (in the clear): the Poseidon2 jet.* lean-ski's statement `p2pre h`
+("sixteen 31-bit values whose Poseidon2 permutation begins with `h`")
+puts the jet at an atom `J` of an open verifier. At `J`, with `k` and the
+comb's public root on the stack, the machine reads the 496 bits from their
+slots and pushes the outputs' 496 bits for `k` (lean-ski's `P2Jet.p2Row`).
+`avon witness --statement=P2PUBLIC WITNESS` runs it with Poseidon2 in C
+(`src/p2.c`, the specification's constants printed by lean-ski's
+`bench/P2C.lean`, checked against its three test vectors). Its table is
+byte for byte ski-air's, and `ski-air compp-prove-table` proves it
+(`make p2-witness-check`). lean-ski proves the circuit sound
+(`Circuit.p2preExport_sound`: an accepted proof's memory holds a preimage
+of `h`). P2IN, P2OUT and P2 carry blinding blocks, the tree's edges
+`CPU —c— P2IN —d— P2OUT —e— P2`, and lean-ski proves the transcript
+simulatable (`Circuit.compP_transcript`); Avon's table is unchanged, the
+blinding being ski-air's alone, as for the jets (§7).
+
 ## 9. Milestones
 
 1. **Measure.** *Done, 2026-09-29* (§1): 11,483 rows jetted against

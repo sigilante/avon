@@ -21,6 +21,11 @@
  *                                     statement's heap, one jetted segment
  *                                     per root, padded to the statement's
  *                                     heights (docs/ZK-JETS.md, milestone 8)
+ *      avon witness --statement=PUBLIC [WITNESS]
+ *                                     a `p2pre` statement: the composed
+ *                                     machine with the Poseidon2 jet
+ *                                     (lean-ski's P2Jet.p2Row), its table
+ *                                     as bench/plonky3's compp-prove writes it
  *      avon census [--select=N] [--top=N] [--min-atoms=N] [--all]
  *                  [--names=FILE]... [--emit=DICT] MANIFEST...
  *                                     which terms the manifests' runs call,
@@ -151,6 +156,7 @@ static int usage(void) {
         "       avon prefix [FILE]\n"
         "       avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [--plan=PLAN]\n"
         "       avon witness --statement=PUBLIC --jet-table=JETS [WITNESS]\n"
+        "       avon witness --statement=P2PUBLIC [WITNESS]\n"
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
@@ -1990,8 +1996,9 @@ done:
     return rc;
 }
 
-/*  avon witness --statement=PUBLIC --jet-table=JETS: the composed table
- *  with jets for the witness wsrc, on stdout. */
+/*  avon witness --statement=PUBLIC [--jet-table=JETS]: the composed table
+ *  for the witness wsrc, on stdout: with code jets from JETS, or, for a
+ *  `p2pre` statement and no jet table, with the Poseidon2 jet. */
 static char *read_text(const char *path, size_t *len) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
@@ -2001,13 +2008,9 @@ static char *read_text(const char *path, size_t *len) {
 }
 
 static int composed_witness(const args *g, const char *wsrc, size_t wlen) {
-    if (!g->jet_table) {
-        fprintf(stderr, "avon: --statement needs --jet-table\n");
-        return 1;
-    }
     size_t slen = 0, jlen = 0;
     char *ssrc = read_text(g->statement, &slen);
-    char *jsrc = read_text(g->jet_table, &jlen);
+    char *jsrc = NULL;
     av_cstmt st;
     av_jettable jt;
     bool have_st = false, have_jt = false;
@@ -2019,14 +2022,31 @@ static int composed_witness(const args *g, const char *wsrc, size_t wlen) {
     const char *msg = NULL;
     int rc = 1;
     if (!ssrc) { fprintf(stderr, "avon: cannot read %s\n", g->statement); goto out; }
-    if (!jsrc) { fprintf(stderr, "avon: cannot read %s\n", g->jet_table); goto out; }
     if (!(have_st = av_cstmt_read(ssrc, slen, &st, &msg))) {
         fprintf(stderr, "avon: %s: %s\n", g->statement, msg);
         goto out;
     }
-    if (!(have_jt = av_jettable_read(jsrc, jlen, &jt, &msg))) {
-        fprintf(stderr, "avon: %s: %s\n", g->jet_table, msg);
+    /* a statement with the Poseidon2 jet has no code jets; any other needs
+       its jet table */
+    if (st.p2 && g->jet_table) {
+        fprintf(stderr, "avon: a statement with the Poseidon2 jet takes no --jet-table\n");
         goto out;
+    }
+    if (!st.p2 && !g->jet_table) {
+        fprintf(stderr, "avon: --statement needs --jet-table\n");
+        goto out;
+    }
+    if (st.p2 && !av_p2_selftest()) {
+        fprintf(stderr, "avon: Poseidon2 fails its test vectors\n");
+        goto out;
+    }
+    if (!st.p2) {
+        jsrc = read_text(g->jet_table, &jlen);
+        if (!jsrc) { fprintf(stderr, "avon: cannot read %s\n", g->jet_table); goto out; }
+        if (!(have_jt = av_jettable_read(jsrc, jlen, &jt, &msg))) {
+            fprintf(stderr, "avon: %s: %s\n", g->jet_table, msg);
+            goto out;
+        }
     }
     priv = calloc((size_t)st.nbits + st.w + 1, sizeof *priv);
     if (!priv) { fprintf(stderr, "avon: out of memory\n"); goto out; }
@@ -2034,16 +2054,21 @@ static int composed_witness(const args *g, const char *wsrc, size_t wlen) {
         fprintf(stderr, "avon: the witness: %s\n", msg);
         goto out;
     }
-    av_status s = av_witness_run_composed(&st, priv, &jt, &w, &ends, &insts, &msg);
+    av_status s = st.p2 ? av_witness_run_p2(&st, priv, &w, &ends, &msg)
+                        : av_witness_run_composed(&st, priv, &jt, &w, &ends, &insts, &msg);
     if (s != AV_WHNF) {
         fprintf(stderr, "avon: no witness: %s\n", msg);
     } else if (!av_composed_table(&st, &w, ends, &b)) {
         fprintf(stderr, "avon: could not write the table\n");
     } else {
         fwrite(b.s, 1, b.len, stdout);
-        fprintf(stderr, "rows %zu cells %zu segments %zu insts %llu pops %llu written %llu\n",
-                w.nrows, w.nmem, st.nroots, (unsigned long long)insts,
-                (unsigned long long)w.pops, (unsigned long long)w.wcells);
+        if (st.p2)
+            fprintf(stderr, "rows %zu cells %zu segments %zu jet calls %llu\n", w.nrows, w.nmem, st.nroots,
+                    (unsigned long long)w.p2calls);
+        else
+            fprintf(stderr, "rows %zu cells %zu segments %zu insts %llu pops %llu written %llu\n",
+                    w.nrows, w.nmem, st.nroots, (unsigned long long)insts,
+                    (unsigned long long)w.pops, (unsigned long long)w.wcells);
         rc = 0;
     }
 out:
