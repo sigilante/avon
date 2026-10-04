@@ -21,7 +21,11 @@
 #      ski-air's, `compp-prove-table` proves it, and `ski-air compp-chain`
 #      verifies the two proofs as a chain (lean-ski's
 #      Circuit.p2commit_chainB); a header with a 495-entry pattern is
-#      refused.
+#      refused;
+#   7. the native jet (docs/DESIGN.md §6.12): for each test vector x,
+#      `avon reduce --p2=P.dag` on lean-ski's `P ⬝ stateN x` (`lake exe
+#      p2run`) reaches `stateN (permute x)`, Plonky3's output, in one step,
+#      one permutation run natively (lean-ski's P_specN licenses it).
 #
 # Avon and ski-air read a false bit only as the cell A 0 1; lean-ski's
 # p2Row also accepts any A f x with f at K and x at I.  The narrower reading
@@ -111,5 +115,21 @@ if "$AVON" witness --statement="$OUT/stmt/short.public.txt" "$OUT/stmt/handoff.w
 else
     echo "avon refuses a malformed p2commit header: $(cat "$OUT/avon/short.err")"
 fi
+
+echo "--- the native jet"
+(cd "$LEAN_SKI" && lake build p2run > /dev/null)
+for k in 0 1 2; do
+    d="$OUT/jet/$k"
+    mkdir -p "$d"
+    (cd "$LEAN_SKI" && lake exe p2run "$k" "$d" > /dev/null)
+    "$AVON" reduce --p2="$d/P.dag" "$d/p2.dag" > "$d/out" 2> "$d/err" || { echo "FAIL: vector $k: $(cat "$d/err")"; fail=1; continue; }
+    if [ "$(head -n 1 "$d/out")" = "NORMAL 1" ] && tail -n +2 "$d/out" | cmp -s - "$d/p2.expected" &&
+        grep -q '^p2: 1 occurrences of P bound (skijack-1:[0-9a-f]*); 1 permutations run natively among the contractions, 0 declined' "$d/err"; then
+        echo "vector $k: stateN (permute x) in one step: $(cat "$d/err")"
+    else
+        echo "FAIL: vector $k: $(head -c 80 "$d/out") / $(cat "$d/err")"
+        fail=1
+    fi
+done
 
 if [ "$fail" -eq 0 ]; then echo "PASS"; else echo "FAIL"; exit 1; fi

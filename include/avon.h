@@ -352,6 +352,9 @@ typedef struct {
                                    dispatch; copy mode ignores it         */
     bool        fix;            /* share mode: Y g unfolds to g (Y g) in
                                    one step (§6.11); copy mode ignores it */
+    bool        p2;             /* share mode: P applied to a state of
+                                   sixteen 31-bit elements runs natively,
+                                   one step (§6.12); copy mode ignores it */
     bool        no_join;        /* with data: never join a case to its
                                    instance (§6.10), for tests comparing
                                    the two; every count is the same       */
@@ -379,6 +382,12 @@ typedef struct {
     uint64_t  joins;        /* cases joined to their instances (§6.10):
                                an instantiation and the dispatch after
                                it, two steps each, among steps            */
+    uint64_t  p2_calls;     /* P run natively (§6.12), one step each,
+                               among steps                                */
+    uint64_t  p2_declines;  /* P met an argument not a state as it
+                               stands, and ran a fresh copy of its term   */
+    uint64_t  p2_unbound;   /* jet nodes whose term was not P's at a fire,
+                               made indirections                          */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -644,6 +653,31 @@ av_status av_witness_run_p2(const av_cstmt *s, const av_cell *priv, av_witness *
 void av_p2_permute(uint32_t s[16]);
 bool av_p2_selftest(void);
 
+/*  The Poseidon2 jet (docs/DESIGN.md §6.12).  lean-ski's term P
+ *  (Ski/ZK/Poseidon2SKI.lean, printed by `lake exe p2run`) takes a state
+ *  `stateN vs` -- sixteen 31-bit elements, each `bitsT 31 v`, least
+ *  significant bit first, in pairs `pairT a b = S (S I (K a)) (K b)`, a
+ *  bit K (1) or K I (0), each list ending in K -- to `stateN (permute vs)`
+ *  (P_specN).  av_p2_register makes p a dashboard entry with the p2 flag,
+ *  refusing p unless its full digest (av_p2_digest: §5's Merkle hash with
+ *  every digest kept whole, 256 bits, over S, K and I) is P's,
+ *  AV_P2_SHA256, pinned here;
+ *  then, after av_jets_match, av_p2_bind keeps a jet node for it only
+ *  where its term is p's, node for node, and makes every other one an
+ *  indirection.  With av_opts.p2, share mode rewrites P at the head with
+ *  an argument that is such a state, as it stands, to the permuted state:
+ *  one step, the jet node's term checked against p's again, so a jet node
+ *  made after the bind is held to it too; any other argument runs a fresh
+ *  copy of P's term, a decline counted, so the node's own term is never
+ *  written.  av_p2_state_read reads a state through
+ *  indirections and jet nodes: false unless t is one. */
+#define AV_P2_DIGEST "skijack-1:43f97c21e068ebe7"   /* lean-ski's Poseidon2SKI.P, §5 */
+#define AV_P2_SHA256 "391f7d9a5ad5e744711e18be27b9952a1bb802f8243672552fab4b2e870405b3"
+bool     av_p2_digest(const av_arena *a, uint32_t t, char out[65]);
+uint32_t av_p2_register(av_arena *a, uint32_t p, const char **err);
+long     av_p2_bind(av_arena *a, uint32_t t, uint32_t id);   /* jet nodes kept, or -1 */
+bool     av_p2_state_read(const av_arena *a, uint32_t t, uint32_t s[16]);
+
 /*  The table in lean-ski's `composed check-cj` format, as bench/plonky3's
  *  compj-prove writes it: the header, `W w`, the memory padded with nil
  *  cells to 2^M, `ends n` and the segments' ends -- the restarts, then the
@@ -748,6 +782,10 @@ typedef struct av_jet {
     uint8_t   word_op;          /* a numeral operation on words (§6.10):
                                    an AV_WOP_*, or 0                      */
     bool      fix;              /* Curry's Y (§6.11): Y g unfolds to g (Y g) */
+    bool      p2;               /* Poseidon2's term P (§6.12): P applied to a
+                                   state runs natively                    */
+    uint32_t  p2_nodes;         /* its term's distinct nodes, the bound on
+                                   comparing a jet node's term with it    */
 } av_jet;
 
 /*  The numeral operations (§6.10), skijack's natAdd .. natIfLe. */
