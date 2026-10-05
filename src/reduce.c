@@ -1018,9 +1018,31 @@ static int case_join(R *r, const av_tmpl *T, const uint32_t *args, size_t at, un
 }
 
 /*  Reduce r->cur to weak head normal form in place.  The spine lives on
- *  r->stk above its entry height, which is restored on success.
+ *  r->stk above its entry height, which is restored on success.  D is
+ *  r->defer, a constant in each of the two copies whnf_share makes, so a
+ *  run that defers nothing reads and writes the stack as plain nodes.
  */
-static av_status whnf_share(R *r) {
+
+/*  The stack's accessors, every entry real when D is false. */
+static inline uint32_t ssarg(const R *r, const bool D, size_t i) {
+    return D ? sarg(r, i) : av_right(r->a, r->stk[i]);
+}
+
+static inline void sroot_set(R *r, const bool D, size_t p, av_node v, uint32_t *curp) {
+    if (D) {
+        root_set(r, p, v, curp);
+        return;
+    }
+    arena_set(r->a, r->stk[p], v);
+    r->top = p;
+    *curp = r->stk[p];
+}
+
+static inline bool sprepare(R *r, const bool D, size_t p, uint32_t *curp) {
+    return !D || prepare(r, p, curp);
+}
+
+static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const bool D) {
     av_arena *a = r->a;
     const av_opts *o = r->o;
     size_t bottom = r->top;
@@ -1058,10 +1080,10 @@ static av_status whnf_share(R *r) {
                 continue;
             }
             size_t p = r->top - 2;
-            if (!prepare(r, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
-            uint32_t sk = av_res(a, sarg(r, p));
+            if (!sprepare(r, D, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
+            uint32_t sk = av_res(a, ssarg(r, D, p));
             if (o->profile) profile_rewrote(o->profile, r->stk[p]);
-            root_set(r, p, (av_node){ sk, word_pred(a, cur) }, &cur);
+            sroot_set(r, D, p, (av_node){ sk, word_pred(a, cur) }, &cur);
             r->steps++;
             r->dispatches++;
             continue;
@@ -1091,11 +1113,11 @@ static av_status whnf_share(R *r) {
                 if (r->top - bottom >= 1) {
                     size_t p = r->top - 1;                  /* the redex root */
                     if (!hensure(r, 1, &cur)) return stop(r, bottom, cur, AV_SIZE);
-                    uint32_t g = sarg(r, p);
+                    uint32_t g = ssarg(r, D, p);
                     uint32_t yf = SK_KIND(r->stk[p]) == SK_REAL ? av_left(a, r->stk[p]) : cur;
                     uint32_t y = reserved_app(a, yf, g);
                     if (o->profile) profile_rewrote(o->profile, r->stk[p]);
-                    root_set(r, p, (av_node){ av_res(a, g), y }, &cur);
+                    sroot_set(r, D, p, (av_node){ av_res(a, g), y }, &cur);
                     r->steps++;
                     r->fix_calls++;
                     continue;
@@ -1129,7 +1151,7 @@ static av_status whnf_share(R *r) {
                  * term, the node kept for the next call */
                 unsigned op = a->jets[id].word_op, k = op >= AV_WOP_IFEQ ? 4u : 2u;
                 if (r->top - bottom >= k) {
-                    if (!prepare(r, r->top - k, &cur)) return stop(r, bottom, cur, AV_SIZE);
+                    if (!sprepare(r, D, r->top - k, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     int wf = word_fire(r, op, k, &cur);
                     if (wf < 0) return stop(r, bottom, cur, AV_SIZE);
                     if (wf > 0) continue;
@@ -1146,7 +1168,7 @@ static av_status whnf_share(R *r) {
                 const av_tmpl *T = &a->tmpls[a->jets[id].tmpl - 1];
                 if (o->data && av_ctor_is(T->ctor) && r->top - bottom >= T->k) {
                     /* a constructor with every argument (§6.10) */
-                    if (!prepare(r, r->top - T->k, &cur)) return stop(r, bottom, cur, AV_SIZE);
+                    if (!sprepare(r, D, r->top - T->k, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     av_status ds = dispatch(r, T->ctor, T->k, &cur);
                     if (ds != AV_WHNF) return stop(r, bottom, cur, ds);
                     continue;
@@ -1154,14 +1176,14 @@ static av_status whnf_share(R *r) {
                 if (r->top - bottom >= T->k) {
                     if (o->jetstats) jetstats_fire(o->jetstats, cur, id);
                     size_t p = r->top - T->k;               /* the redex root */
-                    if (!prepare(r, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
+                    if (!sprepare(r, D, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     bool joins = o->data && T->case_p && !o->no_join && !o->profile &&
                                  !o->jetstats && o->max_steps - r->steps >= 2;
                     if (!hensure(r, joins ? join_need(a, T) : T->nops + T->nsuc, &cur))
                         return stop(r, bottom, cur, AV_SIZE);
                     uint32_t args[AV_JET_ARITY_MAX];
                     for (unsigned i = 0; i < T->k; i++)
-                        args[i] = av_res(a, sarg(r, r->top - 1 - i));
+                        args[i] = av_res(a, ssarg(r, D, r->top - 1 - i));
                     unsigned ck;
                     if (joins && (ck = case_kind(a, T, args)) != CJ_NONE) {
                         int cj = case_join(r, T, args, p, ck, &cur);
@@ -1256,20 +1278,20 @@ static av_status whnf_share(R *r) {
         if (o->profile)                         /* S f, S f g; K x; I x */
             profile_charge(o->profile, r->stk + r->top, c == SKI_S ? 2 : 1, c);
         size_t p = r->top - k;                  /* the redex root */
-        if (!prepare(r, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
+        if (!sprepare(r, D, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
         if (c == SKI_S) {                       /* S f g x -> f x (g x) */
             if (!hensure(r, 2, &cur)) return stop(r, bottom, cur, AV_SIZE);
-            uint32_t f = av_res(a, sarg(r, r->top - 1));
-            uint32_t g = av_res(a, sarg(r, r->top - 2));
-            uint32_t x = av_res(a, sarg(r, p));
+            uint32_t f = av_res(a, ssarg(r, D, r->top - 1));
+            uint32_t g = av_res(a, ssarg(r, D, r->top - 2));
+            uint32_t x = av_res(a, ssarg(r, D, p));
             uint32_t fx = reserved_app(a, f, x);
             uint32_t gx = reserved_app(a, g, x);
             if (o->profile) profile_rewrote(o->profile, r->stk[p]);
-            root_set(r, p, (av_node){ fx, gx }, &cur);
+            sroot_set(r, D, p, (av_node){ fx, gx }, &cur);
         } else {                                /* K x y -> x;  I x -> x */
-            uint32_t x = av_res(a, sarg(r, r->top - 1));
+            uint32_t x = av_res(a, ssarg(r, D, r->top - 1));
             if (o->profile) profile_rewrote(o->profile, r->stk[p]);
-            root_set(r, p, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 }, &cur);
+            sroot_set(r, D, p, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 }, &cur);
         }
         r->steps++;
     }
@@ -1278,6 +1300,10 @@ static av_status whnf_share(R *r) {
     if (!materialize(r, bottom, &cur)) return AV_SIZE;
     r->top = bottom;
     return AV_WHNF;
+}
+
+static av_status whnf_share(R *r) {
+    return r->defer ? whnf_share_d(r, true) : whnf_share_d(r, false);
 }
 
 /*  Whether t's head is a word (§6.10). */

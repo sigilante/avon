@@ -302,6 +302,44 @@ python3 tests/workloads/reduceron/run.py --avon build/avon --skijack ~/skijack
 It runs each port as SKI, with templates and with data jets, prints every
 count and the best user time, and fails if an answer is not True.
 
+### Remeasured, 2026-10-04
+
+Every share-mode change since, together: data jets, the case joined to its
+instance, `--fix`, and deferred roots (`DESIGN.md` §6.10, §6.11, §6.13).
+Avon `reduceron-remeasure` over `f51e478`, skijack `312288c`, `run.py`,
+user CPU, best of five, interleaved; load average 2.3 to 5.1, and 4.2 to
+7.2 for the inlined runs, on 16 cores. Each cell: seconds, then the
+multiple of the Reduceron's time.
+
+| program | SKI | templates | data jets | + `--fix` | `--fix`, inlined |
+|---|---:|---:|---:|---:|---:|
+| OrdList | 22.91, 23.4 | 2.45, 2.50 | 2.06, 2.10 | 1.94, 1.98 | 1.92, 1.96 |
+| Queens2 | 10.74, 8.3 | 2.37, 1.84 | 1.90, 1.47 | 1.90, 1.47 | 1.94, 1.50 |
+| Taut | 22.82, 40.0 | 1.71, 3.00 | 1.55, 2.72 | 1.52, 2.67 | 1.33, 2.33 |
+| Clausify | 12.54, 17.2 | 2.28, 3.12 | 1.79, 2.45 | 1.76, 2.41 | 1.52, 2.08 |
+| PermSort | 46.09, 28.5 | 7.72, 4.77 | 3.52, 2.17 | 3.33, 2.06 | 2.90, 1.79 |
+| geometric mean | 20.7 | 2.90 | 2.14 | 2.08 | 1.91 |
+
+- **Avon takes 1.47 to 2.67 times the Reduceron's time, 2.08 by
+  geometric mean;** compiled with skijack's inlining, 1.50 to 2.33 and
+  1.91. "Y unfolded in one step" had 2.22 and 1.98, before the case join
+  and deferred roots.
+- **Every count is as before.** With templates, data jets and `--fix`,
+  the steps, instantiations, dispatches and unfoldings equal the tables
+  above.
+- **Plain SKI paid for the deferral at first.** Before deferral, the
+  reducer read and wrote the stack as plain nodes. Merged, every
+  argument read tested the entry's kind, even in runs that defer
+  nothing: plain SKI ran 5 to 10% slower than at `c46df7d`, interleaved.
+  `whnf_share` is now compiled twice, deferral a constant in each, and
+  the copy that defers nothing reads the stack as before. Plain SKI still
+  retires 1.5% more instructions and takes 1.9 to 3.9% longer on
+  Queens2, OrdList and Taut. With `--fix`, the same pairs run 4 to 9%
+  faster than at `c46df7d`.
+- **The SKI column is not the table above's.** Clausify's and PermSort's
+  ports call the prelude's numeral operations since "With data jets",
+  which cost more as pure SKI.
+
 ### Other machines
 
 - **NORMA** (Scheevel, 1986), a Turner-combinator machine, did about
