@@ -1255,12 +1255,12 @@ plan. `--fix` stays: it agrees with SKI on every test, it is cheap, and
 a witness row for it could be built. Today `avon witness` refuses `--fix`,
 as it refuses `--templates` and `--data`: the witness runs plain SKI.
 
-**Shared, an experiment (`--fix=shared`, 2026-10-05).** Almost all of a
+**Shared, an experiment (`--memory`, 2026-10-05).** Almost all of a
 port's live set is Y's unfoldings: with the cycle, the largest live set
 after a collection falls from 2,293,349 nodes to 590 on OrdList and from
 3,956,193 to 1,355 on PermSort. A recursive function is a shared node
 updated in place to `g (Y g)`, whose `Y g` is updated in its turn, so every
-level of recursion reached stays chained to it. `--fix=shared` keeps one
+level of recursion reached stays chained to it. `--memory` keeps one
 `Y g`, `y0`, per generator `g` (by node identity), never written, and one
 unfolding `u0 = g y0`, updated as any node. Every `Y g` of that `g`
 becomes an indirection to `u0`, and `y0`, when demanded, leads to `u0`.

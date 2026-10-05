@@ -70,7 +70,7 @@
  *                                     calls file through DIR/abs.skit, or its
  *                                     jet, checked against Python's by hash
  *      avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]
- *                  [--templates=DIR [--data] [--fix] [--no-defer]] [--names=FILE]... [--fuel=N]
+ *                  [--templates=DIR [--data] [--fix] [--memory] [--no-defer]] [--names=FILE]... [--fuel=N]
  *                  [--max-nodes=N] DIR SOURCE
  *                                     the SKIjack-0 front end (docs/DESIGN.md
  *                                     §20.3) on SOURCE: DIR/front.skit and the
@@ -169,7 +169,7 @@ static int usage(void) {
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
-        "        --profile=NAMES --templates=DIR --data --fix[=shared] --no-defer --p2=FILE)\n"
+        "        --profile=NAMES --templates=DIR --data --fix --memory --no-defer --p2=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"
@@ -183,7 +183,7 @@ static int usage(void) {
         "       (boot, poke, peek, load accept --strategy=, --fuel=, --budget=)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
-        "                   [--templates=DIR [--data] [--fix] [--no-defer]]\n"
+        "                   [--templates=DIR [--data] [--fix] [--memory] [--no-defer]]\n"
         "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
         "       avon enum N [--start=K] [--count=M]      (N from 1 to 20)\n"
         "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"
@@ -257,7 +257,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) g->templates = s + 12;
         else if (strcmp(s, "--data") == 0)           g->data = true;
         else if (strcmp(s, "--fix") == 0)            g->fix = true;
-        else if (strcmp(s, "--fix=shared") == 0)     g->fix = g->o.fix_shared = true;
+        else if (strcmp(s, "--memory") == 0)         g->fix = g->o.fix_shared = true;
         else if (strcmp(s, "--no-defer") == 0)       g->o.no_defer = true;
         else if (strncmp(s, "--p2=", 5) == 0 && s[5])  g->p2 = s + 5;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
@@ -329,7 +329,7 @@ static bool options_fit(const args *g, const char *cmd) {
     if (traced || strcmp(cmd, "witness") == 0) {
         if (g->templates) bad = "--templates";
         else if (g->data) bad = "--data";
-        else if (g->fix) bad = "--fix";
+        else if (g->fix) bad = g->o.fix_shared ? "--memory" : "--fix";
         else if (g->o.no_defer) bad = "--no-defer";
         else if (g->p2) bad = "--p2";
         else if (g->profile) bad = "--profile";
@@ -645,7 +645,8 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         return 1;
     }
     if (g->fix && !g->templates) {
-        fprintf(stderr, "avon: --fix needs --templates=DIR: Y is registered with them\n");
+        fprintf(stderr, "avon: %s needs --templates=DIR: Y is registered with them\n",
+                g->o.fix_shared ? "--memory" : "--fix");
         av_arena_free(a);
         return 1;
     }
@@ -1766,7 +1767,7 @@ static int front0_main(int argc, char **argv) {
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) templates = s + 12;
         else if (strcmp(s, "--data") == 0) data = true;
         else if (strcmp(s, "--fix") == 0) fix = true;
-        else if (strcmp(s, "--fix=shared") == 0) fix = o.fix_shared = true;
+        else if (strcmp(s, "--memory") == 0) fix = o.fix_shared = true;
         else if (strcmp(s, "--no-defer") == 0) o.no_defer = true;
         else if (strncmp(s, "--names=", 8) == 0 && s[8] && nn < 64) namefiles[nn++] = argv[i] + 8;
         else if (strcmp(s, "--jet-stats") == 0) stats_top = 40;

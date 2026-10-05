@@ -549,7 +549,7 @@ with `--templates=DIR --data --knot`.
 
 ## Y shared: an experiment
 
-`--fix=shared` (`DESIGN.md` §6.11, "Shared") against `--fix`, Avon
+`--memory` (`DESIGN.md` §6.11, "Shared") against `--fix`, Avon
 `fix-shared` over `eb71bb1`, share mode with templates and data jets.
 Time: user CPU, best of five, interleaved, load average 1.3 to 2.7. Live
 set: the largest after any collection, from a build that logs each one.

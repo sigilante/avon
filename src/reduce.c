@@ -88,7 +88,7 @@ typedef struct {
                                    many nodes free, so writing them never
                                    fails                                  */
     uint32_t       hold;        /* share: the head, across a collection   */
-    nmap           ymemo;       /* --fix=shared: generator g -> y0, the
+    nmap           ymemo;       /* --memory: generator g -> y0, the
                                    one Y g every unfolding of g passes
                                    on, never written, and u0 = g y0, the
                                    one unfolding, updated as any node:
@@ -1232,7 +1232,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                     bool real = SK_KIND(r->stk[p]) == SK_REAL;
                     uint32_t yf = real ? av_left(a, r->stk[p]) : cur;
                     if (o->fix_shared) {
-                        /* --fix=shared: every unfolding of g passes on one
+                        /* --memory: every unfolding of g passes on one
                          * Y g, y0, never written, and every Y g of g leads
                          * to one unfolding u0 = g y0, written as any node
                          * is: no unfolding chains to the next, and u0's
