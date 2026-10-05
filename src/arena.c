@@ -83,6 +83,7 @@ void av_arena_free(av_arena *a) {
         free(a->tmpls[k].consts);
         free(a->tmpls[k].sucop);
         free(a->tmpls[k].case_spine);
+        free(a->tmpls[k].vspine);
     }
     free(a->tmpls);
     free(a->tmpl_globals);

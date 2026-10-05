@@ -813,12 +813,16 @@ int av_equal(const av_arena *a, uint32_t x, uint32_t y, size_t budget) {
     /* Pairs already compared are not compared again: tree equality is the
      * conjunction over every pair reachable from (x, y), so each distinct
      * pair needs one visit, and a shared graph costs its size, not its
-     * unfolding's.  The budget bounds distinct pairs. */
-    size_t cap = 256, top = 0, scap = 1024, sn = 0;
-    uint32_t *stk = malloc(2 * cap * sizeof *stk);
-    uint64_t *set = calloc(scap, sizeof *set);           /* 0 = empty */
+     * unfolding's.  The budget bounds distinct pairs.  The stack and the
+     * set start on the C stack and move to the heap only when they grow:
+     * most calls, a decoder's probe of a node against a constructor,
+     * finish within a few pairs. */
+    uint32_t stk0[2 * 32];
+    uint64_t set0[64] = { 0 };                            /* 0 = empty */
+    size_t cap = 32, top = 0, scap = 64, sn = 0;
+    uint32_t *stk = stk0;
+    uint64_t *set = set0;
     int out = 1;
-    if (!stk || !set) { free(stk); free(set); return -1; }
     stk[0] = x;
     stk[1] = y;
     top = 1;
@@ -842,7 +846,7 @@ int av_equal(const av_arena *a, uint32_t x, uint32_t y, size_t budget) {
                 while (ns[j]) j = (j + 1) & (ncap - 1);
                 ns[j] = set[k];
             }
-            free(set);
+            if (set != set0) free(set);
             set = ns;
             scap = ncap;
         }
@@ -852,9 +856,12 @@ int av_equal(const av_arena *a, uint32_t x, uint32_t y, size_t budget) {
             continue;
         }
         if (top + 2 > cap) {
-            uint32_t *s = realloc(stk, 2 * (cap *= 2) * sizeof *s);
+            uint32_t *s = stk == stk0 ? malloc(2 * 2 * cap * sizeof *s)
+                                      : realloc(stk, 2 * 2 * cap * sizeof *s);
             if (!s) { out = -1; break; }
+            if (stk == stk0) memcpy(s, stk0, sizeof stk0);
             stk = s;
+            cap *= 2;
         }
         stk[2 * top] = av_left(a, p);
         stk[2 * top + 1] = av_left(a, q);
@@ -863,7 +870,7 @@ int av_equal(const av_arena *a, uint32_t x, uint32_t y, size_t budget) {
         stk[2 * top + 1] = av_right(a, q);
         top++;
     }
-    free(stk);
-    free(set);
+    if (stk != stk0) free(stk);
+    if (set != set0) free(set);
     return out;
 }

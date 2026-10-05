@@ -23,7 +23,13 @@
  *  - an instance whose body cases on a formal that arrived as a
  *    constructor value or a word (its dispatch could join the instance);
  *  - SUC applications an instance could not make a word, and how many of
- *    those were applied to a thunk.
+ *    those were applied to a thunk;
+ *  - spine cells by what follows their instance.  The body's head, with
+ *    the arguments it already holds and the body's own, is *saturated* when
+ *    it can step at once: then the reducer contracts through the spine it
+ *    has just written, a write that deferring the redex root's update (the
+ *    Reduceron's way) would skip.  Otherwise the instance is a value, or
+ *    waits for arguments its context supplies, and its spine may be kept.
  */
 
 #ifndef SSTATS_H
@@ -45,6 +51,7 @@ typedef struct av_sstats {
     uint64_t  forced, dead, hist[7];     /* delays: 0, <=1, <=10, ... >1e5 */
     uint64_t  prs, case_ctor, case_word;
     uint64_t  suc_word, suc_cell, suc_on_thunk;
+    uint64_t  spine_saturated, spine_open;
 } av_sstats;
 
 /*  The one table, for the one arena a run measures (defined in reduce.c). */
@@ -124,6 +131,7 @@ static inline void sstats_instance(av_arena *a, const av_tmpl *T, const uint32_t
         if ((ops[2 * i + 1] >> 30) == 2) asx[ops[2 * i + 1] & AV_PAYLOAD] = 1;
     }
     if (!in_place && (T->root >> 30) == 2) asx[T->root & AV_PAYLOAD] = 1;
+    uint64_t nspine = 0;
     for (uint32_t i = 0; i < end; i++) {
         if (T->sucop && T->sucop[i]) {
             uint32_t x = ops[2 * i + 1];
@@ -140,7 +148,7 @@ static inline void sstats_instance(av_arena *a, const av_tmpl *T, const uint32_t
         }
         if (i == root) continue;
         s->cells++;
-        if (!asx[i]) { s->spine++; continue; }
+        if (!asx[i]) { s->spine++; nspine++; continue; }
         uint32_t c = out[i];
         if (av_is_word(a, c)) { s->arg_word++; continue; }
         unsigned m;
@@ -160,7 +168,16 @@ static inline void sstats_instance(av_arena *a, const av_tmpl *T, const uint32_t
     /* the body's head: a formal that arrived as a value its case reads */
     if (!in_place && (T->root >> 30) != 2) return;     /* the body is no application */
     uint32_t x = in_place ? ops[2 * (n - 1)] : ops[2 * (T->root & AV_PAYLOAD)];
-    while ((x >> 30) == 2) x = ops[2 * (x & AV_PAYLOAD)];
+    unsigned d = 1;                                     /* the body's arguments */
+    while ((x >> 30) == 2) { x = ops[2 * (x & AV_PAYLOAD)]; d++; }
+    if (nspine) {
+        uint32_t hn = (x >> 30) == 0 ? a->tmpl_globals[T->consts[x & AV_PAYLOAD]] : args[x & AV_PAYLOAD];
+        unsigned m;
+        uint32_t hd = sstats_head(a, hn, &m, NULL, 0);
+        unsigned k = sstats_arity(a, hd);
+        if (k && m + d >= k) s->spine_saturated += nspine;
+        else s->spine_open += nspine;
+    }
     if ((x >> 30) == 1) {
         uint32_t v = av_res(a, args[x & AV_PAYLOAD]);
         if (av_is_word(a, v) || v == AV_NODE_K) s->case_word++;
@@ -237,6 +254,11 @@ static inline void sstats_report(void) {
             (unsigned long long)s->prs, (unsigned long long)s->case_ctor,
             (unsigned long long)s->case_word, (unsigned long long)s->suc_word,
             (unsigned long long)s->suc_cell, (unsigned long long)s->suc_on_thunk);
+    fprintf(stderr, "sstats: spine cells %llu: under a saturated head %llu (%.1f%%), "
+            "a value or awaiting arguments %llu\n",
+            (unsigned long long)s->spine, (unsigned long long)s->spine_saturated,
+            s->spine ? 100.0 * (double)s->spine_saturated / (double)s->spine : 0.0,
+            (unsigned long long)s->spine_open);
 }
 
 #define SSTATS_INSTANCE(a, T, args, now) sstats_instance((a), (T), (args), (now))

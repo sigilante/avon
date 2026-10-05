@@ -57,6 +57,28 @@ against 129,964 plain, 8.9%, and `csplit8` 157,680 against 471,887,
 33.4%. Both halt at `K` over the nil, and `checkJA` accepts both from the
 filled machine.
 
+**Proof size and verification, measured 2026-10-04** on lean-ski's
+release proofs (`release/skilark`), with `ski-air composed-verify` and
+`compj-verify`:
+
+| statement | proof, plain | proof, jets | verify, plain | verify, jets |
+|---|---:|---:|---:|---:|
+| `split8` | 812,349 bytes | 1,108,220 | 12.6 s (7.8) | 23.0 s (18.1) |
+| `csplit8` | 932,199 bytes | 1,176,849 | 78.3 s (51.6) | 148.6 s (121.8) |
+
+Jets cut the rows but make the proof 26 to 36% larger and its
+verification slower. The jet circuit has ten tables, the plain one five,
+and each table adds commitments and openings. Verification is the
+command's whole time. The time in parentheses is what ski-air reports
+for its `verify` step, which also runs Lean's check of the exported AIRs
+(`compare-compJ`) and the verifier's setup; the rest of the command is
+Lean's check of the statement and the jet table. ski-air does not yet
+report the proof's check alone, so how much of the slowdown is the proof
+and how much is Lean is not measured. `split8` keeps its CPU budget at
+`2^17` with jets, so its prove time barely moves (12.3 s against 13 s);
+`csplit8`'s budgets fall one height each, and it proves in 26 s against
+42 (milestone 4).
+
 **The goal.** A proof, in zero knowledge, that a public verifier accepts
 hidden literal bits (lean-ski's predicate statement, `Ski/Predicate.lean`)
 or a hidden term (a formula's atom), in which the verifier's run

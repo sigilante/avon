@@ -358,6 +358,10 @@ typedef struct {
     bool        no_join;        /* with data: never join a case to its
                                    instance (§6.10), for tests comparing
                                    the two; every count is the same       */
+    bool        no_defer;       /* with templates: write every instance's
+                                   root and spine at once (§6.13), for
+                                   tests comparing the two; every count
+                                   and state is the same                  */
 } av_opts;
 
 typedef struct {
@@ -388,6 +392,9 @@ typedef struct {
                                stands, and ran a fresh copy of its term   */
     uint64_t  p2_unbound;   /* jet nodes whose term was not P's at a fire,
                                made indirections                          */
+    uint64_t  deferred;     /* instances whose root and spine were left in
+                               the stack (§6.13), among tmpl_calls and
+                               fused                                      */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -920,6 +927,11 @@ typedef struct av_tmpl {
                                    written over the redex root; 0 none    */
     uint8_t  *case_spine;       /* per instruction: on that spine, used by
                                    its parent alone; NULL when no case    */
+    uint8_t  *vspine;           /* per instruction: on the root's spine,
+                                   used by its parent alone, so a deferred
+                                   instance leaves it unwritten (reduce.c,
+                                   "Deferred roots"); NULL when none      */
+    uint32_t  nvspine;          /* how many, a chain below the root       */
 } av_tmpl;
 
 typedef struct av_tmplset av_tmplset;

@@ -35,6 +35,14 @@ static inline uint32_t reserved_app(av_arena *a, uint32_t f, uint32_t x) {
 
 typedef struct { uint32_t head; size_t base, n, i; } frame;
 
+/*  A share-mode stack entry (see "Deferred roots"), its kind in a node
+ *  index's two spare bits: a node of the graph; a node whose update is
+ *  deferred, its application this entry's argument (in dstk) and the
+ *  entry above; or an application with no node, of the entry above to the
+ *  argument the entry holds. */
+enum { SK_REAL, SK_DEFER, SK_VIRT };
+typedef struct { uint32_t at, arg; } dentry;     /* the stack stays below 2^32 entries */
+
 typedef struct {
     av_arena      *a;
     const av_opts *o;
@@ -58,13 +66,22 @@ typedef struct {
     uint64_t       jet_calls, jet_steps;
     uint64_t       tmpl_calls;
     uint64_t       dispatches, fused, word_ops, fix_calls, joins;
-    uint64_t       p2_calls, p2_declines, p2_unbound;
+    uint64_t       p2_calls, p2_declines, p2_unbound, deferred;
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
     bool           normal;      /* share: making the normal form, or the
                                    root's term's head normal form, where a
                                    word must become its term's            */
+
+    /* share: deferred roots (see "Deferred roots" below) */
+    bool           defer;       /* instances may defer their roots        */
+    dentry        *dstk;        /* the SK_DEFER entries, rising           */
+    size_t         ndstk, dcap;
+    size_t         nvirt;       /* SK_VIRT entries: the arena keeps that
+                                   many nodes free, so writing them never
+                                   fails                                  */
+    uint32_t       hold;        /* share: the head, across a collection   */
 } R;
 
 /*  ---------------------------------------------------------------- memory */
@@ -75,7 +92,12 @@ static void roots(av_gc *g, void *ctx) {
     if (r->head != AV_NONE) r->head = av_gc_evac(g, r->head);
     if (r->cur != AV_NONE) r->cur = av_gc_evac(g, r->cur);
     if (r->jnode != AV_NONE) r->jnode = av_gc_evac(g, r->jnode);
-    for (size_t i = 0; i < r->top; i++) r->stk[i] = av_gc_evac(g, r->stk[i]);
+    if (r->hold != AV_NONE) r->hold = av_gc_evac(g, r->hold);
+    for (size_t i = 0; i < r->top; i++) {      /* a share-mode entry keeps its kind */
+        uint32_t e = r->stk[i];
+        r->stk[i] = (e & ~AV_PAYLOAD) | av_gc_evac(g, e & AV_PAYLOAD);
+    }
+    for (size_t i = 0; i < r->ndstk; i++) r->dstk[i].arg = av_gc_evac(g, r->dstk[i].arg);
     for (size_t i = 0; i < r->nfr; i++)
         r->fr[i].head = av_gc_evac(g, r->fr[i].head);
     for (size_t i = 0; i < r->nwork; i++)
@@ -441,6 +463,259 @@ static av_status run_copy(R *r) {
 
 /*  ----------------------------------------------------------------- share */
 
+/*  ------------------------------------------------------- deferred roots
+ *
+ *  An instance writes its body over the redex root, and the reducer at
+ *  once unwinds the body's spine again: those spine cells are 61 to 65% of
+ *  what instances write, and most are contracted through at the next step
+ *  (docs/BENCHMARK.md, "Most spine cells are contracted through at
+ *  once").  The Reduceron writes no spine; neither does a deferred
+ *  instance.  It leaves the redex root's node as it was, SK_DEFER, keeps
+ *  the body's outermost argument in the root's stack entry, and pushes the
+ *  rest of the root's spine as SK_VIRT entries, applications with no node,
+ *  each the entry above applied to its argument (av_tmpl.vspine: the spine
+ *  applications used by their parent alone).  A contraction at a virtual
+ *  entry builds no node for its redex root either.
+ *
+ *  A deferred root is written, with the application its entries stand
+ *  for, before anything else could read it:
+ *  - before a contraction consumes it as a function part (prepare): it is
+ *    then a value, the head lacking arguments, and the graph shares it;
+ *  - when the reduction stops, at a weak head normal form or otherwise
+ *    (materialize, stop);
+ *  - before the rarer steps that read the stack as nodes: interpreter,
+ *    Poseidon2 and residual jets (materialize from the bottom).
+ *  A contraction whose redex root it is writes it as an undeferred root.
+ *  The graph is acyclic (§2), so no reduction in progress can reach a
+ *  deferred node through another path, so a deferred node is overwritten
+ *  with I I, holding nothing; writing the deferred roots never fails,
+ *  since the arena keeps a node free for each virtual entry (nvirt).
+ *  Every contraction is the one the undeferred reducer makes, at the same
+ *  step: the steps, the counts and every state reported are the same, and
+ *  only nodes go unwritten -- unless a node cap binds, where the reserve
+ *  and a stop's writes may move the step that hits it.
+ *
+ *  A real entry's node has the entry above it as its function part; a
+ *  deferred or virtual entry's is the entry above it.  Virtual entries
+ *  are pushed only above a deferred one, so no real entry is ever below a
+ *  virtual one; the deferred entries' indices rise with the stack (dstk).
+ */
+
+/*  An entry's kind and its node or argument. */
+#define SK_KIND(e) ((e) >> AV_TAG_SHIFT)
+#define SK_BODY(e) ((e) & AV_PAYLOAD)
+#define SK_MAKE(k, x) ((uint32_t)(k) << AV_TAG_SHIFT | (x))
+
+/*  The argument of stack entry i, unresolved.  A deferred entry is read
+ *  only as a redex root's, the highest deferred entry then (prepare). */
+static inline uint32_t sarg(const R *r, size_t i) {
+    uint32_t e = r->stk[i];
+    if (SK_KIND(e) == SK_REAL) return av_right(r->a, e);
+    if (SK_KIND(e) == SK_VIRT) return SK_BODY(e);
+    assert(r->ndstk && r->dstk[r->ndstk - 1].at == i);
+    return r->dstk[r->ndstk - 1].arg;
+}
+
+/*  ensure() for k nodes and the virtual entries' reserve, the head *curp
+ *  held across a collection. */
+static bool hensure(R *r, size_t k, uint32_t *curp) {
+    k += r->nvirt;
+    if (r->a->cap - r->a->used >= k) return true;
+    r->hold = *curp;
+    bool ok = ensure(r, k);
+    *curp = r->hold;
+    r->hold = AV_NONE;
+    return ok;
+}
+
+/*  Entry i, a deferred root's, is written: no longer deferred. */
+static inline void undefer(R *r, size_t i) {
+    if (SK_KIND(r->stk[i]) != SK_DEFER) return;
+    assert(r->ndstk && r->dstk[r->ndstk - 1].at == i);
+    r->ndstk--;
+    r->stk[i] = SK_BODY(r->stk[i]);
+}
+
+/*  The entries from `from` to the top are popped: the virtual among them
+ *  leave the reserve. */
+static inline void vpop(R *r, size_t from) {
+    if (!r->nvirt) return;
+    for (size_t j = from; j < r->top; j++) r->nvirt -= SK_KIND(r->stk[j]) == SK_VIRT;
+}
+
+/*  Write every deferred and virtual entry from `from` up, `from` the
+ *  stack's bottom or a deferred entry, the head *curp: each deferred node
+ *  with its application, each virtual entry a fresh node.  False: SIZE. */
+static bool materialize(R *r, size_t from, uint32_t *curp) {
+    if (!r->ndstk || r->dstk[r->ndstk - 1].at < from) return true;
+    av_arena *a = r->a;
+    size_t nv = 0;
+    for (size_t j = from; j < r->top; j++) nv += SK_KIND(r->stk[j]) == SK_VIRT;
+    assert(nv <= r->nvirt && a->cap - a->used >= r->nvirt);
+    if (a->cap - a->used < nv) return false;        /* the reserve holds them */
+    r->nvirt -= nv;
+    uint32_t left = *curp;
+    size_t k = r->ndstk;
+    for (size_t j = r->top; j-- > from;) {
+        uint32_t e = r->stk[j], node = SK_BODY(e);
+        if (SK_KIND(e) == SK_VIRT) {
+            node = reserved_app(a, left, node);
+        } else if (SK_KIND(e) == SK_DEFER) {
+            assert(k && r->dstk[k - 1].at == j);
+            arena_set(a, node, (av_node){ left, r->dstk[--k].arg });
+        }
+        r->stk[j] = node;
+        left = node;
+    }
+    assert(!k || r->dstk[k - 1].at < from);
+    r->ndstk = k;
+    return true;
+}
+
+/*  Before a contraction whose redex root is entry p: the deferred roots
+ *  above it, which it consumes as function parts, written.  False: SIZE. */
+static inline bool prepare(R *r, size_t p, uint32_t *curp) {
+    if (!r->ndstk || r->dstk[r->ndstk - 1].at <= p) return true;
+    size_t i = r->ndstk;
+    while (i && r->dstk[i - 1].at > p) i--;
+    return materialize(r, r->dstk[i].at, curp);
+}
+
+/*  The reduction stops with st: everything deferred written first. */
+static av_status stop(R *r, size_t bottom, uint32_t cur, av_status st) {
+    return materialize(r, bottom, &cur) ? st : AV_SIZE;
+}
+
+/*  The contraction at entry p rewrites its redex root to v, an
+ *  indirection or an application; the head becomes the result.  A virtual
+ *  root builds no node: an indirection's target is the head, and an
+ *  application's argument stays in the entry, its function the head. */
+static inline void root_set(R *r, size_t p, av_node v, uint32_t *curp) {
+    vpop(r, p + 1);
+    if (SK_KIND(r->stk[p]) == SK_VIRT) {
+        if (v.l >> AV_TAG_SHIFT == AV_IND) {
+            r->nvirt--;
+            r->top = p;
+            *curp = v.l & AV_PAYLOAD;
+        } else {
+            r->stk[p] = SK_MAKE(SK_VIRT, v.r);
+            r->top = p + 1;
+            *curp = v.l;
+        }
+        return;
+    }
+    undefer(r, p);
+    arena_set(r->a, r->stk[p], v);
+    r->top = p;
+    *curp = r->stk[p];
+}
+
+/*  Room to make entry p head applied to m operands: the stack's entries
+ *  and, when p is real, its place among the deferred. */
+static bool defer_grow(R *r, size_t p, size_t m) {
+    if (p + m > UINT32_MAX || !grow(&r->stk, &r->cap, p + m)) return false;
+    if (SK_KIND(r->stk[p]) == SK_REAL && r->ndstk == r->dcap) {
+        size_t c = r->dcap ? 2 * r->dcap : 64;
+        dentry *d = realloc(r->dstk, c * sizeof *d);
+        if (!d) return false;
+        r->dstk = d;
+        r->dcap = c;
+    }
+    return true;
+}
+
+static inline bool defer_room(R *r, size_t p, size_t m) {
+    return (p + m <= r->cap && p + m <= UINT32_MAX &&
+            (SK_KIND(r->stk[p]) != SK_REAL || r->ndstk < r->dcap)) ||
+           defer_grow(r, p, m);
+}
+
+/*  Entry p, a root, takes the argument x, deferred if it was real; its
+ *  room made. */
+static inline void defer_root(R *r, size_t p, uint32_t x) {
+    uint32_t e = r->stk[p];
+    if (SK_KIND(e) == SK_VIRT) {
+        r->stk[p] = SK_MAKE(SK_VIRT, x);
+    } else if (SK_KIND(e) == SK_DEFER) {
+        assert(r->ndstk && r->dstk[r->ndstk - 1].at == p);
+        r->dstk[r->ndstk - 1].arg = x;
+    } else {
+        assert(!r->ndstk || r->dstk[r->ndstk - 1].at < p);
+        r->dstk[r->ndstk++] = (dentry){ (uint32_t)p, x };
+        r->stk[p] = SK_MAKE(SK_DEFER, e);
+        /* nothing reads a deferred node before it is written, and its old
+         * redex would keep alive what the undeferred reducer lets go.  An
+         * application, not an indirection: a collection follows those, and
+         * the entry would name the node it pointed to */
+        arena_set(r->a, e, (av_node){ AV_NODE_I, AV_NODE_I });
+    }
+}
+
+/*  Entry p becomes head applied to f[0] .. f[m-1], m >= 1, f[m-1] in entry
+ *  p, the rest virtual above it: a real root deferred.  False: out of
+ *  memory for the stack, nothing changed. */
+static inline bool defer_apply(R *r, size_t p, uint32_t head, const uint32_t *f, unsigned m,
+                               uint32_t *curp) {
+    if (!defer_room(r, p, m)) return false;
+    vpop(r, p + 1);
+    defer_root(r, p, f[m - 1]);
+    for (unsigned i = 1; i < m; i++) r->stk[p + i] = SK_MAKE(SK_VIRT, f[m - 1 - i]);
+    r->nvirt += m - 1;
+    r->top = p + m;
+    *curp = head;
+    return true;
+}
+
+/*  Whether an instance of T may defer its root: written in place, no SUC
+ *  to make a word of. */
+static inline bool defers(const R *r, const av_tmpl *T) {
+    return r->defer && T->root_last && !T->sucop;
+}
+
+/*  A deferred instance of T at entry p, its nodes reserved: the body's
+ *  other applications written, its root's spine left in the stack, the
+ *  root's argument in entry p and each spine application's above it, the
+ *  innermost highest.  False: out of memory for the stack, nothing
+ *  written. */
+static inline bool tmpl_defer(R *r, const av_tmpl *T, const uint32_t *args, size_t p,
+                              uint32_t *curp) {
+    av_arena *a = r->a;
+    const uint32_t *ops = T->ops;
+    uint32_t n = T->nops;
+    if (!defer_room(r, p, (size_t)T->nvspine + 1)) return false;
+    assert(a->tmpl_scratch_cap >= T->nops + T->nconsts);
+    uint32_t *out = a->tmpl_scratch, *cv = out + n;
+    for (uint32_t j = 0; j < T->nconsts; j++) cv[j] = a->tmpl_globals[T->consts[j]];
+    const uint32_t *const base[3] = { cv, args, out };
+#define OPND(o) (base[(o) >> 30][(o) & AV_PAYLOAD])
+    const uint8_t *vs = T->vspine;
+    av_node *nodes = a->nodes;
+    uint32_t used = a->used;
+    assert(a->cap - used >= n - 1 && "allocation past what was reserved");
+    for (uint32_t i = 0; i + 1 < n; i++) {
+        if (vs && vs[i]) continue;                  /* used by its parent alone */
+        nodes[used] = (av_node){ OPND(ops[2 * i]), OPND(ops[2 * i + 1]) };
+        out[i] = used++;
+    }
+    a->used = used;
+    vpop(r, p + 1);
+    defer_root(r, p, OPND(ops[2 * (n - 1) + 1]));
+    size_t q = p + 1;
+    uint32_t x = ops[2 * (n - 1)];
+    while (x >> 30 == 2 && vs && vs[x & AV_PAYLOAD]) {
+        uint32_t j = x & AV_PAYLOAD;
+        r->stk[q++] = SK_MAKE(SK_VIRT, OPND(ops[2 * j + 1]));
+        x = ops[2 * j];
+    }
+    assert(q == p + 1 + T->nvspine);
+    r->nvirt += T->nvspine;
+    r->top = q;
+    *curp = OPND(x);
+#undef OPND
+    r->deferred++;
+    return true;
+}
+
 /*  The most nodes one numeral operation builds (§6.10).  Beyond it the
  *  operation runs its term, which builds its result lazily: a product
  *  nobody reads past its first successor should not cost its whole size. */
@@ -468,8 +743,8 @@ static void dispatch_read(const R *r, av_ctor sh, disp *d) {
     const av_arena *a = r->a;
     unsigned m = sh.fields;
     for (unsigned j = 0; j < m; j++)
-        d->field[j] = av_res(a, av_right(a, r->stk[r->top - 1 - j]));
-    d->cont = av_res(a, av_right(a, r->stk[r->top - 1 - m - sh.index]));
+        d->field[j] = av_res(a, sarg(r, r->top - 1 - j));
+    d->cont = av_res(a, sarg(r, r->top - 1 - m - sh.index));
     dispatch_fuse(a, sh, d);
 }
 
@@ -521,20 +796,48 @@ bool dispatch_write(R *r, av_ctor sh, const disp *d, uint32_t nd) {
     return true;
 }
 
+/*  The dispatch d over the redex root at entry p, its nodes reserved: the
+ *  head becomes its result.  Deferring, a fused template's instance or the
+ *  continuation's application to the fields is left in the stack.  False:
+ *  SIZE. */
+static bool dispatch_put(R *r, av_ctor sh, const disp *d, size_t p, uint32_t *curp) {
+    av_arena *a = r->a;
+    if (!r->defer) {                                /* every entry real */
+        uint32_t nd = r->stk[p];
+        if (!dispatch_write(r, sh, d, nd)) return false;
+        r->top = p;
+        *curp = nd;
+    } else if (d->U && defers(r, d->U)) {           /* fused, deferred */
+        if (!tmpl_defer(r, d->U, d->uarg, p, curp)) return false;
+        r->fused++;
+    } else if (d->U) {                              /* fused, written */
+        uint32_t into = SK_KIND(r->stk[p]) == SK_VIRT ? AV_NONE : SK_BODY(r->stk[p]);
+        uint32_t inst = tmpl_instance(a, d->U, d->uarg, into);
+        assert(inst != AV_NONE && "allocation past what ensure() reserved");
+        if (inst == AV_NONE) return false;
+        r->fused++;
+        undefer(r, p);
+        vpop(r, p);
+        r->top = p;
+        *curp = inst;
+    } else if (sh.fields == 0) {
+        root_set(r, p, (av_node){ (AV_IND << AV_TAG_SHIFT) | d->cont, 0 }, curp);
+    } else if (!defer_apply(r, p, d->cont, d->field, sh.fields, curp)) {
+        return false;
+    }
+    return true;
+}
+
 /*  The dispatch: k = m + n arguments, the redex root stk[top-k]. */
 static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
     av_arena *a = r->a;
     disp d;
     dispatch_read(r, sh, &d);
     size_t need = d.U ? d.U->nops + d.U->nsuc : (sh.fields ? sh.fields - 1 : 0);
-    if (need && a->cap - a->used < need) {
-        if (!ensure(r, need)) return AV_SIZE;
-        dispatch_read(r, sh, &d);                   /* the collection moved them */
-    }
-    uint32_t nd = r->stk[r->top - k];
-    if (!dispatch_write(r, sh, &d, nd)) return AV_SIZE;
-    r->top -= k;
-    *curp = nd;
+    uint64_t gcs = a->collections;
+    if (!hensure(r, need, curp)) return AV_SIZE;    /* and the virtual entries' reserve */
+    if (a->collections != gcs) dispatch_read(r, sh, &d);      /* the collection moved them */
+    if (!dispatch_put(r, sh, &d, r->top - k, curp)) return AV_SIZE;
     r->steps++;
     r->dispatches++;
     return AV_WHNF;
@@ -546,15 +849,14 @@ static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
 static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
     av_arena *a = r->a;
     uint32_t m, n;
-    if (!av_numeral(a, av_right(a, r->stk[r->top - 1]), &m) ||
-        !av_numeral(a, av_right(a, r->stk[r->top - 2]), &n))
+    if (!av_numeral(a, sarg(r, r->top - 1), &m) || !av_numeral(a, sarg(r, r->top - 2), &n))
         return 0;
     uint64_t v = 0, need = 0;
     if (op == AV_WOP_ADD) { v = (uint64_t)m + n; need = 2 * (uint64_t)n; }
     if (op == AV_WOP_MUL) { v = (uint64_t)m * n; need = 2 * v; }
     if (v > AV_WORD_MAX || need > WORD_BUILD_MAX) return 0;
-    if (need && !ensure(r, (size_t)need)) return -1;
-    uint32_t x = av_res(a, av_right(a, r->stk[r->top - 1]));     /* m: reread */
+    if (need && !hensure(r, (size_t)need, curp)) return -1;
+    uint32_t x = av_res(a, sarg(r, r->top - 1));                 /* m: reread */
     switch (op) {
     case AV_WOP_ADD:
         for (uint32_t i = 0; i < n; i++) x = word_succ(a, x);
@@ -567,20 +869,17 @@ static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
         for (uint64_t i = 0; i < v; i++) x = word_succ(a, x);
         break;
     case AV_WOP_IFEQ:
-        x = av_res(a, av_right(a, r->stk[r->top - (m == n ? 3 : 4)]));
+        x = av_res(a, sarg(r, r->top - (m == n ? 3 : 4)));
         break;
     case AV_WOP_IFLE:
-        x = av_res(a, av_right(a, r->stk[r->top - (m <= n ? 3 : 4)]));
+        x = av_res(a, sarg(r, r->top - (m <= n ? 3 : 4)));
         break;
     default:
         return 0;
     }
     assert(x != AV_NONE && "allocation past what ensure() reserved");
     if (x == AV_NONE) return -1;
-    uint32_t nd = r->stk[r->top - k];               /* the redex root */
-    arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
-    r->top -= k;
-    *curp = nd;
+    root_set(r, r->top - k, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 }, curp);
     r->steps++;
     r->word_ops++;
     return 1;
@@ -631,6 +930,15 @@ static int p2_fire(R *r, uint32_t jn, uint32_t id, uint32_t *curp) {
  *  without a collection; the caller then instantiates as before. */
 enum { CJ_NONE, CJ_CTOR, CJ_WORD, CJ_ZERO };
 
+/*  Both writes of a join from the free nodes: the instance's T->nops +
+ *  T->nsuc at most, the dispatch's a fused template's (at most twice the
+ *  scratch every template fits) or its fields' applications.  The caller
+ *  reserves them before it asks, so whether a case joins never depends on
+ *  how full the arena is. */
+static inline size_t join_need(const av_arena *a, const av_tmpl *T) {
+    return (size_t)T->nops + T->nsuc + 2 * (size_t)a->tmpl_scratch_cap + AV_JET_ARITY_MAX;
+}
+
 /*  Which value, if any, T's case meets its formal as: CJ_NONE, or the kind
  *  case_join takes.  Inline: it is asked at nearly every instance of a
  *  case, and most answers are no. */
@@ -654,7 +962,8 @@ unsigned case_kind(const av_arena *a, const av_tmpl *T, const uint32_t *args) {
 }
 
 __attribute__((noinline))
-static bool case_join(R *r, const av_tmpl *T, const uint32_t *args, uint32_t nd, unsigned kind) {
+static int case_join(R *r, const av_tmpl *T, const uint32_t *args, size_t at, unsigned kind,
+                     uint32_t *curp) {
     av_arena *a = r->a;
     unsigned p = T->case_p;
     uint32_t h = av_res(a, args[T->case_h - 1]);
@@ -666,11 +975,7 @@ static bool case_join(R *r, const av_tmpl *T, const uint32_t *args, uint32_t nd,
     }
     av_ctor sh = { 0, 0, 0 };
     if (kind == CJ_CTOR) sh = a->tmpls[a->jets[AV_JET_ID(av_left(a, h))].tmpl - 1].ctor;
-    /* both writes from the free nodes: the instance's T->nops + T->nsuc at
-     * most, the dispatch's a fused template's (at most twice the scratch
-     * every template fits) or its fields' applications */
-    size_t need = (size_t)T->nops + T->nsuc + 2 * (size_t)a->tmpl_scratch_cap + AV_JET_ARITY_MAX;
-    if (a->cap - a->used < need) return false;
+    if (a->cap - a->used < join_need(a, T)) return 0;
 
     /* the instance, its spine and root left out */
     uint32_t *out = a->tmpl_scratch, *cv = out + T->nops;
@@ -695,21 +1000,21 @@ static bool case_join(R *r, const av_tmpl *T, const uint32_t *args, uint32_t nd,
     r->steps++;                                 /* the instance */
     r->tmpl_calls++;
     if (kind == CJ_ZERO) {                      /* K z s -> z */
-        arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | c[0], 0 });
+        root_set(r, at, (av_node){ (AV_IND << AV_TAG_SHIFT) | c[0], 0 }, curp);
     } else if (kind == CJ_WORD) {               /* W n z s -> s (W (n-1)) */
-        arena_set(a, nd, (av_node){ c[1], word_pred(a, h) });
+        root_set(r, at, (av_node){ c[1], word_pred(a, h) }, curp);
         r->dispatches++;
     } else {
         disp d;
         for (unsigned i = 0; i < m; i++) d.field[i] = av_res(a, sp[m - 1 - i]);
         d.cont = c[sh.index];
         dispatch_fuse(a, sh, &d);
-        if (!dispatch_write(r, sh, &d, nd)) return false;
+        if (!dispatch_put(r, sh, &d, at, curp)) return -1;     /* SIZE */
         r->dispatches++;
     }
     r->steps++;                                 /* the dispatch */
     r->joins++;
-    return true;
+    return 1;
 }
 
 /*  Reduce r->cur to weak head normal form in place.  The spine lives on
@@ -720,12 +1025,13 @@ static av_status whnf_share(R *r) {
     const av_opts *o = r->o;
     size_t bottom = r->top;
     uint32_t cur = r->cur;
+    assert(r->ndstk == 0 && r->nvirt == 0);
 
     for (;;) {
         cur = av_res(a, cur);
         if (av_tag(a, cur) == AV_APP) {
             SSTATS_FORCE(a, cur, r->steps);
-            if (!push(r, cur)) return AV_SIZE;
+            if (!push(r, cur)) return stop(r, bottom, cur, AV_SIZE);
             /* path compression: point past an indirection for good, or
              * chains grow by one per contraction and walks go quadratic */
             uint32_t l = av_left(a, cur), rl = av_res(a, l);
@@ -733,8 +1039,8 @@ static av_status whnf_share(R *r) {
             cur = rl;
             continue;
         }
-        if (interrupted(r)) return AV_INTERRUPTED;
-        if (r->steps >= o->max_steps) return AV_FUEL;
+        if (interrupted(r)) return stop(r, bottom, cur, AV_INTERRUPTED);
+        if (r->steps >= o->max_steps) return stop(r, bottom, cur, AV_FUEL);
         if (av_tag(a, cur) == AV_JET && (av_left(a, cur) & AV_JET_WORD)) {
             /* a word (§6.10): with its two continuations, W n z s is
              * s (W (n-1)), written over the redex root; short of them, a
@@ -743,7 +1049,7 @@ static av_status whnf_share(R *r) {
             if (r->top - bottom < 2) {
                 if (!r->normal) break;
                 r->jnode = cur;
-                if (!ensure(r, 1)) return AV_SIZE;
+                if (!ensure(r, 1 + r->nvirt)) return stop(r, bottom, r->jnode, AV_SIZE);
                 cur = r->jnode;
                 r->jnode = AV_NONE;
                 uint32_t t = reserved_app(a, a->word_suc, word_pred(a, cur));
@@ -751,12 +1057,11 @@ static av_status whnf_share(R *r) {
                 cur = t;
                 continue;
             }
-            uint32_t n = r->stk[r->top - 2];
-            uint32_t sk = av_res(a, av_right(a, n));
-            if (o->profile) profile_rewrote(o->profile, n);
-            arena_set(a, n, (av_node){ sk, word_pred(a, cur) });
-            r->top -= 2;
-            cur = n;
+            size_t p = r->top - 2;
+            if (!prepare(r, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
+            uint32_t sk = av_res(a, sarg(r, p));
+            if (o->profile) profile_rewrote(o->profile, r->stk[p]);
+            root_set(r, p, (av_node){ sk, word_pred(a, cur) }, &cur);
             r->steps++;
             r->dispatches++;
             continue;
@@ -765,8 +1070,12 @@ static av_status whnf_share(R *r) {
             uint32_t id = AV_JET_ID(av_left(a, cur));
             av_status ist;
             uint32_t iout;
+            /* the steps below that read the stack as nodes: everything
+             * deferred written first */
+            if (interp_role(a, id) && !materialize(r, bottom, &cur))
+                return stop(r, bottom, cur, AV_SIZE);
             int ir = interp_role(a, id) ? try_interp(r, &cur, r->top - bottom, &ist, &iout) : 0;
-            if (ir < 0) return ist;
+            if (ir < 0) return stop(r, bottom, cur, ist);
             if (ir > 0) {                       /* the redex root becomes it */
                 unsigned k = fire_nargs(r, id);
                 uint32_t n = r->stk[r->top - k];     /* reread: the fire may collect */
@@ -780,13 +1089,13 @@ static av_status whnf_share(R *r) {
                  * g (Y g), a fresh Y g, one step -- convertible, not a
                  * reduct, and acyclic; short of it, its term */
                 if (r->top - bottom >= 1) {
-                    if (!ensure(r, 1)) return AV_SIZE;
-                    uint32_t n = r->stk[r->top - 1];        /* the redex root, reread */
-                    uint32_t y = reserved_app(a, av_left(a, n), av_right(a, n));
-                    if (o->profile) profile_rewrote(o->profile, n);
-                    arena_set(a, n, (av_node){ av_res(a, av_right(a, n)), y });
-                    r->top -= 1;
-                    cur = n;
+                    size_t p = r->top - 1;                  /* the redex root */
+                    if (!hensure(r, 1, &cur)) return stop(r, bottom, cur, AV_SIZE);
+                    uint32_t g = sarg(r, p);
+                    uint32_t yf = SK_KIND(r->stk[p]) == SK_REAL ? av_left(a, r->stk[p]) : cur;
+                    uint32_t y = reserved_app(a, yf, g);
+                    if (o->profile) profile_rewrote(o->profile, r->stk[p]);
+                    root_set(r, p, (av_node){ av_res(a, g), y }, &cur);
                     r->steps++;
                     r->fix_calls++;
                     continue;
@@ -801,12 +1110,14 @@ static av_status whnf_share(R *r) {
                  * stands; else a fresh copy of P's term, so the node's own
                  * term is never written and stays P's for the next call */
                 if (r->top - bottom >= 1) {
+                    if (!materialize(r, bottom, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     int pf = p2_fire(r, cur, id, &cur);
-                    if (pf < 0) return AV_SIZE;
+                    if (pf < 0) return stop(r, bottom, cur, AV_SIZE);
                     if (pf > 0) continue;       /* fired, or unbound */
                 }
                 r->jnode = cur;
-                if (!ensure(r, a->jets[id].term_nodes)) return AV_SIZE;
+                if (!ensure(r, a->jets[id].term_nodes + r->nvirt))
+                    return stop(r, bottom, r->jnode, AV_SIZE);
                 r->jnode = AV_NONE;
                 cur = jet_term_copy(a, id);
                 assert(cur != AV_NONE && "allocation past what ensure() reserved");
@@ -818,8 +1129,9 @@ static av_status whnf_share(R *r) {
                  * term, the node kept for the next call */
                 unsigned op = a->jets[id].word_op, k = op >= AV_WOP_IFEQ ? 4u : 2u;
                 if (r->top - bottom >= k) {
+                    if (!prepare(r, r->top - k, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     int wf = word_fire(r, op, k, &cur);
-                    if (wf < 0) return AV_SIZE;
+                    if (wf < 0) return stop(r, bottom, cur, AV_SIZE);
                     if (wf > 0) continue;
                 }
                 if (!(av_left(a, cur) & AV_JET_SHARED)) {
@@ -834,32 +1146,44 @@ static av_status whnf_share(R *r) {
                 const av_tmpl *T = &a->tmpls[a->jets[id].tmpl - 1];
                 if (o->data && av_ctor_is(T->ctor) && r->top - bottom >= T->k) {
                     /* a constructor with every argument (§6.10) */
+                    if (!prepare(r, r->top - T->k, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     av_status ds = dispatch(r, T->ctor, T->k, &cur);
-                    if (ds != AV_WHNF) return ds;
+                    if (ds != AV_WHNF) return stop(r, bottom, cur, ds);
                     continue;
                 }
                 if (r->top - bottom >= T->k) {
                     if (o->jetstats) jetstats_fire(o->jetstats, cur, id);
-                    if (!ensure(r, T->nops + T->nsuc)) return AV_SIZE;
+                    size_t p = r->top - T->k;               /* the redex root */
+                    if (!prepare(r, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
+                    bool joins = o->data && T->case_p && !o->no_join && !o->profile &&
+                                 !o->jetstats && o->max_steps - r->steps >= 2;
+                    if (!hensure(r, joins ? join_need(a, T) : T->nops + T->nsuc, &cur))
+                        return stop(r, bottom, cur, AV_SIZE);
                     uint32_t args[AV_JET_ARITY_MAX];
                     for (unsigned i = 0; i < T->k; i++)
-                        args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
-                    uint32_t n = r->stk[r->top - T->k];     /* the redex root */
+                        args[i] = av_res(a, sarg(r, r->top - 1 - i));
                     unsigned ck;
-                    if (o->data && T->case_p && !o->no_join && !o->profile && !o->jetstats &&
-                        o->max_steps - r->steps >= 2 &&
-                        (ck = case_kind(a, T, args)) != CJ_NONE && case_join(r, T, args, n, ck)) {
-                        r->top -= T->k;
-                        cur = n;
-                        continue;
+                    if (joins && (ck = case_kind(a, T, args)) != CJ_NONE) {
+                        int cj = case_join(r, T, args, p, ck, &cur);
+                        if (cj < 0) return stop(r, bottom, cur, AV_SIZE);
+                        if (cj > 0) continue;
                     }
-                    if (o->profile) profile_rewrote(o->profile, n);
-                    uint32_t inst = tmpl_instance(a, T, args, n);
-                    assert(inst != AV_NONE && "allocation past what ensure() reserved");
-                    if (inst == AV_NONE) return AV_SIZE;
-                    SSTATS_INSTANCE(a, T, args, r->steps);
-                    r->top -= T->k;
-                    cur = n;
+                    /* a virtual root has no node to write an undeferred
+                     * instance over */
+                    uint32_t n = SK_KIND(r->stk[p]) == SK_VIRT ? AV_NONE : SK_BODY(r->stk[p]);
+                    if (defers(r, T)) {
+                        if (!tmpl_defer(r, T, args, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
+                    } else {
+                        if (o->profile) profile_rewrote(o->profile, n);
+                        uint32_t inst = tmpl_instance(a, T, args, n);
+                        assert(inst != AV_NONE && "allocation past what ensure() reserved");
+                        if (inst == AV_NONE) return stop(r, bottom, cur, AV_SIZE);
+                        SSTATS_INSTANCE(a, T, args, r->steps);
+                        undefer(r, p);
+                        vpop(r, p);
+                        r->top = p;
+                        cur = inst;
+                    }
                     r->steps++;
                     r->tmpl_calls++;
                     continue;
@@ -885,17 +1209,20 @@ static av_status whnf_share(R *r) {
                 uint32_t inner = av_right(a, cur);
                 if (av_left(a, cur) & AV_JET_SHARED) {
                     r->jnode = cur;
-                    if (!ensure(r, a->jets[id].term_nodes)) return AV_SIZE;
+                    if (!ensure(r, a->jets[id].term_nodes + r->nvirt))
+                    return stop(r, bottom, r->jnode, AV_SIZE);
                     cur = r->jnode;
                     r->jnode = AV_NONE;
                     inner = jet_term_copy(a, id);
                     assert(inner != AV_NONE && "allocation past what ensure() reserved");
-                    if (inner == AV_NONE) return AV_SIZE;
+                    if (inner == AV_NONE) return stop(r, bottom, cur, AV_SIZE);
                 }
                 arena_set(a, cur, (av_node){ (AV_IND << AV_TAG_SHIFT) | inner, 0 });
                 cur = inner;
                 continue;
             }
+            /* a residual jet fires: everything deferred written first */
+            if (!materialize(r, bottom, &cur)) return stop(r, bottom, cur, AV_SIZE);
             unsigned k = a->jets[id].arity;
             uint32_t args[AV_JET_ARITY_MAX];
             if (o->jet_check && (r->jet_calls + 1) % o->jet_check == 0) {
@@ -928,27 +1255,27 @@ static av_status whnf_share(R *r) {
 
         if (o->profile)                         /* S f, S f g; K x; I x */
             profile_charge(o->profile, r->stk + r->top, c == SKI_S ? 2 : 1, c);
-        uint32_t n;
+        size_t p = r->top - k;                  /* the redex root */
+        if (!prepare(r, p, &cur)) return stop(r, bottom, cur, AV_SIZE);
         if (c == SKI_S) {                       /* S f g x -> f x (g x) */
-            if (!ensure(r, 2)) return AV_SIZE;
-            n = r->stk[r->top - 3];
-            uint32_t f = av_res(a, av_right(a, r->stk[r->top - 1]));
-            uint32_t g = av_res(a, av_right(a, r->stk[r->top - 2]));
-            uint32_t x = av_res(a, av_right(a, n));
+            if (!hensure(r, 2, &cur)) return stop(r, bottom, cur, AV_SIZE);
+            uint32_t f = av_res(a, sarg(r, r->top - 1));
+            uint32_t g = av_res(a, sarg(r, r->top - 2));
+            uint32_t x = av_res(a, sarg(r, p));
             uint32_t fx = reserved_app(a, f, x);
             uint32_t gx = reserved_app(a, g, x);
-            if (o->profile) profile_rewrote(o->profile, n);
-            arena_set(a, n, (av_node){ fx, gx });
+            if (o->profile) profile_rewrote(o->profile, r->stk[p]);
+            root_set(r, p, (av_node){ fx, gx }, &cur);
         } else {                                /* K x y -> x;  I x -> x */
-            n = r->stk[r->top - k];
-            uint32_t x = av_res(a, av_right(a, r->stk[r->top - 1]));
-            if (o->profile) profile_rewrote(o->profile, n);
-            arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
+            uint32_t x = av_res(a, sarg(r, r->top - 1));
+            if (o->profile) profile_rewrote(o->profile, r->stk[p]);
+            root_set(r, p, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 }, &cur);
         }
-        r->top -= k;
-        cur = n;
         r->steps++;
     }
+    /* a weak head normal form: the value the deferred roots stand for
+     * written, so the graph shares it */
+    if (!materialize(r, bottom, &cur)) return AV_SIZE;
     r->top = bottom;
     return AV_WHNF;
 }
@@ -1022,12 +1349,21 @@ av_opts av_opts_default(void) {
         .data      = false,
         .fix       = false,
         .no_join   = false,
+        .no_defer  = false,
     };
 }
 
 av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     R r = { .a = a, .o = o, .root = t, .head = AV_NONE, .cur = AV_NONE,
-            .jnode = AV_NONE };
+            .jnode = AV_NONE, .hold = AV_NONE };
+    /* deferred roots: share mode's instances, not where a profile or the
+     * jet stats key on the nodes rewritten, nor in the stats build, which
+     * counts the cells instances write */
+    r.defer = o->strategy == AV_SHARE && o->templates && !o->no_defer && !o->profile &&
+              !o->jetstats;
+#ifdef AV_STRICT_STATS
+    r.defer = false;
+#endif
     av_active me = { roots, remap_marks, &r, a->active };
     a->active = &me;
     struct av_jetstats *outer_stats = a->jetstats;  /* a nested run keeps its own */
@@ -1047,11 +1383,12 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
 
     a->active = me.next;
     free(r.stk);
+    free(r.dstk);
     free(r.fr);
     free(r.work);
     free(r.marks);
     return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls,
                         r.jet_steps, r.jet_fault, r.tmpl_calls,
                         r.dispatches, r.fused, r.word_ops, r.fix_calls, r.joins,
-                        r.p2_calls, r.p2_declines, r.p2_unbound };
+                        r.p2_calls, r.p2_declines, r.p2_unbound, r.deferred };
 }
