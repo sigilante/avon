@@ -938,8 +938,8 @@ static int kernel_main(int argc, char **argv) {
                     if (!av_pier_entropy(p, eny_file, &err)) {
                         fprintf(stderr, "avon: %s: entropy: %s\n", pier, err);
                         rc = 1;
-                    } else {
-                        report_unanswered(p);
+                    } else if (!report_unanswered(p)) {
+                        rc = 1;                 /* as poke: a file run out stops it */
                     }
                 }
             }
