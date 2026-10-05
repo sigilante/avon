@@ -38,8 +38,9 @@ design lives. Last revised 2026-10-05.
 2. **Check entropy against §9.1.** lean-ski built and proved it; Avon confirms the pier
    does what §9.1 decides: the `--entropy` opt-in, logging before applying, the boot
    reply, and `--entropy=FILE` stopping when the file runs out.
-3. **Stage 8** (item 3): a scoping pass first, then the front end to the milestone it
-   sets.
+3. **Stage 8** (item 3) through M4, scoped 2026-10-05: every accepted corpus program
+   compiles to Python's terms, hash for hash. The checkers, M5 and M6, follow the
+   audit.
 4. **A codebase audit** by reviewers in parallel: failure paths, documentation
    against code, the build and its gates, the security edges, the shape of
    `reduce.c` and `main.c`. Slated into it: plain SKI's residual 1.9 to 3.9% since
@@ -90,6 +91,28 @@ SKIjack-0's front end compiles itself in Avon. What remains runs in Python: core
 macros, signatures, quotation, scries, namespace literals and the type checker. Most
 of the work is SKIjack programs in skijack's repository; Avon runs them and checks them
 on the corpus, hash for hash. It is the one unfinished stage. Next in order (step 3).
+
+Scoped 2026-10-05, against skijack `6a870ac`. The SKIjack-0 front end
+(`selfhost/front0.ascii.ski`) is 406 lines; Python's front end about 7,100. Sizes
+are estimates, in lines of SKIjack:
+
+| milestone | adds | size | corpus programs matching |
+|---|---|---:|---:|
+| M1 | wider lexer and parser, plain cores, hygienic macros, signatures parsed and dropped, the birds `B`, `C`, `W`, `Y`, the numeral operations | 150–250 | 5 of 17 |
+| M2 | interpreter generation (`generate.py`): step and loop equations, names built at run time | 150–250 | 10 |
+| M3 | quotation and level-1 runs: object leaves, encoding, `\|-`, fuel | 100–160 | 13 |
+| M4 | scries, path literals, namespace literals | 60–110 | all 17 |
+| M5 | Stage A (`check.py`): refusal parity, errors with a class | 250–400 | — |
+| M6 | Stage B (`typecheck.py`): Hindley–Milner over an explicit store, equirecursive unification | 400–700 | — |
+
+Checking never changes the terms, so M1 to M4 are each checked against
+`skijack.compile(..., check=False)` on the corpus as they land, with `run0.py`'s
+random and edge programs extended. The front end stays a separate program from
+`front0`, whose fixed point stays as it is; the reader `avon front0` serves both while
+the result's shape is kept. Hard parts, from the scoping: no parametric types, so
+every table is its own trie (generate them, as `tables.py` does); names built at run
+time need the intern table kept past lexing; Python's output order (compare as a
+map, or reproduce it).
 
 ### 4. Safe cycles for Y: parked 2026-10-05 (`DESIGN.md` §6.11)
 
