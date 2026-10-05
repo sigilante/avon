@@ -1,0 +1,33 @@
+# make check on every push to master and every pull request: the release
+# binary, the stats build, and every unit test under ASan and UBSan.  The
+# checks that need a lean-ski or skijack checkout (witness-check,
+# zk-jet-witness-check, p2-witness-check, front0-check, selfhost-check,
+# hider-check) stay manual: see the Makefile's header.
+name: check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: clang
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang
+      - name: clang version
+        run: clang --version
+      - name: release build
+        run: make -j4 build/avon
+      - name: stats build
+        run: make -j4 stats
+      - name: unit tests under ASan and UBSan
+        run: make -j4 check
