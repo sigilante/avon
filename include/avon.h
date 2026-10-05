@@ -354,7 +354,7 @@ typedef struct {
                                    one step (§6.11); copy mode ignores it */
     bool        fix_shared;     /* with fix: every unfolding of a g passes
                                    on one Y g, never written (§6.11,
-                                   "Shared"): an experiment                */
+                                   "Shared"): less memory, not less time  */
     bool        p2;             /* share mode: P applied to a state of
                                    sixteen 31-bit elements runs natively,
                                    one step (§6.12); copy mode ignores it */

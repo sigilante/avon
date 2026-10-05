@@ -1255,7 +1255,7 @@ plan. `--fix` stays: it agrees with SKI on every test, it is cheap, and
 a witness row for it could be built. Today `avon witness` refuses `--fix`,
 as it refuses `--templates` and `--data`: the witness runs plain SKI.
 
-**Shared, an experiment (`--memory`, 2026-10-05).** Almost all of a
+**Shared (`--memory`, 2026-10-05).** Almost all of a
 port's live set is Y's unfoldings: with the cycle, the largest live set
 after a collection falls from 2,293,349 nodes to 590 on OrdList and from
 3,956,193 to 1,355 on PermSort. A recursive function is a shared node
@@ -1278,11 +1278,12 @@ cycle's time: 1.00 times `--fix`'s by geometric mean, PermSort 1.10 faster
 and Queens2 1.13 slower. A cycle's node is its own value, so a recursive
 call reaches it at once; `y0` is never written, so every call passes
 through it, its jet and a table lookup, 10 to 40 million times a port
-(`docs/BENCHMARK.md`, "Y shared: an experiment"). Answers and normal forms
+(`docs/BENCHMARK.md`, "Y shared (`--memory`)"). Answers and normal forms
 are `--fix`'s, the front end compiles its 492 names hash for hash, and
 `tests/test_fix.c` checks a term with no normal form, the fixtures, every
-fuel to 300 and a collecting arena. Off unless asked; `avon witness` and
-copy mode refuse it with `--fix`.
+fuel to 300 and a collecting arena. An option for a run whose heap matters
+more than its time, such as a long-lived kernel; off unless asked, and
+`avon witness` and copy mode refuse it with `--fix`.
 
 **True cycles: parked.** On today's code the cycle would take 1.12 times
 less time than `--fix` by geometric mean, 1.00 to 1.25 (`docs/BENCHMARK.md`,

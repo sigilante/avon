@@ -69,7 +69,7 @@ signatures and quotation. It is the one unfinished stage.
 
 ### 4. Safe cycles for Y: parked 2026-10-05 (`DESIGN.md` §6.11)
 
-Measured first (`BENCHMARK.md`, "Y shared: an experiment" and "The ceiling for a
+Measured first (`BENCHMARK.md`, "Y shared (`--memory`)" and "The ceiling for a
 true cycle"):
 - Nearly all of a port's live set is Y's unfoldings. `--memory` (one shared `Y g`
   per generator, acyclic) cuts peak memory to 4 to 8 MB, at `--fix`'s time.

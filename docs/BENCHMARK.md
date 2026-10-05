@@ -547,7 +547,7 @@ Compiled with skijack's inlining, the geometric means are 2.04, 1.98 and
 --skijack ~/skijack` (its `fix` mode); the cycle from `e74e581`'s binary
 with `--templates=DIR --data --knot`.
 
-## Y shared: an experiment
+## Y shared (`--memory`)
 
 `--memory` (`DESIGN.md` §6.11, "Shared") against `--fix`, Avon
 `fix-shared` over `eb71bb1`, share mode with templates and data jets.
