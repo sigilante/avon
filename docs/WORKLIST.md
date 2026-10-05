@@ -25,6 +25,28 @@ design lives. Last revised 2026-10-05.
   most events need no bits. lean-ski proves a poke of a reply with the bits private
   (2026-10-05, `Ski/Entropy.lean`).
 
+- **`--memory`** (2026-10-05, #18; `DESIGN.md` §6.11, "Shared"). One `Y g` per
+  generator, never written, and one shared unfolding: peak memory of a few MB where
+  `--fix` holds hundreds, at about `--fix`'s time. Safe cycles parked on their measured
+  ceiling (item 4). Integer literals proposed to SKIjack (issue #7).
+
+## Next, in this order (agreed 2026-10-05)
+
+1. **CI.** GitHub Actions running `make check` on every push and pull request, so that
+   nothing reaches master red. The checks that need lean-ski or skijack checkouts stay
+   manual for now.
+2. **Check entropy against §9.1.** lean-ski built and proved it; Avon confirms the pier
+   does what §9.1 decides: the `--entropy` opt-in, logging before applying, the boot
+   reply, and `--entropy=FILE` stopping when the file runs out.
+3. **Stage 8** (item 3): a scoping pass first, then the front end to the milestone it
+   sets.
+4. **A codebase audit** by reviewers in parallel: failure paths, documentation
+   against code, the build and its gates, the security edges, the shape of
+   `reduce.c` and `main.c`. Slated into it: plain SKI's residual 1.9 to 3.9% since
+   deferred roots (code generation), and deferral's 8 to 39 MB of extra peak memory with
+   the same live set (the allocator).
+5. **Hygiene refactors** from the audit's findings, each its own pull request.
+
 ## In progress
 
 ### 0. The papers' measurements (outline: the "Avon paper outlines" page)
@@ -64,8 +86,10 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
 
 ### 3. Stage 8: the full language's front end (`DESIGN.md` §20.3)
 
-SKIjack-0's front end compiles itself in Avon. What remains is cores, macros,
-signatures and quotation. It is the one unfinished stage.
+SKIjack-0's front end compiles itself in Avon. What remains runs in Python: cores,
+macros, signatures, quotation, scries, namespace literals and the type checker. Most
+of the work is SKIjack programs in skijack's repository; Avon runs them and checks them
+on the corpus, hash for hash. It is the one unfinished stage. Next in order (step 3).
 
 ### 4. Safe cycles for Y: parked 2026-10-05 (`DESIGN.md` §6.11)
 
