@@ -152,12 +152,13 @@ form (`Y K` stops at `K (Y K)`).
 **Poseidon2 run natively** (`--p2=FILE`, §6.12) prints
 `p2: 1 occurrences of P bound (skijack-1:43f97c21e068ebe7); 1
 permutations run natively among the contractions, 0 declined (an argument
-not a state as it stands), 0 unbound at a fire`. FILE must hold
+neither a state nor a chain of calls ending in one), 0 unbound at a call`. FILE must hold
 lean-ski's `P`: Avon pins its 256-bit digest and refuses any other term. Only a jet node whose term is `P`'s,
-node for node, fires. `P` fires on a state as it stands and runs its term
-on anything else, counted as a decline, so the normal form is SKI's. A
-chain `P (P x)` declines the outer call, which then takes SKI's 10^9
-steps: build each state before passing it on.
+node for node, fires. `P` fires on a state as it stands, or on a chain
+`P (P … x)` ending in one, innermost call first; it runs its term on
+anything else, counted as a decline, so the normal form is SKI's. Any
+other computation between calls, `P (f (P x))`, declines unless each
+state is built before it is passed on.
 
 ```sh
 (cd ~/lean-ski && lake exe p2run 1 /tmp/p2)

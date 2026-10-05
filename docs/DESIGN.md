@@ -1307,34 +1307,52 @@ another jet already holds under another role or another term.
 
 `av_jets_match` wraps each occurrence of `P` in the program, which may be
 hostile. `av_p2_bind` compares each wrapped term with FILE's, node for
-node (`av_equal`), unbinding any that differs. Every fire checks its jet
-node's term again, so a jet node made after the bind is held to the same
-rule; such nodes arise in a copy of another jet's term, a template's
-globals, or a run-time match. The comparison visits each pair of nodes
-once, and answers no past eight pairs per node of `P`'s term. A 64-bit
-collision in the program therefore cannot reach the native step, which
-would otherwise replace an arbitrary term's reduction with a
-permutation. The check costs under 0.01 s a fire.
+node (`av_equal`), unbinding any that differs. Every fire and every
+decline checks its jet node's term again, so a jet node made after the
+bind is held to the same rule; such nodes arise in a copy of another
+jet's term, a template's globals, or a run-time match. A decline needs
+the check as much as a fire does, since it runs FILE's term, not the
+node's. Before 2026-10-04 it was unchecked, so such a node over anything
+but a state ran `P` in place of its own term. The comparison visits each
+pair of nodes once, and answers no past eight pairs per node of `P`'s
+term. A 64-bit collision in the program therefore cannot reach the native
+step, which would otherwise replace an arbitrary term's reduction with a
+permutation. The check costs under 0.01 s a call.
 
-**The jet fires only on a state as it stands.** At the head with an
-argument, `P` reads the argument through indirections and jet nodes
-(`av_p2_state_read`). The argument must be exactly `stateN vs`:
+**The jet fires on a state as it stands, or on a chain of calls ending in
+one.** At the head with an argument, `P` reads the argument through
+indirections and jet nodes (`av_p2_state_read`). The argument must be
+exactly `stateN vs`:
 
 - each element `bitsT 31 v` holds 31 pairs `S (S I (K b)) (K rest)`;
 - each bit is `K` (1) or `K I` (0), least significant first;
 - each element and the state end in `K`, with sixteen elements.
 
 The redex root then becomes the permuted state, 2,562 fresh nodes, in one
-step. Any other argument runs a fresh copy of `P`'s term, counted as a
-decline: a thunk, a malformed state, or `P`'s own unreduced output. The
-copy keeps the jet node's own term unwritten, so a shared `P` stays `P`
-for its next call. A jet node unbound at a fire is counted too. So
-`P (P x)` permutes the inner call natively and the outer one in S, K and
-I, because lazy reduction meets the outer call first: 981 million steps
-and 11 s for test vector 1, one decline reported, whether the two `P`s
-are one node or two. Words (§6.10) work the same way: an operation fires
-only on operands already held. A chain fires natively only when each
-state is built before it is passed on.
+step. An argument that is itself a call `P y` is a chain: lazy reduction
+meets the outer call first. Avon checks the outer node's term, then walks
+down the chain once to the innermost call whose argument is a state. It
+fires the calls from there outward, each writing its permuted state over
+its call's node, one step each, as far as the fuel and the free nodes
+reach. Only a collection, which moves the nodes walked, forces a second
+walk, so a chain of m calls costs O(m) visits per collection, not per
+call: 16,000 calls take 0.16 s. A node found to be `P`'s is remembered
+until the next collection, so a shared `P` is compared once, not once
+per call. Each write is the reduct lazy reduction would write once the
+outer call forced the inner one, so sharing holds: a call shared
+elsewhere is permuted once. `P (P x)` for test vector 1 now takes two steps and 0.03 s,
+against 981 million steps and 11 s before, when the outer call declined.
+The unjetted run takes 1,943,605,466 steps and 22 s, to the same normal
+form, byte for byte.
+
+Any other argument runs a fresh copy of `P`'s term, counted as a decline:
+a thunk, a malformed state, or a chain whose innermost argument is no
+state. The copy keeps the jet node's own term unwritten, so a shared `P`
+stays `P` for its next call. A jet node unbound at a call is counted too.
+Words (§6.10) work the same way: an operation fires only on operands
+already held. A chain of `P` calls fires natively. Any other computation
+between the calls, `P (f (P x))`, declines unless its state is built
+before it is passed on.
 
 **Counts change, as for the other share-mode jets.** A fire is one step,
 reported as `p2: … permutations run natively`. Fuel counts those steps,

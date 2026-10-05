@@ -67,6 +67,12 @@ typedef struct {
     uint64_t       tmpl_calls;
     uint64_t       dispatches, fused, word_ops, fix_calls, joins;
     uint64_t       p2_calls, p2_declines, p2_unbound, deferred;
+    uint32_t      *p2c;         /* share: a chain of P calls, its call and
+                                   jet node at each level, outermost first */
+    size_t         p2cap;
+    av_node        p2_seen;     /* share: the jet node last found P's, as  */
+    uint32_t       p2_node;     /* it stood, and where, before collection  */
+    uint64_t       p2_gen;      /* p2_gen - 1; 0 none                      */
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node being demoted        */
@@ -885,25 +891,112 @@ static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
     return 1;
 }
 
-/*  The Poseidon2 jet (§6.12), jet node jn of jet id at the head with its
- *  argument: 1 fired, the redex root now the permuted state; 0 declined,
- *  the argument not a state as it stands, to run P's term; 2 unbound, jn's
- *  term not P's, jn now an indirection to it; -1 SIZE.  P_specN is the
- *  licence: P applied to stateN vs, sixteen 31-bit elements, reduces to
- *  stateN (permute vs). */
-static int p2_fire(R *r, uint32_t jn, uint32_t id, uint32_t *curp) {
+/*  Whether jet node jn of Poseidon2 jet id has P's term: checked against
+ *  the registered term, node for node, unless jn was found so since the
+ *  last collection and stands as it stood then.  A node found otherwise is
+ *  unbound, an indirection to its own term.  A jet node's term is written
+ *  only to a reduct, so a term once found P's stays convertible to it. */
+static bool p2_ok(R *r, uint32_t jn, uint32_t id) {
+    av_arena *a = r->a;
+    av_node v = a->nodes[jn];
+    if (r->p2_gen == a->collections + 1 && r->p2_node == jn && r->p2_seen.l == v.l && r->p2_seen.r == v.r)
+        return true;
+    if (!p2_same(a, v.r, id)) {
+        arena_set(a, jn, (av_node){ (AV_IND << AV_TAG_SHIFT) | v.r, 0 });
+        r->p2_unbound++;
+        return false;
+    }
+    r->p2_seen = v;
+    r->p2_node = jn;
+    r->p2_gen = a->collections + 1;
+    return true;
+}
+
+/*  Down a chain P (P (… (P x))) from the argument t, into r->p2c: each
+ *  call and its jet node, outermost first, and the innermost argument's
+ *  state in s.  The number of calls; 0 when t is no such chain, or a state
+ *  itself: some call's head not a Poseidon2 jet node, or the innermost
+ *  argument not a state.  SIZE_MAX: out of memory.  Reads only; the heap
+ *  is acyclic, so the walk ends. */
+static size_t p2_walk(R *r, uint32_t t, uint32_t s[16]) {
+    const av_arena *a = r->a;
+    size_t m = 0;
+    for (;;) {
+        if (av_p2_state_read(a, t, s)) return m;
+        t = av_res(a, t);
+        if (av_tag(a, t) != AV_APP) return 0;
+        uint32_t f = av_res(a, av_left(a, t));
+        if (av_tag(a, f) != AV_JET || (av_left(a, f) & AV_JET_WORD) ||
+            !a->jets[AV_JET_ID(av_left(a, f))].p2)
+            return 0;
+        if (!grow(&r->p2c, &r->p2cap, 2 * m + 2)) return SIZE_MAX;
+        r->p2c[2 * m] = t;
+        r->p2c[2 * m + 1] = f;
+        m++;
+        t = av_right(a, t);
+    }
+}
+
+/*  The calls of a chain under the redex root, fired innermost first, as
+ *  lazy reduction would fire each once the call outside it forced it: each
+ *  rewritten in place to its permuted state, one step each.  One walk
+ *  serves every call the free nodes and the fuel cover; the next pass
+ *  walks again only after a collection or when fuel runs out, so a chain
+ *  of m calls costs O(m) visits a collection, not O(m) a call.  A jet
+ *  node not P's term is unbound, and the calls outside it are left.  1
+ *  some done, the head and stack as they were; 0 no chain; -1 SIZE. */
+static int p2_chain(R *r, uint32_t *curp) {
     av_arena *a = r->a;
     uint32_t s[16];
+    for (;;) {
+        size_t m = p2_walk(r, av_right(a, r->stk[r->top - 1]), s);
+        if (m == SIZE_MAX) return -1;
+        if (m == 0) return 0;
+        size_t fuel = r->o->max_steps > r->steps ? (size_t)(r->o->max_steps - r->steps) : 0;
+        if (fuel == 0) return 1;                    /* the loop stops at FUEL */
+        size_t avail = a->cap - a->used, room = avail > r->nvirt ? (avail - r->nvirt) / P2_STATE_NODES : 0;
+        if (room == 0) {
+            /* a collection moves the nodes walked: walk again */
+            if (!hensure(r, P2_STATE_NODES, curp)) return -1;
+            continue;
+        }
+        size_t k = m < fuel ? m : fuel;
+        if (k > room) k = room;
+        for (size_t i = m; i-- > m - k;) {
+            uint32_t c = r->p2c[2 * i], jn = r->p2c[2 * i + 1];
+            if (!p2_ok(r, jn, AV_JET_ID(av_left(a, jn)))) return 1;
+            av_p2_permute(s);                   /* the next call's argument, built */
+            uint32_t x = p2_state_build(a, s);
+            if (r->o->profile) profile_rewrote(r->o->profile, c);
+            arena_set(a, c, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
+            r->steps++;
+            r->p2_calls++;
+        }
+        return 1;
+    }
+}
+
+/*  The Poseidon2 jet (§6.12), its jet node *curp, of jet id, at the head
+ *  with its argument: 1 fired, the redex root now the permuted state; 3 an
+ *  inner call of a chain fired or unbound, the head and stack as they
+ *  were, for the next pass to take the next; 0 declined, the argument
+ *  neither a state as it stands nor such a chain, to run P's term; 2
+ *  unbound, the node's term not P's, the node now an indirection to it;
+ *  -1 SIZE.  P_specN is the licence: P applied to stateN vs, sixteen
+ *  31-bit elements, reduces to stateN (permute vs). */
+static int p2_fire(R *r, uint32_t id, uint32_t *curp) {
+    av_arena *a = r->a;
+    uint32_t s[16];
+    /* the term checked first, at every fire and every decline: a jet node
+     * may have been made after av_p2_bind, in a copy of another jet's
+     * term; a decline runs the registered term, not the node's; and a
+     * chain is fired only under a P */
+    if (!p2_ok(r, *curp, id)) return 2;
     if (!av_p2_state_read(a, av_right(a, r->stk[r->top - 1]), s)) {
+        int pc = p2_chain(r, curp);
+        if (pc) return pc < 0 ? -1 : 3;
         r->p2_declines++;
         return 0;
-    }
-    /* the term checked at every fire: a jet node may have been made after
-     * av_p2_bind, in a copy of another jet's term */
-    if (!p2_same(a, av_right(a, jn), id)) {
-        arena_set(a, jn, (av_node){ (AV_IND << AV_TAG_SHIFT) | av_right(a, jn), 0 });
-        r->p2_unbound++;
-        return 2;
     }
     av_p2_permute(s);
     if (!ensure(r, P2_STATE_NODES)) return -1;
@@ -1133,9 +1226,11 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                  * term is never written and stays P's for the next call */
                 if (r->top - bottom >= 1) {
                     if (!materialize(r, bottom, &cur)) return stop(r, bottom, cur, AV_SIZE);
-                    int pf = p2_fire(r, cur, id, &cur);
+                    int pf = p2_fire(r, id, &cur);
                     if (pf < 0) return stop(r, bottom, cur, AV_SIZE);
                     if (pf > 0) continue;       /* fired, or unbound */
+                } else if (!p2_ok(r, cur, id)) {
+                    continue;                   /* bare, as a normal form reaches it: its own term */
                 }
                 r->jnode = cur;
                 if (!ensure(r, a->jets[id].term_nodes + r->nvirt))
@@ -1410,6 +1505,7 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     a->active = me.next;
     free(r.stk);
     free(r.dstk);
+    free(r.p2c);
     free(r.fr);
     free(r.work);
     free(r.marks);

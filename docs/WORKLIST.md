@@ -12,6 +12,11 @@ design lives. Last revised 2026-10-04.
   printed from a Lean proof that it computes the specification on every `uint32_t`
   state (`lean/P2Prog.lean`, `AvonP2.permuteC`, #11).
 
+- **Chained Poseidon2 calls** (2026-10-04; `DESIGN.md` §6.12). `P (P x)` fires both
+  calls natively, innermost first, in one walk down the chain: two steps and 0.03 s for
+  test vector 1, against 981 million steps and 11 s when the outer call declined. A
+  decline now checks the jet node's term too; before, a node made after the bind ran
+  `P`'s registered term in place of its own over anything but a state.
 - **Entropy for kernels** (2026-10-04; `DESIGN.md` §9.1, SKIjack SPEC §4.1). Per
   request: a pier booted with `--entropy` answers each `[0 id]` in a poke's effects
   list with the event `[0 [id bits]]`, 128 Scott Booleans, logged first, and boot's own

@@ -709,8 +709,8 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     if (g->fix) report_fix(&r);
     if (g->p2)
         fprintf(stderr, "p2: %ld occurrences of P bound (%s); %llu permutations run natively "
-                "among the contractions, %llu declined (an argument not a state as it stands), "
-                "%llu unbound at a fire\n",
+                "among the contractions, %llu declined (an argument neither a state nor a chain "
+                "of calls ending in one), %llu unbound at a call\n",
                 p2kept, AV_P2_DIGEST, (unsigned long long)r.p2_calls,
                 (unsigned long long)r.p2_declines, (unsigned long long)r.p2_unbound);
     av_buf b = { 0 };

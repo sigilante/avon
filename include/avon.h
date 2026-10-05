@@ -388,10 +388,11 @@ typedef struct {
                                it, two steps each, among steps            */
     uint64_t  p2_calls;     /* P run natively (§6.12), one step each,
                                among steps                                */
-    uint64_t  p2_declines;  /* P met an argument not a state as it
-                               stands, and ran a fresh copy of its term   */
-    uint64_t  p2_unbound;   /* jet nodes whose term was not P's at a fire,
-                               made indirections                          */
+    uint64_t  p2_declines;  /* P met an argument neither a state as it
+                               stands nor a chain of P calls ending in
+                               one, and ran a fresh copy of its term      */
+    uint64_t  p2_unbound;   /* jet nodes whose term was not P's at a fire
+                               or a decline, made indirections            */
     uint64_t  deferred;     /* instances whose root and spine were left in
                                the stack (§6.13), among tmpl_calls and
                                fused                                      */
@@ -674,11 +675,12 @@ bool av_p2_selftest(void);
  *  then, after av_jets_match, av_p2_bind keeps a jet node for it only
  *  where its term is p's, node for node, and makes every other one an
  *  indirection.  With av_opts.p2, share mode rewrites P at the head with
- *  an argument that is such a state, as it stands, to the permuted state:
- *  one step, the jet node's term checked against p's again, so a jet node
- *  made after the bind is held to it too; any other argument runs a fresh
- *  copy of P's term, a decline counted, so the node's own term is never
- *  written.  av_p2_state_read reads a state through
+ *  an argument that is such a state, as it stands, to the permuted state,
+ *  one step; over a chain P (P … x) ending in one, it fires the innermost
+ *  call first, in place.  Any other argument runs a fresh copy of P's
+ *  term, a decline counted, so the node's own term is never written.  At
+ *  every fire and decline the jet node's term is checked against p's
+ *  again, so a jet node made after the bind is held to it too.  av_p2_state_read reads a state through
  *  indirections and jet nodes: false unless t is one. */
 #define AV_P2_DIGEST "skijack-1:43f97c21e068ebe7"   /* lean-ski's Poseidon2SKI.P, §5 */
 #define AV_P2_SHA256 "391f7d9a5ad5e744711e18be27b9952a1bb802f8243672552fab4b2e870405b3"

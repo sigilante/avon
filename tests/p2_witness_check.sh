@@ -25,7 +25,10 @@
 #   7. the native jet (docs/DESIGN.md §6.12): for each test vector x,
 #      `avon reduce --p2=P.dag` on lean-ski's `P ⬝ stateN x` (`lake exe
 #      p2run`) reaches `stateN (permute x)`, Plonky3's output, in one step,
-#      one permutation run natively (lean-ski's P_specN licenses it);
+#      one permutation run natively (lean-ski's P_specN licenses it); and
+#      the chain P (P (P x)) of test vector 1, one shared P (`p2run chain`),
+#      reaches `stateN (permute^3 x)` in three steps, three run natively,
+#      none declined;
 #   8. the permutation itself: lean/P2Prog.lean, checked against lean-ski,
 #      proves its program equal to the specification with C's arithmetic
 #      (AvonP2.permuteC, on lean-ski's axioms only) and prints it; the print
@@ -135,6 +138,18 @@ for k in 0 1 2; do
         fail=1
     fi
 done
+
+d="$OUT/jet/chain"
+mkdir -p "$d"
+(cd "$LEAN_SKI" && lake exe p2run chain 1 3 "$d" > /dev/null)
+if "$AVON" reduce --p2="$d/P.dag" "$d/chain.dag" > "$d/out" 2> "$d/err" &&
+    [ "$(head -n 1 "$d/out")" = "NORMAL 3" ] && tail -n +2 "$d/out" | cmp -s - "$d/chain.expected" &&
+    grep -q '^p2: 1 occurrences of P bound (skijack-1:[0-9a-f]*); 3 permutations run natively among the contractions, 0 declined' "$d/err"; then
+    echo "a chain of three: stateN (permute^3 x) in three steps: $(cat "$d/err")"
+else
+    echo "FAIL: a chain of three: $(head -c 80 "$d/out") / $(cat "$d/err")"
+    fail=1
+fi
 
 echo "--- the permutation, printed from its proof"
 mkdir -p "$OUT/prog"
