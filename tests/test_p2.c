@@ -322,28 +322,52 @@ TEST(any_other_argument_runs_the_term) {
     free(text);
 }
 
-TEST(a_chain_fires_its_inner_call_only) {
+/*  The two permutations of P (P x), the stand-in's licence. */
+static char *twice_text(void) {
+    uint32_t want[16];
+    memcpy(want, VS, sizeof want);
+    av_p2_permute(want);
+    av_p2_permute(want);
+    return state_text(want, (spoil){ 0 });
+}
+
+/*  P (P x): the outer call meets a call, not a state, and fires the inner
+ *  one first, as forcing it would; then itself.  Two steps, no decline. */
+TEST(a_chain_fires_every_call) {
     char *text = state_text(VS, (spoil){ 0 });
     size_t n = strlen(text) + 16;
     char *inner = malloc(n);
     snprintf(inner, n, "S K K (%s)", text);             /* P x, its jet node matched */
-    uint32_t want[16];
-    memcpy(want, VS, sizeof want);
-    av_p2_permute(want);
-    char *wtext = state_text(want, (spoil){ 0 });
+    char *wtext = twice_text();
     jetrun r = jet_run(inner, true, false);
-    CHECK(r.status == AV_NORMAL && r.p2_calls == 1 && r.p2_declines == 1);
-    CHECK(r.nf && strcmp(r.nf, wtext) == 0);            /* the stand-in is I */
+    CHECK(r.status == AV_NORMAL && r.p2_calls == 2 && r.p2_declines == 0);
+    CHECK(r.steps == 2);
+    CHECK(r.nf && strcmp(r.nf, wtext) == 0);
     free(r.nf);
     free(wtext);
     free(inner);
     free(text);
 }
 
+/*  A chain whose innermost argument is no state declines once, at the
+ *  outer call, and runs its term; the inner call fires when forced. */
+TEST(a_chain_over_a_thunk_declines) {
+    char *text = state_text(VS, (spoil){ 0 });
+    size_t n = strlen(text) + 16;
+    char *inner = malloc(n);
+    snprintf(inner, n, "S K K (I (%s))", text);
+    jetrun r = jet_run(inner, true, false);
+    CHECK(r.status == AV_NORMAL && r.p2_declines >= 1);
+    free(r.nf);
+    free(inner);
+    free(text);
+}
+
 /*  P (P x) with one P node, shared, P a stand-in with a redex of its own,
- *  I (S K K): the outer call declines and runs a fresh copy of P's term,
- *  so the node's own term is never rewritten, stays P's, and the inner
- *  call still fires. */
+ *  I (S K K): both calls fire, the inner first, and the node's own term is
+ *  never rewritten.  Then P (I (P x)), the same node: the outer call
+ *  declines and runs a fresh copy of P's term, so the node stays P's and
+ *  the inner call still fires. */
 TEST(a_shared_node_keeps_the_jet_after_a_decline) {
     char *text = state_text(VS, (spoil){ 0 });
     av_arena *a = av_arena_new(1u << 16);
@@ -363,15 +387,30 @@ TEST(a_shared_node_keeps_the_jet_after_a_decline) {
     av_result r = av_reduce(a, t, &o);
     av_root_pop(a);
     CHECK(r.status == AV_NORMAL);
+    CHECK(r.p2_calls == 2 && r.p2_declines == 0 && r.p2_unbound == 0);
+    char *wtext = twice_text();
+    av_buf b = { 0 };
+    CHECK(av_print(a, r.term, 10000000, &b) && strcmp(b.s, wtext) == 0);
+    av_buf_free(&b);
+    /* the same node over I (P x): a decline, and the node still P's */
+    x = av_parse(a, text, strlen(text), NULL);
+    t = av_app(a, q, av_app(a, AV_NODE_I, av_app(a, q, x)));
+    t = av_jets_match(a, t);
+    CHECK(av_p2_bind(a, t, id) == 1);
+    av_root_push(a, &t);
+    r = av_reduce(a, t, &o);
+    av_root_pop(a);
+    CHECK(r.status == AV_NORMAL);
     CHECK(r.p2_calls == 1 && r.p2_declines == 1 && r.p2_unbound == 0);
     uint32_t want[16];
     memcpy(want, VS, sizeof want);
     av_p2_permute(want);
-    char *wtext = state_text(want, (spoil){ 0 });
-    av_buf b = { 0 };
-    CHECK(av_print(a, r.term, 10000000, &b) && strcmp(b.s, wtext) == 0);
+    char *otext = state_text(want, (spoil){ 0 });
+    b = (av_buf){ 0 };
+    CHECK(av_print(a, r.term, 10000000, &b) && strcmp(b.s, otext) == 0);
     av_buf_free(&b);
     av_arena_free(a);
+    free(otext);
     free(wtext);
     free(text);
 }
@@ -387,6 +426,112 @@ TEST(a_jet_node_over_another_term_is_unbound) {
     free(text);
 }
 
+/*  A jet node made after the bind over S K S, not P's term, applied to
+ *  an argument that is no state.  A decline runs P's registered term, so
+ *  the node is checked at a decline too: unbound, it runs its own.  (S K S
+ *  y and S K K y are both y; the counts show which ran.) */
+TEST(a_forged_node_declines_to_its_own_term) {
+    char *text = state_text(VS, (spoil){ 0 });
+    av_arena *a = av_arena_new(1u << 16);
+    uint32_t p = av_parse(a, "S K K", 5, NULL);
+    const char *err = NULL;
+    uint32_t id = p2_register(a, p, false, &err);
+    CHECK(id != AV_NONE);
+    uint32_t f = av_parse(a, "S K S", 5, NULL);
+    uint32_t x = av_parse(a, text, strlen(text), NULL);
+    uint32_t j = av_app(a, f, f);
+    a->nodes[j] = (av_node){ (AV_JET << AV_TAG_SHIFT) | id, f };
+    uint32_t t = av_app(a, j, av_app(a, AV_NODE_I, x));
+    av_opts o = av_opts_default();
+    o.p2 = true;
+    av_root_push(a, &t);
+    av_result r = av_reduce(a, t, &o);
+    av_root_pop(a);
+    CHECK(r.status == AV_NORMAL);
+    CHECK(r.p2_calls == 0 && r.p2_declines == 0 && r.p2_unbound == 1);
+    av_buf b = { 0 };
+    CHECK(av_print(a, r.term, 10000000, &b) && strcmp(b.s, text) == 0);
+    av_buf_free(&b);
+    av_arena_free(a);
+    free(text);
+}
+
+/*  A chain of n calls over VS, of one shared P node or n distinct ones,
+ *  P the stand-in I (S K K); forged, the call at depth n / 2 a jet node
+ *  made after the bind over S K S, not P's term (it is the identity as
+ *  well, so the answer is unchanged; the counts show what ran).  Reduced
+ *  in an arena of cap nodes, with fuel; the result, and whether its
+ *  normal form is permute applied `perms` times. */
+typedef struct { av_result r; bool eq; uint64_t collections; } chainrun;
+
+static chainrun chain_run(int n, bool shared, uint32_t cap, uint64_t fuel, bool forged, int perms) {
+    chainrun out = { 0 };
+    char *text = state_text(VS, (spoil){ 0 });
+    av_arena *a = av_arena_new(cap);
+    uint32_t p = av_parse(a, "I (S K K)", 9, NULL);
+    const char *err = NULL;
+    uint32_t id = p2_register(a, p, false, &err);
+    CHECK(id != AV_NONE);
+    uint32_t t = av_parse(a, text, strlen(text), NULL);
+    uint32_t q = av_parse(a, "I (S K K)", 9, NULL);
+    for (int i = 0; i < n; i++)
+        t = av_app(a, shared ? q : av_parse(a, "I (S K K)", 9, NULL), t);
+    t = av_jets_match(a, t);
+    CHECK(av_p2_bind(a, t, id) == (shared ? 1 : n));
+    if (forged) {                       /* the call at depth n / 2, rewrapped */
+        uint32_t c = t;
+        for (int i = 0; i < n / 2; i++) c = av_res(a, av_right(a, c));
+        uint32_t f = av_parse(a, "S K S", 5, NULL);
+        uint32_t j = av_app(a, f, f);
+        a->nodes[j] = (av_node){ (AV_JET << AV_TAG_SHIFT) | id, f };
+        a->nodes[c].l = j;
+    }
+    av_opts o = av_opts_default();
+    o.p2 = true;
+    o.max_steps = fuel;
+    av_root_push(a, &t);
+    out.r = av_reduce(a, t, &o);
+    av_root_pop(a);
+    out.collections = a->collections;
+    uint32_t want[16];
+    memcpy(want, VS, sizeof want);
+    for (int i = 0; i < perms; i++) av_p2_permute(want);
+    char *w = state_text(want, (spoil){ 0 });
+    av_buf b = { 0 };
+    out.eq = out.r.term != AV_NONE && av_print(a, out.r.term, 100000000, &b) && strcmp(b.s, w) == 0;
+    av_buf_free(&b);
+    av_arena_free(a);
+    free(w);
+    free(text);
+    return out;
+}
+
+/*  Two hundred calls, through collections mid-chain: every call fires,
+ *  one step each, shared or not. */
+TEST(a_long_chain_fires_through_collections) {
+    for (int shared = 0; shared < 2; shared++) {
+        chainrun c = chain_run(200, shared, 3000, UINT64_MAX, false, 200);
+        CHECK(c.r.status == AV_NORMAL && c.eq);
+        CHECK(c.r.steps == 200 && c.r.p2_calls == 200 && c.r.p2_declines == 0);
+        CHECK(c.collections > 10);
+    }
+}
+
+/*  Fuel short of the chain stops it there, at FUEL, every step a call. */
+TEST(fuel_stops_a_chain_where_it_runs_out) {
+    chainrun c = chain_run(200, true, 3000, 199, false, 0);
+    CHECK(c.r.status == AV_FUEL && c.r.steps == 199 && c.r.p2_calls == 199);
+}
+
+/*  A forged call at depth 10 of 20: the nine calls inside it fire, it is
+ *  unbound, and the ten outside it each decline to P's term, which here is
+ *  the identity, so the answer is permute applied nine times. */
+TEST(a_forged_call_mid_chain_is_unbound) {
+    chainrun c = chain_run(20, false, 1u << 16, UINT64_MAX, true, 9);
+    CHECK(c.r.status == AV_NORMAL && c.eq);
+    CHECK(c.r.p2_unbound == 1 && c.r.p2_calls == 9 && c.r.p2_declines == 10);
+}
+
 TEST_MAIN(
     TEST_CASE(the_test_vectors),
     TEST_CASE(a_p2commit_statement_is_read),
@@ -399,7 +544,12 @@ TEST_MAIN(
     TEST_CASE(the_jet_permutes_a_state_in_one_step),
     TEST_CASE(a_collection_at_the_fire_keeps_the_answer),
     TEST_CASE(any_other_argument_runs_the_term),
-    TEST_CASE(a_chain_fires_its_inner_call_only),
+    TEST_CASE(a_chain_fires_every_call),
+    TEST_CASE(a_chain_over_a_thunk_declines),
+    TEST_CASE(a_forged_node_declines_to_its_own_term),
+    TEST_CASE(a_long_chain_fires_through_collections),
+    TEST_CASE(fuel_stops_a_chain_where_it_runs_out),
+    TEST_CASE(a_forged_call_mid_chain_is_unbound),
     TEST_CASE(a_shared_node_keeps_the_jet_after_a_decline),
     TEST_CASE(a_jet_node_over_another_term_is_unbound),
 )
