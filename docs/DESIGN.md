@@ -1255,6 +1255,35 @@ plan. `--fix` stays: it agrees with SKI on every test, it is cheap, and
 a witness row for it could be built. Today `avon witness` refuses `--fix`,
 as it refuses `--templates` and `--data`: the witness runs plain SKI.
 
+**Shared, an experiment (`--fix=shared`, 2026-10-05).** Almost all of a
+port's live set is Y's unfoldings: with the cycle, the largest live set
+after a collection falls from 2,293,349 nodes to 590 on OrdList and from
+3,956,193 to 1,355 on PermSort. A recursive function is a shared node
+updated in place to `g (Y g)`, whose `Y g` is updated in its turn, so every
+level of recursion reached stays chained to it. `--fix=shared` keeps one
+`Y g`, `y0`, per generator `g` (by node identity), never written, and one
+unfolding `u0 = g y0`, updated as any node. Every `Y g` of that `g`
+becomes an indirection to `u0`, and `y0`, when demanded, leads to `u0`.
+The link from `y0` to `u0` is a table's (`R.ymemo`, weak across
+collections), not the graph's, so the graph stays acyclic and every walk
+works as before. Following the link is a step, so a `Y g` that needs
+itself runs out of fuel as SKI does. The node a call reduces, which its
+caller reads, is unfolded in place as `--fix` does, and its `g` is never
+shared again. Without that rule `K (Y K)` reported NORMAL, a bug the tests
+now pin.
+
+It keeps the cycle's memory: the largest live set falls to 584 to 7,802
+nodes and peak memory to 4 to 8 MB on the five ports. It does not keep the
+cycle's time: 1.00 times `--fix`'s by geometric mean, PermSort 1.10 faster
+and Queens2 1.13 slower. A cycle's node is its own value, so a recursive
+call reaches it at once; `y0` is never written, so every call passes
+through it, its jet and a table lookup, 10 to 40 million times a port
+(`docs/BENCHMARK.md`, "Y shared: an experiment"). Answers and normal forms
+are `--fix`'s, the front end compiles its 492 names hash for hash, and
+`tests/test_fix.c` checks a term with no normal form, the fixtures, every
+fuel to 300 and a collecting arena. Off unless asked; `avon witness` and
+copy mode refuse it with `--fix`.
+
 ### 6.12 Poseidon2 run natively
 
 **With `--p2=FILE`, share mode runs lean-ski's Poseidon2 term natively.**

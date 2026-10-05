@@ -11,6 +11,9 @@
  *  - Collections keep the answer; copy mode ignores fix; Y with no argument
  *    is left alone; Y g to weak head normal form is g (Y g), the one place
  *    the state's form differs, pinned here.
+ *  - With fix_shared (§6.11, "Shared"), every unfolding of a g passes on
+ *    one Y g: the same answers and normal forms, a term with no normal form
+ *    still stops at exactly its fuel, and collections keep the answer.
  */
 
 #include <stdio.h>
@@ -66,6 +69,8 @@ typedef struct {
     char      nf[1 << 16];
 } outcome;
 
+static bool shared;     /* run()'s fix shares each g's Y g when set */
+
 /*  src reduced; with dir, its templates loaded, data jets on, and fix when
  *  asked. */
 static outcome run(const char *src, const char *dir, bool fix, av_strategy st,
@@ -97,6 +102,7 @@ static outcome run(const char *src, const char *dir, bool fix, av_strategy st,
     o.templates = dir != NULL;
     o.data = dir != NULL;
     o.fix = fix;
+    o.fix_shared = fix && shared;
     av_root_push(a, &t);
     av_result r = av_reduce(a, t, &o);
     av_root_pop(a);
@@ -224,6 +230,66 @@ TEST(collections_keep_the_answer) {
     free(src);
 }
 
+/*  fix_shared against fix: no normal form still stops at exactly its fuel;
+ *  Y K's head normal form is pinned as fix's; the fixtures answer and
+ *  normalize as plain SKI, also at every fuel to 300 where both finish;
+ *  and a small arena that collects keeps the answer. */
+TEST(a_shared_unfolding_answers_as_fix_does) {
+    char d[64];
+    empty_dir(d);
+    shared = true;
+    const char *srcs[4] = { "(" Y ") K", "(" Y ") I", "(" Y ") (S I I)", "K ((" Y ") K)" };
+    for (int i = 0; i < 4; i++) {
+        for (int whnf = 0; whnf < 2; whnf++) {
+            if ((i == 0 || i == 3) && whnf) continue;     /* these have head normal forms */
+            outcome fx = run(srcs[i], d, true, AV_SHARE, whnf, 1000, 1u << 10);
+            CHECK_EQ(fx.status, AV_FUEL);
+            CHECK_EQ(fx.steps, 1000);
+            CHECK(fx.fix_calls > 0);
+        }
+    }
+    outcome h = run("(" Y ") K", d, true, AV_SHARE, true, 1000, 1u << 10);
+    CHECK_EQ(h.status, AV_WHNF);
+    CHECK(strcmp(h.nf, "K (" Y " K)") == 0);
+    rm_dir(d);
+
+    const char *progs[2] = { "lists", "nats" };
+    uint64_t collected = 0;
+    for (int i = 0; i < 2; i++) {
+        char dir[64];
+        snprintf(dir, sizeof dir, "tests/data/%s", progs[i]);
+        char *main_src = fixture(progs[i], "main"), *out_src = fixture(progs[i], "out");
+        if (!main_src || !out_src) { free(main_src); free(out_src); continue; }
+        shared = false;
+        outcome plain = run(out_src, NULL, false, AV_SHARE, false, 100000000, 1u << 12);
+        static char want[1 << 16];
+        strcpy(want, plain.nf);
+        CHECK(plain.status == AV_NORMAL);
+        shared = true;
+        outcome fx = run(main_src, dir, true, AV_SHARE, true, 10000000, 1u << 12);
+        CHECK(fx.status == AV_WHNF && strcmp(fx.nf, "Ff") == 0);
+        CHECK(fx.fix_calls > 0);
+        outcome fn = run(out_src, dir, true, AV_SHARE, false, 100000000, 1u << 12);
+        CHECK_EQ(fn.status, AV_NORMAL);
+        CHECK(strcmp(fn.nf, want) == 0);
+        fx = run(main_src, dir, true, AV_SHARE, true, 10000000, 1u << 8);   /* collecting */
+        CHECK(fx.status == AV_WHNF && strcmp(fx.nf, "Ff") == 0);
+        collected += fx.collections;
+        for (uint64_t fuel = 0; fuel <= 300; fuel++) {
+            outcome m = run(main_src, dir, true, AV_SHARE, true, fuel, 1u << 8);
+            CHECK(m.status == AV_FUEL || (m.status == AV_WHNF && strcmp(m.nf, "Ff") == 0));
+            outcome n = run(out_src, dir, true, AV_SHARE, false, fuel, 1u << 8);
+            CHECK(n.status == AV_FUEL || (n.status == AV_NORMAL && strcmp(n.nf, want) == 0));
+            if (m.status == AV_FUEL) CHECK_EQ(m.steps, fuel);
+            if (n.status == AV_FUEL) CHECK_EQ(n.steps, fuel);
+        }
+        shared = false;
+        free(main_src);
+        free(out_src);
+    }
+    CHECK(collected > 0);           /* the small arena collected, the table remapped */
+}
+
 TEST_MAIN(
     TEST_CASE(a_normal_form_is_the_unjetted_one_in_fewer_steps),
     TEST_CASE(no_normal_form_still_stops_at_its_fuel),
@@ -231,5 +297,6 @@ TEST_MAIN(
     TEST_CASE(y_short_of_its_argument_is_left_alone),
     TEST_CASE(copy_mode_ignores_fix),
     TEST_CASE(the_fixtures_answer_and_normalize_as_without),
-    TEST_CASE(collections_keep_the_answer)
+    TEST_CASE(collections_keep_the_answer),
+    TEST_CASE(a_shared_unfolding_answers_as_fix_does)
 )

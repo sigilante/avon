@@ -547,6 +547,32 @@ Compiled with skijack's inlining, the geometric means are 2.04, 1.98 and
 --skijack ~/skijack` (its `fix` mode); the cycle from `e74e581`'s binary
 with `--templates=DIR --data --knot`.
 
+## Y shared: an experiment
+
+`--fix=shared` (`DESIGN.md` §6.11, "Shared") against `--fix`, Avon
+`fix-shared` over `eb71bb1`, share mode with templates and data jets.
+Time: user CPU, best of five, interleaved, load average 1.3 to 2.7. Live
+set: the largest after any collection, from a build that logs each one.
+
+| program | `--fix`, s | shared, s | ratio | largest live set, nodes | peak memory, MB | unfoldings, `--fix` → shared |
+|---|---:|---:|---:|---:|---:|---:|
+| OrdList | 1.85 | 1.86 | 0.99 | 2,289,826 → 584 | 235 → 4 | 2.3M → 27.1M |
+| Queens2 | 1.81 | 2.05 | 0.88 | 11,303 → 7,802 | 4 → 4 | 8,782 → 26.9M |
+| Taut | 1.46 | 1.45 | 1.01 | 529,958 → 6,241 | 62 → 4 | 0.52M → 10.2M |
+| Clausify | 1.68 | 1.63 | 1.03 | 856,744 → 3,972 | 63 → 8 | 0.86M → 16.7M |
+| PermSort | 3.15 | 2.86 | 1.10 | 3,991,450 → 1,379 | 237 → 4 | 4.0M → 40.3M |
+
+- **The memory is the cycle's.** The tag `experiment/knot` (the cycle
+  `n = g n`) leaves 590 nodes live on OrdList and 1,355 on PermSort.
+- **The time is not.** By geometric mean the shared unfolding takes as
+  long as `--fix`, where the cycle took 1.17 times less. Every recursive
+  call passes through the shared `Y g`, its jet and a table lookup: the
+  unfoldings column counts them. Queens2 recurses shallowly, so `--fix`
+  kept little and the lookups only cost.
+- **Steps rise with them:** OrdList 103.4 million against 77.6, PermSort
+  156.8 against 116.8. The front end compiles itself in 19.8 million
+  against 16.9, in 0.76 s against 0.75, hash for hash.
+
 ## What becomes of an instance's cells
 
 **Strictness has little to save here; the spine does.** Avon `strictness`

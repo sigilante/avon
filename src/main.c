@@ -169,7 +169,7 @@ static int usage(void) {
         "                    [FILE]\n"
         "       (all accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
-        "        --profile=NAMES --templates=DIR --data --fix --no-defer --p2=FILE)\n"
+        "        --profile=NAMES --templates=DIR --data --fix[=shared] --no-defer --p2=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"
@@ -257,6 +257,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) g->templates = s + 12;
         else if (strcmp(s, "--data") == 0)           g->data = true;
         else if (strcmp(s, "--fix") == 0)            g->fix = true;
+        else if (strcmp(s, "--fix=shared") == 0)     g->fix = g->o.fix_shared = true;
         else if (strcmp(s, "--no-defer") == 0)       g->o.no_defer = true;
         else if (strncmp(s, "--p2=", 5) == 0 && s[5])  g->p2 = s + 5;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
@@ -1765,6 +1766,7 @@ static int front0_main(int argc, char **argv) {
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) templates = s + 12;
         else if (strcmp(s, "--data") == 0) data = true;
         else if (strcmp(s, "--fix") == 0) fix = true;
+        else if (strcmp(s, "--fix=shared") == 0) fix = o.fix_shared = true;
         else if (strcmp(s, "--no-defer") == 0) o.no_defer = true;
         else if (strncmp(s, "--names=", 8) == 0 && s[8] && nn < 64) namefiles[nn++] = argv[i] + 8;
         else if (strcmp(s, "--jet-stats") == 0) stats_top = 40;

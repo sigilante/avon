@@ -88,6 +88,12 @@ typedef struct {
                                    many nodes free, so writing them never
                                    fails                                  */
     uint32_t       hold;        /* share: the head, across a collection   */
+    nmap           ymemo;       /* --fix=shared: generator g -> y0, the
+                                   one Y g every unfolding of g passes
+                                   on, never written, and u0 = g y0, the
+                                   one unfolding, updated as any node:
+                                   y0 << 32 | u0, or YM_NONE once y0 is
+                                   written; weak across collections       */
 } R;
 
 /*  ---------------------------------------------------------------- memory */
@@ -130,10 +136,26 @@ static bool mark_set(R *r, uint32_t i) {
     return true;
 }
 
+#define YM_NONE UINT64_MAX          /* ymemo: g's y0 was written; none yet */
+
 static void remap_marks(av_gc *g, void *ctx) {
     R *r = ctx;
     if (r->o->profile) profile_remap(r->o->profile, g);
     if (r->o->jetstats) jetstats_remap(r->o->jetstats, g);
+    if (r->ymemo.n) {               /* an entry with a node dead goes */
+        nmap old = r->ymemo, fresh = { 0 };
+        for (size_t i = 0; i < old.cap; i++) {
+            if (old.key[i] == AV_NONE || old.val[i] == YM_NONE) continue;
+            uint32_t k = av_gc_forwarded(g, old.key[i]);
+            uint32_t y = av_gc_forwarded(g, (uint32_t)(old.val[i] >> 32));
+            uint32_t u = av_gc_forwarded(g, (uint32_t)old.val[i]);
+            if (k != AV_NONE && y != AV_NONE && u != AV_NONE &&
+                !nmap_put(&fresh, k, (uint64_t)y << 32 | u))
+                break;
+        }
+        nmap_free(&old);
+        r->ymemo = fresh;          /* out of memory: entries lost, not wrong */
+    }
     if (!r->marks) return;
     uint64_t *old = r->marks;
     size_t nold = r->nmarks;
@@ -1207,7 +1229,56 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                     size_t p = r->top - 1;                  /* the redex root */
                     if (!hensure(r, 1, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     uint32_t g = ssarg(r, D, p);
-                    uint32_t yf = SK_KIND(r->stk[p]) == SK_REAL ? av_left(a, r->stk[p]) : cur;
+                    bool real = SK_KIND(r->stk[p]) == SK_REAL;
+                    uint32_t yf = real ? av_left(a, r->stk[p]) : cur;
+                    if (o->fix_shared) {
+                        /* --fix=shared: every unfolding of g passes on one
+                         * Y g, y0, never written, and every Y g of g leads
+                         * to one unfolding u0 = g y0, written as any node
+                         * is: no unfolding chains to the next, and u0's
+                         * value is made once.  The link y0 -> u0 is this
+                         * table's, not the graph's, which stays acyclic;
+                         * following it is a step, so a Y g that needs
+                         * itself runs out of fuel, as SKI does. */
+                        uint32_t gr = av_res(a, g), y0, u0;
+                        uint64_t v;
+                        bool have = nmap_get(&r->ymemo, gr, &v) && v != YM_NONE;
+                        if (real && p == bottom && (!have || r->stk[p] == (uint32_t)(v >> 32))) {
+                            /* the node this call reduces, which its caller
+                             * reads: unfolded in place as --fix does, and
+                             * never shared again, being written */
+                            if (have && !nmap_put(&r->ymemo, gr, YM_NONE))
+                                return stop(r, bottom, cur, AV_SIZE);
+                            uint32_t y = reserved_app(a, yf, g);
+                            sroot_set(r, D, p, (av_node){ gr, y }, &cur);
+                            r->steps++;
+                            r->fix_calls++;
+                            continue;
+                        }
+                        if (have) {
+                            y0 = (uint32_t)(v >> 32);
+                            u0 = (uint32_t)v;
+                        } else {
+                            if (!hensure(r, 2, &cur)) return stop(r, bottom, cur, AV_SIZE);
+                            g = ssarg(r, D, p);             /* reread */
+                            gr = av_res(a, g);
+                            yf = real ? av_left(a, r->stk[p]) : cur;
+                            y0 = real ? r->stk[p] : reserved_app(a, yf, g);
+                            u0 = reserved_app(a, gr, y0);
+                            if (!nmap_put(&r->ymemo, gr, (uint64_t)y0 << 32 | u0))
+                                return stop(r, bottom, cur, AV_SIZE);
+                        }
+                        if (real && r->stk[p] == y0) {
+                            r->top = p;                     /* y0 stays Y g */
+                            cur = u0;
+                        } else {
+                            if (o->profile) profile_rewrote(o->profile, r->stk[p]);
+                            sroot_set(r, D, p, (av_node){ (AV_IND << AV_TAG_SHIFT) | u0, 0 }, &cur);
+                        }
+                        r->steps++;
+                        r->fix_calls++;
+                        continue;
+                    }
                     uint32_t y = reserved_app(a, yf, g);
                     if (o->profile) profile_rewrote(o->profile, r->stk[p]);
                     sroot_set(r, D, p, (av_node){ av_res(a, g), y }, &cur);
@@ -1469,6 +1540,7 @@ av_opts av_opts_default(void) {
         .templates = false,
         .data      = false,
         .fix       = false,
+        .fix_shared = false,
         .no_join   = false,
         .no_defer  = false,
     };
@@ -1505,6 +1577,7 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     a->active = me.next;
     free(r.stk);
     free(r.dstk);
+    nmap_free(&r.ymemo);
     free(r.p2c);
     free(r.fr);
     free(r.work);
