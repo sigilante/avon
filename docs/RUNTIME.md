@@ -244,6 +244,8 @@ build/avon boot --pier=/tmp/pier tests/kernel/pill.skit        # a pier: log and
 build/avon poke --pier=/tmp/pier tests/kernel/events.tick.skit tests/kernel/events.poke5.skit
 build/avon peek --pier=/tmp/pier tests/kernel/events.zero.skit
 build/avon load --pier=/tmp/pier tests/kernel/pill.skit        # a new kernel onto the old state
+build/avon boot --pier=/tmp/epier --entropy tests/kernel/entropy.pill.skit   # answers requests for bits
+build/avon poke --pier=/tmp/epier tests/kernel/entropy.ask5.skit
 ```
 
 - `boot PILL` applies the pill to the initial subject (`--subject=FILE`,
@@ -253,6 +255,18 @@ build/avon load --pier=/tmp/pier tests/kernel/pill.skit        # a new kernel on
   event (§19); otherwise a pier is an event log and snapshots, and
   `--snapshot` on `poke` or `load` takes one. `--pma` matters only to
   `boot`: the pier remembers which it is.
+- `boot --entropy` opts the pier into entropy (§9.1): it answers each
+  request `[0 id]` in a poke's effects list with the event `[0 [id
+  bits]]`, 128 Scott Booleans, logged before it applies, and boot's own
+  request with the first event. Each reply prints as `event N, an entropy
+  reply, …`. One outside event draws 16 replies at most. Every outside
+  event must be a cell `[tag data]` whose tag a probe shows nonzero; any
+  other is refused. A reply that cannot be drawn leaves its event applied,
+  and the failure is reported after it.
+- `boot --entropy=FILE` makes a test pier, whose bits come from FILE, from
+  byte 16 n, n the replies already logged; every later `poke` must give
+  `--entropy=FILE` too, and a pier booted with plain `--entropy` refuses
+  one.
 - All four accept `--strategy=`, `--fuel=` and `--budget=`; share mode is
   the default.
 

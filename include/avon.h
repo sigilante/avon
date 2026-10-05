@@ -1350,8 +1350,9 @@ uint32_t av_kernel_state(av_kernel *k);
  *  (av_snapshot_save).  Opening a pier loads the newest snapshot that
  *  verifies and replays the log's later events, so a pier reopened after
  *  a crash holds the kernel the events it logged produce.  Log records:
- *  `poke N <event SKIT, hex>` and `load N <new kernel's pill SKIT, hex>
- *  <subject SKIT, hex>`; a record without its newline was cut short by a
+ *  `poke N <event SKIT, hex>`, `load N <new kernel's pill SKIT, hex>
+ *  <subject SKIT, hex>`, and, under entropy (below), `entropy 0` and
+ *  `eny N <id SKIT, hex> <16 bytes, hex>`; a record without its newline was cut short by a
  *  crash, and is dropped.
  */
 typedef struct av_pier av_pier;
@@ -1381,6 +1382,43 @@ bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *
                   size_t nsubject, const char **err);
 /*  Snapshot the installed kernel at the current event count. */
 bool av_pier_snapshot(av_pier *p, const char **err);
+
+/*  Entropy (§9.1).  A pier made with AV_PIER_ENTROPY answers each
+ *  request [0 id] in a poke's effects list with the event [0 [id bits]],
+ *  bits 128 Scott Booleans, each reply logged as `eny N <id jammed> <16
+ *  bytes>` before it is applied; one outside event draws AV_ENY_MAX
+ *  replies at most.  An outside event is accepted only when probing shows
+ *  it a cell [tag data] with tag a successor: tag 0 is the replies'.  The
+ *  opt-in is the log's `entropy 0` record, written before the pier's
+ *  image, and records whether the pier draws from a file
+ *  (AV_PIER_ENTROPY_FILE, for tests) or from getentropy; it never mixes
+ *  them.  av_pier_entropy gives this session's file (from byte 16 n, n the
+ *  replies logged), NULL for getentropy, and answers
+ *  boot's own request, [0 [0 bits]], if no reply is logged yet; the first
+ *  poke does too, after a crash took it.  A failure while answering a
+ *  poke's requests leaves the poke applied and successful, the failure in
+ *  av_pier_entropy_error. */
+#define AV_ENY_BYTES 16
+#define AV_ENY_MAX   16
+#define AV_ENY_WALK  1024           /* effects list elements probed */
+#define AV_ENY_PROBE_STEPS 10000000 /* probe contractions one event's effects may spend */
+#define AV_PIER_PMA     1u
+#define AV_PIER_ENTROPY 2u
+#define AV_PIER_ENTROPY_FILE 4u     /* entropy from a file only, for tests */
+av_pier *av_pier_new_ex(const char *dir, const uint8_t *pill, size_t npill, const uint8_t *subject,
+                        size_t nsubject, const av_opts *o, unsigned flags, const char **err);
+typedef void (*av_pier_event_fn)(void *ctx, uint64_t event, uint64_t steps, uint32_t effects,
+                                 bool reply);
+bool     av_pier_entropy(av_pier *p, const char *file, const char **err);
+/*  Why the last poke's (or av_pier_entropy's) replies stopped short, or
+ *  NULL: a spent file, a probe budget, out of memory. */
+const char *av_pier_entropy_error(const av_pier *p);
+/*  Called as each event av_pier_poke applies, the outside event and then
+ *  its replies, with its number, contractions and effects. */
+void     av_pier_on_event(av_pier *p, av_pier_event_fn fn, void *ctx);
+/*  The replies the last poke (or boot) drew, and the requests it left
+ *  unanswered at the cap. */
+uint64_t av_pier_replies(const av_pier *p, uint64_t *unanswered);
 
 /*  ---------------------------------------------------------- the compiler
  *

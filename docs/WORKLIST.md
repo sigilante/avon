@@ -2,7 +2,7 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-04.
+design lives. Last revised 2026-10-05.
 
 ## Done since the last revision
 
@@ -17,6 +17,12 @@ design lives. Last revised 2026-10-04.
   test vector 1, against 981 million steps and 11 s when the outer call declined. A
   decline now checks the jet node's term too; before, a node made after the bind ran
   `P`'s registered term in place of its own over anything but a state.
+- **Entropy for kernels** (2026-10-04; `DESIGN.md` §9.1, SKIjack SPEC §4.1). Per
+  request: a pier booted with `--entropy` answers each `[0 id]` in a poke's effects
+  list with the event `[0 [id bits]]`, 128 Scott Booleans, logged first, and boot's own
+  request with the first event; `--entropy=FILE` for tests. Per request rather than with
+  every event because a proved poke carries its whole event as private witness, and
+  most events need no bits. Open: lean-ski's proof of a reply event.
 
 ## In progress
 
@@ -74,39 +80,6 @@ It needs its own plan.
 
 ## Handed to lean-ski
 
-### 2. Entropy for kernels (`DESIGN.md` §9.1, written 2026-10-04)
-
-Handed to lean-ski 2026-10-04. Avon matches what she settles, and checks it against
-§9.1's decided points.
-
-Decided:
-- **128 bits** per entropy event, for a research proof of concept, not production
-  security.
-- **Per-request delivery.** A kernel emits an effect asking for entropy, and the pier
-  answers with an event carrying fresh bits from `getentropy`, logged before it is
-  applied. `avon boot` gives a boot seed the same way. There is no ratchet in the
-  kernel.
-- **Entropy is only ever event data, never a reduction primitive.** Replay, the
-  conformance counts, the jets' licence and every proof depend on it.
-- `--entropy=FILE` replaces `getentropy` for reproducible tests.
-- The log, and so the pier, is as secret as the bits it holds.
-- In a proved poke, the bits are a private witness (lean-ski).
-- Kernel entropy never feeds the prover's seed (`ZK-JETS.md` §7).
-
-Open:
-- **Encoding.** Recommended: 128 Scott Booleans, which are pure SKI and are the shape
-  of lean-ski's private witness tables. The alternative is data-jet words, which are
-  compact but exist in share mode only.
-- **The request and reply shapes.** A change to SKIjack's kernel interface,
-  `SPEC.md` §4.1, agreed with SKIjack.
-
-Steps:
-1. Write §9.1. *Done:* it recommends shape A, a tagged pair `[0 id]` under a
-   `--entropy` opt-in, over B, a prelude term recognized by key.
-2. Agree the shapes in SKIjack.
-3. Build the pier's request and reply loop, the boot seed and `--entropy=FILE`.
-4. Add kernel tests: replay gives the same bits, and a request is answered once.
-
 ### 5. The proof gaps (`DESIGN.md` §11.1, "Open")
 
 - Witnesses for terms with atoms (§17.3).
@@ -116,6 +89,9 @@ Steps:
 - The Poseidon2 tables' constraints (`Sat`): the honest tables are proved to balance
   and to carry clear flags, but not to satisfy each AIR.
 - Fiat–Shamir and ChaCha20's pseudorandomness, both assumed (`ZK-JETS.md` §7).
+- A proved poke whose event is an entropy reply, `[0 [id bits]]`, the bits a
+  private witness (`DESIGN.md` §9.1). Avon's side, the pier's requests and replies, is
+  built.
 
 When lean-ski changes a table format or the prover's inputs, Avon matches it and
 reruns `make zk-jet-witness-check`.

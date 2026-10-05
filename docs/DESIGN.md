@@ -1763,9 +1763,8 @@ kernel's battery and its `Run`, it reopens to the same kernel again.
 
 ### 9.1 Entropy
 
-*Written 2026-10-04. Decided: the bits, the delivery and the rule that
-entropy is data. Proposed, to agree with SKIjack: the shapes of the
-request and the reply (SPEC §4.1).*
+*Written 2026-10-04; decided the same day: per request, shape A, Scott
+Booleans, effects as a list. SKIjack's side is SPEC §4.1, "Entropy".*
 
 **A kernel gets randomness only as event data.** Reduction stays a
 function of its term: no combinator, jet or scry yields fresh bits.
@@ -1779,14 +1778,21 @@ sees the same bits.
 - **128 bits an event.** This is a research proof of concept, not
   production security, and 128 bits keeps the log and a proof's private
   witness small.
-- **Per request.** A kernel emits an effect asking for entropy, and the
-  pier answers with an event carrying fresh bits from `getentropy(2)`,
-  logged before it is applied. Boot answers one request of its own: the
-  first event after boot is a reply, so a kernel starts with a seed. The
-  kernel keeps no ratchet; it asks again when it needs more.
-- **`--entropy=FILE`** replaces `getentropy` with a file's bytes, read in
-  order, for reproducible tests. Proposed: a file that runs out stops the
-  pier, rather than falling back to `getentropy`.
+- **Per request.** A kernel asks in an effect, and the pier answers with
+  an event carrying fresh bits from `getentropy(2)`, logged before it is
+  applied. Boot answers one request of its own, so a kernel starts with
+  a seed. The kernel keeps no ratchet; it asks again when it needs more.
+- **Shape A, a tagged cell under an opt-in.** The pier acts on requests
+  only for a pier booted with `--entropy`; any other kernel's effects
+  pass through untouched.
+- **128 Scott Booleans in a list,** `cons b₁ (cons b₂ … nil)`, each `bᵢ`
+  `K` or `K I` (SPEC §4). It is pure SKI, so copy, share and witness
+  modes all carry it, and it is the shape of lean-ski's private bits.
+  Data-jet words would be compact, but they exist only in share mode
+  (§6.10), so a proved poke could not take them.
+- **`--entropy=FILE`** replaces `getentropy` with a file's bytes, for
+  reproducible tests. A file that runs out stops the pier rather than
+  falling back to `getentropy`.
 - **The log is as secret as the bits it holds,** and so is the pier's
   directory.
 - **In a proved poke the bits are a private witness** (lean-ski). A proof
@@ -1795,37 +1801,107 @@ sees the same bits.
 - **Kernel entropy never feeds the prover's seed** (`ZK-JETS.md` §7).
   The two are separate draws from `getentropy`.
 
-**Encoding, recommended: 128 Scott Booleans in a list,** `cons b₁ (cons
-b₂ … nil)` with each `bᵢ` `K` or `K I` (SPEC §4). It is pure SKI, so
-copy, share and witness modes all carry it, and it is the shape of
-lean-ski's private bits. The alternative, data-jet words, is compact but
-exists only in share mode (§6.10), so a proved poke could not take it.
+**Why per request, and not with every event.** Vere puts fresh entropy
+into every event, and Arvo never asks. Under `--entropy` Avon could do
+the same, wrapping each event `ev` as `[bits ev]`. It would need no
+request shape, no probe of effects and no boot reply, and when running
+it costs almost nothing: a `getentropy` call of about a microsecond, a
+list of about 900 nodes that a poke which ignores it never forces,
+and 16 bytes of log, all beside the millisecond `fsync` every event
+already pays. The cost lands in proofs. A proved poke's statement covers
+its whole event, so every proved event would carry the bits as private
+witness cells, roughly 500 to 700 memory cells, whether or not the kernel
+reads them; the Poseidon2 statement we prove has 9,480 in all. Most
+events need no entropy, so most proofs would pay for nothing. Per
+request, the extra work is a probe of each poke's effects, which runs in
+the pier, outside any proved poke, and costs a few selector applications
+per effect. Only the events that ask pay for bits, and only reply events
+carry them into a proof. The price is a convention in SPEC §4.1 for the
+shape of effects and events.
 
-**The shapes: two candidates.** The runtime must recognize a request
-among a kernel's effects without reading a name (§9), and must not
-mistake a program's own effect for one.
+**The convention, for a kernel booted with `--entropy`.** It follows
+Arvo's `(quip card _this)`: a poke returns a list of cards, each a cell
+with its tag first.
 
-- **A, a tagged pair under an opt-in (recommended).** A request is the
-  cell `[0 id]`, with `0` the Scott numeral and `id` a numeral the kernel
-  chooses. The reply is the event `[0 [id bits]]`. The runtime reads both
-  by probing, as it reads a kernel (§9). The pier acts on requests only
-  for a kernel booted with `--entropy`. A kernel written for the
-  convention cannot collide with it by accident, and any other kernel's
-  effects pass through untouched.
-- **B, a prelude term recognized by key.** SKIjack's prelude gains
-  `entropyReq id`, and Avon recognizes its compiled term by structural
-  hash, as it recognizes a jet (§6.1). Collisions are then impossible
-  without an opt-in, but the runtime depends on a prelude term's key, and
-  a change to the compiler's output changes the key.
+- **Effects are a list,** `nil` and `cons` (SPEC §4), of cells
+  `[tag data]`, `tag` a Scott numeral.
+- **A request is the element `[0 id]`,** `id` a numeral the kernel
+  chooses, like a `%pass` on a wire.
+- **Events are cells `[tag data]` too.** The reply to a request is the
+  event `[0 [id bits]]`, like the `%sign` that comes back on the wire.
+  Tag 0 belongs to the pier, so that no driver can forge a reply and
+  choose a kernel's bits. The pier accepts an outside event only when a
+  probe shows it a cell whose tag is a successor, and refuses everything
+  else, a probe that runs out of fuel included. Only that positive answer
+  is sound. A tag can reach 0 after more steps than a probe spends, and
+  copy-mode probes and the share-mode kernel count steps differently, so
+  "not shown to be 0" lets such a tag through; the first review found
+  exactly that forgery. A positive answer holds whatever the fuel: probe
+  markers are inert, so a reduction to `m g d` with `g z s` reducing to
+  `s n` is a reduction for the kernel's own continuations too.
+- **Boot's reply is `[0 [0 bits]]`,** the first event after boot.
 
-A costs SKIjack one paragraph of SPEC §4.1 and Avon a probe. B costs a
-prelude change and a key the runtime must track. Both leave the door's
-four axes as they are.
+The pier reads the effects by probing (`av_peel`, `av_read_nat`), as it
+reads a kernel, never by name. It walks the list in order and answers
+each request with its own reply event; a reply's effects are walked in
+turn. Elements that are not requests are left as they are, and so is an
+effects value that is not a list. One outside event draws at most 16
+replies, and its probes, its replies' included, spend at most 10,000,000
+contractions. A kernel that asks without end is stopped there, its
+remaining requests reported and unanswered.
 
-**Steps.** Agree the shape with SKIjack. Then build the pier's
-request-and-reply loop, the boot reply and `--entropy=FILE`, with kernel
-tests: replay gives the same bits, each request is answered once, and a
-kernel booted without `--entropy` has its effects passed through.
+**Logged as bytes, rebuilt on replay.** A reply is logged as an `eny`
+record holding the jammed `id` and the 16 raw bytes, synced before the
+reply is applied. Replay rebuilds `[0 [id bits]]` from them: bit `8i + j`
+of the list is bit `j`, least significant first, of byte `i`. Replay
+answers no request; the replies it needs are the `eny` records already
+in the log. `--entropy=FILE` reads the file from byte `16 n`, `n` the
+`eny` records in the log, so a test pier reopened with the same file
+draws what it would have drawn without the reopen.
+
+**Failures after the event leave it applied.** A request whose reply
+cannot be drawn (a spent file, a failed `getentropy`) leaves the event
+that asked applied and logged, so `av_pier_poke` reports success and puts
+the failure beside it (`av_pier_entropy_error`); a caller that took it
+for the event's failure would apply the event twice. So does a crash
+after the event is logged and before its reply is. Either way the request
+stays unanswered, as a lost network packet would, and the kernel asks
+again. Boot's own request is the exception, since no kernel asks it: the
+first poke answers it if no reply is logged.
+
+**Opt-in and source are fixed at boot.** The `entropy 0` record goes to
+the log before the pier's image, so a crash between them leaves a pier
+that does not open, not one that opens without its opt-in. The record
+also says whether the pier draws from a file, and a pier never mixes the
+two sources: a file pier refuses a poke given no file, and a
+`getentropy` pier refuses a file.
+
+**Built 2026-10-04** (`src/pier.c`, `avon boot --entropy`; SKIjack SPEC
+§4.1). `tests/test_entropy.c` runs `tests/kernel/entropy.ascii.ski`, a
+kernel whose events ask once, ask twice with an ordinary effect between,
+or turn greedy and ask on every reply. Against a file of known bytes:
+
+- boot's reply and each request are answered in order, with the ids
+  asked and each reply's bits the file's next 16 bytes, least
+  significant bit first;
+- a reopened pier replays to the same answers on every peek path, and
+  with the file again draws on from byte 64, after the four replies
+  logged;
+- a forged reply is refused and leaves no record, and so is one whose
+  tag reaches 0 only after about 400,000 steps, and an event that is no
+  cell;
+- boot's reply, lost to a crash, comes with the first poke;
+- a file pier reopened without its file refuses to poke;
+- a collection in the event hook loses no request;
+- the greedy kernel draws 16 replies and is left one request;
+- a spent file leaves the event applied, its failure reported beside it;
+- a pier booted without `--entropy` passes a request through as an
+  ordinary effect and takes a tag-0 event as its own.
+
+A reply is 909 nodes as the pier builds it. The probe reads a request's
+`id` as its normal form, since a probe's field is a thunk over its
+marker; the reply carries that normal form, convertible to the kernel's
+`id`. Open: lean-ski's proved poke of a reply event, the bits private.
 
 ## 10. The conformance harness
 

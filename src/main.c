@@ -48,8 +48,8 @@
  *                                     events and attempts, checked against
  *                                     the reference host's; --log keeps each
  *                                     run's facts in DIR/ID.facts
- *      avon boot [--pier=DIR [--pma]] [--subject=FILE] PILL
- *      avon poke --pier=DIR [--snapshot] EVENT...
+ *      avon boot [--pier=DIR [--pma] [--entropy[=FILE]]] [--subject=FILE] PILL
+ *      avon poke --pier=DIR [--snapshot] [--entropy=FILE] EVENT...
  *      avon peek --pier=DIR PATH...
  *      avon load --pier=DIR [--subject=FILE] [--snapshot] PILL
  *                                     a kernel (docs/DESIGN.md §9, §20): boot
@@ -60,7 +60,10 @@
  *                                     snapshots, or with --pma a persistent
  *                                     arena committed every event -- that
  *                                     poke, peek and load reopen; share mode
- *                                     by default
+ *                                     by default.  --entropy (§9.1): the
+ *                                     pier answers a kernel's requests for
+ *                                     entropy, and boot's own; =FILE draws
+ *                                     the bits from FILE, not getentropy
  *      avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS
  *                                     the compiler's core as a term
  *                                     (docs/DESIGN.md §20.3): every call of a
@@ -173,8 +176,8 @@ static int usage(void) {
         "                    [--alone] [--halting] [--top=N] MANIFEST...\n"
         "       avon scry [--log=DIR] [--jets=DICT [--interp=FILE]] [--jet-check=N]\n"
         "                 NAMESPACES\n"
-        "       avon boot [--pier=DIR [--pma]] [--subject=FILE] PILL\n"
-        "       avon poke --pier=DIR [--snapshot] EVENT...\n"
+        "       avon boot [--pier=DIR [--pma] [--entropy[=FILE]]] [--subject=FILE] PILL\n"
+        "       avon poke --pier=DIR [--snapshot] [--entropy=FILE] EVENT...\n"
         "       avon peek --pier=DIR PATH...\n"
         "       avon load --pier=DIR [--subject=FILE] [--snapshot] PILL\n"
         "       (boot, poke, peek, load accept --strategy=, --fuel=, --budget=)\n"
@@ -859,9 +862,34 @@ static void print_value(av_arena *a, uint32_t t, size_t budget) {
     else { printf("(no normal form within 1,000,000) "); print_term(a, t, budget); }
 }
 
+/*  Each event a poke applies, as it applies: the outside event, then its
+ *  entropy replies (§9.1). */
+typedef struct { av_pier *p; size_t budget; } event_out;
+
+static void print_event(void *ctx, uint64_t event, uint64_t steps, uint32_t effects, bool reply) {
+    const event_out *eo = ctx;
+    printf("event %llu, %s%llu contractions; effects: ", (unsigned long long)event,
+           reply ? "an entropy reply, " : "", (unsigned long long)steps);
+    print_value(av_pier_kernel(eo->p)->a, effects, eo->budget);
+}
+
+/*  The cap's note, if the last poke reached it, and why its replies
+ *  stopped short, if they did: false then, the event itself applied. */
+static bool report_unanswered(const av_pier *p) {
+    uint64_t left;
+    av_pier_replies(p, &left);
+    if (left)
+        printf("entropy: %d replies drawn, the most one event may; %llu requests left unanswered\n",
+               AV_ENY_MAX, (unsigned long long)left);
+    const char *e = av_pier_entropy_error(p);
+    if (e) fprintf(stderr, "avon: entropy, after the event applied: %s\n", e);
+    return !e;
+}
+
 /*  avon boot | poke | peek | load: a kernel in a pier directory (§9, §20). */
 static int kernel_main(int argc, char **argv) {
-    const char *cmd = argv[1], *pier = NULL, *subject_file = NULL;
+    const char *cmd = argv[1], *pier = NULL, *subject_file = NULL, *eny_file = NULL;
+    bool eny = false;
     const char *files[256];
     int nf = 0;
     bool snap = false, pma = false;
@@ -879,6 +907,8 @@ static int kernel_main(int argc, char **argv) {
         else if (strncmp(s, "--budget=", 9) == 0 && number(s + 9, &v)) budget = v;
         else if (strcmp(s, "--snapshot") == 0) snap = true;
         else if (strcmp(s, "--pma") == 0) pma = true;
+        else if (strcmp(s, "--entropy") == 0) eny = true;
+        else if (strncmp(s, "--entropy=", 10) == 0 && s[10]) { eny = true; eny_file = s + 10; }
         else if (s[0] != '-' && nf < 256) files[nf++] = s;
         else return usage();
     }
@@ -893,12 +923,23 @@ static int kernel_main(int argc, char **argv) {
         uint8_t *pill = read_file(files[0], &np);
         if (!pill) { free(subject); return 1; }
         if (pier) {
-            av_pier *p = pma ? av_pier_new_pma(pier, pill, np, subject, ns, &o, &err)
-                             : av_pier_new(pier, pill, np, subject, ns, &o, &err);
+            av_pier *p = av_pier_new_ex(pier, pill, np, subject, ns, &o,
+                                        (pma ? AV_PIER_PMA : 0u) | (eny ? AV_PIER_ENTROPY : 0u) |
+                                            (eny_file ? AV_PIER_ENTROPY_FILE : 0u), &err);
             if (!p) fprintf(stderr, "avon: %s: %s\n", pier, err);
             else {
                 printf("booted a kernel in %s%s\n", pier, pma ? ", on a persistent arena" : "");
                 rc = 0;
+                if (eny) {
+                    event_out eo = { p, budget };
+                    av_pier_on_event(p, print_event, &eo);
+                    if (!av_pier_entropy(p, eny_file, &err)) {
+                        fprintf(stderr, "avon: %s: entropy: %s\n", pier, err);
+                        rc = 1;
+                    } else {
+                        report_unanswered(p);
+                    }
+                }
             }
             av_pier_free(p);
         } else {                                /* boot once, and show the value */
@@ -929,6 +970,14 @@ static int kernel_main(int argc, char **argv) {
     av_pier *p = av_pier_open(pier, &o, &err);
     if (!p) { fprintf(stderr, "avon: %s: %s\n", pier, err); free(subject); return 1; }
     av_kernel *k = av_pier_kernel(p);
+    event_out eo = { p, budget };
+    av_pier_on_event(p, print_event, &eo);
+    if (eny && !av_pier_entropy(p, eny_file, &err)) {
+        fprintf(stderr, "avon: %s: %s\n", pier, err);
+        av_pier_free(p);
+        free(subject);
+        return 1;
+    }
     rc = 0;
     for (int i = 0; i < nf && rc == 0; i++) {
         size_t n;
@@ -941,9 +990,7 @@ static int kernel_main(int argc, char **argv) {
                 fprintf(stderr, "avon: %s: %s (%s)\n", files[i], err, av_status_name(r.status));
                 rc = 1;
             } else {
-                printf("event %llu, %llu contractions; effects: ", (unsigned long long)k->events,
-                       (unsigned long long)r.steps);
-                print_value(k->a, eff, budget);
+                if (!report_unanswered(p)) rc = 1;  /* the events printed as they applied */
             }
         } else if (strcmp(cmd, "peek") == 0) {
             uint32_t path = av_cue(k->a, b, n, &err), ans;
