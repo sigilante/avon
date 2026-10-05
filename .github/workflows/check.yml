@@ -1,5 +1,6 @@
 # make check on every push to master and every pull request: the release
-# binary, the stats build, and every unit test under ASan and UBSan.  The
+# binary, the stats build, and every unit test under ASan and UBSan, on
+# Linux; pushes to master also run it on macOS.  The
 # checks that need a lean-ski or skijack checkout (witness-check,
 # zk-jet-witness-check, p2-witness-check, front0-check, selfhost-check,
 # hider-check) stay manual: see the Makefile's header.
@@ -10,12 +11,14 @@ on:
     branches: [master]
   pull_request:
 
+# Linux on every push and pull request; macOS, billed at ten times the
+# rate on a private repository, only on pushes to master.
 jobs:
   check:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
