@@ -53,9 +53,31 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
   run 5.8 to 14.5% faster (`BENCHMARK.md`, "Deferred roots"). Measured first: 55 to 95%
   of spine cells sit under a head that steps at once.
 
-## Decided, to build
+## Later
+
+### 3. Stage 8: the full language's front end (`DESIGN.md` §20.3)
+
+SKIjack-0's front end compiles itself in Avon. What remains is cores, macros,
+signatures and quotation. It is the one unfinished stage.
+
+### 4. Safe cycles for Y (`DESIGN.md` §6.11)
+
+`--fix` unfolds Y acyclically and cannot share the unfolding. The cycle experiment
+(tag `experiment/knot`) showed that sharing is worth 1.20 times by geometric mean, and
+that an unguarded cycle changes answers and hangs. A safe cycle needs:
+- black holes, so that a cyclic redex that needs itself stops at FUEL;
+- walks that tolerate cycles, or a proof that none reaches them;
+- copy mode left without cycles;
+- before a witness can use one, a lean-ski heap semantics for cycles.
+
+It needs its own plan.
+
+## Handed to lean-ski
 
 ### 2. Entropy for kernels (`DESIGN.md` §9.1, written 2026-10-04)
+
+Handed to lean-ski 2026-10-04. Avon matches what she settles, and checks it against
+§9.1's decided points.
 
 Decided:
 - **128 bits** per entropy event, for a research proof of concept, not production
@@ -84,27 +106,6 @@ Steps:
 2. Agree the shapes in SKIjack.
 3. Build the pier's request and reply loop, the boot seed and `--entropy=FILE`.
 4. Add kernel tests: replay gives the same bits, and a request is answered once.
-
-## Later
-
-### 3. Stage 8: the full language's front end (`DESIGN.md` §20.3)
-
-SKIjack-0's front end compiles itself in Avon. What remains is cores, macros,
-signatures and quotation. It is the one unfinished stage.
-
-### 4. Safe cycles for Y (`DESIGN.md` §6.11)
-
-`--fix` unfolds Y acyclically and cannot share the unfolding. The cycle experiment
-(tag `experiment/knot`) showed that sharing is worth 1.20 times by geometric mean, and
-that an unguarded cycle changes answers and hangs. A safe cycle needs:
-- black holes, so that a cyclic redex that needs itself stops at FUEL;
-- walks that tolerate cycles, or a proof that none reaches them;
-- copy mode left without cycles;
-- before a witness can use one, a lean-ski heap semantics for cycles.
-
-It needs its own plan.
-
-## Handed to lean-ski
 
 ### 5. The proof gaps (`DESIGN.md` §11.1, "Open")
 
