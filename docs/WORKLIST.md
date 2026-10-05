@@ -2,7 +2,7 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-04.
+design lives. Last revised 2026-10-05.
 
 ## Done since the last revision
 
@@ -59,10 +59,6 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
   run 5.8 to 14.5% faster (`BENCHMARK.md`, "Deferred roots"). Measured first: 55 to 95%
   of spine cells sit under a head that steps at once.
 
-## Decided, to build
-
-Nothing at present.
-
 ## Later
 
 ### 3. Stage 8: the full language's front end (`DESIGN.md` §20.3)
@@ -93,6 +89,9 @@ It needs its own plan.
 - The Poseidon2 tables' constraints (`Sat`): the honest tables are proved to balance
   and to carry clear flags, but not to satisfy each AIR.
 - Fiat–Shamir and ChaCha20's pseudorandomness, both assumed (`ZK-JETS.md` §7).
+- A proved poke whose event is an entropy reply, `[0 [id bits]]`, the bits a
+  private witness (`DESIGN.md` §9.1). Avon's side, the pier's requests and replies, is
+  built.
 
 When lean-ski changes a table format or the prover's inputs, Avon matches it and
 reruns `make zk-jet-witness-check`.
