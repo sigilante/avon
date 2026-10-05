@@ -573,6 +573,26 @@ set: the largest after any collection, from a build that logs each one.
   156.8 against 116.8. The front end compiles itself in 19.8 million
   against 16.9, in 0.76 s against 0.75, hash for hash.
 
+**The ceiling for a true cycle, measured 2026-10-05.** The knot's rewrite
+of `experiment/knot`, grafted onto `eb71bb1` in a scratch build (not
+committed), against `--fix` and `--memory` from the same build; user CPU,
+best of five, interleaved, load average 2.2 to 2.8. Every port answers
+`Ff`.
+
+| program | `--fix`, s | `--memory`, s | knot, s | `--fix` ÷ knot | knot ÷ Reduceron |
+|---|---:|---:|---:|---:|---:|
+| OrdList | 1.94 | 1.90 | 1.66 | 1.17 | 1.69 |
+| Queens2 | 1.86 | 2.10 | 1.85 | 1.01 | 1.43 |
+| Taut | 1.49 | 1.48 | 1.39 | 1.07 | 2.44 |
+| Clausify | 1.73 | 1.67 | 1.52 | 1.14 | 2.08 |
+| PermSort | 3.32 | 2.97 | 2.65 | 1.25 | 1.64 |
+| geometric mean | | | | 1.12 | 1.82 |
+
+A cycle would take 1.12 times less time than `--fix` by geometric mean,
+and Avon from 2.08 times the Reduceron's time to 1.82. Its peak memory,
+3 to 8 MB, is `--memory`'s. Safe cycles are parked on this measurement
+(`WORKLIST.md`, item 4).
+
 ## What becomes of an instance's cells
 
 **Strictness has little to save here; the spine does.** Avon `strictness`

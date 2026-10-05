@@ -1284,6 +1284,15 @@ are `--fix`'s, the front end compiles its 492 names hash for hash, and
 fuel to 300 and a collecting arena. Off unless asked; `avon witness` and
 copy mode refuse it with `--fix`.
 
+**True cycles: parked.** On today's code the cycle would take 1.12 times
+less time than `--fix` by geometric mean, 1.00 to 1.25 (`docs/BENCHMARK.md`,
+"The ceiling for a true cycle"), and its memory is `--memory`'s. Against
+that, a safe cycle needs indirection writes checked never to close a
+loop, re-entry of a knot under evaluation turned into fuel, a normal-form
+pass that refuses infinite terms, and no cycle leaving a reduction: every
+exit, kernel pokes included, breaking each knot's back-edges, or every
+walk and snapshot learning cycles.
+
 ### 6.12 Poseidon2 run natively
 
 **With `--p2=FILE`, share mode runs lean-ski's Poseidon2 term natively.**

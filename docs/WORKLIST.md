@@ -66,17 +66,26 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
 SKIjack-0's front end compiles itself in Avon. What remains is cores, macros,
 signatures and quotation. It is the one unfinished stage.
 
-### 4. Safe cycles for Y (`DESIGN.md` §6.11)
+### 4. Safe cycles for Y: parked 2026-10-05 (`DESIGN.md` §6.11)
 
-`--fix` unfolds Y acyclically and cannot share the unfolding. The cycle experiment
-(tag `experiment/knot`) showed that sharing is worth 1.20 times by geometric mean, and
-that an unguarded cycle changes answers and hangs. A safe cycle needs:
-- black holes, so that a cyclic redex that needs itself stops at FUEL;
-- walks that tolerate cycles, or a proof that none reaches them;
-- copy mode left without cycles;
-- before a witness can use one, a lean-ski heap semantics for cycles.
+Measured first (`BENCHMARK.md`, "Y shared: an experiment" and "The ceiling for a
+true cycle"):
+- Nearly all of a port's live set is Y's unfoldings. `--memory` (one shared `Y g`
+  per generator, acyclic) cuts peak memory to 4 to 8 MB, at `--fix`'s time.
+- A true cycle, grafted onto today's code, would take 1.12 times less time than
+  `--fix` by geometric mean (1.00 to 1.25), with `--memory`'s memory.
 
-It needs its own plan.
+Parked on that: 12% does not pay for what a safe cycle needs.
+- indirection writes checked never to close a loop (`av_res` and the collector
+  spin on one);
+- re-entry of a knot under evaluation turned into fuel, as SKI runs forever;
+- a normal-form pass that refuses infinite terms;
+- no cycle leaving a reduction: every exit, kernel pokes included, breaking each
+  knot's back-edges, or every walk and snapshot learning cycles;
+- copy mode and the witness without cycles; for proofs, a lean-ski heap semantics.
+
+If taken up: cycles inside `reduce` and `batch` only, broken at every exit, kernels
+refusing the flag; measure the cost of breaking them before going further.
 
 ## Handed to lean-ski
 
