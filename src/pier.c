@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -24,6 +25,16 @@ struct av_pier {
     av_opts    o;
     FILE      *log;
     bool       pma;             /* committed to a persistent arena (§19.1) */
+    bool       eny;             /* booted with --entropy (§9.1)           */
+    bool       eny_from_file;   /* booted with --entropy=FILE: only a file */
+    char      *eny_file;        /* --entropy=FILE: bits from it, not getentropy */
+    uint64_t   eny_n;           /* eny records in the log                 */
+    uint64_t   eny_replies;     /* replies the last poke drew             */
+    uint64_t   eny_unanswered;  /* requests it left at the cap            */
+    uint64_t   probe_from;      /* a->probe_steps when the poke began     */
+    const char *eny_err;        /* why the last poke's replies stopped    */
+    av_pier_event_fn event_fn;
+    void      *event_ctx;
 };
 
 static char *path_in(const char *dir, const char *name) {
@@ -102,6 +113,7 @@ void av_pier_free(av_pier *p) {
     if (p->a) av_kernel_free(&p->k);
     if (p->log) fclose(p->log);
     av_arena_free(p->a);
+    free(p->eny_file);
     free(p->dir);
     free(p);
 }
@@ -118,7 +130,7 @@ static av_pier *pier_alloc(const char *dir, const av_opts *o) {
 
 static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
                          const uint8_t *subject, size_t nsubject, const av_opts *o,
-                         bool pma, const char **err) {
+                         bool pma, bool eny, bool eny_file, const char **err) {
     if (mkdir(dir, 0777) != 0 && errno != EEXIST) { *err = "cannot make the pier's directory"; return NULL; }
     char *logp = path_in(dir, "events.log");
     if (!logp) { *err = "out of memory"; return NULL; }
@@ -128,6 +140,18 @@ static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
     uint32_t k = boot_term(p->a, pill, npill, subject, nsubject, &p->o, err);
     if (k == AV_NONE) { free(logp); av_pier_free(p); return NULL; }
     av_kernel_adopt(&p->k, p->a, k, &p->o);
+    if (eny) {
+        /* the opt-in before the image: a crash between them leaves a log
+         * and no image, a pier that will not open, not one that opens
+         * without its opt-in */
+        FILE *lg = fopen(logp, "ab");
+        const uint8_t from_file = 1;
+        bool ok = lg && log_record(lg, "entropy", 0, &from_file, eny_file ? 1 : 0, NULL, 0);
+        if (lg) fclose(lg);
+        if (!ok) { free(logp); av_pier_free(p); *err = "the event log cannot be written"; return NULL; }
+        p->eny = true;
+        p->eny_from_file = eny_file;
+    }
     if (pma) {                                  /* the arena moves into its image */
         char *img = path_in(dir, "pma");
         p->pma = true;
@@ -149,13 +173,169 @@ static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
 av_pier *av_pier_new(const char *dir, const uint8_t *pill, size_t npill,
                      const uint8_t *subject, size_t nsubject, const av_opts *o,
                      const char **err) {
-    return pier_new(dir, pill, npill, subject, nsubject, o, false, err);
+    return pier_new(dir, pill, npill, subject, nsubject, o, false, false, false, err);
 }
 
 av_pier *av_pier_new_pma(const char *dir, const uint8_t *pill, size_t npill,
                          const uint8_t *subject, size_t nsubject, const av_opts *o,
                          const char **err) {
-    return pier_new(dir, pill, npill, subject, nsubject, o, true, err);
+    return pier_new(dir, pill, npill, subject, nsubject, o, true, false, false, err);
+}
+
+av_pier *av_pier_new_ex(const char *dir, const uint8_t *pill, size_t npill, const uint8_t *subject,
+                        size_t nsubject, const av_opts *o, unsigned flags, const char **err) {
+    return pier_new(dir, pill, npill, subject, nsubject, o, flags & AV_PIER_PMA,
+                    flags & (AV_PIER_ENTROPY | AV_PIER_ENTROPY_FILE),
+                    flags & AV_PIER_ENTROPY_FILE, err);
+}
+
+/*  ------------------------------------------------------------ entropy
+ *
+ *  §9.1: under --entropy, a request is an element [0 id] of a poke's
+ *  effects list, and its reply the event [0 [id bits]], bits 128 Scott
+ *  Booleans in a list.  The pier finds requests by probing, never by
+ *  name, and logs each reply as `eny N <id, jammed> <16 bytes>`. */
+
+/*  Probes: copy mode writes nothing the kernel shares, and no collection
+ *  moves the nodes being walked; bounded, so a diverging effect is no
+ *  request rather than a hang. */
+static av_opts probe_opts(const av_pier *p) {
+    av_opts po = p->o;
+    po.strategy = AV_COPY;
+    po.no_collect = true;
+    po.max_steps = 1000000;
+    return po;
+}
+
+/*  The numeral 0, Zero of `Zero | Suc n`: one probe. */
+static bool is_zero(av_arena *a, uint32_t t, const av_opts *po) {
+    av_peeled z;
+    return av_peel(a, t, 2, po, &z, NULL) && z.ctor == 0 && z.nfields == 0;
+}
+
+/*  t shown, by probing, to be a cell whose tag is a successor: an outside
+ *  event the kernel cannot read as a reply.  Only a positive answer
+ *  counts.  It is sound whatever the probe's fuel: probe markers are inert
+ *  atoms, so if t m reduces to m g d and g z s to s n, then t applied to
+ *  the kernel's own continuations reduces the same way, the markers
+ *  replaced.  A probe that runs out, or anything else, is a refusal: a
+ *  tag that reached 0 only past the probe's fuel would otherwise pass. */
+static bool tagged_succ(av_arena *a, uint32_t t, const av_opts *po) {
+    av_peeled c, g;
+    return av_peel(a, t, 1, po, &c, NULL) && c.ctor == 0 && c.nfields == 2 &&
+           av_peel(a, c.field[0], 2, po, &g, NULL) && g.ctor == 1 && g.nfields == 1;
+}
+
+/*  t a cell [0 x]: x. */
+static bool tagged_zero(av_arena *a, uint32_t t, const av_opts *po, uint32_t *x) {
+    av_peeled c;
+    if (!av_peel(a, t, 1, po, &c, NULL) || c.ctor != 0 || c.nfields != 2) return false;
+    if (!is_zero(a, c.field[0], po)) return false;
+    *x = c.field[1];
+    return true;
+}
+
+/*  pair x y, the Scott pair λc. c x y. */
+static uint32_t pair_term(av_arena *a, uint32_t x, uint32_t y) {
+    uint32_t si = av_app(a, AV_NODE_S, AV_NODE_I);
+    uint32_t kx = av_app(a, AV_NODE_K, x), ky = av_app(a, AV_NODE_K, y);
+    uint32_t f = si == AV_NONE || kx == AV_NONE ? AV_NONE : av_app(a, si, kx);
+    uint32_t g = f == AV_NONE ? AV_NONE : av_app(a, AV_NODE_S, f);
+    return g == AV_NONE || ky == AV_NONE ? AV_NONE : av_app(a, g, ky);
+}
+
+/*  The reply [0 [id bits]], id cued from its jam: bit 8i + j of the list
+ *  is bit j of byte i, least significant first; true K, false K I; cons
+ *  h t = K (pair h t), nil K. */
+static uint32_t reply_event(av_arena *a, const uint8_t *idjam, size_t nid, const uint8_t *b,
+                            const char **err) {
+    uint32_t id = av_cue(a, idjam, nid, err);
+    if (id == AV_NONE) return AV_NONE;
+    uint32_t ki = av_app(a, AV_NODE_K, AV_NODE_I), t = AV_NODE_K;
+    for (int i = 8 * AV_ENY_BYTES - 1; i >= 0 && t != AV_NONE && ki != AV_NONE; i--) {
+        uint32_t c = pair_term(a, b[i / 8] >> (i % 8) & 1u ? AV_NODE_K : ki, t);
+        t = c == AV_NONE ? AV_NONE : av_app(a, AV_NODE_K, c);
+    }
+    uint32_t inner = t == AV_NONE ? AV_NONE : pair_term(a, id, t);
+    uint32_t ev = inner == AV_NONE ? AV_NONE : pair_term(a, AV_NODE_K, inner);
+    if (ev == AV_NONE) *err = "out of memory";
+    return ev;
+}
+
+/*  A queue of requests: their ids, jammed. */
+typedef struct { av_buf *ids; size_t n, head, cap; } reqs;
+
+static void reqs_free(reqs *q) {
+    for (size_t i = q->head; i < q->n; i++) av_buf_free(&q->ids[i]);
+    free(q->ids);
+}
+
+static bool reqs_push(reqs *q, av_buf b) {
+    if (q->n == q->cap) {
+        size_t c = q->cap ? 2 * q->cap : 8;
+        av_buf *v = realloc(q->ids, c * sizeof *v);
+        if (!v) return false;
+        q->ids = v;
+        q->cap = c;
+    }
+    q->ids[q->n++] = b;
+    return true;
+}
+
+static bool boot_reply(av_pier *p, const char **err);
+
+/*  The requests among effects eff, in order, onto q: eff a list (nil,
+ *  cons), each element [0 id] a request, id with a normal form within the
+ *  probes' fuel.  Anything else is no request; a list is walked at most
+ *  AV_ENY_WALK elements.  False: out of memory. */
+static bool find_requests(av_pier *p, uint32_t eff, reqs *q) {
+    av_arena *a = p->a;
+    av_opts po = probe_opts(p);
+    for (unsigned i = 0; i < AV_ENY_WALK; i++) {
+        if (a->probe_steps - p->probe_from > AV_ENY_PROBE_STEPS) {
+            p->eny_err = "the probes of this event's effects spent their budget; later requests unread";
+            return true;
+        }
+        av_peeled l;
+        if (!av_peel(a, eff, 2, &po, &l, NULL) || l.ctor != 1 || l.nfields != 2) return true;
+        uint32_t id;
+        if (tagged_zero(a, l.field[0], &po, &id)) {
+            /* the probe's field is a thunk over its marker, K id m: the
+             * id's normal form is what the reply carries */
+            av_opts no = po;
+            no.whnf_only = false;
+            av_result r = av_reduce(a, id, &no);
+            a->probe_steps += r.steps;
+            av_buf b = { 0 };
+            if (r.status == AV_NORMAL && av_jam(a, r.term, 1u << 16, &b, NULL)) {
+                if (!reqs_push(q, b)) { av_buf_free(&b); return false; }
+            } else {
+                av_buf_free(&b);                /* no normal form, or past the budget: no request */
+            }
+        }
+        eff = l.field[1];
+    }
+    return true;
+}
+
+/*  16 fresh bytes: --entropy=FILE's from byte 16 n, n the draws logged,
+ *  or getentropy's. */
+static bool draw(av_pier *p, uint8_t b[AV_ENY_BYTES], const char **err) {
+    if (p->eny_from_file && !p->eny_file) {
+        *err = "the pier draws its bits from a file: give --entropy=FILE";
+        return false;
+    }
+    if (!p->eny_file) {
+        if (getentropy(b, AV_ENY_BYTES) != 0) { *err = "getentropy failed"; return false; }
+        return true;
+    }
+    FILE *f = fopen(p->eny_file, "rb");
+    if (!f) { *err = "cannot open the entropy file"; return false; }
+    bool ok = fseeko(f, (off_t)(p->eny_n * AV_ENY_BYTES), SEEK_SET) == 0 &&
+              fread(b, 1, AV_ENY_BYTES, f) == AV_ENY_BYTES;
+    fclose(f);
+    if (!ok) *err = "the entropy file has run out";
+    return ok;
 }
 
 /*  The newest snapshot that verifies, and its event count. */
@@ -239,6 +419,12 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
         unsigned long long n;
         int used;
         if (sscanf(line, "%7s %llu %n", kind, &n, &used) != 2) { msg = "a malformed log record"; break; }
+        if (strcmp(kind, "entropy") == 0 && n == 0) {   /* the opt-in, and whether from a file */
+            p->eny = true;
+            p->eny_from_file = strcmp(line + used, "01") == 0;
+            continue;
+        }
+        if (strcmp(kind, "eny") == 0) p->eny_n++;  /* every kept draw counts toward FILE's offset */
         if (n <= at) continue;                  /* in the snapshot already */
         if (n != p->k.events + 1) { msg = "the log skips an event"; break; }
         char *f1 = line + used, *sp = strchr(f1, ' ');
@@ -256,6 +442,18 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
                 int c = fgetc(in);
                 if (c == EOF) good = start;
                 else msg = "a logged event does not replay";
+                free(b1);
+                free(b2);
+                break;
+            }
+        } else if (strcmp(kind, "eny") == 0 && b2 && l2 == AV_ENY_BYTES) {
+            uint32_t ev = reply_event(p->a, b1, l1, b2, &msg);
+            uint32_t eff;
+            av_result r;
+            if (ev != AV_NONE && av_kernel_poke(&p->k, ev, &eff, &r) != AV_WHNF) {
+                int c = fgetc(in);              /* as a poke's: last, a crash's */
+                if (c == EOF) { good = start; p->eny_n--; }   /* dropped: its bytes unspent */
+                else msg = "a logged reply does not replay";
                 free(b1);
                 free(b2);
                 break;
@@ -284,17 +482,23 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     return p;
 }
 
-av_status av_pier_poke(av_pier *p, const uint8_t *event, size_t n, uint32_t *effects,
-                       av_result *r, const char **err) {
-    uint32_t ev = av_cue(p->a, event, n, err);  /* a term, or nothing is logged */
-    if (ev == AV_NONE) { r->status = AV_SIZE; return AV_SIZE; }
+/*  Log the record (kind, a1, a2), sync, then poke with ev: the record
+ *  removed again if the poke does not reach weak head normal form. */
+static av_status poke_logged(av_pier *p, const char *kind, const uint8_t *a1, size_t n1,
+                             const uint8_t *a2, size_t n2, uint32_t ev, uint32_t *effects,
+                             av_result *r, bool *kept, const char **err) {
+    *kept = false;
+    av_root_push(p->a, &ev);
     long start = fseek(p->log, 0, SEEK_END) == 0 ? ftell(p->log) : -1;
-    if (start < 0 || !log_record(p->log, "poke", p->k.events + 1, event, n, NULL, 0)) {
+    bool logged = start >= 0 && log_record(p->log, kind, p->k.events + 1, a1, n1, a2, n2);
+    av_root_pop(p->a);
+    if (!logged) {
         *err = "the event log cannot be written";
         r->status = AV_SIZE;
         return AV_SIZE;
     }
     av_status st = av_kernel_poke(&p->k, ev, effects, r);
+    *kept = st == AV_WHNF;
     if (st == AV_WHNF && p->pma && !av_pma_commit(p->a, p->k.k, p->k.events, err)) {
         /* applied and logged, not committed: a reopen replays it */
         return AV_SIZE;
@@ -307,6 +511,123 @@ av_status av_pier_poke(av_pier *p, const uint8_t *event, size_t n, uint32_t *eff
             *err = "the event did not apply, and could not be removed from the log";
     }
     return st;
+}
+
+/*  Answer the requests in q, each with its own logged reply event, and
+ *  the requests the replies' effects make in turn, AV_ENY_MAX at most. */
+static bool serve(av_pier *p, reqs *q, const char **err) {
+    while (q->head < q->n) {
+        if (p->eny_replies == AV_ENY_MAX) {
+            p->eny_unanswered = q->n - q->head;
+            return true;
+        }
+        av_buf *id = &q->ids[q->head];
+        uint8_t b[AV_ENY_BYTES];
+        if (!draw(p, b, err)) return false;
+        uint32_t ev = reply_event(p->a, (const uint8_t *)id->s, id->len, b, err);
+        if (ev == AV_NONE) return false;
+        uint32_t eff;
+        av_result r;
+        bool kept;
+        av_status st = poke_logged(p, "eny", (const uint8_t *)id->s, id->len, b, AV_ENY_BYTES, ev, &eff, &r,
+                                   &kept, err);
+        if (kept) p->eny_n++;                   /* logged: its bytes are spent */
+        if (st != AV_WHNF) return false;
+        p->eny_replies++;
+        av_buf_free(id);
+        q->head++;
+        av_root_push(p->a, &eff);
+        if (p->event_fn) p->event_fn(p->event_ctx, p->k.events, r.steps, eff, true);
+        bool ok = find_requests(p, eff, q);
+        av_root_pop(p->a);
+        if (!ok) { *err = "out of memory"; return false; }
+    }
+    return true;
+}
+
+av_status av_pier_poke(av_pier *p, const uint8_t *event, size_t n, uint32_t *effects,
+                       av_result *r, const char **err) {
+    p->eny_replies = p->eny_unanswered = 0;
+    p->eny_err = NULL;
+    p->probe_from = p->a->probe_steps;
+    uint32_t ev = av_cue(p->a, event, n, err);  /* a term, or nothing is logged */
+    if (ev == AV_NONE) { r->status = AV_SIZE; return AV_SIZE; }
+    if (p->eny && p->eny_from_file && !p->eny_file) {
+        *err = "the pier draws its bits from a file: give --entropy=FILE";
+        r->status = AV_SIZE;
+        return AV_SIZE;
+    }
+    if (p->eny) {
+        /* tag 0 is the pier's: no outside event chooses a kernel's bits */
+        av_opts po = probe_opts(p);
+        if (!tagged_succ(p->a, ev, &po)) {
+            *err = "not an event [tag data] with a tag shown nonzero; tag 0 is the pier's entropy replies'";
+            r->status = AV_SIZE;
+            return AV_SIZE;
+        }
+        /* boot's request, if a crash took its reply */
+        if (p->k.events == 0 && !boot_reply(p, err)) { r->status = AV_SIZE; return AV_SIZE; }
+    }
+    bool kept;
+    av_status st = poke_logged(p, "poke", event, n, NULL, 0, ev, effects, r, &kept, err);
+    if (st != AV_WHNF) return st;
+    av_root_push(p->a, effects);                /* the hook may collect */
+    if (p->event_fn) p->event_fn(p->event_ctx, p->k.events, r->steps, *effects, false);
+    av_root_pop(p->a);
+    if (!p->eny) return st;
+    /* the event is applied: a failure from here on is reported beside it,
+     * not as its failure, so that no caller retries an applied event */
+    reqs q = { 0 };
+    const char *serr = NULL;
+    av_root_push(p->a, effects);
+    if (!find_requests(p, *effects, &q)) serr = "out of memory";
+    else serve(p, &q, &serr);
+    av_root_pop(p->a);
+    reqs_free(&q);
+    if (serr) p->eny_err = serr;
+    return st;
+}
+
+/*  Boot's own request, [0 [0 bits]], answered unless the log holds a
+ *  reply already: at boot, or on the first poke after a crash took it. */
+static bool boot_reply(av_pier *p, const char **err) {
+    if (p->eny_n) return true;
+    av_buf zero = { 0 };
+    if (!av_jam(p->a, AV_NODE_K, 16, &zero, err)) return false;
+    reqs q = { 0 };
+    if (!reqs_push(&q, zero)) { av_buf_free(&zero); *err = "out of memory"; return false; }
+    bool ok = serve(p, &q, err);
+    reqs_free(&q);
+    return ok;
+}
+
+bool av_pier_entropy(av_pier *p, const char *file, const char **err) {
+    if (!p->eny) { *err = "the pier was not booted with --entropy"; return false; }
+    if (!file != !p->eny_from_file) {
+        /* a test pier's bits never mix with the system's, nor the reverse */
+        *err = p->eny_from_file ? "the pier draws its bits from a file: give --entropy=FILE"
+                                : "the pier draws its bits from getentropy, not a file";
+        return false;
+    }
+    free(p->eny_file);
+    p->eny_file = NULL;
+    if (file && !(p->eny_file = strdup(file))) { *err = "out of memory"; return false; }
+    p->eny_replies = p->eny_unanswered = 0;
+    p->eny_err = NULL;
+    p->probe_from = p->a->probe_steps;
+    return p->k.events != 0 || boot_reply(p, err);
+}
+
+const char *av_pier_entropy_error(const av_pier *p) { return p->eny_err; }
+
+void av_pier_on_event(av_pier *p, av_pier_event_fn fn, void *ctx) {
+    p->event_fn = fn;
+    p->event_ctx = ctx;
+}
+
+uint64_t av_pier_replies(const av_pier *p, uint64_t *unanswered) {
+    if (unanswered) *unanswered = p->eny_unanswered;
+    return p->eny_replies;
 }
 
 bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *subject,

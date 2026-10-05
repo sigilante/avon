@@ -12,6 +12,13 @@ design lives. Last revised 2026-10-04.
   printed from a Lean proof that it computes the specification on every `uint32_t`
   state (`lean/P2Prog.lean`, `AvonP2.permuteC`, #11).
 
+- **Entropy for kernels** (2026-10-04; `DESIGN.md` §9.1, SKIjack SPEC §4.1). Per
+  request: a pier booted with `--entropy` answers each `[0 id]` in a poke's effects
+  list with the event `[0 [id bits]]`, 128 Scott Booleans, logged first, and boot's own
+  request with the first event; `--entropy=FILE` for tests. Per request rather than with
+  every event because a proved poke carries its whole event as private witness, and
+  most events need no bits. Open: lean-ski's proof of a reply event.
+
 ## In progress
 
 ### 0. The papers' measurements (outline: the "Avon paper outlines" page)
@@ -49,35 +56,7 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
 
 ## Decided, to build
 
-### 2. Entropy for kernels (`DESIGN.md` §9.1, written 2026-10-04)
-
-Decided:
-- **128 bits** per entropy event, for a research proof of concept, not production
-  security.
-- **Per-request delivery.** A kernel emits an effect asking for entropy, and the pier
-  answers with an event carrying fresh bits from `getentropy`, logged before it is
-  applied. `avon boot` gives a boot seed the same way. There is no ratchet in the
-  kernel.
-- **Entropy is only ever event data, never a reduction primitive.** Replay, the
-  conformance counts, the jets' licence and every proof depend on it.
-- `--entropy=FILE` replaces `getentropy` for reproducible tests.
-- The log, and so the pier, is as secret as the bits it holds.
-- In a proved poke, the bits are a private witness (lean-ski).
-- Kernel entropy never feeds the prover's seed (`ZK-JETS.md` §7).
-
-Open:
-- **Encoding.** Recommended: 128 Scott Booleans, which are pure SKI and are the shape
-  of lean-ski's private witness tables. The alternative is data-jet words, which are
-  compact but exist in share mode only.
-- **The request and reply shapes.** A change to SKIjack's kernel interface,
-  `SPEC.md` §4.1, agreed with SKIjack.
-
-Steps:
-1. Write §9.1. *Done:* it recommends shape A, a tagged pair `[0 id]` under a
-   `--entropy` opt-in, over B, a prelude term recognized by key.
-2. Agree the shapes in SKIjack.
-3. Build the pier's request and reply loop, the boot seed and `--entropy=FILE`.
-4. Add kernel tests: replay gives the same bits, and a request is answered once.
+Nothing at present.
 
 ## Later
 

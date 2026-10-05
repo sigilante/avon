@@ -1,0 +1,23 @@
+-- A kernel that asks for entropy (avon/docs/DESIGN.md §9.1), for a pier
+-- booted with --entropy.  Every event is a cell [tag data]; tag 0 is the
+-- pier's reply [0 [id bits]], bits a list of 128 Booleans (K or K I).
+-- The state is [greedy replies], replies newest first.
+--   [1 n]  asks once, with id n;
+--   [2 n]  asks twice, ids n and n + 1, with the effect [1 n] between;
+--   [3 x]  turns greedy: every reply asks again, so the pier's cap stops it.
+-- Peek 0 is how many replies came, peek 1 the ones in the newest reply's
+-- bits, peek 2 its id, peek 3 its first bit.
+nat     === Zero | Suc nat
+list    === Nil | Cons nat list
+len l = l |> { Nil Zero; Cons h t (Suc (len t)) }
+ones bs = bs |> { Nil Zero; Cons b rest (b (Suc (ones rest)) (ones rest)) }
+first l = l |> { Nil [Zero Nil]; Cons h t h }
+bit0 bs = bs |> { Nil Zero; Cons b rest (b (Suc Zero) Zero) }
+again g n = g |> { Zero Nil; Suc z (Cons [Zero n] Nil) }
+reply k r = [(again (2@(3@k)) (Suc (len (3@(3@k))))) [(2@k) [(2@(3@k)) (Cons r (3@(3@k)))]]]
+ask k ev t = t |> { Zero [(Cons [Zero (3@ev)] Nil) k]; Suc u (more k ev u) }
+more k ev u = u |> { Zero [(Cons [Zero (3@ev)] (Cons [(Suc Zero) (3@ev)] (Cons [Zero (Suc (3@ev))] Nil))) k]; Suc w [(Cons [Zero Zero] Nil) [(2@k) [(Suc Zero) (3@(3@k))]]] }
+poke k ev = (2@ev) |> { Zero (reply k (3@ev)); Suc t (ask k ev t) }
+peek k p = p |> { Zero (len (3@(3@k))); Suc q (q |> { Zero (ones (3@(first (3@(3@k))))); Suc r (r |> { Zero (2@(first (3@(3@k)))); Suc w (bit0 (3@(first (3@(3@k))))) }) }) }
+load k old = [(2@k) old]
+kernel := [[poke [peek load]] [Zero Nil]]
