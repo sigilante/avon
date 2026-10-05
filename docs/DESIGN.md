@@ -2130,8 +2130,10 @@ or a witness; `avon witness` refuses all three options.
   cycle would share it.
 - **Poseidon2 run natively** (§6.12, `--p2`): `P ⬝ stateN x` in one step,
   against 962 million steps and 10.1 s unjetted.
-- **Against the Reduceron** (`docs/BENCHMARK.md`): Avon takes 1.6 to 3.0
-  times its time on the five ports. Per step it keeps the Reduceron's
+- **Against the Reduceron** (`docs/BENCHMARK.md`, "Remeasured,
+  2026-10-04"): with data jets, `--fix` and deferred roots Avon takes 1.47
+  to 2.67 times its time on the five ports, 2.08 by geometric mean, and
+  1.91 compiled with skijack's inlining. Per step it keeps the Reduceron's
   pace; it takes more steps, most of them Y re-deriving its unfolding.
 
 **Beyond the stages: proofs and the paper.**
