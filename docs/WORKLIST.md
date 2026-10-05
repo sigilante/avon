@@ -22,7 +22,8 @@ design lives. Last revised 2026-10-05.
   list with the event `[0 [id bits]]`, 128 Scott Booleans, logged first, and boot's own
   request with the first event; `--entropy=FILE` for tests. Per request rather than with
   every event because a proved poke carries its whole event as private witness, and
-  most events need no bits. Open: lean-ski's proof of a reply event.
+  most events need no bits. lean-ski proves a poke of a reply with the bits private
+  (2026-10-05, `Ski/Entropy.lean`).
 
 ## In progress
 
@@ -89,9 +90,6 @@ It needs its own plan.
 - The Poseidon2 tables' constraints (`Sat`): the honest tables are proved to balance
   and to carry clear flags, but not to satisfy each AIR.
 - Fiat–Shamir and ChaCha20's pseudorandomness, both assumed (`ZK-JETS.md` §7).
-- A proved poke whose event is an entropy reply, `[0 [id bits]]`, the bits a
-  private witness (`DESIGN.md` §9.1). Avon's side, the pier's requests and replies, is
-  built.
 
 When lean-ski changes a table format or the prover's inputs, Avon matches it and
 reruns `make zk-jet-witness-check`.

@@ -1795,9 +1795,8 @@ sees the same bits.
   falling back to `getentropy`.
 - **The log is as secret as the bits it holds,** and so is the pier's
   directory.
-- **In a proved poke the bits are a private witness** (lean-ski). A proof
-  of one event from an installed kernel already treats its event as
-  witness data (§17).
+- **In a proved poke the bits are a private witness** (lean-ski,
+  `Ski/Entropy.lean`; proved below, "Proved").
 - **Kernel entropy never feeds the prover's seed** (`ZK-JETS.md` §7).
   The two are separate draws from `getentropy`.
 
@@ -1901,7 +1900,23 @@ or turn greedy and ask on every reply. Against a file of known bytes:
 A reply is 909 nodes as the pier builds it. The probe reads a request's
 `id` as its normal form, since a probe's field is a thunk over its
 marker; the reply carries that normal form, convertible to the kernel's
-`id`. Open: lean-ski's proved poke of a reply event, the bits private.
+`id`.
+
+**Proved, 2026-10-05** (lean-ski `Ski/Entropy.lean`, `release/entropy`).
+A poke whose event is a reply is a predicate statement over 128 literal
+bits, the reply's. Its verifier, `entropyV`, reads the public `[k [id
+chk]]`, builds `[0 [id bits]]` from the circuit's bits in this pier's
+encoding, pokes `k` with it and hands `[effects k']` to the check `chk`.
+An accepted proof holds 128 Booleans on which `chk` accepts that poke
+(`Circuit.entropyExport_sound`), and the bits are the circuit's private
+slot cells (`Circuit.comp_zk`). lean-ski compiles the kernel from
+`tests/kernel/entropy.ascii.ski` to the same term SKIjack does, and its
+`lake exe entropy emit` reads a pier's `eny 1` record for the witness.
+The release proves two checks of this kernel's boot poke, each from a
+fresh pier's bits: `bootok`, which reads no bit, and `firstset`, which
+discloses the first. About 1,900 CPU rows and 13,600 memory cells, half a
+second. The proof does not show that the bits came from a pier: a prover
+chooses them, as the pier's operator does.
 
 ## 10. The conformance harness
 
