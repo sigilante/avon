@@ -13,6 +13,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "avon.h"
@@ -397,6 +398,115 @@ TEST(a_pier_reloads_to_the_same_state) {
     CHECK(system(cmd) == 0);
 }
 
+static long file_size(const char *path) {
+    struct stat st;
+    return stat(path, &st) == 0 ? (long)st.st_size : -1;
+}
+
+/*  A logged event is one the kernel took: a reopen replays it with no fuel
+ *  limit, whatever this run's --fuel, and drops nothing but a torn record;
+ *  an event that cannot replay stops the open and stays in the log. */
+TEST(a_logged_event_replays_whatever_the_fuel) {
+    char dir[] = "/tmp/avon-replay-XXXXXX";
+    CHECK(mkdtemp(dir) != NULL);
+    char pier[128], logp[160];
+    snprintf(pier, sizeof pier, "%s/pier", dir);
+    snprintf(logp, sizeof logp, "%s/events.log", pier);
+    av_opts o = copy_opts();
+    size_t np, nt, n5, ni = 0;
+    uint8_t *pill = bytes_of("pill", &np), *tick = bytes_of("events.tick", &nt);
+    uint8_t *poke5 = bytes_of("events.poke5", &n5);
+    av_arena *s = av_arena_new(0);
+    uint8_t *subject = jam_of(s, AV_NODE_I, &ni);
+    av_arena_free(s);
+    const char *err = NULL;
+    av_pier *p = av_pier_new(pier, pill, np, subject, ni, &o, &err);
+    REQUIRE(p != NULL);
+    uint32_t eff;
+    av_result r;
+    CHECK_EQ(av_pier_poke(p, tick, nt, &eff, &r, &err), AV_WHNF);
+    CHECK_EQ(av_pier_poke(p, poke5, n5, &eff, &r, &err), AV_WHNF);
+    av_pier_free(p);
+    long logged = file_size(logp);
+    CHECK(logged > 0);
+
+    av_opts starved = o;
+    starved.max_steps = 5;                                  /* each event took more */
+    p = av_pier_open(pier, &starved, &err);
+    REQUIRE(p != NULL);
+    CHECK_EQ(av_pier_kernel(p)->events, 2);
+    CHECK_EQ(pier_state(p), 6);
+    CHECK_EQ(av_pier_poke(p, tick, nt, &eff, &r, &err), AV_FUEL);   /* the live fuel holds */
+    CHECK_EQ(av_pier_kernel(p)->events, 2);
+    av_pier_free(p);
+    CHECK_EQ(file_size(logp), logged);
+
+    /* a logged event that does not reach weak head normal form */
+    av_arena *e = av_arena_new(0);
+    const char *om = "S I I (S I I)";
+    size_t nom;
+    uint8_t *omega = jam_of(e, av_parse(e, om, strlen(om), NULL), &nom);
+    av_arena_free(e);
+    FILE *f = fopen(logp, "ab");
+    REQUIRE(f != NULL);
+    fputs("poke 3 ", f);
+    for (size_t i = 0; i < nom; i++) fprintf(f, "%02x", omega[i]);
+    fputc('\n', f);
+    fclose(f);
+    logged = file_size(logp);
+    av_opts small = o;
+    small.max_nodes = 1u << 16;                             /* omega grows: SIZE, not forever */
+    CHECK(av_pier_open(pier, &small, &err) == NULL);
+    CHECK(err != NULL && strstr(err, "does not replay") != NULL);
+    CHECK_EQ(file_size(logp), logged);                      /* refused, and kept */
+
+    free(pill); free(tick); free(poke5); free(subject); free(omega);
+    char cmd[256];
+    snprintf(cmd, sizeof cmd, "/bin/rm -rf %s", dir);
+    CHECK(system(cmd) == 0);
+}
+
+/*  A pier holds the kernel's entropy: its directory is the caller's alone,
+ *  0700, its files 0600, and a directory someone else could read or write
+ *  is refused. */
+TEST(a_pier_is_closed_to_others) {
+    char dir[] = "/tmp/avon-mode-XXXXXX";
+    CHECK(mkdtemp(dir) != NULL);
+    char pier[128], logp[160], open_dir[128], empty[128];
+    snprintf(pier, sizeof pier, "%s/pier", dir);
+    snprintf(logp, sizeof logp, "%s/events.log", pier);
+    snprintf(open_dir, sizeof open_dir, "%s/open", dir);
+    snprintf(empty, sizeof empty, "%s/empty", dir);
+    av_opts o = copy_opts();
+    size_t np, ni = 0;
+    uint8_t *pill = bytes_of("pill", &np);
+    av_arena *s = av_arena_new(0);
+    uint8_t *subject = jam_of(s, AV_NODE_I, &ni);
+    av_arena_free(s);
+    const char *err = NULL;
+    mode_t old = umask(0);                                  /* the widest umask */
+    av_pier *p = av_pier_new(pier, pill, np, subject, ni, &o, &err);
+    umask(old);
+    REQUIRE(p != NULL);
+    av_pier_free(p);
+    struct stat st;
+    CHECK(stat(pier, &st) == 0 && (st.st_mode & 0777) == 0700);
+    CHECK(stat(logp, &st) == 0 && (st.st_mode & 0777) == 0600);
+
+    CHECK(mkdir(open_dir, 0700) == 0 && chmod(open_dir, 0755) == 0);
+    CHECK(av_pier_new(open_dir, pill, np, subject, ni, &o, &err) == NULL);
+    CHECK(err != NULL && strstr(err, "0700") != NULL);
+    CHECK(mkdir(empty, 0700) == 0);                         /* empty, the caller's, 0700 */
+    p = av_pier_new(empty, pill, np, subject, ni, &o, &err);
+    CHECK(p != NULL);
+    av_pier_free(p);
+
+    free(pill); free(subject);
+    char cmd[256];
+    snprintf(cmd, sizeof cmd, "/bin/rm -rf %s", dir);
+    CHECK(system(cmd) == 0);
+}
+
 TEST_MAIN(
     TEST_CASE(the_selectors_are_the_abis),
     TEST_CASE(the_events_kernel_runs_as_the_reference_does),
@@ -405,4 +515,6 @@ TEST_MAIN(
     TEST_CASE(a_pill_boots_to_a_kernel),
     TEST_CASE(share_mode_pokes_stay_flat),
     TEST_CASE(a_pier_reloads_to_the_same_state),
+    TEST_CASE(a_logged_event_replays_whatever_the_fuel),
+    TEST_CASE(a_pier_is_closed_to_others),
 )
