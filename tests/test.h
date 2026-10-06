@@ -3,7 +3,8 @@
  *  The unit-test runner: one executable per tests/test_*.c file.  Declare
  *  cases with TEST(name), list them in TEST_MAIN, and check with CHECK or
  *  CHECK_EQ.  A failed check reports its line and fails the case; the
- *  executable exits nonzero if any case failed.
+ *  executable exits nonzero if any case failed.  REQUIRE is CHECK that
+ *  also ends the case, for a precondition the rest depends on.
  */
 
 #ifndef TEST_H
@@ -32,6 +33,16 @@ static int test_failed_;
             fprintf(stderr, "  %s:%d: %s == %jd, want %jd\n", __FILE__,   \
                     __LINE__, #got, g_, w_);                              \
             test_failed_ = 1;                                             \
+        }                                                                 \
+    } while (0)
+
+#define REQUIRE(cond)                                                     \
+    do {                                                                  \
+        if (!(cond)) {                                                    \
+            fprintf(stderr, "  %s:%d: REQUIRE(%s)\n", __FILE__, __LINE__, \
+                    #cond);                                               \
+            test_failed_ = 1;                                             \
+            return;                                                       \
         }                                                                 \
     } while (0)
 

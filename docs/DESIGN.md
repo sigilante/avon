@@ -1781,11 +1781,17 @@ Effects and events are terms. Avon does not invent a syntax for them.
   written image first and sidecar last (§4.2's `av_snapshot_save`).
   Reopening loads the newest snapshot that verifies and replays the
   later records -- pokes, and `load`s, which log the new pill and
-  subject. A record cut short by a crash is dropped; a poke that does
-  not reach weak head normal form never applied, so it leaves the log
-  when it fails, and a crash between the two leaves it last, where
-  replay drops it. Snapshots are not pruned yet, and the directory is
-  not synced after a rename.
+  subject. A record cut short by a crash is dropped. A poke that does
+  not reach weak head normal form leaves the log when it fails.
+  - A logged record is an event the kernel took. Replay runs it with no
+    fuel limit and no interrupt, so another run's `--fuel` cannot erase
+    an acknowledged event (`AUDIT.md`, item 1).
+  - A record that does not replay stops the open, and stays in the log.
+  - So a crash between a live failure and its removal leaves an event
+    that replays uncapped: it applies, or the pier refuses to open.
+  - A pier's directory is 0700 and its files 0600 (item 2).
+  - Snapshots are not pruned yet, and the directory is not synced after
+    a rename.
 - **Upgrade** pulls `load` from the new kernel with the installed
   kernel's state and installs the result, unreduced.
 

@@ -174,6 +174,12 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
 6. Items 21 to 24, the documents.
 7. Items 25 to 27, measured first, then restructured.
 
+## Fixed since
+
+- Items 1 and 2 (`pier-replay`). Replay runs logged events with no fuel limit and
+  never drops one but a torn record. Piers are 0700 with files 0600, and a pier
+  refuses a directory that is not empty, the caller's own, and 0700.
+
 ## Fixed on `stage8-m1`
 
 - DESIGN.md's status line said the full front end remained.

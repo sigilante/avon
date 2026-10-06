@@ -220,8 +220,8 @@ static void crash_point(int n) {
  *  then sync.  Idempotent. */
 static bool apply(const char *dir, const uint8_t *j, size_t len, const char **err) {
     char *np = path_in(dir, "nodes"), *ap = path_in(dir, "atoms");
-    int fn = np ? open(np, O_RDWR | O_CREAT, 0644) : -1;
-    int fa = ap ? open(ap, O_RDWR | O_CREAT, 0644) : -1;
+    int fn = np ? open(np, O_RDWR | O_CREAT, 0600) : -1;
+    int fa = ap ? open(ap, O_RDWR | O_CREAT, 0600) : -1;
     free(np);
     free(ap);
     bool ok = fn >= 0 && fa >= 0;
@@ -364,7 +364,7 @@ bool av_pma_commit(av_arena *a, uint32_t root, uint64_t events, const char **err
         ok = put(&j, sha, 32);
     }
     char *tmp = path_in(p->dir, "journal.tmp"), *jp = path_in(p->dir, "journal");
-    int fd = ok && tmp ? open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644) : -1;
+    int fd = ok && tmp ? open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600) : -1;
     ok = ok && fd >= 0 && write_all(fd, j.b, j.len, 0) && fsync(fd) == 0;
     if (fd >= 0) close(fd);
     if (ok) crash_point(1);
@@ -400,11 +400,11 @@ uint64_t av_pma_last_chunks(const av_arena *a) { return a->pma ? a->pma->last_ch
 bool av_pma_attach(av_arena *a, const char *dir, const char **err) {
     *err = NULL;
     if (a->pma) { *err = "the arena has an image already"; return false; }
-    if (mkdir(dir, 0777) != 0 && errno != EEXIST) { *err = "cannot make the image's directory"; return false; }
+    if (mkdir(dir, 0700) != 0 && errno != EEXIST) { *err = "cannot make the image's directory"; return false; }
     char *np = path_in(dir, "nodes");
     if (!np) { *err = "out of memory"; return false; }
     if (access(np, F_OK) == 0) { free(np); *err = "an image is already there"; return false; }
-    int fd = open(np, O_RDWR | O_CREAT | O_EXCL, 0644);
+    int fd = open(np, O_RDWR | O_CREAT | O_EXCL, 0600);
     free(np);
     if (fd < 0) { *err = "cannot create the image"; return false; }
     if (flock(fd, LOCK_EX | LOCK_NB) != 0) { close(fd); *err = "the image is in use"; return false; }

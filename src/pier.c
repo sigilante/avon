@@ -9,6 +9,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -118,6 +119,39 @@ void av_pier_free(av_pier *p) {
     free(p);
 }
 
+/*  The log, opened to append, created readable by its owner only: it
+ *  holds the kernel's entropy (docs/DESIGN.md §9.1). */
+static FILE *open_log(const char *path) {
+    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0600);
+    if (fd < 0) return NULL;
+    FILE *f = fdopen(fd, "ab");
+    if (!f) close(fd);
+    return f;
+}
+
+/*  A new pier's directory: made 0700, or one already there that is a
+ *  directory, empty, the caller's own and closed to others, so that no
+ *  one else can read the pier or plant a snapshot in it. */
+static bool pier_dir(const char *dir, const char **err) {
+    if (mkdir(dir, 0700) == 0) return true;
+    if (errno != EEXIST) { *err = "cannot make the pier's directory"; return false; }
+    struct stat st;
+    if (lstat(dir, &st) != 0 || !S_ISDIR(st.st_mode)) { *err = "the pier's path is not a directory"; return false; }
+    DIR *d = opendir(dir);
+    if (!d) { *err = "cannot read the pier's directory"; return false; }
+    struct dirent *e;
+    bool empty = true;
+    while (empty && (e = readdir(d)))
+        if (strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0) empty = false;
+    closedir(d);
+    if (!empty) { *err = "a pier is already there, or the directory is not empty"; return false; }
+    if (st.st_uid != geteuid() || (st.st_mode & 077) != 0) {
+        *err = "the pier's directory must be the caller's own and mode 0700";
+        return false;
+    }
+    return true;
+}
+
 static av_pier *pier_alloc(const char *dir, const av_opts *o) {
     av_pier *p = calloc(1, sizeof *p);
     if (!p) return NULL;
@@ -131,10 +165,10 @@ static av_pier *pier_alloc(const char *dir, const av_opts *o) {
 static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
                          const uint8_t *subject, size_t nsubject, const av_opts *o,
                          bool pma, bool eny, bool eny_file, const char **err) {
-    if (mkdir(dir, 0777) != 0 && errno != EEXIST) { *err = "cannot make the pier's directory"; return NULL; }
     char *logp = path_in(dir, "events.log");
     if (!logp) { *err = "out of memory"; return NULL; }
     if (access(logp, F_OK) == 0) { free(logp); *err = "a pier is already there"; return NULL; }
+    if (!pier_dir(dir, err)) { free(logp); return NULL; }
     av_pier *p = pier_alloc(dir, o);
     if (!p || !(p->a = av_arena_new(1u << 16))) { free(logp); av_pier_free(p); *err = "out of memory"; return NULL; }
     uint32_t k = boot_term(p->a, pill, npill, subject, nsubject, &p->o, err);
@@ -144,7 +178,7 @@ static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
         /* the opt-in before the image: a crash between them leaves a log
          * and no image, a pier that will not open, not one that opens
          * without its opt-in */
-        FILE *lg = fopen(logp, "ab");
+        FILE *lg = open_log(logp);
         const uint8_t from_file = 1;
         bool ok = lg && log_record(lg, "entropy", 0, &from_file, eny_file ? 1 : 0, NULL, 0);
         if (lg) fclose(lg);
@@ -164,7 +198,7 @@ static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
         av_pier_free(p);
         return NULL;
     }
-    p->log = fopen(logp, "ab");                 /* the image first: an empty log */
+    p->log = open_log(logp);                   /* the image first: an empty log */
     free(logp);
     if (!p->log) { *err = "cannot open the event log"; av_pier_free(p); return NULL; }
     return p;
@@ -395,12 +429,21 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     free(img);
     av_kernel_adopt(&p->k, p->a, root, &p->o);
     p->k.events = at;
+    /* A logged event is one the kernel took: it replays with no fuel limit
+     * and no interrupt, whatever this run's options, and one that does not
+     * reach weak head normal form stops the open; nothing logged is dropped
+     * but a torn last record. */
+    av_opts live = p->k.o, replay = p->o;
+    replay.max_steps = UINT64_MAX / 2;
+    replay.interrupt = NULL;
+    p->k.o.max_steps = replay.max_steps;
+    p->k.o.interrupt = NULL;
 
     char *logp = path_in(dir, "events.log");
     if (!logp) { *err = "out of memory"; av_pier_free(p); return NULL; }
     FILE *in = fopen(logp, "rb");
     if (!in && errno == ENOENT) {               /* a crash before the first event */
-        FILE *mk = fopen(logp, "ab");
+        FILE *mk = open_log(logp);
         if (mk) fclose(mk);
         in = fopen(logp, "rb");
     }
@@ -412,7 +455,6 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     const char *msg = NULL;
     while (!msg && (len = getline(&line, &lcap, in)) > 0) {
         if (line[len - 1] != '\n') break;       /* cut short by a crash */
-        off_t start = good;
         good += len;
         line[len - 1] = '\0';
         char kind[8];
@@ -436,30 +478,16 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
             uint32_t ev = av_cue(p->a, b1, l1, &msg);
             uint32_t eff;
             av_result r;
-            if (ev != AV_NONE && av_kernel_poke(&p->k, ev, &eff, &r) != AV_WHNF) {
-                /* A poke that fails is removed from the log when it fails;
-                 * found last, it is one a crash left: it never applied. */
-                int c = fgetc(in);
-                if (c == EOF) good = start;
-                else msg = "a logged event does not replay";
-                free(b1);
-                free(b2);
-                break;
-            }
+            if (ev != AV_NONE && av_kernel_poke(&p->k, ev, &eff, &r) != AV_WHNF)
+                msg = "a logged event does not replay";
         } else if (strcmp(kind, "eny") == 0 && b2 && l2 == AV_ENY_BYTES) {
             uint32_t ev = reply_event(p->a, b1, l1, b2, &msg);
             uint32_t eff;
             av_result r;
-            if (ev != AV_NONE && av_kernel_poke(&p->k, ev, &eff, &r) != AV_WHNF) {
-                int c = fgetc(in);              /* as a poke's: last, a crash's */
-                if (c == EOF) { good = start; p->eny_n--; }   /* dropped: its bytes unspent */
-                else msg = "a logged reply does not replay";
-                free(b1);
-                free(b2);
-                break;
-            }
+            if (ev != AV_NONE && av_kernel_poke(&p->k, ev, &eff, &r) != AV_WHNF)
+                msg = "a logged reply does not replay";
         } else if (strcmp(kind, "load") == 0 && b2) {
-            uint32_t nk = boot_term(p->a, b1, l1, b2, l2, &p->o, &msg);
+            uint32_t nk = boot_term(p->a, b1, l1, b2, l2, &replay, &msg);
             if (nk != AV_NONE && !av_kernel_load(&p->k, nk)) msg = "out of memory";
         } else {
             msg = "a malformed log record";
@@ -469,6 +497,7 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     }
     free(line);
     fclose(in);
+    p->k.o = live;
     if (msg) { free(logp); *err = msg; av_pier_free(p); return NULL; }
     if (truncate(logp, good) != 0) { free(logp); *err = "cannot drop a torn record"; av_pier_free(p); return NULL; }
     if (p->pma && p->k.events != at && !av_pma_commit(p->a, p->k.k, p->k.events, err)) {
@@ -476,7 +505,7 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
         av_pier_free(p);
         return NULL;
     }
-    p->log = fopen(logp, "ab");
+    p->log = open_log(logp);
     free(logp);
     if (!p->log) { *err = "cannot open the event log"; av_pier_free(p); return NULL; }
     return p;

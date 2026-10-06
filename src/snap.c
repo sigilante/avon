@@ -59,7 +59,7 @@ static bool write_durably(const char *path, const void *p, size_t n) {
     if (!tmp) return false;
     memcpy(tmp, path, len);
     memcpy(tmp + len, ".tmp", 5);
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     bool ok = fd >= 0;
     const char *c = p;
     while (ok && n) {

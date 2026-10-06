@@ -252,6 +252,13 @@ build/avon poke --pier=/tmp/epier tests/kernel/entropy.ask5.skit
 - `boot PILL` applies the pill to the initial subject (`--subject=FILE`,
   default `I`). Without `--pier` it only reports whether the value is a
   kernel.
+- `boot --pier=DIR` makes DIR 0700 and its files 0600, since a pier holds
+  the kernel's entropy. It also takes a DIR that already exists, if the
+  directory is empty, yours, and 0700.
+- A pier replays its logged events with no fuel limit and no interrupt,
+  whatever this run's `--fuel`. A logged event that does not replay stops
+  the open, and its record stays in the log. Only a record torn by a crash
+  is dropped.
 - `boot --pma` makes the pier a persistent arena, committed after every
   event (§19); otherwise a pier is an event log and snapshots, and
   `--snapshot` on `poke` or `load` takes one. `--pma` matters only to
