@@ -385,6 +385,48 @@ TEST(a_term_that_is_not_its_operation_is_refused) {
     nats_rm(dir);
 }
 
+/*  An addition that agrees with + on 0 .. 6 and not past it, under its own
+ *  hash: word_admit's samples pass it, and only the pinned term refuses it
+ *  (AUDIT.md item 7). */
+static const char FAKE_ADD[] =
+    "skijack-1:d9868dcd09572633\tadd\t0\t"
+    "S S (K (S (K (S (K (S (K K) (S (K (S I)) K))))) (S (K (S (S S (K"
+    " (S (K (S (K (S (K K) (S (K (S I)) K))))) (S (K (S (S S (K (S (K"
+    " (S (K (S (K K) (S (K (S I)) K))))) (S (K (S (S S (K (S (K (S (K"
+    " (S (K K) (S (K (S I)) K))))) (S (K (S (S S (K (S (K (S (K (S (K"
+    " K) (S (K (S I)) K))))) (S (K (S (S S (K (S (K (S (K (S (K K) (S"
+    " (K (S I)) K))))) (S (K (S (K I))) K)))))) K)))))) K)))))) K))))"
+    ")) K)))))) K)))";
+
+static void no_edit(char *text) { (void)text; }
+
+TEST(only_skijacks_operations_are_admitted) {
+    char dir[64];
+    nats_copy(dir, no_edit);
+    char path[96];
+    snprintf(path, sizeof path, "%s/words.tsv", dir);
+    char *text = slurp(path);
+    REQUIRE(text != NULL);
+    FILE *f = fopen(path, "w");
+    REQUIRE(f != NULL);
+    for (char *line = text, *nl; *line; line = nl ? nl + 1 : line + strlen(line)) {
+        nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
+        if (!strstr(line, "\tadd\t")) fprintf(f, "%s\n", line);
+    }
+    fprintf(f, "%s\n", FAKE_ADD);
+    fclose(f);
+    free(text);
+    char *src = fixture("nats", "main");
+    REQUIRE(src != NULL);
+    outcome dt = run(src, dir, DATA, AV_SHARE, true, 10000000, 1u << 12);
+    CHECK_EQ(dt.admitted, 4);
+    CHECK_EQ(dt.refused, 1);
+    CHECK(strcmp(dt.nf, "Ff") == 0);
+    free(src);
+    nats_rm(dir);
+}
+
 TEST(collections_keep_words_and_fuel_stops) {
     char *src = fixture("nats", "main");
     if (!src) return;
@@ -526,5 +568,6 @@ TEST_MAIN(
     TEST_CASE(an_operand_not_yet_a_word_runs_the_term),
     TEST_CASE(a_divergent_operand_is_never_forced),
     TEST_CASE(a_term_that_is_not_its_operation_is_refused),
+    TEST_CASE(only_skijacks_operations_are_admitted),
     TEST_CASE(collections_keep_words_and_fuel_stops)
 )
