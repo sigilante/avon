@@ -32,21 +32,19 @@ design lives. Last revised 2026-10-05.
 
 ## Next, in this order (agreed 2026-10-05)
 
-1. **CI.** GitHub Actions running `make check` on every push and pull request, so that
-   nothing reaches master red. The checks that need lean-ski or skijack checkouts stay
-   manual for now.
-2. **Check entropy against §9.1.** lean-ski built and proved it; Avon confirms the pier
-   does what §9.1 decides: the `--entropy` opt-in, logging before applying, the boot
-   reply, and `--entropy=FILE` stopping when the file runs out.
-3. **Stage 8** (item 3) through M4, scoped 2026-10-05: every accepted corpus program
-   compiles to Python's terms, hash for hash. The checkers, M5 and M6, follow the
-   audit.
-4. **A codebase audit** by reviewers in parallel: failure paths, documentation
+1. **CI**: done 2026-10-05 (#19). `make check` on Linux for every pull request, and
+   macOS too on master. The checks that need lean-ski or skijack checkouts stay manual.
+2. **Check entropy against §9.1**: done 2026-10-05 (#20).
+3. **Stage 8** (item 3) through M4: done 2026-10-05. Every corpus program compiles to
+   Python's terms, hash for hash. The checkers, M5 and M6, follow the audit.
+4. **A codebase audit**: done 2026-10-05 (`AUDIT.md`), by reviewers in parallel: failure paths, documentation
    against code, the build and its gates, the security edges, the shape of
    `reduce.c` and `main.c`. Slated into it: plain SKI's residual 1.9 to 3.9% since
    deferred roots (code generation), and deferral's 8 to 39 MB of extra peak memory with
    the same live set (the allocator).
-5. **Hygiene refactors** from the audit's findings, each its own pull request.
+5. **Fixes and hygiene refactors** from the audit's findings, each its own pull request,
+   in `AUDIT.md`'s order. First the pier: replay deletes an acknowledged event, and
+   the pier's files are readable by every local user.
 
 ## In progress
 
@@ -96,7 +94,7 @@ Scoped 2026-10-05, against skijack `6a870ac`. The SKIjack-0 front end
 (`selfhost/front0.ascii.ski`) is 406 lines; Python's front end about 7,100. Sizes
 are estimates, in lines of SKIjack:
 
-| milestone | adds | size | corpus programs matching |
+| milestone | adds | size (estimated at scoping) | corpus programs matching (estimated) |
 |---|---|---:|---:|
 | M1 | wider lexer and parser, plain cores, hygienic macros, signatures parsed and dropped, the birds `B`, `C`, `W`, `Y`, the numeral operations | 150–250 | 5 of 17 |
 | M2 | interpreter generation (`generate.py`): step and loop equations, names built at run time | 150–250 | 10 |
@@ -104,6 +102,15 @@ are estimates, in lines of SKIjack:
 | M4 | scries, path literals, namespace literals | 60–110 | all 17 |
 | M5 | Stage A (`check.py`): refusal parity, errors with a class | 250–400 | — |
 | M6 | Stage B (`typecheck.py`): Hindley–Milner over an explicit store, equirecursive unification | 400–700 | — |
+
+**M1 to M4, built 2026-10-05** (skijack `front1.ascii.ski`, `run1.py`; `make
+front1-check`; `DESIGN.md` §20.3). Every corpus program agrees, hash for hash, and the
+fixed point covers 1,009 names. Of 303 edge programs, aviary's environment decides 12,
+not SKIjack's rules. Those are binders named as defined names or built-ins, a binder
+twice, a recursion's name rebound, and a binder named as a later definition, which
+aviary reads as the definition. front1 takes each binder as a binder; parity there is
+M5's. Left for the audit: front1's term grew from 265,145 nodes to 635,173, so Python
+compiles it in 48 seconds.
 
 Checking never changes the terms, so M1 to M4 are each checked against
 `skijack.compile(..., check=False)` on the corpus as they land, with `run0.py`'s
