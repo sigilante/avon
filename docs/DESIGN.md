@@ -1,6 +1,6 @@
 # Avon: the native runtime, planned
 
-> **Status (2026-10-01).** Built: stages 0 to 7 and 9 of §11 are done, and stage 8 has the compiler's core and the SKIjack-0 front end; the full language's front end remains (§11.1). Beyond the stages, share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof; jets under hiding are built (`ZK-JETS.md`); frame traces serve the pure-S paper's census (§22). What the proofs do not yet cover is listed in §11.1, "Open". The note was written 2026-09-16, before any of it; the compiler it targets is `python/skijack`, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
+> **Status (2026-10-05).** Built: stages 0 to 7 and 9 of §11 are done, and stage 8 has the compiler's core, the SKIjack-0 front end, and the full language's front end through M4, every corpus program compiled in Avon to Python's terms; its checkers remain (§11.1, §20.3). Beyond the stages, share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof; jets under hiding are built (`ZK-JETS.md`); frame traces serve the pure-S paper's census (§22). What the proofs do not yet cover is listed in §11.1, "Open". The note was written 2026-09-16, before any of it; the compiler it targets is `python/skijack`, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
 
 *2026-09-16. The build plan for the C runtime named in `RUNTIME-DESIGN.md`
 §3a. Its constraints come from three places: the reference host
@@ -2244,7 +2244,9 @@ in stage 8"):
 - **The compiler is a term in a pill**, a kernel answering `Abs` events.
 - **The front end, for SKIjack-0, compiles its own source** (§20.3,
   "Built for SKIjack-0"): all 492 of its names, from source text, hash for
-  hash (`make front0-check`). The full language's front end remains.
+  hash (`make front0-check`). The full language's front end is built
+  through M4 of six: every corpus program compiles in Avon to Python's
+  terms (`make front1-check`). The checkers remain.
 
 **Stage 9, done.** The persistent arena (§19.1, "Built in stage 9"):
 
@@ -3115,12 +3117,51 @@ remaps its memo.
   the check runs in share mode, and the non-sharing reference reducer
   runs only the lexer (skijack's `tests/test_front0.py`).
 
-The full language's front end -- cores, macros, signatures, quotation,
-scries, namespace literals and the type checker -- still runs in Python.
-Next comes the whole language's front end, checked on the corpus. §6.7
-measured jets for this one: constructor jets and residual jets for its
-own equations both make it slower in share mode, so what remains of its
-cost is for the extended basis to try.
+§6.7 measured jets for this front end: constructor jets and residual
+jets for its own equations both make it slower in share mode, so what
+remains of its cost is for the extended basis to try.
+
+**The full language's front end, by milestone** (skijack's
+`python/skijack/selfhost/front1.ascii.ski` and `run1.py`;
+`tests/front1_check.sh`; the milestones in `WORKLIST.md`, item 3). It
+grows from `front0` and is checked against the expander with checking
+off, which gives the same terms as with checking on.
+
+- **M1 to M4, built 2026-10-05:**
+  - M1: cores, hygienic macros with the expander's three limits,
+    signatures parsed and dropped, the birds `B`, `C`, `W` and `Y`, and
+    the numeral operations;
+  - M2: interpreter generation, the walker, rebuilder, default steps and
+    each interpreter core's step and fuel loop, with the names they need
+    built at run time;
+  - M3: quotation and level-1 runs. A datum is its body's term encoded by
+    the object type's constructors. A quotation may name a datum only if
+    that datum is declared before it, directly or through level-0 rules, as
+    in Python;
+  - M4: scries, paths and namespace literals.
+- **Its fixed point:** all 1,009 of its names, in 80,541,877 contractions
+  with templates and data jets.
+- **The corpus:** it agrees on all 21 programs, the 17 the expander accepts
+  and the 4 it refuses.
+- **Edge programs:** 303 in all, run0's and each milestone's. It agrees on
+  291. aviary's environment decides the other 12, not SKIjack's rules, and
+  they are M5's:
+  - aviary refuses a binder named as a defined name or a built-in;
+  - it refuses a binder twice, and a recursion's name rebound;
+  - it reads a binder named as a later definition as that definition, so
+    a definition that shares a generated binder's name, such as `r`,
+    changes the generated equations' terms.
+- **Random programs:** it agrees on 200 random SKIjack-0 programs, and on
+  every random program of the full language the expander accepts. Those
+  programs have macros, cores, object types, interpreter cores, datums and
+  level-1 runs.
+- **What counts as refused:** a term holding a name the expander left
+  unresolved, a free atom, counts as refused, as Stage B refuses it. One
+  example is a level-0 name that names a level-1 run.
+
+Its term is 635,173 nodes inlined, against 265,145 at M1. Python takes 48
+seconds to compile it, against 9. The checkers, M5 and M6, still run in
+Python.
 
 ### 20.4 What else the analogy imports
 
