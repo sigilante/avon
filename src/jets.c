@@ -577,6 +577,11 @@ static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared) {
         uint64_t d;
         nmap_get(&dig, it.node, &d);
         uint32_t id = jet_find(a, d);
+        /* a digest is 64 bits: the node is the jet's only if it is the
+         * jet's term, tree for tree (AUDIT.md item 8) */
+        if (id != AV_NONE &&
+            av_equal(a, it.node, a->jets[id].fallback, 8 * (size_t)a->jets[id].term_nodes + 4096) != 1)
+            id = AV_NONE;
         if (id != AV_NONE && !(skip_root && it.node == root)) {
             built = jet_node(a, id | (shared ? AV_JET_SHARED : 0), built);
             if (built == AV_NONE) goto done;

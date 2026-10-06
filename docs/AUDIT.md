@@ -182,6 +182,11 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
 - Item 7 (`pin-words`). A word operation is admitted only if its term is skijack's,
   node for node: `words.c` pins the five. The forged addition is refused, and
   `fake6 7 1` gives 7 with `--templates --data` as without.
+- Item 8 (`bind-jets`).
+  - A residual jet wraps a node only if the node is its term, tree for tree.
+  - An interpreter's dictionary rows must have their hashes.
+  - The compiler jet is admitted only if its nine terms match full digests pinned
+    in `compiler.c`.
 
 ## Fixed on `stage8-m1`
 

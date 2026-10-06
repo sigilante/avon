@@ -173,7 +173,33 @@ static uint32_t native(av_arena *a, const av_compiler *c, uint64_t x, uint32_t t
     return r == AV_NONE ? AV_NONE : av_tm_encode(a, c, r);
 }
 
+/*  The compiler's nine terms, pinned by their full digests (av_p2_digest):
+ *  abs, compiled by skijack from tests/selfhost/abstract.ascii.ski, and
+ *  the constructors of its tm, ap and nat types.  A compiler is admitted
+ *  only if it is this one, so native abstraction stands in for no other
+ *  term (AUDIT.md item 8); the samples below run as well. */
+static const char *const PINNED[9] = {
+    "31ef1f0698171f55f5c1c9d62e6c1924b9fc13f3e472fe147a70bf581ff2acce",   /* abs */
+    "267020e689832bb9f4040fc8aa12c738e67b052601a045b90acef6649c7fef28",   /* TS */
+    "ef9ab93025440441e4928d2a0a6887de0da80a6fac9dd0e7fb606d2b206b2253",   /* TK */
+    "7903f20d24dae2137a358aa7fc25f65f77c4f67944f1faaf7113a1183e94ad8b",   /* TI */
+    "ac1fa093de75ef3a63839669260c51ce2ed144b16d9bf3aceaaf8be2b88149f5",   /* TV */
+    "3d36f9ff11f63619c8054ac923456b925818223a3e4911521a7173f7ba521d55",   /* TA */
+    "aaeee552d6c69d8d6288f0e048a91d9a8100c5b15cb626e4fd93a0a57c415943",   /* Ap */
+    "86be9a55762d316a3026c2836d044f5fc76e34da10e1b45feee5f18be7edb177",   /* Zero */
+    "675705e4def6c18f61de932eedfd2ffc515bd272c4310a31ac6d08396764ab55",   /* Suc */
+};
+
 bool av_compiler_register(av_arena *a, const av_compiler *c, const char **err) {
+    const uint32_t terms[9] = { c->abs, c->ts, c->tk, c->ti, c->tv, c->ta, c->ap, c->zero, c->suc };
+    for (int i = 0; i < 9; i++) {
+        char full[65];
+        if (!av_p2_digest(a, terms[i], full)) { if (err) *err = "out of memory"; return false; }
+        if (strcmp(full, PINNED[i]) != 0) {
+            if (err) *err = "not skijack's compiler: a term's full digest is not the pinned one";
+            return false;
+        }
+    }
     static const char *const samples[] = {
         "v0", "v1", "S", "v0 v1", "v1 v0", "v1 (v0 v1)", "S (K v0) v1", "K v1 v0",
         "v2 v1 v0", "S v0 (K v1)",

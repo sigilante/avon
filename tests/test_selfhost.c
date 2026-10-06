@@ -216,9 +216,25 @@ TEST(a_term_that_is_no_compiler_is_refused) {
     av_arena_free(a);
 }
 
+/*  I abs abstracts as abs does, so the samples pass it; it is not the
+ *  pinned compiler, and is refused (AUDIT.md item 8). */
+TEST(only_the_pinned_compiler_is_admitted) {
+    av_arena *a = av_arena_new(1u << 16);
+    av_compiler c = compiler(a);
+    c.abs = av_app(a, AV_NODE_I, c.abs);
+    const char *err = NULL;
+    CHECK(!av_compiler_register(a, &c, &err));
+    CHECK(err != NULL && strstr(err, "pinned") != NULL);
+    CHECK_EQ(a->compiler[0], 0);
+    av_compiler good = compiler(a);
+    CHECK(av_compiler_register(a, &good, &err));
+    av_arena_free(a);
+}
+
 TEST_MAIN(
     TEST_CASE(the_compiler_term_reproduces_its_own_compilation),
     TEST_CASE(the_compiler_jet_agrees_every_fire_checked),
     TEST_CASE(the_compiler_in_a_pill_answers_pokes),
     TEST_CASE(a_term_that_is_no_compiler_is_refused),
+    TEST_CASE(only_the_pinned_compiler_is_admitted),
 )
