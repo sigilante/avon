@@ -188,6 +188,48 @@ static uint32_t plain_numeral(av_arena *a, uint32_t n) {
     return suc == AV_NONE ? AV_NONE : t;
 }
 
+/*  The numeral operations' terms, skijack's (expand.py's natAdd .. natIfLe,
+ *  over its prelude's suc and zero), pinned: a words.tsv row is admitted
+ *  only if its term is this one, node for node, so a row cannot bring an
+ *  operation of its own; word_admit's test on small numerals runs as well.
+ *  Index AV_WOP_ADD .. AV_WOP_IFLE. */
+static const char *const PINNED[] = {
+    NULL,
+    /* add */
+        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S"
+        " I)) K)))) (S (K (S (K K))) (S (K (S (K (S (K K) (S (K (S I)) K)))))"
+        ")))",
+    /* sub */
+        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S"
+        " I)) K)))) (S (K (S (K K))) (S (S (K S) K) (K (S (S I (K K)) (K I)))"
+        ")))",
+    /* mul */
+        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (K (S (S I (K K))"
+        ")))) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K (S I I)) (S (S (K S"
+        ") K) (K (S I I))) (S (K (S (S (K S) (S (K (S I)) K)))) (S (K (S (K K"
+        "))) (S (K (S (K (S (K K) (S (K (S I)) K))))))))))))))",
+    /* ifeq */
+        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S"
+        " (K S))) (S (K (S (K (S (K S))))) (S (S (K S) (S (K K) (S (K S) (S ("
+        "K K) (S (K S) K))))) (K (S (S (K S) (S (K (S (K S))) (S (K K)))) (K "
+        "(K K)))))))))) (S (K K) (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S"
+        " (K S))) (S (K K)))))))) (S (K K) (S (S (K S) (S (K (S (K S))) (S (K"
+        " (S (K K))) (S (K (S (K S))) (S (K (S (K (S (K S))))) (S (S (K S) (S"
+        " (K K) (S (K S) (S (K S))))) (K (S (K K) K)))))))) (K (K (S (K K) K)"
+        ")))))))",
+    /* ifle */
+        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K K)"
+        " (S (K S) (S (K (S (K S))) (S (K K)))))))) (S (K K) (S (K (S (S (K S"
+        ") (S (K K) (S (K S) (S (K (S (K S))) (S (K K)))))))) (S (K K) (S (S "
+        "(K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S (K S))) (S (K (S (K"
+        " (S (K S))))) (S (S (K S) (S (K K) (S (K S) (S (K S))))) (K (S (K K)"
+        " K)))))))) (K (K (S (K K) K))))))))",
+};
+
+const char *av_word_pinned(unsigned op) {
+    return op >= 1 && op < sizeof PINNED / sizeof *PINNED ? PINNED[op] : NULL;
+}
+
 #define ADMIT_MAX 5u        /* operands 0 .. ADMIT_MAX, each against each */
 
 bool word_admit(av_arena *a, uint32_t term, unsigned op) {

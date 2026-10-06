@@ -179,6 +179,9 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
 - Items 1 and 2 (`pier-replay`). Replay runs logged events with no fuel limit and
   never drops one but a torn record. Piers are 0700 with files 0600, and a pier
   refuses a directory that is not empty, the caller's own, and 0700.
+- Item 7 (`pin-words`). A word operation is admitted only if its term is skijack's,
+  node for node: `words.c` pins the five. The forged addition is refused, and
+  `fake6 7 1` gives 7 with `--templates --data` as without.
 
 ## Fixed on `stage8-m1`
 

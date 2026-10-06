@@ -644,7 +644,11 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
             uint64_t d, have;
             if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
             if (d != want) { msg = "a word operation does not match its hash"; goto fail; }
-            if (nmap_get(&ts->key_jet, c, &have) || !word_admit(a, c, op)) {
+            /* skijack's operation, node for node, or it runs as its term */
+            const char *pin = av_word_pinned(op);
+            uint32_t pt = pin ? av_parse(a, pin, strlen(pin), &pe) : AV_NONE;
+            uint32_t pc = pt == AV_NONE ? AV_NONE : hc_canon(a, &ts->h, pt);
+            if (pc == AV_NONE || pc != c || nmap_get(&ts->key_jet, c, &have) || !word_admit(a, c, op)) {
                 ts->words_refused++;
                 continue;
             }

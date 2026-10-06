@@ -56,6 +56,7 @@ static inline uint32_t word_pred(const av_arena *a, uint32_t w) {
     return av_right(a, av_right(a, w));
 }
 bool     word_admit(av_arena *a, uint32_t term, unsigned op);
+const char *av_word_pinned(unsigned op);
 
 /*  The jet stats' hooks (jetstats.c): a fire of jet id at jet node `node`;
  *  a miss; a share-mode demotion, copied or not; a jet node made fresh

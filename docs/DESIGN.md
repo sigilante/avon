@@ -1100,14 +1100,21 @@ make one.** The loaded program's closed numerals become words in place
 a numeral already held builds a word (`av_words_mark`); and the numeral
 operations return words.
 
-**The numeral operations are skijack's terms, found by hash and checked
-by running.** `natAdd`, `natSub` (truncated), `natMul`, `natIfEq` and
+**The numeral operations are skijack's terms, pinned and checked by
+running.** `natAdd`, `natSub` (truncated), `natMul`, `natIfEq` and
 `natIfLe` join skijack's prelude when a program names one (skijack
-`SPEC.md` §4); `words.tsv` lists each by the §5 hash of its term. Avon
-loads a row only if the term matches its hash, and admits it only if the
-term, run in share mode on private copies over the numerals 0 to 5, agrees
-with the native operation on all 36 pairs; one that does not runs as its
-term. A match on 36 pairs is a test, not a proof: each admitted operation
+`SPEC.md` §4).
+- `words.tsv` lists each by the §5 hash of its term. Avon loads a row only
+  if the term matches its hash.
+- Avon admits a row only if its term is skijack's, node for node.
+  `words.c` pins the five terms (2026-10-05, `AUDIT.md` item 7). A row
+  under its own hash used to bring an operation of its own: an addition
+  right on 0 to 6 and wrong past them passed the test below.
+- The term must also agree with the native operation on all 36 pairs of
+  the numerals 0 to 5, run in share mode on private copies.
+- A row that fails any of these runs as its term.
+
+Neither the pin nor the match on 36 pairs is a proof: each admitted operation
 is native code the runtime trusts, as a Vere jet is, and its licence for
 a proof is §18.2's word-level theorem, owed per operation. An operation
 fires only when both numeral operands are words already, as the
