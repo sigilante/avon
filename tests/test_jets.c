@@ -338,6 +338,38 @@ TEST(the_check_catches_a_corrupted_jet) {
     av_arena_free(a);
 }
 
+static size_t jet_nodes(const av_arena *a, uint32_t t, size_t depth) {
+    if (depth > 64) return 0;
+    t = av_res(a, t);
+    if (av_tag(a, t) == AV_JET) return 1 + jet_nodes(a, av_right(a, t), depth + 1);
+    if (av_tag(a, t) != AV_APP) return 0;
+    return jet_nodes(a, av_left(a, t), depth + 1) + jet_nodes(a, av_right(a, t), depth + 1);
+}
+
+/*  A node is a jet's only if it is the jet's term: the 64-bit digest
+ *  finds a candidate, and the trees must match (AUDIT.md item 8).  Here
+ *  the jet's term is changed after registration, as a colliding term
+ *  under the same digest would be. */
+TEST(a_digest_match_is_not_enough) {
+    av_arena *a = av_arena_new(0);
+    const char *pair = "S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K)";
+    uint32_t p = av_parse(a, pair, strlen(pair), NULL);
+    av_root_push(a, &p);
+    uint32_t id = av_jet_register(a, p, 3, 1000, NULL);
+    REQUIRE(id != AV_NONE);
+    uint32_t x = av_parse(a, "X", 1, NULL);
+    uint32_t prog = av_app(a, p, x);
+    av_root_push(a, &prog);
+    uint32_t m = av_jets_match(a, prog);
+    CHECK_EQ(jet_nodes(a, m, 0), 1);                /* the term: wrapped */
+    a->jets[id].fallback = av_parse(a, "K K", 3, NULL);
+    m = av_jets_match(a, prog);
+    CHECK_EQ(jet_nodes(a, m, 0), 0);                /* the digest alone: not */
+    av_root_pop(a);
+    av_root_pop(a);
+    av_arena_free(a);
+}
+
 TEST(jets_survive_collection) {
     FILE *f = fopen("tests/fixtures/t1.ski", "rb");
     CHECK(f != NULL);
@@ -489,6 +521,7 @@ TEST_MAIN(
     TEST_CASE(the_dictionary_registers),
     TEST_CASE(every_jet_leaves_counts_and_states_alone),
     TEST_CASE(the_check_catches_a_corrupted_jet),
+    TEST_CASE(a_digest_match_is_not_enough),
     TEST_CASE(share_mode_never_writes_the_dashboard),
     TEST_CASE(jets_survive_collection),
     TEST_CASE(a_snapshot_holds_no_jets),

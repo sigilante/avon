@@ -538,6 +538,12 @@ plan left open:
   row's hash from its term and refuses a mismatch, registers the rows at
   or above a size floor (default 8 atoms: 135 of 282), and wraps each
   jet's inner jets in its term and residual.
+- **A match is tree identity, not a digest.** `av_jets_match` finds a
+  candidate by the 64-bit digest and wraps the node only if it is the
+  jet's term, tree for tree. Before 2026-10-06 a digest alone sufficed,
+  so a term built to collide in about 2^32 work ran as another
+  (`AUDIT.md` item 8). An interpreter's dictionary rows are held to
+  their hashes the same way.
 - **Compiled residuals.** At registration a residual becomes a list of
   instructions, one per node an instance builds, over constants,
   arguments and earlier results. A fire is that loop and nothing else; a
@@ -3087,9 +3093,13 @@ was written.
   is the last abstraction of its chain, so every one is Python's.
 - **The compiler jet** answers `abs x t` natively (`av_abstract`), its
   datum decoded by probing and its result encoded with the program's own
-  constructors. It is admitted only if the term agrees with it on sample
-  terms, and with `--jet-check=1` every fire is compared with the term's
-  reduction: 8,636 of 8,636 and 87 of 87 agree.
+  constructors.
+  - It is admitted only if its nine terms (`abs` and the constructors)
+    are skijack's: `compiler.c` pins their full digests (2026-10-06,
+    `AUDIT.md` item 8).
+  - The term must also agree with the native abstraction on sample terms.
+  - With `--jet-check=1` every fire is compared with the term's
+    reduction: 8,636 of 8,636 and 87 of 87 agree.
 - **The compiler in a pill.** The same source declares a kernel whose
   event `Abs x t` has the effect `Out ([vx] t)`; booted from its pill and
   poked with every call of its own compilation, it answers each with

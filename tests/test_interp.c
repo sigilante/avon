@@ -12,6 +12,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "avon.h"
 #include "test.h"
@@ -252,6 +253,40 @@ TEST(a_diverging_arm_declines_and_diverges) {
     differential(wf5omg, true, getenv("AVON_FUZZ") ? atoi(getenv("AVON_FUZZ")) / 4 + 1 : 30, "wf5Omg");
 }
 
+/*  A dictionary row is used only if its term has the row's hash: the
+ *  numeral Zero's row given S for its K refuses the load (AUDIT.md item 8). */
+TEST(a_dictionary_row_must_be_its_hash) {
+    size_t len;
+    uint8_t *raw = slurp(DIR "dictionary.tsv", &len);
+    REQUIRE(raw != NULL);
+    char *d = malloc(len + 1);                       /* slurp's bytes, as a string */
+    REQUIRE(d != NULL);
+    memcpy(d, raw, len);
+    d[len] = '\0';
+    free(raw);
+    const char *zero = "skijack-1:86be9a55762d316a";   /* interpreters.tsv's nat Zero */
+    char *row = strstr(d, zero);
+    REQUIRE(row != NULL);
+    char *t1 = strchr(row, '\t'), *t2 = t1 ? strchr(t1 + 1, '\t') : NULL, *nl = t2 ? strchr(t2, '\n') : NULL;
+    REQUIRE(nl != NULL);
+    char path[] = "/tmp/avon-dict-XXXXXX";
+    int fd = mkstemp(path);
+    REQUIRE(fd >= 0);
+    FILE *f = fdopen(fd, "w");
+    REQUIRE(f != NULL);
+    fwrite(d, 1, (size_t)(t2 + 1 - d), f);           /* through the second tab */
+    fputs("S", f);                                    /* not Zero's term, K */
+    fputs(nl, f);
+    fclose(f);
+    av_arena *a = av_arena_new(1u << 16);
+    const char *err = NULL;
+    CHECK(av_interps_load(a, DIR "interpreters.tsv", path, &err) < 0);
+    CHECK(err != NULL && strstr(err, "hash") != NULL);
+    av_arena_free(a);
+    unlink(path);
+    free(d);
+}
+
 TEST_MAIN(
     TEST_CASE(the_specs_load),
     TEST_CASE(t2_costs_t0_plus_its_decoding),
@@ -259,4 +294,5 @@ TEST_MAIN(
     TEST_CASE(whnff_agrees_with_its_interpreter),
     TEST_CASE(an_error_arm_agrees),
     TEST_CASE(a_diverging_arm_declines_and_diverges),
+    TEST_CASE(a_dictionary_row_must_be_its_hash),
 )

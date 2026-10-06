@@ -45,12 +45,16 @@ static int drow_cmp(const void *x, const void *y) {
     return strncmp(((const drow *)x)->hash, ((const drow *)y)->hash, 26);
 }
 
-/*  The dictionary's term for a published hash, parsed into the arena. */
+/*  The dictionary's term for a published hash, parsed into the arena; a
+ *  row whose term does not have that hash is none (AUDIT.md item 8). */
 static uint32_t dict_term(av_arena *a, const drow *rows, size_t n, const char *hash) {
     drow key = { hash, NULL, 0 };
     const drow *r = bsearch(&key, rows, n, sizeof *rows, drow_cmp);
     if (!r) return AV_NONE;
-    return av_parse(a, r->term, r->tlen, NULL);
+    uint32_t t = av_parse(a, r->term, r->tlen, NULL);
+    char h[27];
+    if (t == AV_NONE || !av_structural_hash(a, t, h) || strncmp(h, hash, 26) != 0) return AV_NONE;
+    return t;
 }
 
 static bool role_of(const char *tok, size_t n, uint8_t *role, uint8_t *arg) {
@@ -101,7 +105,7 @@ long av_interps_load(av_arena *a, const char *ipath, const char *dpath,
             if (!tab) { msg = "malformed nat line"; goto done; }
             *tab = '\0';
             uint32_t zt = dict_term(a, rows, n, z), st = dict_term(a, rows, n, tab + 1);
-            if (zt == AV_NONE || st == AV_NONE) { msg = "a numeral missing from the dictionary"; goto done; }
+            if (zt == AV_NONE || st == AV_NONE) { msg = "a numeral missing from the dictionary, or not its hash's term"; goto done; }
             uint32_t *q = realloc(a->nats, 2 * (a->nnats + 1) * sizeof *q);
             if (!q) { msg = "out of memory"; goto done; }
             a->nats = q;
@@ -135,7 +139,7 @@ long av_interps_load(av_arena *a, const char *ipath, const char *dpath,
                 goto done;
             }
             in.octor[i] = dict_term(a, rows, n, slash + 1);
-            if (in.octor[i] == AV_NONE) { msg = "a constructor missing from the dictionary"; goto done; }
+            if (in.octor[i] == AV_NONE) { msg = "a constructor missing from the dictionary, or not its hash's term"; goto done; }
             switch (in.orole[i]) {
             case AV_OROLE_S: in.oleaf[i] = AV_NODE_S; s = true; break;
             case AV_OROLE_K: in.oleaf[i] = AV_NODE_K; kk = true; break;
@@ -160,7 +164,7 @@ long av_interps_load(av_arena *a, const char *ipath, const char *dpath,
             if (in.rrole[i] == AV_RROLE_VALUE) in.value = i;
             if (in.rrole[i] == AV_RROLE_TIMEOUT) in.timeout = i;
             in.rctor[i] = dict_term(a, rows, n, slash + 1);
-            if (in.rctor[i] == AV_NONE) { msg = "a constructor missing from the dictionary"; goto done; }
+            if (in.rctor[i] == AV_NONE) { msg = "a constructor missing from the dictionary, or not its hash's term"; goto done; }
         }
         if (strcmp(f[5], "-") != 0) {
             for (char *tok = strtok(f[5], " "); tok; tok = strtok(NULL, " ")) {
@@ -186,7 +190,7 @@ long av_interps_load(av_arena *a, const char *ipath, const char *dpath,
             goto done;
         }
         uint32_t loop = dict_term(a, rows, n, f[0]);
-        if (loop == AV_NONE) { msg = "the loop term is missing from the dictionary"; goto done; }
+        if (loop == AV_NONE) { msg = "the loop term is missing from the dictionary, or not its hash's term"; goto done; }
         in.jet = jet_entry_for(a, in.digest, loop);
         if (in.jet == AV_NONE) { msg = "out of memory"; goto done; }
         av_interp *q = realloc(a->interps, (a->ninterps + 1) * sizeof *q);
