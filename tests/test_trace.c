@@ -360,6 +360,10 @@ TEST(malformed_dag_terms_are_refused) {
         "dag 1=2.1 @1",
         "dag 1=S",
         "dag ",
+        /* names that would not print and parse back (AUDIT.md item 13) */
+        "dag 1=a(b @1",
+        "dag 1=ab) @1",
+        "dag 1=a`b @1",
     };
     av_arena *a = av_arena_new(1u << 12);
     for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
@@ -371,11 +375,17 @@ TEST(malformed_dag_terms_are_refused) {
     const char *good[] = {
         "dag 18446744073709551614=S @18446744073709551614",
         "dag 1=S 2=1.1 @2\n\n",
+        "dag 1=a'b_c @1",
     };
     for (size_t i = 0; i < sizeof good / sizeof *good; i++) {
         const char *msg = NULL;
         CHECK(av_parse_dag(a, good[i], strlen(good[i]), &msg) != AV_NONE);
     }
+    /* a NUL in a name would alias the name before it */
+    const char nul[] = "dag 1=a\0b @1";
+    const char *nmsg = NULL;
+    CHECK(av_parse_dag(a, nul, sizeof nul - 1, &nmsg) == AV_NONE);
+    CHECK(nmsg && strstr(nmsg, "leaf name"));
     av_arena_free(a);
 }
 

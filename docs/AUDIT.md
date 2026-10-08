@@ -217,6 +217,18 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
     count the same.
   - To-space is still allocated at the arena's capacity. A collection runs when
     the arena is full, so sizing it by `used` saves nothing.
+- Items 13 to 15 (`robust-io`).
+  - A DAG leaf name holding a parenthesis, a backtick or a NUL is refused.
+  - `front0`'s probes share `--fuel`, a name it reads is at most 65,536
+    characters, and a name with a control character or a space is refused,
+    since one could forge an output line.
+  - `reduce` and `batch` exit 1 when a jet check fails, and every command exits
+    1 when its output could not be written. A run that stops on FUEL or SIZE
+    still exits 0, its status on its line: the census client, `parity.py` and
+    `diff_aviary.py` read it there.
+  - The persistent arena no longer closes stdin on a failed open, gives every
+    failure a message, and removes the `nodes` file a failed attach made.
+  - Not done: the journal is still built whole in memory before it is written.
 
 ## Fixed on `stage8-m1`
 

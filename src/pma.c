@@ -277,12 +277,17 @@ static uint8_t *read_journal(const char *path, size_t *len, bool *bad) {
 static bool recover(const char *dir, const char **err) {
     char *tmp = path_in(dir, "journal.tmp"), *jp = path_in(dir, "journal");
     bool ok = tmp && jp;
+    if (!ok) *err = "out of memory";
     if (ok) unlink(tmp);                        /* never renamed: never happened */
     size_t len;
     bool bad;
     uint8_t *j = ok ? read_journal(jp, &len, &bad) : NULL;
     if (ok && !j && bad) { *err = "the journal does not verify"; ok = false; }
-    if (ok && j) ok = apply(dir, j, len, err) && unlink(jp) == 0 && sync_dir(dir);
+    if (ok && j) ok = apply(dir, j, len, err);
+    if (ok && j && (unlink(jp) != 0 || !sync_dir(dir))) {
+        *err = "the journal applied, but cannot be removed";   /* not NULL, printed as (null) */
+        ok = false;
+    }
     free(j);
     free(tmp);
     free(jp);
@@ -400,22 +405,30 @@ bool av_pma_attach(av_arena *a, const char *dir, const char **err) {
     if (!np) { *err = "out of memory"; return false; }
     if (access(np, F_OK) == 0) { free(np); *err = "an image is already there"; return false; }
     int fd = open(np, O_RDWR | O_CREAT | O_EXCL, 0600);
-    free(np);
-    if (fd < 0) { *err = "cannot create the image"; return false; }
-    if (flock(fd, LOCK_EX | LOCK_NB) != 0) { close(fd); *err = "the image is in use"; return false; }
+    if (fd < 0) { free(np); *err = "cannot create the image"; return false; }
+    /* from here a failure removes the file it made, so a retry finds no
+     * image already there (AUDIT.md item 15) */
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        close(fd); unlink(np); free(np); *err = "the image is in use"; return false;
+    }
     av_pma *p = calloc(1, sizeof *p);
-    if (!p || !(p->dir = strdup(dir))) { free(p); close(fd); *err = "out of memory"; return false; }
+    if (!p || !(p->dir = strdup(dir))) {
+        free(p); close(fd); unlink(np); free(np); *err = "out of memory"; return false;
+    }
     p->fd = fd;
     p->hdr = page_size();
     if (!map_arena(p, fd, 0) || !map_to(p, (size_t)a->cap * sizeof(av_node))) {
         close(fd);
+        unlink(np);
         if (p->base) munmap(p->base, p->reserve);
         free(p->dirty);
         free(p->dir);
         free(p);
+        free(np);
         *err = "cannot map the arena";
         return false;
     }
+    free(np);
     memcpy(p->base, a->nodes, (size_t)a->used * sizeof(av_node));
     free(a->nodes);
     a->nodes = (av_node *)(void *)p->base;
@@ -474,6 +487,7 @@ av_arena *av_pma_open(const char *dir, uint32_t *root, uint64_t *events, const c
 
     a = calloc(1, sizeof *a);
     p = calloc(1, sizeof *p);
+    if (p) p->fd = -1;                          /* not 0, stdin, which fail: would close */
     if (!a || !p || !(p->dir = strdup(dir))) { *err = "out of memory"; goto fail; }
     p->fd = fd;
     fd = -1;

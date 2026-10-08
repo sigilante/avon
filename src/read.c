@@ -196,6 +196,13 @@ uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg
             while (i < len && src[i] != ' ' && src[i] != '\t' && src[i] != '\n' && src[i] != '\r') i++;
             if (i == s2) { *msg = "a leaf name expected"; goto out; }
             if (src[s2] == '@' || src[s2] == '`') { *msg = "a reserved leaf name"; goto out; }
+            /* a name must print and parse back, as cue's names must
+             * (AUDIT.md item 13); a NUL would alias a shorter name */
+            for (size_t k = s2; k < i; k++)
+                if (src[k] == '\0' || src[k] == '(' || src[k] == ')' || src[k] == '`') {
+                    *msg = "a leaf name holds NUL, a parenthesis or a backtick";
+                    goto out;
+                }
             if (!(i - s2 == 1 && (src[s2] == 'S' || src[s2] == 'K' || src[s2] == 'I')) &&
                 !a->allow_bird_atoms && av_is_bird(src + s2, i - s2)) {
                 *msg = "atom named like a live aviary combinator (§4.3)";
