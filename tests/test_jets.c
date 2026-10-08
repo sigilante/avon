@@ -370,6 +370,36 @@ TEST(a_digest_match_is_not_enough) {
     av_arena_free(a);
 }
 
+/*  A program's copy of a jet's term may share less than the term: here the
+ *  term holds a constant of 15 distinct nodes whose tree has 2^14 leaves,
+ *  and the program holds the tree.  The match is by identity of trees,
+ *  not a comparison with a budget on the jet's size, which refused it
+ *  (92 templates of front1's own source). */
+TEST(a_jet_matches_a_copy_that_shares_less) {
+    av_arena *a = av_arena_new(0);
+    uint32_t c = AV_NODE_S;
+    for (int i = 0; i < 14; i++) c = av_app(a, c, c);    /* shared: 15 nodes */
+    /* J = S (K (K K)) (K C): J x y z is y, its constant discarded */
+    uint32_t kk = av_app(a, AV_NODE_K, AV_NODE_K);
+    uint32_t j = av_app(a, av_app(a, AV_NODE_S, av_app(a, AV_NODE_K, kk)), av_app(a, AV_NODE_K, c));
+    av_root_push(a, &j);
+    const char *why = NULL;
+    uint32_t id = av_jet_register(a, j, 2, 100000, &why);
+    REQUIRE(id != AV_NONE);
+    av_buf b = { 0 };
+    REQUIRE(av_print(a, j, 1u << 24, &b));
+    uint32_t tree = av_parse(a, b.s, b.len, NULL);       /* the same term, unshared */
+    av_buf_free(&b);
+    REQUIRE(tree != AV_NONE);
+    uint32_t prog = av_app(a, tree, av_parse(a, "X", 1, NULL));
+    av_root_push(a, &prog);
+    uint32_t m = av_jets_match(a, prog);
+    CHECK_EQ(jet_nodes(a, m, 0), 1);
+    av_root_pop(a);
+    av_root_pop(a);
+    av_arena_free(a);
+}
+
 TEST(jets_survive_collection) {
     FILE *f = fopen("tests/fixtures/t1.ski", "rb");
     CHECK(f != NULL);
@@ -522,6 +552,7 @@ TEST_MAIN(
     TEST_CASE(every_jet_leaves_counts_and_states_alone),
     TEST_CASE(the_check_catches_a_corrupted_jet),
     TEST_CASE(a_digest_match_is_not_enough),
+    TEST_CASE(a_jet_matches_a_copy_that_shares_less),
     TEST_CASE(share_mode_never_writes_the_dashboard),
     TEST_CASE(jets_survive_collection),
     TEST_CASE(a_snapshot_holds_no_jets),

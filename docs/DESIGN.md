@@ -539,11 +539,20 @@ plan left open:
   or above a size floor (default 8 atoms: 135 of 282), and wraps each
   jet's inner jets in its term and residual.
 - **A match is tree identity, not a digest.** `av_jets_match` finds a
-  candidate by the 64-bit digest and wraps the node only if it is the
-  jet's term, tree for tree. Before 2026-10-06 a digest alone sufficed,
-  so a term built to collide in about 2^32 work ran as another
-  (`AUDIT.md` item 8). An interpreter's dictionary rows are held to
-  their hashes the same way.
+  candidate by the 64-bit digest. It wraps the node only if the node is
+  the jet's term, tree for tree.
+  - Before 2026-10-06 a digest alone sufficed, so a term built to
+    collide in about 2^32 work ran as another (`AUDIT.md` item 8). An
+    interpreter's dictionary rows are held to their hashes the same way.
+  - Trees are compared by canonical ids. A leaf's id is its interned
+    node; an application's is the pair of its children's ids. The table
+    lasts a whole match, so the program and the jets' terms each cost
+    their nodes once.
+  - The first version, in #26, compared with a pair budget set by the
+    jet's size. It refused a program whose copy of a term shared less
+    than the jet's term: 92 templates on front1's own source. That made
+    front1's fixed point 9.7% dearer, 88,316,487 contractions, and
+    front0's 3.5% dearer, until the ids replaced it (2026-10-09).
 - **Compiled residuals.** At registration a residual becomes a list of
   instructions, one per node an instance builds, over constants,
   arguments and earlier results. A fire is that loop and nothing else; a
