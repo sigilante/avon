@@ -13,6 +13,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -507,6 +509,62 @@ TEST(a_pier_is_closed_to_others) {
     CHECK(system(cmd) == 0);
 }
 
+/*  A record that fails to write is cut away again, so a pier kept open
+ *  writes its next record after a whole one (AUDIT.md item 4); and one
+ *  process holds a pier at a time (item 5). */
+TEST(a_torn_append_is_cut_and_a_pier_is_one_process_s) {
+    char dir[] = "/tmp/avon-torn-XXXXXX";
+    CHECK(mkdtemp(dir) != NULL);
+    char pier[128], logp[160];
+    snprintf(pier, sizeof pier, "%s/pier", dir);
+    snprintf(logp, sizeof logp, "%s/events.log", pier);
+    av_opts o = copy_opts();
+    size_t np, nt, n5, ni = 0;
+    uint8_t *pill = bytes_of("pill", &np), *tick = bytes_of("events.tick", &nt);
+    uint8_t *poke5 = bytes_of("events.poke5", &n5);
+    av_arena *s = av_arena_new(0);
+    uint8_t *subject = jam_of(s, AV_NODE_I, &ni);
+    av_arena_free(s);
+    const char *err = NULL;
+    av_pier *p = av_pier_new(pier, pill, np, subject, ni, &o, &err);
+    REQUIRE(p != NULL);
+    CHECK(av_pier_open(pier, &o, &err) == NULL);            /* held */
+    CHECK(err != NULL && strstr(err, "in use") != NULL);
+    uint32_t eff;
+    av_result r;
+    CHECK_EQ(av_pier_poke(p, tick, nt, &eff, &r, &err), AV_WHNF);
+    long one = file_size(logp);
+
+    /* a file size limit cuts the next record short */
+    struct rlimit old, lim;
+    REQUIRE(getrlimit(RLIMIT_FSIZE, &old) == 0);
+    void (*was)(int) = signal(SIGXFSZ, SIG_IGN);
+    lim = old;
+    lim.rlim_cur = (rlim_t)one + 8;
+    REQUIRE(setrlimit(RLIMIT_FSIZE, &lim) == 0);
+    av_status st = av_pier_poke(p, poke5, n5, &eff, &r, &err);
+    CHECK(setrlimit(RLIMIT_FSIZE, &old) == 0);
+    signal(SIGXFSZ, was);
+    CHECK(st != AV_WHNF);
+    CHECK(err != NULL && strstr(err, "cannot be written") != NULL);
+    CHECK_EQ(file_size(logp), one);                          /* cut back */
+    CHECK_EQ(av_pier_kernel(p)->events, 1);
+    CHECK_EQ(av_pier_poke(p, poke5, n5, &eff, &r, &err), AV_WHNF);
+    CHECK_EQ(pier_state(p), 6);
+    av_pier_free(p);
+
+    p = av_pier_open(pier, &o, &err);                        /* released, and whole */
+    REQUIRE(p != NULL);
+    CHECK_EQ(av_pier_kernel(p)->events, 2);
+    CHECK_EQ(pier_state(p), 6);
+    av_pier_free(p);
+
+    free(pill); free(tick); free(poke5); free(subject);
+    char cmd[256];
+    snprintf(cmd, sizeof cmd, "/bin/rm -rf %s", dir);
+    CHECK(system(cmd) == 0);
+}
+
 TEST_MAIN(
     TEST_CASE(the_selectors_are_the_abis),
     TEST_CASE(the_events_kernel_runs_as_the_reference_does),
@@ -517,4 +575,5 @@ TEST_MAIN(
     TEST_CASE(a_pier_reloads_to_the_same_state),
     TEST_CASE(a_logged_event_replays_whatever_the_fuel),
     TEST_CASE(a_pier_is_closed_to_others),
+    TEST_CASE(a_torn_append_is_cut_and_a_pier_is_one_process_s),
 )

@@ -259,6 +259,10 @@ build/avon poke --pier=/tmp/epier tests/kernel/entropy.ask5.skit
   whatever this run's `--fuel`. A logged event that does not replay stops
   the open, and its record stays in the log. Only a record torn by a crash
   is dropped.
+- One process holds a pier at a time; a second gets "the pier is in use".
+- On a `--pma` pier, if the image fails to commit after an event applied,
+  `poke` says the event applied and is logged, and exits 1. Do not poke
+  that event again: a reopen replays it.
 - `boot --pma` makes the pier a persistent arena, committed after every
   event (§19); otherwise a pier is an event log and snapshots, and
   `--snapshot` on `poke` or `load` takes one. `--pma` matters only to

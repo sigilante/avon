@@ -1416,6 +1416,11 @@ bool     av_pier_entropy(av_pier *p, const char *file, const char **err);
 /*  Why the last poke's (or av_pier_entropy's) replies stopped short, or
  *  NULL: a spent file, a probe budget, out of memory. */
 const char *av_pier_entropy_error(const av_pier *p);
+/*  Why the last poke's or load's image did not commit, or NULL.  The event
+ *  was applied and logged, and av_pier_poke reports it a success: the
+ *  image's writes stay dirty, and the next commit, or a reopen's replay of
+ *  the log, carries them.  Only a persistent-arena pier commits. */
+const char *av_pier_commit_error(const av_pier *p);
 /*  Called as each event av_pier_poke applies, the outside event and then
  *  its replies, with its number, contractions and effects. */
 void     av_pier_on_event(av_pier *p, av_pier_event_fn fn, void *ctx);

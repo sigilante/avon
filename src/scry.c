@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "avon.h"
+#include "durable.h"
 #include "jets.h"
 
 struct av_facts {
@@ -260,7 +261,7 @@ static bool log_fact(FILE *log, av_arena *a, uint32_t key, uint32_t answer) {
               av_jam(e, ek, 100000000, &k, &msg) && av_jam(e, ev, 100000000, &v, &msg) &&
               fputs("fact ", log) >= 0 && hex_out(log, &k) && fputc(' ', log) != EOF &&
               hex_out(log, &v) && fputc('\n', log) != EOF && fflush(log) == 0 &&
-              fsync(fileno(log)) == 0;
+              av_sync_fd(fileno(log));
     av_buf_free(&k);
     av_buf_free(&v);
     av_arena_free(e);

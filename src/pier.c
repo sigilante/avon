@@ -14,17 +14,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "avon.h"
+#include "durable.h"
 
 struct av_pier {
     char      *dir;
     av_arena  *a;
     av_kernel  k;
     av_opts    o;
-    FILE      *log;
+    int        log;             /* events.log, appended, locked: -1 if none */
     bool       pma;             /* committed to a persistent arena (§19.1) */
     bool       eny;             /* booted with --entropy (§9.1)           */
     bool       eny_from_file;   /* booted with --entropy=FILE: only a file */
@@ -34,6 +36,7 @@ struct av_pier {
     uint64_t   eny_unanswered;  /* requests it left at the cap            */
     uint64_t   probe_from;      /* a->probe_steps when the poke began     */
     const char *eny_err;        /* why the last poke's replies stopped    */
+    const char *commit_err;     /* why the last event's image did not commit */
     av_pier_event_fn event_fn;
     void      *event_ctx;
 };
@@ -45,10 +48,13 @@ static char *path_in(const char *dir, const char *name) {
     return p;
 }
 
-static bool hex_out(FILE *f, const uint8_t *b, size_t n) {
-    for (size_t i = 0; i < n; i++)
-        if (fprintf(f, "%02x", b[i]) < 0) return false;
-    return true;
+static char *hex_put(char *o, const uint8_t *b, size_t n) {
+    static const char hx[] = "0123456789abcdef";
+    for (size_t i = 0; i < n; i++) {
+        *o++ = hx[b[i] >> 4];
+        *o++ = hx[b[i] & 15];
+    }
+    return o;
 }
 
 static uint8_t *unhex(const char *s, size_t n, size_t *len) {
@@ -64,12 +70,42 @@ static uint8_t *unhex(const char *s, size_t n, size_t *len) {
     return out;
 }
 
-/*  Append and sync one record. */
-static bool log_record(FILE *log, const char *kind, uint64_t n, const uint8_t *a1, size_t n1,
-                       const uint8_t *a2, size_t n2) {
-    bool ok = fprintf(log, "%s %llu ", kind, (unsigned long long)n) >= 0 && hex_out(log, a1, n1);
-    if (ok && a2) ok = fputc(' ', log) != EOF && hex_out(log, a2, n2);
-    return ok && fputc('\n', log) != EOF && fflush(log) == 0 && fsync(fileno(log)) == 0;
+/*  Cut the log back to off, durably: a record that must not stand. */
+static bool log_cut(int log, off_t off) {
+    return ftruncate(log, off) == 0 && av_sync_fd(log);
+}
+
+/*  Append one record, whole, and sync it; *at is where it starts.  A
+ *  record that fails to write or to sync is cut away again, so a pier
+ *  kept open writes its next record after a whole one (AUDIT.md item 4). */
+static bool log_record(int log, const char *kind, uint64_t n, const uint8_t *a1, size_t n1,
+                       const uint8_t *a2, size_t n2, off_t *at) {
+    char head[48];
+    int hn = snprintf(head, sizeof head, "%s %llu ", kind, (unsigned long long)n);
+    if (hn < 0 || (size_t)hn >= sizeof head) return false;
+    size_t len = (size_t)hn + 2 * n1 + (a2 ? 1 + 2 * n2 : 0) + 1;
+    char *rec = malloc(len), *o = rec;
+    if (!rec) return false;
+    memcpy(o, head, (size_t)hn);
+    o = hex_put(o + hn, a1, n1);
+    if (a2) {
+        *o++ = ' ';
+        o = hex_put(o, a2, n2);
+    }
+    *o = '\n';
+    off_t start = lseek(log, 0, SEEK_END);
+    bool ok = start >= 0;
+    for (size_t done = 0; ok && done < len;) {
+        ssize_t w = write(log, rec + done, len - done);
+        if (w < 0 && errno == EINTR) continue;
+        if (w <= 0) ok = false;
+        else done += (size_t)w;
+    }
+    free(rec);
+    if (ok) ok = av_sync_fd(log);
+    if (!ok && start >= 0) log_cut(log, start);
+    if (at) *at = start;
+    return ok;
 }
 
 /*  Boot pill on subject in a, to a kernel: the new kernel's term. */
@@ -112,21 +148,31 @@ av_kernel *av_pier_kernel(av_pier *p) { return &p->k; }
 void av_pier_free(av_pier *p) {
     if (!p) return;
     if (p->a) av_kernel_free(&p->k);
-    if (p->log) fclose(p->log);
+    if (p->log >= 0) close(p->log);
     av_arena_free(p->a);
     free(p->eny_file);
     free(p->dir);
     free(p);
 }
 
-/*  The log, opened to append, created readable by its owner only: it
- *  holds the kernel's entropy (docs/DESIGN.md §9.1). */
-static FILE *open_log(const char *path) {
-    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0600);
-    if (fd < 0) return NULL;
-    FILE *f = fdopen(fd, "ab");
-    if (!f) close(fd);
-    return f;
+/*  The log, opened to append, created (with create) readable by its owner
+ *  only, as it holds the kernel's entropy (docs/DESIGN.md §9.1), and
+ *  locked for the pier's life: one process writes a pier (AUDIT.md item
+ *  5).  -1 with *err; or, without create, with *missing if it is not there. */
+static int open_log(const char *path, bool create, bool *missing, const char **err) {
+    if (missing) *missing = false;
+    int fd = open(path, O_RDWR | O_APPEND | (create ? O_CREAT : 0), 0600);
+    if (fd < 0) {
+        if (!create && errno == ENOENT && missing) *missing = true;
+        else *err = "cannot open the event log";
+        return -1;
+    }
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        *err = errno == EWOULDBLOCK ? "the pier is in use" : "cannot lock the event log";
+        close(fd);
+        return -1;
+    }
+    return fd;
 }
 
 /*  A new pier's directory: made 0700, or one already there that is a
@@ -156,6 +202,7 @@ static av_pier *pier_alloc(const char *dir, const av_opts *o) {
     av_pier *p = calloc(1, sizeof *p);
     if (!p) return NULL;
     p->dir = strdup(dir);
+    p->log = -1;
     p->o = *o;
     p->o.whnf_only = true;
     if (!p->dir) { free(p); return NULL; }
@@ -171,18 +218,25 @@ static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
     if (!pier_dir(dir, err)) { free(logp); return NULL; }
     av_pier *p = pier_alloc(dir, o);
     if (!p || !(p->a = av_arena_new(1u << 16))) { free(logp); av_pier_free(p); *err = "out of memory"; return NULL; }
+    /* the log first, empty and locked: the pier is this process's from
+     * its first file; a crash before the image leaves a pier that will
+     * not open, as no image verifies */
+    p->log = open_log(logp, true, NULL, err);
+    free(logp);
+    if (p->log < 0) { av_pier_free(p); return NULL; }
     uint32_t k = boot_term(p->a, pill, npill, subject, nsubject, &p->o, err);
-    if (k == AV_NONE) { free(logp); av_pier_free(p); return NULL; }
+    if (k == AV_NONE) { av_pier_free(p); return NULL; }
     av_kernel_adopt(&p->k, p->a, k, &p->o);
     if (eny) {
         /* the opt-in before the image: a crash between them leaves a log
          * and no image, a pier that will not open, not one that opens
          * without its opt-in */
-        FILE *lg = open_log(logp);
         const uint8_t from_file = 1;
-        bool ok = lg && log_record(lg, "entropy", 0, &from_file, eny_file ? 1 : 0, NULL, 0);
-        if (lg) fclose(lg);
-        if (!ok) { free(logp); av_pier_free(p); *err = "the event log cannot be written"; return NULL; }
+        if (!log_record(p->log, "entropy", 0, &from_file, eny_file ? 1 : 0, NULL, 0, NULL)) {
+            av_pier_free(p);
+            *err = "the event log cannot be written";
+            return NULL;
+        }
         p->eny = true;
         p->eny_from_file = eny_file;
     }
@@ -192,15 +246,17 @@ static av_pier *pier_new(const char *dir, const uint8_t *pill, size_t npill,
         bool ok = img && av_pma_attach(p->a, img, err) &&
                   av_pma_commit(p->a, p->k.k, 0, err);
         free(img);
-        if (!ok) { free(logp); av_pier_free(p); return NULL; }
+        if (!ok) { av_pier_free(p); return NULL; }
     } else if (!snapshot(p, err)) {
-        free(logp);
         av_pier_free(p);
         return NULL;
     }
-    p->log = open_log(logp);                   /* the image first: an empty log */
-    free(logp);
-    if (!p->log) { *err = "cannot open the event log"; av_pier_free(p); return NULL; }
+    /* the log's entry, and the pier's in its parent, on the media */
+    if (!av_sync_dir(dir) || !av_sync_parent(dir)) {
+        *err = "cannot sync the pier's directory";
+        av_pier_free(p);
+        return NULL;
+    }
     return p;
 }
 
@@ -411,20 +467,25 @@ static av_arena *newest_snapshot(const char *dir, uint32_t *root, uint64_t *at) 
 av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     av_pier *p = pier_alloc(dir, o);
     if (!p) { *err = "out of memory"; return NULL; }
+    char *logp = path_in(dir, "events.log");
+    if (!logp) { *err = "out of memory"; av_pier_free(p); return NULL; }
+    bool missing;                               /* the lock before anything is read */
+    p->log = open_log(logp, false, &missing, err);
+    if (p->log < 0 && !missing) { free(logp); av_pier_free(p); return NULL; }
     uint32_t root;
     uint64_t at = 0;
     char *img = path_in(dir, "pma"), *imgnodes = path_in(dir, "pma/nodes");
-    if (!img || !imgnodes) { free(img); free(imgnodes); *err = "out of memory"; av_pier_free(p); return NULL; }
+    if (!img || !imgnodes) { free(img); free(imgnodes); free(logp); *err = "out of memory"; av_pier_free(p); return NULL; }
     p->pma = access(imgnodes, F_OK) == 0;
     free(imgnodes);
     if (p->pma) {
         const char *perr = NULL;
         p->a = av_pma_open(img, &root, &at, &perr);
-        if (!p->a) { free(img); *err = perr; av_pier_free(p); return NULL; }
-        if (root == AV_NONE) { free(img); *err = "the image holds no kernel"; av_pier_free(p); return NULL; }
+        if (!p->a) { free(img); free(logp); *err = perr; av_pier_free(p); return NULL; }
+        if (root == AV_NONE) { free(img); free(logp); *err = "the image holds no kernel"; av_pier_free(p); return NULL; }
     } else {
         p->a = newest_snapshot(dir, &root, &at);
-        if (!p->a) { free(img); *err = "no snapshot verifies"; av_pier_free(p); return NULL; }
+        if (!p->a) { free(img); free(logp); *err = "no snapshot verifies"; av_pier_free(p); return NULL; }
     }
     free(img);
     av_kernel_adopt(&p->k, p->a, root, &p->o);
@@ -439,14 +500,18 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     p->k.o.max_steps = replay.max_steps;
     p->k.o.interrupt = NULL;
 
-    char *logp = path_in(dir, "events.log");
-    if (!logp) { *err = "out of memory"; av_pier_free(p); return NULL; }
-    FILE *in = fopen(logp, "rb");
-    if (!in && errno == ENOENT) {               /* a crash before the first event */
-        FILE *mk = open_log(logp);
-        if (mk) fclose(mk);
-        in = fopen(logp, "rb");
+    /* an image and no log: a pier an earlier Avon made, before its first
+     * event, which wrote the log after the image */
+    if (p->log < 0) {
+        p->log = open_log(logp, true, NULL, err);
+        if (p->log < 0 || !av_sync_dir(dir)) {
+            if (p->log >= 0) *err = "cannot sync the pier's directory";
+            free(logp);
+            av_pier_free(p);
+            return NULL;
+        }
     }
+    FILE *in = fopen(logp, "rb");
     if (!in) { free(logp); *err = "no event log"; av_pier_free(p); return NULL; }
     char *line = NULL;
     size_t lcap = 0;
@@ -499,27 +564,34 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     fclose(in);
     p->k.o = live;
     if (msg) { free(logp); *err = msg; av_pier_free(p); return NULL; }
-    if (truncate(logp, good) != 0) { free(logp); *err = "cannot drop a torn record"; av_pier_free(p); return NULL; }
-    if (p->pma && p->k.events != at && !av_pma_commit(p->a, p->k.k, p->k.events, err)) {
-        free(logp);                             /* the replayed events, committed */
+    free(logp);
+    off_t end = lseek(p->log, 0, SEEK_END);
+    if (end < 0 || (end != good && !log_cut(p->log, good))) {
+        *err = "cannot drop a torn record";
         av_pier_free(p);
         return NULL;
     }
-    p->log = open_log(logp);
-    free(logp);
-    if (!p->log) { *err = "cannot open the event log"; av_pier_free(p); return NULL; }
+    if (p->pma && p->k.events != at && !av_pma_commit(p->a, p->k.k, p->k.events, err)) {
+        av_pier_free(p);                        /* the replayed events, committed */
+        return NULL;
+    }
     return p;
 }
 
 /*  Log the record (kind, a1, a2), sync, then poke with ev: the record
- *  removed again if the poke does not reach weak head normal form. */
+ *  removed again if the poke does not reach weak head normal form.  An
+ *  event applied and logged is the pier's whether or not its image then
+ *  commits: a failed commit is p->commit_err, beside the event, not its
+ *  failure, so that no caller retries an applied event (AUDIT.md item 6);
+ *  the image's writes stay dirty, and the next commit or a reopen's
+ *  replay carries them. */
 static av_status poke_logged(av_pier *p, const char *kind, const uint8_t *a1, size_t n1,
                              const uint8_t *a2, size_t n2, uint32_t ev, uint32_t *effects,
                              av_result *r, bool *kept, const char **err) {
     *kept = false;
     av_root_push(p->a, &ev);
-    long start = fseek(p->log, 0, SEEK_END) == 0 ? ftell(p->log) : -1;
-    bool logged = start >= 0 && log_record(p->log, kind, p->k.events + 1, a1, n1, a2, n2);
+    off_t start;
+    bool logged = log_record(p->log, kind, p->k.events + 1, a1, n1, a2, n2, &start);
     av_root_pop(p->a);
     if (!logged) {
         *err = "the event log cannot be written";
@@ -528,15 +600,13 @@ static av_status poke_logged(av_pier *p, const char *kind, const uint8_t *a1, si
     }
     av_status st = av_kernel_poke(&p->k, ev, effects, r);
     *kept = st == AV_WHNF;
-    if (st == AV_WHNF && p->pma && !av_pma_commit(p->a, p->k.k, p->k.events, err)) {
-        /* applied and logged, not committed: a reopen replays it */
-        return AV_SIZE;
-    }
+    const char *cerr = NULL;
+    if (st == AV_WHNF && p->pma && !av_pma_commit(p->a, p->k.k, p->k.events, &cerr))
+        p->commit_err = cerr ? cerr : "the image did not commit";
     if (st != AV_WHNF) {
         /* it did not apply: it leaves the log */
         *err = "the event did not reach weak head normal form, and is not kept";
-        if (fflush(p->log) != 0 || ftruncate(fileno(p->log), start) != 0 ||
-            fsync(fileno(p->log)) != 0)
+        if (!log_cut(p->log, start))
             *err = "the event did not apply, and could not be removed from the log";
     }
     return st;
@@ -578,6 +648,7 @@ av_status av_pier_poke(av_pier *p, const uint8_t *event, size_t n, uint32_t *eff
                        av_result *r, const char **err) {
     p->eny_replies = p->eny_unanswered = 0;
     p->eny_err = NULL;
+    p->commit_err = NULL;
     p->probe_from = p->a->probe_steps;
     uint32_t ev = av_cue(p->a, event, n, err);  /* a term, or nothing is logged */
     if (ev == AV_NONE) { r->status = AV_SIZE; return AV_SIZE; }
@@ -643,11 +714,14 @@ bool av_pier_entropy(av_pier *p, const char *file, const char **err) {
     if (file && !(p->eny_file = strdup(file))) { *err = "out of memory"; return false; }
     p->eny_replies = p->eny_unanswered = 0;
     p->eny_err = NULL;
+    p->commit_err = NULL;
     p->probe_from = p->a->probe_steps;
     return p->k.events != 0 || boot_reply(p, err);
 }
 
 const char *av_pier_entropy_error(const av_pier *p) { return p->eny_err; }
+
+const char *av_pier_commit_error(const av_pier *p) { return p->commit_err; }
 
 void av_pier_on_event(av_pier *p, av_pier_event_fn fn, void *ctx) {
     p->event_fn = fn;
@@ -661,13 +735,21 @@ uint64_t av_pier_replies(const av_pier *p, uint64_t *unanswered) {
 
 bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *subject,
                   size_t nsubject, const char **err) {
+    p->commit_err = NULL;
     uint32_t nk = boot_term(p->a, pill, npill, subject, nsubject, &p->o, err);
     if (nk == AV_NONE) return false;
     av_root_push(p->a, &nk);
-    bool ok = log_record(p->log, "load", p->k.events + 1, pill, npill, subject, nsubject);
+    off_t start;
+    bool ok = log_record(p->log, "load", p->k.events + 1, pill, npill, subject, nsubject, &start);
     av_root_pop(p->a);
     if (!ok) { *err = "the event log cannot be written"; return false; }
-    if (!av_kernel_load(&p->k, nk)) { *err = "out of memory"; return false; }
-    if (p->pma && !av_pma_commit(p->a, p->k.k, p->k.events, err)) return false;
+    if (!av_kernel_load(&p->k, nk)) {           /* not applied: it leaves the log */
+        *err = log_cut(p->log, start) ? "out of memory"
+                                      : "out of memory, and the load could not be removed from the log";
+        return false;
+    }
+    const char *cerr = NULL;                    /* applied: a failed commit is beside it */
+    if (p->pma && !av_pma_commit(p->a, p->k.k, p->k.events, &cerr))
+        p->commit_err = cerr ? cerr : "the image did not commit";
     return true;
 }

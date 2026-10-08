@@ -34,6 +34,7 @@
 #include <unistd.h>
 
 #include "avon.h"
+#include "durable.h"
 #include "jets.h"
 
 #define CHUNK       4096u                  /* dirty-tracking granularity */
@@ -75,13 +76,7 @@ static char *path_in(const char *dir, const char *name) {
     return p;
 }
 
-static bool sync_dir(const char *dir) {
-    int fd = open(dir, O_RDONLY);
-    if (fd < 0) return false;
-    bool ok = fsync(fd) == 0;
-    close(fd);
-    return ok;
-}
+static bool sync_dir(const char *dir) { return av_sync_dir(dir); }
 
 static bool write_all(int fd, const void *p, size_t n, off_t off) {
     const uint8_t *b = p;
@@ -241,7 +236,7 @@ static bool apply(const char *dir, const uint8_t *j, size_t len, const char **er
         ok = write_all(file == 0 ? fn : fa, j + at + 13, l, (off_t)off);
         at += 13 + l;
     }
-    if (ok) ok = fsync(fn) == 0 && fsync(fa) == 0;
+    if (ok) ok = av_sync_fd(fn) && av_sync_fd(fa);
     if (fn >= 0) close(fn);
     if (fa >= 0) close(fa);
     if (!ok && err) *err = "the journal cannot be applied to the image";
@@ -365,7 +360,7 @@ bool av_pma_commit(av_arena *a, uint32_t root, uint64_t events, const char **err
     }
     char *tmp = path_in(p->dir, "journal.tmp"), *jp = path_in(p->dir, "journal");
     int fd = ok && tmp ? open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600) : -1;
-    ok = ok && fd >= 0 && write_all(fd, j.b, j.len, 0) && fsync(fd) == 0;
+    ok = ok && fd >= 0 && write_all(fd, j.b, j.len, 0) && av_sync_fd(fd);
     if (fd >= 0) close(fd);
     if (ok) crash_point(1);
     ok = ok && jp && rename(tmp, jp) == 0 && sync_dir(p->dir);
