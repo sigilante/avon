@@ -203,6 +203,20 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
     one, still read.
   - No caps on atom count or event size: with linear interning the cost the
     caps were to bound is linear in the event.
+- Items 11 and 12 (`robust-mem`).
+  - `--max-nodes` defaults to physical memory over 64 bytes, between 2^20 and
+    2^30. A collection peaks near 40 bytes a live node, so a runaway run
+    reports SIZE before it can take the host's memory.
+  - The reservation invariants that guard writes into the arena are
+    `AV_ALWAYS`, checked in release builds too. A breach aborts with its place
+    instead of writing past the arena.
+  - The checks cost nothing measurable once their failure path is marked cold.
+    Unmarked, they cost templates mode 4 to 7.5%. On the five Reduceron ports
+    against master, the geometric means are +0.4% as SKI, -0.1% with
+    templates, -0.2% with data jets and -0.5% with Y unfolded, with every step
+    count the same.
+  - To-space is still allocated at the arena's capacity. A collection runs when
+    the arena is full, so sizing it by `used` saves nothing.
 
 ## Fixed on `stage8-m1`
 

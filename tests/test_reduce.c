@@ -8,7 +8,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include "avon.h"
+#include "../src/jets.h"
 #include "test.h"
 
 typedef struct { av_status status; uint64_t steps; char text[256]; } outcome;
@@ -278,6 +283,33 @@ TEST(a_stopped_state_too_large_to_rebuild_is_size) {
     CHECK(rebuilt_failed > 0);      /* the sweep reaches the case */
 }
 
+/*  The default node cap follows the host's memory, between 2^20 and
+ *  AV_MAX_NODES (AUDIT.md item 11). */
+TEST(the_default_node_cap_fits_the_host) {
+    uint32_t n = av_default_max_nodes();
+    CHECK(n >= (1u << 20) && n <= AV_MAX_NODES);
+    CHECK_EQ(av_opts_default().max_nodes, n);
+    long pages = sysconf(_SC_PHYS_PAGES), size = sysconf(_SC_PAGESIZE);
+    if (pages > 0 && size > 0)
+        CHECK((uint64_t)n * 64 <= (uint64_t)pages * (uint64_t)size || n == (1u << 20));
+}
+
+/*  An allocation past what was reserved stops the process, in release
+ *  builds too, instead of writing past the arena (AUDIT.md item 12). */
+TEST(an_allocation_past_its_reservation_aborts) {
+    pid_t pid = fork();
+    REQUIRE(pid >= 0);
+    if (pid == 0) {
+        av_arena *a = av_arena_new(0);
+        a->used = a->cap;                       /* full, nothing reserved */
+        arena_app_reserved(a, AV_NODE_S, AV_NODE_K);
+        _exit(0);                               /* not reached */
+    }
+    int st = 0;
+    REQUIRE(waitpid(pid, &st, 0) == pid);
+    CHECK(WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT);
+}
+
 TEST_MAIN(
     TEST_CASE(each_rule_contracts_once),
     TEST_CASE(extra_arguments_stay_applied),
@@ -294,4 +326,6 @@ TEST_MAIN(
     TEST_CASE(the_node_cap_reports_size),
     TEST_CASE(a_stopped_state_too_large_to_rebuild_is_size),
     TEST_CASE(the_strategies_agree_on_normal_forms),
+    TEST_CASE(the_default_node_cap_fits_the_host),
+    TEST_CASE(an_allocation_past_its_reservation_aborts),
 )

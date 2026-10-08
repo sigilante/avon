@@ -298,7 +298,7 @@ static av_status fire_copy(R *r) {
     for (unsigned i = 0; i < k; i++) args[i] = r->stk[r->top - 1 - i];
     if (r->o->jetstats) jetstats_fire(r->o->jetstats, r->head, id);
     uint32_t inst = jet_instance(a, id, args, false);   /* copy mode writes nothing */
-    assert(inst != AV_NONE && "allocation past what ensure() reserved");
+    AV_ALWAYS(inst != AV_NONE, "allocation past what ensure() reserved");
     if (inst == AV_NONE) return AV_SIZE;
     r->top -= k;
     if (!decompose(r, inst)) return AV_SIZE;
@@ -579,7 +579,7 @@ static bool materialize(R *r, size_t from, uint32_t *curp) {
     av_arena *a = r->a;
     size_t nv = 0;
     for (size_t j = from; j < r->top; j++) nv += SK_KIND(r->stk[j]) == SK_VIRT;
-    assert(nv <= r->nvirt && a->cap - a->used >= r->nvirt);
+    AV_ALWAYS(nv <= r->nvirt && a->cap - a->used >= r->nvirt, "virtual roots past the reserve");
     if (a->cap - a->used < nv) return false;        /* the reserve holds them */
     r->nvirt -= nv;
     uint32_t left = *curp;
@@ -719,7 +719,7 @@ static inline bool tmpl_defer(R *r, const av_tmpl *T, const uint32_t *args, size
     const uint8_t *vs = T->vspine;
     av_node *nodes = a->nodes;
     uint32_t used = a->used;
-    assert(a->cap - used >= n - 1 && "allocation past what was reserved");
+    AV_ALWAYS(a->cap - used >= n - 1, "allocation past what was reserved");
     for (uint32_t i = 0; i + 1 < n; i++) {
         if (vs && vs[i]) continue;                  /* used by its parent alone */
         nodes[used] = (av_node){ OPND(ops[2 * i]), OPND(ops[2 * i + 1]) };
@@ -809,7 +809,7 @@ bool dispatch_write(R *r, av_ctor sh, const disp *d, uint32_t nd) {
     if (d->U) {
         if (r->o->profile) profile_rewrote(r->o->profile, nd);
         uint32_t inst = tmpl_instance(a, d->U, d->uarg, nd);
-        assert(inst != AV_NONE && "allocation past what ensure() reserved");
+        AV_ALWAYS(inst != AV_NONE, "allocation past what ensure() reserved");
         if (inst == AV_NONE) return false;
         SSTATS_INSTANCE(a, d->U, d->uarg, r->steps);
         r->fused++;
@@ -841,7 +841,7 @@ static bool dispatch_put(R *r, av_ctor sh, const disp *d, size_t p, uint32_t *cu
     } else if (d->U) {                              /* fused, written */
         uint32_t into = SK_KIND(r->stk[p]) == SK_VIRT ? AV_NONE : SK_BODY(r->stk[p]);
         uint32_t inst = tmpl_instance(a, d->U, d->uarg, into);
-        assert(inst != AV_NONE && "allocation past what ensure() reserved");
+        AV_ALWAYS(inst != AV_NONE, "allocation past what ensure() reserved");
         if (inst == AV_NONE) return false;
         r->fused++;
         undefer(r, p);
@@ -905,7 +905,7 @@ static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
     default:
         return 0;
     }
-    assert(x != AV_NONE && "allocation past what ensure() reserved");
+    AV_ALWAYS(x != AV_NONE, "allocation past what ensure() reserved");
     if (x == AV_NONE) return -1;
     root_set(r, r->top - k, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 }, curp);
     r->steps++;
@@ -1308,7 +1308,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                     return stop(r, bottom, r->jnode, AV_SIZE);
                 r->jnode = AV_NONE;
                 cur = jet_term_copy(a, id);
-                assert(cur != AV_NONE && "allocation past what ensure() reserved");
+                AV_ALWAYS(cur != AV_NONE, "allocation past what ensure() reserved");
                 if (cur == AV_NONE) return AV_SIZE;
                 continue;
             }
@@ -1364,7 +1364,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                     } else {
                         if (o->profile) profile_rewrote(o->profile, n);
                         uint32_t inst = tmpl_instance(a, T, args, n);
-                        assert(inst != AV_NONE && "allocation past what ensure() reserved");
+                        AV_ALWAYS(inst != AV_NONE, "allocation past what ensure() reserved");
                         if (inst == AV_NONE) return stop(r, bottom, cur, AV_SIZE);
                         SSTATS_INSTANCE(a, T, args, r->steps);
                         undefer(r, p);
@@ -1402,7 +1402,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                     cur = r->jnode;
                     r->jnode = AV_NONE;
                     inner = jet_term_copy(a, id);
-                    assert(inner != AV_NONE && "allocation past what ensure() reserved");
+                    AV_ALWAYS(inner != AV_NONE, "allocation past what ensure() reserved");
                     if (inner == AV_NONE) return stop(r, bottom, cur, AV_SIZE);
                 }
                 arena_set(a, cur, (av_node){ (AV_IND << AV_TAG_SHIFT) | inner, 0 });
@@ -1426,7 +1426,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
             if (o->jetstats) jetstats_fire(o->jetstats, cur, id);
             uint32_t inst = jet_instance(a, id, args, true);
-            assert(inst != AV_NONE && "allocation past what ensure() reserved");
+            AV_ALWAYS(inst != AV_NONE, "allocation past what ensure() reserved");
             if (inst == AV_NONE) return AV_SIZE;
             uint32_t n = r->stk[r->top - k];    /* the redex root */
             arena_set(a, n, (av_node){ (AV_IND << AV_TAG_SHIFT) | inst, 0 });
@@ -1525,7 +1525,7 @@ av_opts av_opts_default(void) {
         .strategy  = AV_SHARE,
         .whnf_only = false,
         .max_steps = UINT64_MAX,
-        .max_nodes = AV_MAX_NODES,
+        .max_nodes = av_default_max_nodes(),
         .interrupt = NULL,
         .no_collect = false,
         .jets      = true,

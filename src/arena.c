@@ -3,8 +3,10 @@
  *  Allocation, leaf interning, and caller roots (docs/DESIGN.md §2).
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "avon.h"
 #include "jets.h"
@@ -43,6 +45,26 @@ static uint32_t alloc_node(av_arena *a, uint32_t l, uint32_t r) {
 
 static uint32_t new_leaf(av_arena *a, ski_leaf id) {
     return alloc_node(a, AV_LEAF << AV_TAG_SHIFT, id);
+}
+
+__attribute__((cold)) _Noreturn void av_invariant_failed(const char *what, const char *file,
+                                                         int line) {
+    fprintf(stderr, "avon: internal invariant broken at %s:%d: %s\n", file, line, what);
+    abort();
+}
+
+/*  The default for --max-nodes: the live nodes whose collection fits in
+ *  the host's memory.  A collection holds the old arena, up to twice the
+ *  live set, a new one as large, and a forwarding word a node, about 40
+ *  bytes a live node at its peak, so physical memory over 64 leaves room;
+ *  AV_MAX_NODES if the memory is not known.  The fixed default of 2^30
+ *  nodes could need 20 GiB before SIZE (AUDIT.md item 11). */
+uint32_t av_default_max_nodes(void) {
+    long pages = sysconf(_SC_PHYS_PAGES), size = sysconf(_SC_PAGESIZE);
+    if (pages <= 0 || size <= 0) return AV_MAX_NODES;
+    uint64_t n = (uint64_t)pages * (uint64_t)size / 64;
+    if (n < (1u << 20)) n = 1u << 20;
+    return n > AV_MAX_NODES ? AV_MAX_NODES : (uint32_t)n;
 }
 
 av_arena *av_arena_new(uint32_t cap) {
