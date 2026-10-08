@@ -71,6 +71,7 @@ void av_arena_free(av_arena *a) {
         free(a->atom_name[id]);
     free(a->atom_name);
     free(a->atom_node);
+    free(a->leaf_index);
     free(a->roots);
     for (uint32_t k = 0; k < a->njets; k++) {
         free(a->jets[k].ops);
@@ -106,13 +107,49 @@ uint32_t av_app(av_arena *a, uint32_t f, uint32_t x) {
     return alloc_node(a, f, x);
 }
 
+static uint64_t name_hash(const char *s, size_t len) {
+    uint64_t h = 0xcbf29ce484222325u;               /* FNV-1a */
+    for (size_t i = 0; i < len; i++) h = (h ^ (uint8_t)s[i]) * 0x100000001b3u;
+    return h;
+}
+
+static void index_put(av_arena *a, uint32_t id) {
+    const char *nm = a->atom_name[id];
+    size_t mask = a->leaf_index_cap - 1;
+    for (size_t i = name_hash(nm, strlen(nm)) & mask;; i = (i + 1) & mask)
+        if (!a->leaf_index[i]) { a->leaf_index[i] = id; return; }
+}
+
+/*  Every atom indexed, the index at most half full.  Atoms another loader
+ *  wrote straight into the table (pma.c) are indexed here, before the next
+ *  lookup. */
+static bool index_sync(av_arena *a) {
+    if (2 * (size_t)a->n_leaves > a->leaf_index_cap) {
+        uint32_t cap = a->leaf_index_cap ? a->leaf_index_cap : 64;
+        while (2 * (size_t)a->n_leaves > cap) cap *= 2;
+        uint32_t *t = calloc(cap, sizeof *t);
+        if (!t) return false;
+        free(a->leaf_index);
+        a->leaf_index = t;
+        a->leaf_index_cap = cap;
+        a->leaf_indexed = SKI_ATOM_FIRST;
+    }
+    for (; a->leaf_indexed < a->n_leaves; a->leaf_indexed++) index_put(a, a->leaf_indexed);
+    return true;
+}
+
 uint32_t av_leaf(av_arena *a, const char *name, size_t len) {
+    if (memchr(name, '\0', len)) return AV_NONE;   /* a name holds no NUL */
     for (ski_leaf id = 0; id < SKI_ATOM_FIRST; id++)
         if (len == 1 && name[0] == comb_name[id][0]) return a->atom_node[id];
-    for (ski_leaf id = SKI_ATOM_FIRST; id < a->n_leaves; id++)
-        if (strlen(a->atom_name[id]) == len &&
-            memcmp(a->atom_name[id], name, len) == 0)
+    if (!index_sync(a)) return AV_NONE;
+    size_t mask = a->leaf_index_cap - 1;
+    for (size_t i = name_hash(name, len) & mask;; i = (i + 1) & mask) {
+        uint32_t id = a->leaf_index[i];
+        if (!id) break;
+        if (strncmp(a->atom_name[id], name, len) == 0 && a->atom_name[id][len] == '\0')
             return a->atom_node[id];
+    }
 
     if (a->n_leaves == a->leaf_cap) {
         uint32_t cap = a->leaf_cap * 2;

@@ -1808,6 +1808,9 @@ Effects and events are terms. Avon does not invent a syntax for them.
     after a create or a rename (`src/durable.c`, item 3).
   - A record is written whole. One that fails to write or to sync is cut
     away again, so a pier kept open appends after a whole record (item 4).
+  - Each record ends with a checksum, the first 4 bytes of its SHA-256,
+    and its hex is read strictly and in linear time. A flipped digit
+    stops the open instead of replaying as another event (item 10).
   - `events.log` is locked for the pier's life. A second process gets
     "the pier is in use" (item 5).
   - An event applied and logged is the pier's even if a persistent

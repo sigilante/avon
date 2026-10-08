@@ -83,6 +83,9 @@ typedef struct {
     char     **atom_name;   /* by ski_leaf id; NULL for S, K, I     */
     uint32_t  *atom_node;   /* by ski_leaf id: its interned leaf     */
     uint32_t   n_leaves, leaf_cap;
+    uint32_t  *leaf_index;  /* atom names hashed to ids, 0 empty: a lookup
+                               is a probe, not a scan (AUDIT.md item 9) */
+    uint32_t   leaf_index_cap, leaf_indexed;   /* slots; ids indexed so far */
 
     uint32_t **roots;       /* addresses of indices held by callers  */
     uint32_t   n_roots, root_cap;
@@ -1355,8 +1358,11 @@ uint32_t av_kernel_state(av_kernel *k);
  *  a crash holds the kernel the events it logged produce.  Log records:
  *  `poke N <event SKIT, hex>`, `load N <new kernel's pill SKIT, hex>
  *  <subject SKIT, hex>`, and, under entropy (below), `entropy 0` and
- *  `eny N <id SKIT, hex> <16 bytes, hex>`; a record without its newline was cut short by a
- *  crash, and is dropped.
+ *  `eny N <id SKIT, hex> <16 bytes, hex>`, hex in lowercase.  Each ends
+ *  ` =` and the first 4 bytes of the SHA-256 of the text before it, in
+ *  hex; a record that fails it stops the open, and one without it, as an
+ *  Avon before 2026-10-09 wrote, is read as it is.  A record without its
+ *  newline was cut short by a crash, and is dropped.
  */
 typedef struct av_pier av_pier;
 

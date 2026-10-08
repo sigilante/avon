@@ -57,17 +57,34 @@ static char *hex_put(char *o, const uint8_t *b, size_t n) {
     return o;
 }
 
+static int nibble(char c) {
+    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+}
+
+/*  Lowercase hex, two digits a byte, as hex_put writes it, and nothing
+ *  else: linear, where a sscanf per byte rescanned the rest of the line
+ *  (AUDIT.md item 10). */
 static uint8_t *unhex(const char *s, size_t n, size_t *len) {
     if (n % 2) return NULL;
     uint8_t *out = malloc(n / 2 + 1);
     if (!out) return NULL;
     for (size_t i = 0; i < n / 2; i++) {
-        unsigned v;
-        if (sscanf(s + 2 * i, "%2x", &v) != 1) { free(out); return NULL; }
-        out[i] = (uint8_t)v;
+        int hi = nibble(s[2 * i]), lo = nibble(s[2 * i + 1]);
+        if (hi < 0 || lo < 0) { free(out); return NULL; }
+        out[i] = (uint8_t)(hi << 4 | lo);
     }
     *len = n / 2;
     return out;
+}
+
+/*  A record's checksum: the first 4 bytes of the SHA-256 of its text
+ *  before ` =`, in hex.  A flipped digit in a record no longer replays as
+ *  another event (AUDIT.md item 10). */
+#define SUM_HEX 8
+static void record_sum(const char *rec, size_t n, char out[SUM_HEX]) {
+    uint8_t h[32];
+    av_sha256(rec, n, h);
+    hex_put(out, h, SUM_HEX / 2);
 }
 
 /*  Cut the log back to off, durably: a record that must not stand. */
@@ -83,7 +100,8 @@ static bool log_record(int log, const char *kind, uint64_t n, const uint8_t *a1,
     char head[48];
     int hn = snprintf(head, sizeof head, "%s %llu ", kind, (unsigned long long)n);
     if (hn < 0 || (size_t)hn >= sizeof head) return false;
-    size_t len = (size_t)hn + 2 * n1 + (a2 ? 1 + 2 * n2 : 0) + 1;
+    size_t body = (size_t)hn + 2 * n1 + (a2 ? 1 + 2 * n2 : 0);
+    size_t len = body + 2 + SUM_HEX + 1;
     char *rec = malloc(len), *o = rec;
     if (!rec) return false;
     memcpy(o, head, (size_t)hn);
@@ -92,7 +110,10 @@ static bool log_record(int log, const char *kind, uint64_t n, const uint8_t *a1,
         *o++ = ' ';
         o = hex_put(o, a2, n2);
     }
-    *o = '\n';
+    *o++ = ' ';
+    *o++ = '=';
+    record_sum(rec, body, o);
+    o[SUM_HEX] = '\n';
     off_t start = lseek(log, 0, SEEK_END);
     bool ok = start >= 0;
     for (size_t done = 0; ok && done < len;) {
@@ -522,6 +543,15 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
         if (line[len - 1] != '\n') break;       /* cut short by a crash */
         good += len;
         line[len - 1] = '\0';
+        /* the checksum, if the record has one: an Avon before 2026-10-09
+         * wrote none, and its records are read as they were */
+        size_t ll = (size_t)len - 1;
+        if (ll > 2 + SUM_HEX && line[ll - SUM_HEX - 2] == ' ' && line[ll - SUM_HEX - 1] == '=') {
+            char want[SUM_HEX];
+            record_sum(line, ll - SUM_HEX - 2, want);
+            if (memcmp(want, line + ll - SUM_HEX, SUM_HEX) != 0) { msg = "a log record fails its checksum"; break; }
+            line[ll - SUM_HEX - 2] = '\0';
+        }
         char kind[8];
         unsigned long long n;
         int used;

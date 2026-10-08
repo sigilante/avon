@@ -565,6 +565,63 @@ TEST(a_torn_append_is_cut_and_a_pier_is_one_process_s) {
     CHECK(system(cmd) == 0);
 }
 
+/*  Each record carries a checksum: one digit flipped is refused, not
+ *  replayed as another event; a record without one, as an earlier Avon
+ *  wrote it, still replays (AUDIT.md item 10). */
+TEST(a_record_must_match_its_checksum) {
+    char dir[] = "/tmp/avon-sum-XXXXXX";
+    CHECK(mkdtemp(dir) != NULL);
+    char pier[128], logp[160];
+    snprintf(pier, sizeof pier, "%s/pier", dir);
+    snprintf(logp, sizeof logp, "%s/events.log", pier);
+    av_opts o = copy_opts();
+    size_t np, nt, ni = 0;
+    uint8_t *pill = bytes_of("pill", &np), *tick = bytes_of("events.tick", &nt);
+    av_arena *s = av_arena_new(0);
+    uint8_t *subject = jam_of(s, AV_NODE_I, &ni);
+    av_arena_free(s);
+    const char *err = NULL;
+    av_pier *p = av_pier_new(pier, pill, np, subject, ni, &o, &err);
+    REQUIRE(p != NULL);
+    uint32_t eff;
+    av_result r;
+    CHECK_EQ(av_pier_poke(p, tick, nt, &eff, &r, &err), AV_WHNF);
+    av_pier_free(p);
+
+    FILE *f = fopen(logp, "r+b");
+    REQUIRE(f != NULL);
+    char line[512];
+    REQUIRE(fgets(line, sizeof line, f) != NULL);
+    char *eq = strstr(line, " =");
+    CHECK(eq != NULL && strlen(eq) == 2 + 8 + 1);             /* " =" 8 digits, newline */
+    long at = (long)(strchr(strchr(line, ' ') + 1, ' ') - line) + 1;   /* the event's first digit */
+    REQUIRE(fseek(f, at, SEEK_SET) == 0);
+    int c = fgetc(f);
+    REQUIRE(fseek(f, at, SEEK_SET) == 0);
+    fputc(c == '0' ? '1' : '0', f);
+    fclose(f);
+    CHECK(av_pier_open(pier, &o, &err) == NULL);
+    CHECK(err != NULL && strstr(err, "checksum") != NULL);
+
+    /* the record as an earlier Avon wrote it: no checksum, and it replays */
+    f = fopen(logp, "wb");
+    REQUIRE(f != NULL);
+    *eq = '\0';
+    line[at] = (char)c;
+    fprintf(f, "%s\n", line);
+    fclose(f);
+    p = av_pier_open(pier, &o, &err);
+    REQUIRE(p != NULL);
+    CHECK_EQ(av_pier_kernel(p)->events, 1);
+    CHECK_EQ(pier_state(p), 1);
+    av_pier_free(p);
+
+    free(pill); free(tick); free(subject);
+    char cmd[256];
+    snprintf(cmd, sizeof cmd, "/bin/rm -rf %s", dir);
+    CHECK(system(cmd) == 0);
+}
+
 TEST_MAIN(
     TEST_CASE(the_selectors_are_the_abis),
     TEST_CASE(the_events_kernel_runs_as_the_reference_does),
@@ -576,4 +633,5 @@ TEST_MAIN(
     TEST_CASE(a_logged_event_replays_whatever_the_fuel),
     TEST_CASE(a_pier_is_closed_to_others),
     TEST_CASE(a_torn_append_is_cut_and_a_pier_is_one_process_s),
+    TEST_CASE(a_record_must_match_its_checksum),
 )

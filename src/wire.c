@@ -168,6 +168,11 @@ static bool get_le(reader *r, int bytes, uint64_t *v) {
     return true;
 }
 
+static int cmp_u32(const void *x, const void *y) {
+    uint32_t a = *(const uint32_t *)x, b = *(const uint32_t *)y;
+    return (a > b) - (a < b);
+}
+
 static bool valid_name(const uint8_t *s, size_t len) {
     if (len == 0) return false;
     for (size_t i = 0; i < len; i++) {
@@ -196,6 +201,9 @@ uint32_t av_cue(av_arena *a, const uint8_t *p, size_t n, const char **err) {
     atoms = malloc((natoms + 1) * sizeof *atoms);
     if (!atoms) { msg = "out of memory"; goto done; }
     atoms[0] = AV_NODE_I;
+    /* the whole table checked before any name is interned, so a refused
+     * container leaves the arena's atoms as they were (AUDIT.md item 9) */
+    size_t names_at = r.pos;
     for (uint64_t k = 1; k <= natoms; k++) {
         if (!get_le(&r, 4, &v) || v > n - r.pos) { msg = "truncated atom name"; goto done; }
         const uint8_t *nm = p + r.pos;
@@ -206,11 +214,24 @@ uint32_t av_cue(av_arena *a, const uint8_t *p, size_t n, const char **err) {
             msg = "atom named like a live aviary combinator (§4.3)";
             goto done;
         }
-        uint32_t leaf = av_leaf(a, (const char *)nm, len);
+    }
+    r.pos = names_at;
+    for (uint64_t k = 1; k <= natoms; k++) {
+        get_le(&r, 4, &v);
+        uint32_t leaf = av_leaf(a, (const char *)p + r.pos, (size_t)v);
+        r.pos += (size_t)v;
         if (leaf == AV_NONE) { msg = "out of memory"; goto done; }
-        for (uint64_t j = 1; j < k; j++)
-            if (atoms[j] == leaf) { msg = "duplicate atom name"; goto done; }
         atoms[k] = leaf;
+    }
+    if (natoms > 1) {                           /* each name once: sorted, no neighbours alike */
+        uint32_t *sorted = malloc(natoms * sizeof *sorted);
+        if (!sorted) { msg = "out of memory"; goto done; }
+        memcpy(sorted, atoms + 1, natoms * sizeof *sorted);
+        qsort(sorted, natoms, sizeof *sorted, cmp_u32);
+        bool dup = false;
+        for (uint64_t k = 1; k < natoms && !dup; k++) dup = sorted[k] == sorted[k - 1];
+        free(sorted);
+        if (dup) { msg = "duplicate atom name"; goto done; }
     }
     if (!get_le(&r, 8, &nbits)) { msg = "truncated bit count"; goto done; }
     if (nbits == 0 || nbits > (uint64_t)(n - r.pos) * 8 ||
