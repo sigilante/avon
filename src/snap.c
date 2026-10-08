@@ -18,6 +18,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,7 @@
 #include <unistd.h>
 
 #include "avon.h"
+#include "durable.h"
 #include "jets.h"
 
 /*  -------------------------------------------------------------- writing */
@@ -52,7 +54,8 @@ static void put32(out *o, uint32_t v) {
     put(o, x, 4);
 }
 
-/* Write a whole file durably: a temporary, fsync, rename, fsync the dir. */
+/* Write a whole file durably: a temporary, synced, renamed over path, and
+ * the directory synced, which must succeed (av_sync_fd, durable.h). */
 static bool write_durably(const char *path, const void *p, size_t n) {
     size_t len = strlen(path);
     char *tmp = malloc(len + 5);
@@ -64,11 +67,12 @@ static bool write_durably(const char *path, const void *p, size_t n) {
     const char *c = p;
     while (ok && n) {
         ssize_t w = write(fd, c, n);
+        if (w < 0 && errno == EINTR) continue;
         if (w <= 0) ok = false;
         else { c += w; n -= (size_t)w; }
     }
     if (fd >= 0) {
-        if (ok && fsync(fd) != 0) ok = false;
+        if (ok && !av_sync_fd(fd)) ok = false;
         if (close(fd) != 0) ok = false;
     }
     if (ok && rename(tmp, path) != 0) ok = false;
@@ -76,19 +80,7 @@ static bool write_durably(const char *path, const void *p, size_t n) {
     free(tmp);
 
     /* the rename itself must reach the disk before the sidecar does */
-    if (ok) {
-        char *dir = strdup(path);
-        if (!dir) return false;
-        char *slash = strrchr(dir, '/');
-        if (slash) slash[slash == dir ? 1 : 0] = '\0';
-        int dfd = open(slash ? dir : ".", O_RDONLY);
-        if (dfd >= 0) {
-            fsync(dfd);
-            close(dfd);
-        }
-        free(dir);
-    }
-    return ok;
+    return ok && av_sync_parent(path);
 }
 
 static void checksum(const av_buf *image, uint32_t root, uint32_t used,

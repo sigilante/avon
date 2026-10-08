@@ -11,6 +11,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -426,6 +427,30 @@ TEST(a_pier_on_the_arena_commits_every_event) {
         CHECK_EQ(av_pier_kernel(p)->events, 1001);
         av_pier_free(p);
     }
+
+    /* an image that will not commit after an event applied: the event is
+     * a success, the failure beside it, and the next commit carries it
+     * (AUDIT.md item 6) */
+    char img[160];
+    snprintf(img, sizeof img, "%s/pma", pier);
+    p = av_pier_open(pier, &o, &err);
+    REQUIRE(p != NULL);
+    uint32_t eff;
+    av_result r;
+    CHECK(chmod(img, 0500) == 0);                           /* no journal can be made */
+    CHECK_EQ(av_pier_poke(p, tick, nt, &eff, &r, &err), AV_WHNF);
+    CHECK(av_pier_commit_error(p) != NULL);
+    CHECK_EQ(av_pier_kernel(p)->events, 1002);
+    CHECK(chmod(img, 0700) == 0);
+    CHECK_EQ(av_pier_poke(p, tick, nt, &eff, &r, &err), AV_WHNF);
+    CHECK(av_pier_commit_error(p) == NULL);
+    CHECK_EQ(state(p), 1003);
+    av_pier_free(p);
+    p = av_pier_open(pier, &o, &err);
+    REQUIRE(p != NULL);
+    CHECK_EQ(av_pier_kernel(p)->events, 1003);
+    CHECK_EQ(state(p), 1003);
+    av_pier_free(p);
     av_buf_free(&sb);
     free(pill);
     free(tick);

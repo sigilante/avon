@@ -1803,8 +1803,18 @@ Effects and events are terms. Avon does not invent a syntax for them.
   - So a crash between a live failure and its removal leaves an event
     that replays uncapped: it applies, or the pier refuses to open.
   - A pier's directory is 0700 and its files 0600 (item 2).
-  - Snapshots are not pruned yet, and the directory is not synced after
-    a rename.
+  - Every sync reaches the media. On macOS that is `F_FULLFSYNC`, since
+    `fsync` leaves the data in the drive's cache. Directories are synced
+    after a create or a rename (`src/durable.c`, item 3).
+  - A record is written whole. One that fails to write or to sync is cut
+    away again, so a pier kept open appends after a whole record (item 4).
+  - `events.log` is locked for the pier's life. A second process gets
+    "the pier is in use" (item 5).
+  - An event applied and logged is the pier's even if a persistent
+    arena's commit then fails. The failure is reported beside it
+    (`av_pier_commit_error`), so no caller retries an applied event. The
+    next commit, or a reopen's replay, carries it (item 6).
+  - Snapshots are not pruned yet.
 - **Upgrade** pulls `load` from the new kernel with the installed
   kernel's state and installs the result, unreduced.
 

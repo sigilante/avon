@@ -187,6 +187,13 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
   - An interpreter's dictionary rows must have their hashes.
   - The compiler jet is admitted only if its nine terms match full digests pinned
     in `compiler.c`.
+- Items 3 to 6 (`pier-durable`).
+  - Syncs reach the media (`F_FULLFSYNC` on macOS), and directories are synced
+    after a create or a rename.
+  - A record is written whole or cut away again.
+  - `events.log` is locked for the pier's life.
+  - A failed commit after an applied event is reported beside it, not as its
+    failure.
 
 ## Fixed on `stage8-m1`
 

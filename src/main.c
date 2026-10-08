@@ -877,6 +877,16 @@ static void print_event(void *ctx, uint64_t event, uint64_t steps, uint32_t effe
 
 /*  The cap's note, if the last poke reached it, and why its replies
  *  stopped short, if they did: false then, the event itself applied. */
+/*  A persistent-arena pier whose image did not commit after an event: the
+ *  event applied and is logged, so it is not to be poked again; the next
+ *  commit or a reopen carries it. */
+static bool report_commit(const av_pier *p) {
+    const char *c = av_pier_commit_error(p);
+    if (c) fprintf(stderr, "avon: the event applied and is logged, but the image did not commit "
+                           "(%s); do not poke it again: a reopen replays it\n", c);
+    return !c;
+}
+
 static bool report_unanswered(const av_pier *p) {
     uint64_t left;
     av_pier_replies(p, &left);
@@ -885,7 +895,7 @@ static bool report_unanswered(const av_pier *p) {
                AV_ENY_MAX, (unsigned long long)left);
     const char *e = av_pier_entropy_error(p);
     if (e) fprintf(stderr, "avon: entropy, after the event applied: %s\n", e);
-    return !e;
+    return report_commit(p) && !e;
 }
 
 /*  avon boot | poke | peek | load: a kernel in a pier directory (§9, §20). */
@@ -1011,6 +1021,7 @@ static int kernel_main(int argc, char **argv) {
             } else {
                 printf("event %llu: loaded the kernel %s boots to\n",
                        (unsigned long long)k->events, files[i]);
+                if (!report_commit(p)) rc = 1;
             }
         } else {
             rc = 2;
