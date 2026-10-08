@@ -194,6 +194,11 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
   - `events.log` is locked for the pier's life.
   - A failed commit after an applied event is reported beside it, not as its
     failure.
+- Item 8, again (`match-identity`). #26 compared a candidate with the jet's
+  term under a budget set by the jet's size. That refused templates whose
+  copies in the program shared less, and front1's fixed point rose from
+  80,541,877 contractions to 88,316,487. Matching is now by canonical ids,
+  exact and linear, and both fixed points are back to their counts.
 - Items 9 and 10 (`robust-intern`).
   - Atoms are interned through a hash index. A container's whole atom table is
     checked before any name is interned, and duplicates are found by sorting.
