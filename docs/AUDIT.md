@@ -194,6 +194,15 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
   - `events.log` is locked for the pier's life.
   - A failed commit after an applied event is reported beside it, not as its
     failure.
+- Items 9 and 10 (`robust-intern`).
+  - Atoms are interned through a hash index. A container's whole atom table is
+    checked before any name is interned, and duplicates are found by sorting.
+    100,000 atoms cue in 0.04 s.
+  - The log's hex decodes in linear time, lowercase only.
+  - Each record carries a checksum. Records written before 2026-10-09, without
+    one, still read.
+  - No caps on atom count or event size: with linear interning the cost the
+    caps were to bound is linear in the event.
 
 ## Fixed on `stage8-m1`
 

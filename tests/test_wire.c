@@ -8,8 +8,10 @@
  *  Run from the repository root.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "avon.h"
 #include "test.h"
@@ -340,6 +342,53 @@ TEST(cue_never_crashes_and_is_bijective) {
     CHECK(accepted > 0);
 }
 
+/*  Atoms are interned through a hash index (AUDIT.md item 9): names that
+ *  share a prefix are distinct, a name is found again, a NUL is refused, a
+ *  refused container interns nothing, and a hundred thousand atoms cue in
+ *  linear time, where a scan per name took minutes. */
+TEST(interning_is_a_probe) {
+    av_arena *a = av_arena_new(0);
+    uint32_t x = av_leaf(a, "ab", 2), y = av_leaf(a, "a", 1), z = av_leaf(a, "abc", 3);
+    CHECK(x != AV_NONE && y != AV_NONE && z != AV_NONE);
+    CHECK(x != y && y != z && x != z);
+    CHECK_EQ(av_leaf(a, "ab", 2), x);
+    CHECK_EQ(av_leaf(a, "abc", 2), x);                   /* a length, not a terminator */
+    CHECK_EQ(av_leaf(a, "S", 1), AV_NODE_S);
+    CHECK_EQ(av_leaf(a, "a\0b", 3), AV_NONE);
+    uint32_t before = a->n_leaves;
+    /* table [fresh, @x]: the second name is refused, and fresh is not interned */
+    uint8_t bad[] = { 'S','K','I','T', 1,0,0,0, 2,0,0,0,
+                      5,0,0,0,'f','r','e','s','h', 2,0,0,0,'@','x',
+                      10,0,0,0,0,0,0,0, 0x67, 0x01 };
+    const char *err = NULL;
+    CHECK_EQ(av_cue(a, bad, sizeof bad, &err), AV_NONE);
+    CHECK_EQ(a->n_leaves, before);
+    av_arena_free(a);
+
+    enum { N = 100000 };
+    av_arena *b = av_arena_new(0);
+    uint32_t t = AV_NODE_I;
+    char nm[16];
+    for (int i = 0; i < N; i++) {
+        int len = snprintf(nm, sizeof nm, "x%d", i);
+        t = av_app(b, t, av_leaf(b, nm, (size_t)len));
+    }
+    REQUIRE(t != AV_NONE);
+    av_buf j = { 0 };
+    REQUIRE(av_jam(b, t, 1u << 24, &j, NULL));
+    av_arena *c = av_arena_new(0);
+    clock_t c0 = clock();
+    uint32_t u = av_cue(c, (const uint8_t *)j.s, j.len, &err);
+    double secs = (double)(clock() - c0) / CLOCKS_PER_SEC;
+    printf("  %d atoms cued in %.2f s\n", N, secs);
+    CHECK(u != AV_NONE);
+    CHECK_EQ(c->n_leaves, SKI_ATOM_FIRST + N);
+    CHECK(secs < 30);
+    av_buf_free(&j);
+    av_arena_free(b);
+    av_arena_free(c);
+}
+
 TEST_MAIN(
     TEST_CASE(sha256_matches_the_standard),
     TEST_CASE(the_codes_are_tromps_with_a_third_leaf),
@@ -349,4 +398,5 @@ TEST_MAIN(
     TEST_CASE(bird_named_atoms_are_refused),
     TEST_CASE(malformed_containers_are_rejected),
     TEST_CASE(cue_never_crashes_and_is_bijective),
+    TEST_CASE(interning_is_a_probe),
 )
