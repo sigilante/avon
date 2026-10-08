@@ -63,6 +63,15 @@ term reached. The status is `WHNF` or `NORMAL` when the run finished,
 reduces each line of standard input and prints one `STATUS steps term`
 line per term. Jet and template reports go to standard error.
 
+**Exit status.** A run's status is its line's, for a script to read: a
+term that runs out of fuel or room still exits 0. Exit 1 is a failure of
+Avon's own:
+- a `--jet-check` that found a jet disagreeing with its term;
+- output that could not be written, a full disk or a closed pipe;
+- an input that does not parse.
+
+Exit 2 is a usage error.
+
 **Two strategies** (§1.1, §3):
 
 - `--strategy=copy` is the reference host's algorithm. Its contraction
@@ -222,6 +231,10 @@ PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --profile
 `front0` also takes `--templates=DIR`, `--data`, `--fix`, `--profile=NAMES`, `--jets=DICT`,
 `--ctors[=N]`, `--jet-stats[=N]`, `--names=FILE`, `--fuel=N` and
 `--max-nodes=N`.
+- `--fuel` bounds the whole read: every probe draws on the same fuel.
+- A name the result holds is at most 65,536 characters, with no control
+  character or space, since the output is a line per name with a tab
+  before its hash. A result that breaks either rule is refused.
 
 **`selfhost`** runs the compiler's core -- bracket abstraction written in
 SKIjack -- on every abstraction in a calls file, or through its native

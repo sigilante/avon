@@ -99,6 +99,10 @@ static int probe(reader *r, unsigned nctors, const unsigned *fields, const av_op
     }
     av_opts po = *o;
     po.whnf_only = true;
+    /* the probes share the run's fuel: --fuel bounds the read, not each
+     * probe of it (AUDIT.md item 14) */
+    if (o->max_steps != UINT64_MAX)
+        po.max_steps = r->steps < o->max_steps ? o->max_steps - r->steps : 0;
     av_result res = av_reduce(a, t, &po);
     r->steps += res.steps;
     r->tmpl_calls += res.tmpl_calls;
@@ -137,7 +141,11 @@ static const unsigned F_BIT[2]    = { 0, 0 };           /* Lo | Hi              
 static const unsigned F_TM[5]     = { 0, 0, 0, 1, 1 };  /* TS TK TI TV nat, TA ap */
 static const unsigned F_AP[1]     = { 2 };              /* Ap tm tm               */
 
-/*  The name on top of the stack, into buf (NUL-terminated). */
+/*  The name on top of the stack, into buf (NUL-terminated): at most
+ *  NAME_MAX_LEN characters, none of them a control character or a space, as
+ *  the output is a line per name and a tab before its hash (AUDIT.md item
+ *  14). */
+#define NAME_MAX_LEN 65536
 static bool read_name(reader *r, const av_opts *o, char **buf, size_t *cap,
                       const char **err) {
     size_t len = 0;
@@ -152,6 +160,7 @@ static bool read_name(reader *r, const av_opts *o, char **buf, size_t *cap,
             *cap = ncap;
         }
         if (c == 0) { (*buf)[len] = '\0'; return true; }
+        if (len == NAME_MAX_LEN) { *err = "a name longer than 65536 characters"; return false; }
         if (probe(r, 1, F_CODE, o, err) < 0) return false;  /* its bits; the rest below */
         unsigned ch = 0;
         for (int i = 0; i < 7; i++) {
@@ -159,6 +168,7 @@ static bool read_name(reader *r, const av_opts *o, char **buf, size_t *cap,
             if (b < 0) return false;
             ch = ch << 1 | (unsigned)b;
         }
+        if (ch <= ' ' || ch == 0x7f) { *err = "a name holding a control character or a space"; return false; }
         (*buf)[len++] = (char)ch;
     }
 }

@@ -721,7 +721,10 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
            b.s ? b.s : "", whole ? "" : " ...");
     av_buf_free(&b);
     av_arena_free(a);
-    return 0;
+    /* the run's status is the line's, a script's to read: exit 1 is for a
+     * failure of Avon's own, here a jet that disagreed with its term
+     * (AUDIT.md item 15) */
+    return r.jet_fault ? 1 : 0;
 }
 
 /*  ------------------------------------------------------------- census */
@@ -2218,7 +2221,21 @@ out:
     return rc;
 }
 
+static int run_main(int argc, char **argv);
+
+/*  Every command, then its output checked: a write that failed, a full
+ *  disk or a closed pipe, is a failure, not a run that printed nothing
+ *  (AUDIT.md item 15). */
 int main(int argc, char **argv) {
+    int rc = run_main(argc, argv);
+    if (fflush(stdout) != 0 || ferror(stdout)) {
+        fprintf(stderr, "avon: writing the output failed\n");
+        if (rc == 0) rc = 1;
+    }
+    return rc;
+}
+
+static int run_main(int argc, char **argv) {
 #ifdef AV_STRICT_STATS
     sstats_begin();                 /* build/stats/avon: one run's cells (sstats.h) */
     atexit(sstats_report);
