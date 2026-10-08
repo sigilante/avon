@@ -11,6 +11,15 @@
 
 #include "avon.h"
 
+/*  An invariant whose breach would write past the arena: checked in
+ *  release builds too, as assert is not, and fatal, so a wrong
+ *  reservation stops the process instead of corrupting the heap
+ *  (AUDIT.md item 12).  One compare on the allocation path. */
+__attribute__((cold)) _Noreturn void av_invariant_failed(const char *what, const char *file,
+                                                         int line);
+#define AV_ALWAYS(cond, what) \
+    (__builtin_expect(!!(cond), 1) ? (void)0 : av_invariant_failed((what), __FILE__, __LINE__))
+
 typedef struct { uint32_t *key; uint64_t *val; size_t cap, n; } nmap;
 
 bool     nmap_get(const nmap *m, uint32_t k, uint64_t *v);
@@ -145,7 +154,7 @@ void pma_release(av_arena *a);
  *  av_reserve): av_app with its check for room and its call inlined away,
  *  the reservation having made the room.  The instance loops' allocator. */
 static inline uint32_t arena_app_reserved(av_arena *a, uint32_t f, uint32_t x) {
-    assert(a->used < a->cap && "allocation past what was reserved");
+    AV_ALWAYS(a->used < a->cap, "allocation past what was reserved");
     uint32_t i = a->used++;
     a->nodes[i] = (av_node){ f, x };
     return i;
@@ -192,7 +201,7 @@ uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args,
          * locals: nothing it stores can move them */
         av_node *nodes = a->nodes;
         uint32_t used = a->used;
-        assert(a->cap - used >= end && "allocation past what was reserved");
+        AV_ALWAYS(a->cap - used >= end, "allocation past what was reserved");
         for (uint32_t i = 0; i < end; i++) {
             nodes[used] = (av_node){ OPND(ops[2 * i]), OPND(ops[2 * i + 1]) };
             out[i] = used++;

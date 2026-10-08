@@ -326,7 +326,8 @@ typedef struct {
     av_strategy strategy;
     bool        whnf_only;      /* stop at weak head normal form        */
     uint64_t    max_steps;      /* fuel, checked before each attempt    */
-    uint32_t    max_nodes;      /* live nodes after a collection        */
+    uint32_t    max_nodes;      /* live nodes after a collection; by default
+                                   av_default_max_nodes() */
     volatile sig_atomic_t *interrupt;   /* polled with fuel; may be NULL */
     bool        no_collect;     /* grow instead of collecting, so every
                                    index the caller holds stays valid */
@@ -405,6 +406,10 @@ typedef struct {
 } av_result;
 
 av_opts   av_opts_default(void);
+/*  max_nodes's default: physical memory over 64 bytes, at least 2^20 and
+ *  at most AV_MAX_NODES, so a run reports SIZE before its collections
+ *  could take the host's memory. */
+uint32_t  av_default_max_nodes(void);
 
 /*  Reduce `t` under normal order.  May collect: see av_root_push. */
 av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o);

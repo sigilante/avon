@@ -75,7 +75,7 @@ line per term. Jet and template reports go to standard error.
 |---|---|
 | `--whnf` | stop at weak head normal form; otherwise reduce to normal form |
 | `--fuel=N` | at most N contractions; a jet fire or template instantiation is charged as §6.5 and §6.9 say |
-| `--max-nodes=N` | live nodes allowed after a collection before `SIZE` |
+| `--max-nodes=N` | live nodes allowed after a collection before `SIZE`; by default physical memory over 64 bytes (between 2^20 and 2^30), so that a run's collections stay within the host's memory |
 | `--budget=N` | nodes read or printed (default 1,000,000) |
 | `--allow-bird-atoms` | accept atoms named like aviary birds |
 
