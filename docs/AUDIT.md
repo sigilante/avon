@@ -10,11 +10,11 @@ The core holds. No reviewer found a way to make a verifier accept a wrong result
 to forge an entropy reply. `make check` passes, with 25 suites under ASan and UBSan.
 The weak spots are the pier, and the jets admitted by testing rather than by identity.
 
-**Status, 2026-10-09.** Items 1 to 15 are fixed, in #24 to #34, as "Fixed since"
-lists; the findings below are as the reviewers found them, with the code's line
-numbers of 2026-10-05. The pier now syncs, locks and checksums its log, and every jet
-binds by identity. Items 16 to 27 are open: the gates, the documentation against the
-code, and the shape and performance questions.
+**Status, 2026-10-09.** Items 1 to 15, 20, 21, 23 and 24 are fixed, as "Fixed
+since" lists; the findings below are as the reviewers found them, with the code's
+line numbers of 2026-10-05. The pier now syncs, locks and checksums its log, and
+every jet binds by identity. Open: the gates (16 to 19), the options `options_fit`
+lets through (22), and the shape and performance questions (25 to 27).
 
 ## 1. Data loss and secrecy
 
@@ -259,6 +259,21 @@ code, and the shape and performance questions.
     corrupted jet.
 - DESIGN.md §18.2 said the word operations are admitted by testing; since
   item 7 they are admitted by identity, as §6.10 says (`design-words`).
+
+- Items 20, 21, 23 and 24 (`docs-audit`).
+  - Item 20 was half wrong: `test_wire` has fuzzed `cue` in `make check`
+    since stage 2, with 20,000 mutants of valid containers and 20,000 noise
+    containers. DESIGN §10.3 now says what CI runs, at what counts, and that
+    the aviary differential is by hand.
+  - RUNTIME.md says SKIT holds atoms; only the prefix form is closed.
+  - RUNTIME.md documents `witness --statement` and the 2^21 defaults, the
+    kernel commands' defaults and the effects' 1,000,000-contraction
+    normalization, `scry`'s jet options, `front0 --memory --no-defer`, the
+    budget of `jam`, `cue` and `prefix`, and `make p2-witness-check`.
+  - BENCHMARK.md names master commits, not branches, and has Reproduce
+    blocks for the case join and deferred roots. The interpreter jet's wall
+    clock still has no harness, and says so.
+  - Item 22, the options `options_fit` lets through, is code, and is open.
 
 ## Fixed on `stage8-m1`
 
