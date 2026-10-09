@@ -34,7 +34,7 @@ backquote, or reads standard input when no file is given:
 | form | looks like | notes |
 |---|---|---|
 | printed | `S (K S) K f g x` | aviary's `pretty`: application to the left, parentheses around an argument that is an application |
-| SKIT | a binary container (§4.2) | what skijack's `jam` writes; closed S/K/I terms, no atoms |
+| SKIT | a binary container (§4.2) | what skijack's `jam` writes; S, K, I and atoms, the atoms' names in the container's table |
 | prefix | `` ``SKK `` for `S K K`: `` ` `` before an application | closed S/K/I only |
 
 ```sh
@@ -43,8 +43,11 @@ build/avon cue t.skit                        # SKIT -> printed: S K K
 build/avon prefix t.skit                     # -> prefix form: ``SKK
 ```
 
-SKIT and the prefix form hold closed terms only: `jam` and `prefix` refuse
-a term with an atom such as `x`.
+`jam`, `cue` and `prefix` take `--budget=N`, the nodes read or written
+(default 1,000,000). Past it they refuse the term and exit 1.
+
+The prefix form holds closed terms only: `prefix` refuses a term with an
+atom such as `x`. SKIT holds atoms: `S x` jams, and cues back to `S x`.
 
 Atom names beginning with `@` are reserved (Avon's probe markers), and an
 atom named like a live aviary bird is refused unless `--allow-bird-atoms`.
@@ -228,9 +231,10 @@ PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templat
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --profile
 ```
 
-`front0` also takes `--templates=DIR`, `--data`, `--fix`, `--profile=NAMES`, `--jets=DICT`,
-`--ctors[=N]`, `--jet-stats[=N]`, `--names=FILE`, `--fuel=N` and
-`--max-nodes=N`.
+`front0` also takes `--templates=DIR`, `--data`, `--fix`, `--memory`,
+`--no-defer`, `--profile=NAMES`, `--jets=DICT`, `--ctors[=N]`,
+`--jet-stats[=N]`, `--names=FILE`, `--fuel=N` and `--max-nodes=N`.
+`--memory` and `--no-defer` mean what they mean to `reduce`.
 - `--fuel` bounds the whole read: every probe draws on the same fuel.
 - A name the result holds is at most 65,536 characters, with no control
   character or space, since the output is a line per name with a tab
@@ -292,14 +296,21 @@ build/avon poke --pier=/tmp/epier tests/kernel/entropy.ask5.skit
   byte 16 n, n the replies already logged; every later `poke` must give
   `--entropy=FILE` too, and a pier booted with plain `--entropy` refuses
   one.
-- All four accept `--strategy=`, `--fuel=` and `--budget=`; share mode is
-  the default.
+- All four accept `--strategy=`, `--fuel=` and `--budget=`. The defaults
+  differ from `reduce`'s: share mode, 100,000,000 contractions an event,
+  and 100,000 nodes printed.
+- A poke prints each event's effects as their normal form, reduced in copy
+  mode, which writes nothing the kernel shares. With no normal form within
+  1,000,000 contractions it prints `(no normal form within 1,000,000)` and
+  the effects as they stand.
 
 ## Scry: `scry`
 
 `scry NAMESPACES` runs the resume loop (§8) over a `namespaces.tsv`
 export, checking each run's events and attempts against the reference
-host's; `--log=DIR` keeps each run's facts.
+host's. `--log=DIR` keeps each run's facts; `--jets=DICT`, with
+`--interp=FILE` (which needs `--jets`) and `--jet-check=N`, runs the resolvers
+with jets.
 
 ```sh
 build/avon scry tests/conformance/namespaces.tsv
@@ -310,7 +321,18 @@ build/avon scry tests/conformance/namespaces.tsv
 `witness` writes the witness strategy's table for lean-ski's checker and
 prover (§17); `--jet-table=JETS` adds lean-ski's jet file for the term
 (§18.1), `--plan=PLAN` probe segments. `--rows=N` and `--cells=N` are
-budgets. `make witness-check` runs the corpus through lean-ski.
+budgets, each 2^21 by default (bench/plonky3's largest height). `make
+witness-check` runs the corpus through lean-ski.
+
+`witness --statement=PUBLIC` writes the table for one of lean-ski's
+composed statements, from the statement's public file and a witness:
+- with `--jet-table=JETS`, a statement with jets: the witness's bits and
+  region in the statement's heap, one jetted segment per root, padded to
+  the statement's heights (`docs/ZK-JETS.md`);
+- without it, a `p2pre` or `p2commit` statement: the machine with the
+  Poseidon2 jet, its table as bench/plonky3's `compp-prove` writes it.
+`make zk-jet-witness-check` and `make p2-witness-check` run both against
+ski-air.
 
 ## Frame traces: `--trace-frame`, `enum`
 
@@ -420,4 +442,5 @@ enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
 | `make jet-witness-check` | the same, jetted (§18) | lean-ski |
 | `make probe-witness-check` | the same, with probe segments | lean-ski |
 | `make zk-jet-witness-check` | composed statements with jets: Avon's tables are ski-air's, accepted by `check-cj`, proved under hiding and verified; bad witnesses and budgets refused (`docs/ZK-JETS.md`) | lean-ski |
+| `make p2-witness-check` | the Poseidon2 statements: Avon's tables are byte-identical to ski-air's for `p2pre` and the two `p2commit` hand-off stages, proved and verified, a flipped bit refused; `reduce --p2` runs each test vector's permutation natively in one step, and a chain of three in three | lean-ski |
 | `tests/diff_aviary.py` | `copy` mode against `aviary_kernel` on random terms | aviary-kernel |

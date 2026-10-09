@@ -377,7 +377,7 @@ each took about 30 ns a step, so the cost is instructions, not memory. A
 template whose body is one node (`M M`, M = `S I I` with the template
 `v0 v0`) took 314 instructions a fire; pure SKI takes 130 a contraction.
 
-Avon `aeae3c9` (branch `instance-cost`), each change measured by
+Avon `aeae3c9`, on master, each change measured by
 instructions retired (`/usr/bin/time -l`, deterministic), then user CPU,
 best of five:
 
@@ -665,7 +665,7 @@ is not measured.
 ## A case joined to its instance
 
 **Joining a case to its instance saves time, not instructions.** Avon
-`case-join` branch against `cd3c73a`, both built clean, share mode with
+`18fccbf` against its parent `cd3c73a`, both on master and built clean, share mode with
 templates and data jets, user time best of 5. The ratio is the base
 binary's time over the joined one's, from paired runs. Every answer,
 step, instantiation, dispatch and fused count is the base's, with and
@@ -700,10 +700,14 @@ The front end's time includes 0.39 s of loading templates.
   which a different allocation pattern moves; that is the likely cause,
   not measured here.
 
+**Reproduce.** Build `18fccbf` and `cd3c73a` each into its own tree, and
+run `python3 tests/workloads/reduceron/run.py --avon BIN` with each binary,
+one after the other; compare the `data` and `fix` rows.
+
 ## Deferred roots
 
 **Leaving an instance's root and spine in the stack runs 5.8 to 14.5%
-faster.** Avon `worklist-oct4` with deferred roots (`DESIGN.md` §6.13)
+faster.** Avon `2851dff`, on master, with deferred roots (`DESIGN.md` §6.13)
 against the same binary with `--no-defer`, share mode with templates and
 data jets, user time best of 5, interleaved. Every answer, step,
 instantiation, dispatch, fusion and join is the same in the two runs, and
@@ -750,6 +754,21 @@ so are the runs with templates alone and with `--fix`.
   before it asks (`DESIGN.md` §6.13), so cases join slightly more often
   than in "A case joined to its instance": OrdList 6,222,685 against
   6,222,282, PermSort 10,682,340 against 10,681,769.
+
+**Reproduce.** `run.py` has no `--no-defer` mode. Build the ports'
+directories as `run.py` does:
+
+```sh
+python3 -c "import sys, pathlib; sys.path.insert(0, 'tests/workloads/reduceron'); import run
+for p in run.PROGS: run.build(pathlib.Path.home() / 'skijack', p, pathlib.Path('/tmp/ports') / p)"
+```
+
+then time each port both ways at `2851dff`, interleaved, best of five:
+
+```sh
+build/avon reduce --whnf --templates=/tmp/ports/queens2 --data /tmp/ports/queens2/main.ski
+build/avon reduce --whnf --templates=/tmp/ports/queens2 --data --no-defer /tmp/ports/queens2/main.ski
+```
 
 ## The hider census through frame traces
 
@@ -824,9 +843,11 @@ is SKI's.
 ## The interpreter jet's wall clock
 
 **The tower collapses in time as well as in steps, by 4.8 times on T2.**
-Avon `worklist-oct4`, in process: the arena loaded with the conformance
-dictionary and interpreter specs, then `av_reduce` alone timed, the best
-of 21 runs, to weak head normal form.
+Avon `2851dff`, on master, in process: the arena loaded with the
+conformance dictionary and interpreter specs, then `av_reduce` alone timed,
+the best of 21 runs, to weak head normal form. The timing harness was never
+committed, so these times cannot be reproduced from the repository; the
+step counts can, with `reduce` and `--interp`.
 
 | target | strategy | plain | residual jets | interpreter jet |
 |---|---|---:|---:|---:|

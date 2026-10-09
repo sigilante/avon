@@ -2045,12 +2045,20 @@ additive: no existing behaviour moves.
 
 ### 10.3 Fuzzing
 
-The differential in `avon/bench/strategies.py` is the template: generate
-random small `{S,K,I}` terms, normalize in Avon (both strategies) and in
-`aviary`, compare normal forms and — for `copy` — counts. 2,986 terms found
-0 mismatches against a Python transcription; against C it should run
-millions, under ASan/UBSan, in CI. Add a second fuzzer over the wire format
-(`cue` on random bytes must never crash and must reject cleanly).
+Two fuzzers run in `make check`, and so in CI, under ASan and UBSan, with
+20,000 cases each by default (`AVON_FUZZ=N` sets the count):
+
+- `test_reduce` reduces random terms of S, K, I and atoms in both
+  strategies and compares their normal forms;
+- `test_wire` hands `cue` mutants of valid containers (bits flipped, bytes
+  replaced, ends cut) and random bytes behind a valid header. `cue` never
+  crashes, and whatever it accepts `jam`s back to the same bytes.
+
+`test_jets` adds 20 rounds of jet fires checked against their terms and
+`test_interp` 150 interpreter cases per spec. The differential against
+`aviary_kernel`, `tests/diff_aviary.py`, needs aviary and runs by hand: one
+run of 6,000,000 terms under the sanitizers found no mismatch. CI runs
+none of it at millions.
 
 ## 11. Stages, with acceptance criteria
 
