@@ -2786,7 +2786,8 @@ residual jets off. When it gains proof jets, it should:
 Arithmetic on Scott numerals is unary, so a jet for it pays only over
 native values. Share mode holds them already (§6.10): a word `W n` is this
 cell's value in the clear, its term the numeral, and its operations are
-admitted by testing, which is all share mode needs. A proof needs more:
+admitted by identity, each term pinned to skijack's and checked on 36
+pairs, which is all share mode needs. A proof needs more:
 share mode's word is a jet node over its numeral term, which the witness
 has no cell for, and its operations are trusted, not proved.
 
