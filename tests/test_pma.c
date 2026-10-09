@@ -9,6 +9,7 @@
  *  is refused, and a damaged image fails its check.
  */
 
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -344,8 +345,10 @@ TEST(a_journal_of_many_blocks_is_checked_then_applied) {
     uint64_t events;
     j[n / 2] ^= 1;                                          /* one byte changed */
     spit(jp, j, n);
+    int in = fcntl(0, F_GETFD);
     a = av_pma_open(img, &root, &events, &err);
     CHECK(a == NULL && err && strstr(err, "verify"));
+    CHECK_EQ(fcntl(0, F_GETFD), in);                        /* stdin left open */
     CHECK(access(jp, F_OK) == 0);
     j[n / 2] ^= 1;
     spit(jp, j, n - 1000);                                  /* its end cut off */
