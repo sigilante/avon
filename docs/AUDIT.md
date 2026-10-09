@@ -251,6 +251,8 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
   - Untested: the PMA attach's failure paths, its open's out-of-memory
     path, and a jet check failing from the command line, which needs a
     corrupted jet.
+- DESIGN.md §18.2 said the word operations are admitted by testing; since
+  item 7 they are admitted by identity, as §6.10 says (`design-words`).
 
 ## Fixed on `stage8-m1`
 
