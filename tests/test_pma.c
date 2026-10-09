@@ -5,7 +5,7 @@
  *  and after collections, which only dirty tracking carries -- without
  *  reading its nodes; a commit writes the chunks an event changed; a
  *  crash at each point of a commit reopens to the state before it or
- *  after it; a pier on it replays the rest of its log; an arena with jets
+ *  after it, and a damaged journal is refused before it is applied; a pier on it replays the rest of its log; an arena with jets
  *  is refused, and a damaged image fails its check.
  */
 
@@ -288,6 +288,86 @@ TEST(a_crash_mid_commit_reopens_whole) {
     }
 }
 
+static uint8_t *slurp(const char *path, size_t *len) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t *p = malloc((size_t)n + 1);
+    *len = fread(p, 1, (size_t)n, f);
+    fclose(f);
+    return p;
+}
+
+static void spit(const char *path, const uint8_t *b, size_t n) {
+    FILE *f = fopen(path, "wb");
+    REQUIRE(f != NULL);
+    CHECK(fwrite(b, 1, n, f) == n);
+    fclose(f);
+}
+
+/*  A journal of many blocks, left by a crash after its rename: open
+ *  refuses it with a byte changed or with its end cut off, leaving it in
+ *  place, and applies it whole once it is restored. */
+TEST(a_journal_of_many_blocks_is_checked_then_applied) {
+    char *d = tmpdir();
+    char img[128], jp[160];
+    snprintf(img, sizeof img, "%s/img", d);
+    snprintf(jp, sizeof jp, "%s/journal", img);
+    av_arena *a = av_arena_new(1u << 18);
+    uint32_t t = av_leaf(a, "Z", 1);
+    av_root_push(a, &t);
+    const char *err = NULL;
+    CHECK(av_pma_attach(a, img, &err));
+    CHECK(av_pma_commit(a, t, 0, &err));
+    pid_t pid = fork();
+    if (pid == 0) {
+        for (unsigned i = 0; i < 100000; i++) t = av_app(a, i % 3 ? AV_NODE_K : AV_NODE_S, t);
+        av_pma_crash_at = 2;
+        av_pma_commit(a, t, 1, &err);
+        _exit(0);                                           /* not reached */
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 77);
+    for (unsigned i = 0; i < 100000; i++) t = av_app(a, i % 3 ? AV_NODE_K : AV_NODE_S, t);
+    char *want = printed(a, t);
+    av_root_pop(a);
+    av_arena_free(a);
+
+    size_t n;
+    uint8_t *j = slurp(jp, &n);
+    REQUIRE(j != NULL);
+    CHECK(n > 10 * 65536);                                 /* 800 KB of nodes */
+    uint32_t root;
+    uint64_t events;
+    j[n / 2] ^= 1;                                          /* one byte changed */
+    spit(jp, j, n);
+    a = av_pma_open(img, &root, &events, &err);
+    CHECK(a == NULL && err && strstr(err, "verify"));
+    CHECK(access(jp, F_OK) == 0);
+    j[n / 2] ^= 1;
+    spit(jp, j, n - 1000);                                  /* its end cut off */
+    err = NULL;
+    a = av_pma_open(img, &root, &events, &err);
+    CHECK(a == NULL && err && strstr(err, "verify"));
+    spit(jp, j, n);                                         /* whole again */
+    a = av_pma_open(img, &root, &events, &err);
+    REQUIRE(a != NULL);
+    CHECK_EQ(events, 1);
+    CHECK(av_pma_verify(a, root, &err));
+    char *got = printed(a, root);
+    CHECK(strcmp(got, want) == 0);
+    CHECK(access(jp, F_OK) != 0);
+    free(got);
+    free(want);
+    free(j);
+    av_arena_free(a);
+    rmrf(d);
+    free(d);
+}
+
 TEST(jets_and_damage_are_refused) {
     char *d = tmpdir();
     char img[128];
@@ -333,18 +413,6 @@ TEST(jets_and_damage_are_refused) {
 }
 
 /*  ------------------------------------------------------ the pier on it */
-
-static uint8_t *slurp(const char *path, size_t *len) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
-    fseek(f, 0, SEEK_END);
-    long n = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    uint8_t *p = malloc((size_t)n + 1);
-    *len = fread(p, 1, (size_t)n, f);
-    fclose(f);
-    return p;
-}
 
 static uint64_t state(av_pier *p) {
     av_kernel *k = av_pier_kernel(p);
@@ -463,6 +531,7 @@ TEST_MAIN(
     TEST_CASE(dirty_tracking_carries_every_write),
     TEST_CASE(a_commit_writes_what_changed_and_an_open_reads_nothing),
     TEST_CASE(a_crash_mid_commit_reopens_whole),
+    TEST_CASE(a_journal_of_many_blocks_is_checked_then_applied),
     TEST_CASE(jets_and_damage_are_refused),
     TEST_CASE(a_pier_on_the_arena_commits_every_event),
 )

@@ -233,7 +233,12 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
     `diff_aviary.py` read it there.
   - The persistent arena no longer closes stdin on a failed open, gives every
     failure a message, and removes the `nodes` file a failed attach made.
-  - Not done: the journal is still built whole in memory before it is written.
+- Item 15's last point (`pma-journal`). The PMA journal streams: a commit
+  writes it 64 KiB at a time, and open verifies its digest and records a
+  block at a time before it applies them one record at a time. Memory holds
+  one block and one record, whatever the journal's size; the largest record
+  is the atoms table, which a commit builds whole as before. `test_pma`
+  damages an 800 KB journal two ways and sees both refused.
 
 ## Fixed on `stage8-m1`
 
