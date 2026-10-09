@@ -239,6 +239,18 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
   one block and one record, whatever the journal's size; the largest record
   is the atoms table, which a commit builds whole as before. `test_pma`
   damages an 800 KB journal two ways and sees both refused.
+- Tests for items 13 to 15 (`robust-io-tests`).
+  - `test_front0` reads Scott results built in the test, with no front end:
+    the probes share `--fuel`, and a name with a control character, a space
+    or 65,537 characters is refused. All three cases fail on the code
+    before #30.
+  - `test_cli` checks the exit codes: 0 for FUEL and SIZE, 1 for a term
+    that does not parse and for output that cannot be written.
+  - `test_pma` checks that a failed open leaves stdin open. `test_trace`
+    already covered the DAG names.
+  - Untested: the PMA attach's failure paths, its open's out-of-memory
+    path, and a jet check failing from the command line, which needs a
+    corrupted jet.
 
 ## Fixed on `stage8-m1`
 
