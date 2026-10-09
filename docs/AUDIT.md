@@ -10,6 +10,12 @@ The core holds. No reviewer found a way to make a verifier accept a wrong result
 to forge an entropy reply. `make check` passes, with 25 suites under ASan and UBSan.
 The weak spots are the pier, and the jets admitted by testing rather than by identity.
 
+**Status, 2026-10-09.** Items 1 to 15 are fixed, in #24 to #34, as "Fixed since"
+lists; the findings below are as the reviewers found them, with the code's line
+numbers of 2026-10-05. The pier now syncs, locks and checksums its log, and every jet
+binds by identity. Items 16 to 27 are open: the gates, the documentation against the
+code, and the shape and performance questions.
+
 ## 1. Data loss and secrecy
 
 1. **Replay deletes an acknowledged event (reproduced).** `pier.c:439-459`.
