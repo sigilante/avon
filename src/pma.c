@@ -14,7 +14,7 @@
  *
  *  A crash before the rename leaves the old image, and journal.tmp is
  *  discarded on open; after it, open applies the journal again, which is
- *  idempotent.  Journal layout: "AVONJNL1", u64 events, u64 nodes file
+ *  idempotent.  The journal streams, a block at a time.  Journal layout: "AVONJNL1", u64 events, u64 nodes file
  *  size, u64 atoms file size, u32 records; per record u8 file (0 nodes,
  *  1 atoms), u64 offset, u32 length, the bytes; then the SHA-256 of all
  *  of it.  Header page: "AVONPMA1", u32 version, u32 header size, u32
@@ -183,112 +183,162 @@ static uint8_t *atoms_blob(const av_arena *a, size_t *len) {
 
 /*  ------------------------------------------------------------ the journal */
 
-typedef struct { uint8_t *b; size_t len, cap; } buf;
+/*  The journal is written and read as a stream: memory holds one block of
+ *  it and one record, never the whole (AUDIT.md item 15). */
 
-static bool put(buf *j, const void *p, size_t n) {
-    if (j->len + n > j->cap) {
-        size_t cap = j->cap ? j->cap : 1 << 16;
-        while (j->len + n > cap) cap *= 2;
-        uint8_t *q = realloc(j->b, cap);
-        if (!q) return false;
-        j->b = q;
-        j->cap = cap;
+#define JBLOCK ((size_t)1 << 16)
+
+static bool read_all(int fd, void *p, size_t n, off_t off) {
+    uint8_t *b = p;
+    while (n) {
+        ssize_t r = pread(fd, b, n, off);
+        if (r < 0) { if (errno == EINTR) continue; return false; }
+        if (r == 0) return false;                   /* short: the file ends */
+        b += r;
+        n -= (size_t)r;
+        off += r;
     }
-    memcpy(j->b + j->len, p, n);
-    j->len += n;
     return true;
 }
 
-static bool record(buf *j, uint8_t file, uint64_t off, const void *data, uint32_t len) {
+typedef struct {
+    int           fd;
+    off_t         off;                      /* bytes written to the file */
+    uint8_t      *b;                        /* a block, JBLOCK bytes */
+    size_t        fill;
+    av_sha256_ctx sha;                      /* of everything put */
+    bool          ok;
+} jw;
+
+static bool jw_flush(jw *w) {
+    if (w->ok && w->fill) {
+        w->ok = write_all(w->fd, w->b, w->fill, w->off);
+        w->off += (off_t)w->fill;
+        w->fill = 0;
+    }
+    return w->ok;
+}
+
+static void put_raw(jw *w, const void *p, size_t n) {
+    if (w->fill + n > JBLOCK && !jw_flush(w)) return;
+    if (n >= JBLOCK) {                          /* a large record goes straight out */
+        w->ok = write_all(w->fd, p, n, w->off);
+        w->off += (off_t)n;
+        return;
+    }
+    memcpy(w->b + w->fill, p, n);
+    w->fill += n;
+}
+
+static void put(jw *w, const void *p, size_t n) {
+    if (!w->ok) return;
+    av_sha256_update(&w->sha, p, n);
+    put_raw(w, p, n);
+}
+
+static void record(jw *w, uint8_t file, uint64_t off, const void *data, uint32_t len) {
     uint8_t h[13];
     h[0] = file;
     put64(h + 1, off);
     put32(h + 9, len);
-    return put(j, h, sizeof h) && put(j, data, len);
+    put(w, h, sizeof h);
+    put(w, data, len);
 }
 
 static void crash_point(int n) {
     if (av_pma_crash_at == n) _exit(77);
 }
 
-/*  Apply a verified journal to the files: sizes first, then the records,
- *  then sync.  Idempotent. */
-static bool apply(const char *dir, const uint8_t *j, size_t len, const char **err) {
+/*  Apply the journal at jp to the files: sizes first, then the records,
+ *  then sync.  The journal is verified, or was just written.  Idempotent. */
+static bool apply(const char *dir, const char *jp, const char **err) {
     char *np = path_in(dir, "nodes"), *ap = path_in(dir, "atoms");
+    int fj = open(jp, O_RDONLY);
     int fn = np ? open(np, O_RDWR | O_CREAT, 0600) : -1;
     int fa = ap ? open(ap, O_RDWR | O_CREAT, 0600) : -1;
     free(np);
     free(ap);
-    bool ok = fn >= 0 && fa >= 0;
-    uint64_t nsize = get64(j + 16), asize = get64(j + 24);
-    uint32_t nrec = get32(j + 32);
+    uint8_t jh[36], *rec = NULL;
+    size_t cap = 0;
+    bool ok = fj >= 0 && fn >= 0 && fa >= 0 && read_all(fj, jh, sizeof jh, 0);
+    uint64_t nsize = ok ? get64(jh + 16) : 0, asize = ok ? get64(jh + 24) : 0;
+    uint32_t nrec = ok ? get32(jh + 32) : 0;
     struct stat st;
     /* the nodes file never shrinks: a private mapping of it must not end
      * beneath its own pages */
     if (ok && fstat(fn, &st) == 0 && (uint64_t)st.st_size < nsize) ok = ftruncate(fn, (off_t)nsize) == 0;
     if (ok) ok = ftruncate(fa, (off_t)asize) == 0;
-    size_t at = 36;
+    off_t at = sizeof jh;
     for (uint32_t r = 0; ok && r < nrec; r++) {
         if (r == nrec / 2) crash_point(3);
-        uint8_t file = j[at];
-        uint64_t off = get64(j + at + 1);
-        uint32_t l = get32(j + at + 9);
-        ok = write_all(file == 0 ? fn : fa, j + at + 13, l, (off_t)off);
-        at += 13 + l;
+        uint8_t h[13];
+        ok = read_all(fj, h, sizeof h, at);
+        uint32_t l = ok ? get32(h + 9) : 0;
+        if (ok && l > cap) {
+            uint8_t *q = realloc(rec, l);
+            ok = q != NULL;
+            if (ok) { rec = q; cap = l; }
+        }
+        ok = ok && read_all(fj, rec, l, at + 13)
+                && write_all(h[0] == 0 ? fn : fa, rec, l, (off_t)get64(h + 1));
+        at += 13 + (off_t)l;
     }
     if (ok) ok = av_sync_fd(fn) && av_sync_fd(fa);
+    if (fj >= 0) close(fj);
     if (fn >= 0) close(fn);
     if (fa >= 0) close(fa);
+    free(rec);
     if (!ok && err) *err = "the journal cannot be applied to the image";
-    (void)len;
     return ok;
 }
 
-/*  A journal's bytes, verified: NULL if there is none; *bad if it does
- *  not verify. */
-static uint8_t *read_journal(const char *path, size_t *len, bool *bad) {
-    *bad = false;
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
-    fseek(f, 0, SEEK_END);
-    long n = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    uint8_t *b = n > 0 ? malloc((size_t)n) : NULL;
-    size_t got = b ? fread(b, 1, (size_t)n, f) : 0;
-    fclose(f);
-    *bad = true;
-    if (!b || got != (size_t)n || n < 36 + 32 || memcmp(b, "AVONJNL1", 8) != 0) { free(b); return NULL; }
-    uint8_t sha[32];
-    av_sha256(b, (size_t)n - 32, sha);
-    if (memcmp(sha, b + n - 32, 32) != 0) { free(b); return NULL; }
-    /* the records lie within it */
-    size_t at = 36, end = (size_t)n - 32;
-    for (uint32_t r = 0, nrec = get32(b + 32); r < nrec; r++) {
-        if (at + 13 > end || get32(b + at + 9) > end - at - 13) { free(b); return NULL; }
-        at += 13 + get32(b + at + 9);
+/*  Whether a journal is at jp (*there), and whether it verifies: its
+ *  digest, read a block at a time, and its records within it. */
+static bool verify_journal(const char *jp, bool *there) {
+    int fd = open(jp, O_RDONLY);
+    *there = fd >= 0 || errno != ENOENT;
+    if (fd < 0) return false;
+    struct stat st;
+    uint8_t *b = malloc(JBLOCK);
+    bool ok = b && fstat(fd, &st) == 0 && st.st_size >= 36 + 32;
+    off_t end = ok ? st.st_size - 32 : 0;
+    if (ok) ok = read_all(fd, b, 36, 0) && memcmp(b, "AVONJNL1", 8) == 0;
+    uint32_t nrec = ok ? get32(b + 32) : 0;
+    av_sha256_ctx s;
+    av_sha256_init(&s);
+    for (off_t at = 0; ok && at < end; ) {
+        size_t n = end - at < (off_t)JBLOCK ? (size_t)(end - at) : JBLOCK;
+        ok = read_all(fd, b, n, at);
+        if (ok) av_sha256_update(&s, b, n);
+        at += (off_t)n;
     }
-    if (at != end) { free(b); return NULL; }
-    *bad = false;
-    *len = (size_t)n;
-    return b;
+    uint8_t sha[32];
+    av_sha256_final(&s, sha);
+    if (ok) ok = read_all(fd, b, 32, end) && memcmp(sha, b, 32) == 0;
+    off_t at = 36;
+    for (uint32_t r = 0; ok && r < nrec; r++) {
+        ok = end - at >= 13 && read_all(fd, b, 13, at) && get32(b + 9) <= end - at - 13;
+        if (ok) at += 13 + (off_t)get32(b + 9);
+    }
+    ok = ok && at == end;
+    free(b);
+    close(fd);
+    return ok;
 }
 
 /*  Apply and remove a journal left in dir, if any. */
 static bool recover(const char *dir, const char **err) {
     char *tmp = path_in(dir, "journal.tmp"), *jp = path_in(dir, "journal");
-    bool ok = tmp && jp;
+    bool ok = tmp && jp, there = false;
     if (!ok) *err = "out of memory";
     if (ok) unlink(tmp);                        /* never renamed: never happened */
-    size_t len;
-    bool bad;
-    uint8_t *j = ok ? read_journal(jp, &len, &bad) : NULL;
-    if (ok && !j && bad) { *err = "the journal does not verify"; ok = false; }
-    if (ok && j) ok = apply(dir, j, len, err);
-    if (ok && j && (unlink(jp) != 0 || !sync_dir(dir))) {
+    bool good = ok && verify_journal(jp, &there);
+    if (ok && there && !good) { *err = "the journal does not verify"; ok = false; }
+    if (ok && there) ok = apply(dir, jp, err);
+    if (ok && there && (unlink(jp) != 0 || !sync_dir(dir))) {
         *err = "the journal applied, but cannot be removed";   /* not NULL, printed as (null) */
         ok = false;
     }
-    free(j);
     free(tmp);
     free(jp);
     return ok;
@@ -322,55 +372,53 @@ bool av_pma_commit(av_arena *a, uint32_t root, uint64_t events, const char **err
     size_t alen;
     uint8_t *atoms = atoms_blob(a, &alen);
     uint8_t *hdr = malloc(p->hdr);
-    buf j = { 0 };
-    bool ok = atoms && hdr;
+    char *tmp = path_in(p->dir, "journal.tmp"), *jp = path_in(p->dir, "journal");
+    jw w = { .fd = -1, .b = malloc(JBLOCK) };
+    bool ok = atoms && hdr && tmp && jp && w.b;
     uint8_t asha[32];
     if (ok) av_sha256(atoms, alen, asha);
+    bool new_atoms = ok && memcmp(asha, p->atoms_sha, 32) != 0;
     uint64_t node_bytes = (uint64_t)a->used * sizeof(av_node);
     uint64_t nsize = p->hdr + round_up((size_t)node_bytes, page_size());
     if (nsize < p->hdr + p->file_nodes) nsize = p->hdr + p->file_nodes;
-    uint64_t chunks = 0, nrec = 0;
+    /* the chunks changed since the last commit, and those with new nodes;
+     * counted first, since the count heads the journal */
+    size_t last = (size_t)((node_bytes + CHUNK - 1) / CHUNK);
+    uint64_t chunks = 0;
+    for (size_t c = 0; c < last; c++)
+        if (p->all_dirty || (uint64_t)(c + 1) * CHUNK_NODES > p->committed || p->dirty[c]) chunks++;
     uint8_t jh[36];
     memcpy(jh, "AVONJNL1", 8);
     put64(jh + 8, events);
     put64(jh + 16, nsize);
     put64(jh + 24, alen);
-    ok = ok && put(&j, jh, sizeof jh);
-    /* the chunks changed since the last commit, and those with new nodes */
-    size_t last = (size_t)((node_bytes + CHUNK - 1) / CHUNK);
-    for (size_t c = 0; ok && c < last; c++) {
+    put32(jh + 32, (uint32_t)(chunks + 1 + new_atoms));
+    if (ok) {
+        w.fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        w.ok = w.fd >= 0;
+        av_sha256_init(&w.sha);
+    }
+    put(&w, jh, sizeof jh);
+    for (size_t c = 0; w.ok && c < last; c++) {
         bool fresh = (uint64_t)(c + 1) * CHUNK_NODES > p->committed;
         if (!p->all_dirty && !fresh && !p->dirty[c]) continue;
         uint64_t off = (uint64_t)c * CHUNK;
         uint32_t len = (uint32_t)(node_bytes - off < CHUNK ? node_bytes - off : CHUNK);
-        ok = record(&j, 0, p->hdr + off, p->base + off, len);
-        chunks++;
-        nrec++;
+        record(&w, 0, p->hdr + off, p->base + off, len);
     }
-    if (ok) {                                   /* the header's fields; the page's
-                                                 * rest is zeros the file already has */
-        header(a, p, root, events, alen, asha, hdr);
-        ok = record(&j, 0, 0, hdr, HDR_FIELDS + 32);
-        nrec++;
-    }
-    if (ok && memcmp(asha, p->atoms_sha, 32) != 0) {
-        ok = record(&j, 1, 0, atoms, (uint32_t)alen);
-        nrec++;
-    }
-    if (ok) {
-        put32(j.b + 32, (uint32_t)nrec);
-        uint8_t sha[32];
-        av_sha256(j.b, j.len, sha);
-        ok = put(&j, sha, 32);
-    }
-    char *tmp = path_in(p->dir, "journal.tmp"), *jp = path_in(p->dir, "journal");
-    int fd = ok && tmp ? open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600) : -1;
-    ok = ok && fd >= 0 && write_all(fd, j.b, j.len, 0) && av_sync_fd(fd);
-    if (fd >= 0) close(fd);
+    /* the header's fields; the page's rest is zeros the file already has */
+    if (w.ok) header(a, p, root, events, alen, asha, hdr);
+    record(&w, 0, 0, hdr, HDR_FIELDS + 32);
+    if (new_atoms) record(&w, 1, 0, atoms, (uint32_t)alen);
+    uint8_t sha[32];
+    av_sha256_final(&w.sha, sha);
+    if (w.ok) put_raw(&w, sha, 32);
+    ok = jw_flush(&w) && av_sync_fd(w.fd);
+    if (w.fd >= 0) close(w.fd);
     if (ok) crash_point(1);
-    ok = ok && jp && rename(tmp, jp) == 0 && sync_dir(p->dir);
+    ok = ok && rename(tmp, jp) == 0 && sync_dir(p->dir);
     if (ok) crash_point(2);
-    ok = ok && apply(p->dir, j.b, j.len, err);
+    ok = ok && apply(p->dir, jp, err);
     if (ok) crash_point(4);
     ok = ok && unlink(jp) == 0 && sync_dir(p->dir);
     if (ok) {
@@ -379,14 +427,14 @@ bool av_pma_commit(av_arena *a, uint32_t root, uint64_t events, const char **err
         memset(p->dirty, 0, p->nchunks);
         memcpy(p->atoms_sha, asha, 32);
         if (nsize - p->hdr > p->file_nodes) p->file_nodes = (size_t)(nsize - p->hdr);
-        p->last_bytes = j.len;
+        p->last_bytes = (uint64_t)w.off;
         p->last_chunks = chunks;
     } else if (!*err) {
         *err = "the journal cannot be written";
     }
     free(tmp);
     free(jp);
-    free(j.b);
+    free(w.b);
     free(atoms);
     free(hdr);
     return ok;
