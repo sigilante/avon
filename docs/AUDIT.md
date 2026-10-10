@@ -174,9 +174,10 @@ and the shape (27).
       puts the extra 2G cycles of Queens2 at the leaf check and dispatch after the
       unwind loop, as back-end stalls; its cause is not located.
     - Retained: deferral makes the runs with templates and data jets 5.8 to
-      14.5% faster (`BENCHMARK.md`, "Deferred roots"). Rolling it back would recover about 3% of plain SKI's cycles
-      and none of the checks' instructions. The `R` fields stay out of the code,
-      since they recover instructions and not time.
+      14.5% faster (`BENCHMARK.md`, "Deferred roots"). Rolling it back would
+      recover about 3% of plain SKI's cycles and none of the checks'
+      instructions. The `R` fields stay out of the code, since they recover
+      instructions and not time.
 26. **Deferral's 8 to 39 MB of extra peak is memory malloc keeps (measured).**
     - The arena is not the cause. On OrdList it ends at 8,388,608 nodes in both
       modes, after seven doublings, each forced by the live set.
