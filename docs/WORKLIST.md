@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-05.
 
 ## Done since the last revision
 
+- **lean-ski at `paper-v2`** (2026-10-11; `ZK-JETS.md` §1 and §9). lean-ski's jet table
+  no longer licenses a template that compiles to a bare `S`, `K` or `I`. `tests/pins.sh`
+  moves to that commit, `79c7026`, and the five checks it serves pass there. Avon writes
+  every jetted witness table byte for byte as ski-air does, and lean-ski's release was
+  remade from Avon's tables. `zk_jet_witness_check.sh` takes the too-small POP budget
+  from the run's pops. It had taken the statement's budget less one, which `split8`'s
+  7,154 pops now fit.
+
 - **The Poseidon2 jet, end to end** (2026-10-03 and 04; `ZK-JETS.md` §8, `DESIGN.md`
   §6.12). `avon witness` writes `p2pre` and `p2commit` tables byte for byte ski-air's
   (#8, #9); share mode runs lean-ski's `P` natively with `--p2` (#10); and the C is

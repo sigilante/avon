@@ -15,6 +15,11 @@
 > as a design decision or an obligation. Where this note and lean-ski's
 > sources differ, the sources are authoritative. `DESIGN.md` §17.3 and §18
 > point here.
+>
+> **Update (2026-10-11).** lean-ski's jet table no longer licenses a
+> template that compiles to a bare `S`, `K` or `I` (lean-ski `79c7026`,
+> tag `paper-v2`). The release was remade, Avon writing every witness
+> table, byte for byte ski-air's (§1, last measurement; §9, milestone 9).
 
 ## 1. Why
 
@@ -35,7 +40,7 @@ about 800 of them.
 
 **Jets cut the rows, and the verifier's code is where they apply.** In
 the clear, supercombinator jets (`DESIGN.md` §18.1) bring the compiled
-corpus rows to 28–34% of the plain run's. A SKIlark verifier is compiled
+corpus rows to 27–30% of the plain run's. A SKIlark verifier is compiled
 SKIjack, the same kind of code: its hot functions (`seq`, `applyU`,
 `wIfz`, the Scott constructors) are equations and constructors, each a
 template the jet table licenses.
@@ -56,6 +61,16 @@ statement's blank heap with the closure rule, run over the filled heap
 against 129,964 plain, 8.9%, and `csplit8` 157,680 against 471,887,
 33.4%. Both halt at `K` over the nil, and `checkJA` accepts both from the
 filled machine.
+
+**Measured without jets at bare combinators (2026-10-11).** A template
+that compiles to a bare `S`, `K` or `I` makes no jet (lean-ski
+`JetTable.isComb`). Its instantiation took the machine's one CPU row,
+then a POP row per formal, an INSTW row per cell and CPU rows to unwind
+them. `seq`'s handler `λg t. g t` compiles to `I`; on `csplit8` it was
+instantiated 39,459 times. In the clear, `split8` now runs in 11,072
+rows against 129,957, 8.5%, with 128 jets and 5,638 roots. On the
+composed heap, `split8` takes 11,166 CPU rows, 8.6%, and `csplit8`
+118,221, 25.1%.
 
 **Proof size and verification, measured 2026-10-04** on lean-ski's
 release proofs (`release/skilark`), with `ski-air composed-verify` and
@@ -567,12 +582,19 @@ compression).
    exe skilark statement`, `cstatement`), verifies each proof through
    `compj-verify`, and refuses a changed byte, the plain statement,
    another budget and the jet table without the closure rule; with Avon
-   nowhere on the verifier's side.
+   nowhere on the verifier's side. *Remade 2026-10-11* without jets at
+   bare combinators: `log 17 18 14 14` and `log 17 18 15 16`. Avon
+   (`e2905bb`) wrote each witness table, byte for byte ski-air's.
+   `split8` takes 11,167 CPU rows, 1,520 instantiations, 7,154 pops and
+   11,931 written cells. `csplit8` takes 118,222 rows, 4,968
+   instantiations, 22,382 pops and 36,578 written cells, and proves in
+   15 s against 42 without jets. Avon's instantiation counts now equal
+   the prover's, since no projection jet remains.
 
 ## 10. Risks
 
-- **The saving was the risk, and it is measured:** 8.8% of the rows on
-  `split8`, far below the compiled corpus's 28–34%, since the kernel's
+- **The saving was the risk, and it is measured:** 8.6% of the rows on
+  `split8`, far below the compiled corpus's 27–30%, since the kernel's
   small equations fire thousands of times. Other predicates will differ;
   the measurement is one statement.
 - **Eight blinded tables take seven tuples,** five more than the composed
@@ -592,7 +614,9 @@ compression).
   it drops 104 of 21,049 roots and no global, and the run grows from
   11,483 rows to 11,571. On the composed heap it drops 47 of 21,043 roots
   on `split8` (11,489 CPU rows in the clear to 11,598) and 71 of 57,245
-  on `csplit8` (157,513 to 157,680).
+  on `csplit8` (157,513 to 157,680). Without jets at bare combinators it
+  drops 37 of 5,638 roots in the clear, and 47 of 5,650 and 71 of 15,658
+  on the composed heaps (11,078 to 11,166 and 118,086 to 118,221).
 - **The jet table grows the statement.** Its check is Lean's recomputation,
   as for the corpus, from the SKIjack source's templates
   (`JetTable.fileTemplates`, as `jets check-src` uses them).

@@ -130,8 +130,16 @@ for c in $cases; do
     else
         echo "the forged region: refused by Avon"
     fi
-    # a POP budget below the run's: refused by both
-    small=$(( lp == 8 ? 0 : lp - 1 ))
+    # a POP budget below the run's: the largest power of two under the
+    # run's pops (Avon's report), refused by both
+    pops=$(sed -n 's/.* pops \([0-9][0-9]*\) .*/\1/p' "$OUT/avon/$name.err")
+    if [ -z "$pops" ]; then
+        echo "FAIL $name: no pop count in Avon's report"
+        fail=1
+        continue
+    fi
+    small=0
+    while [ $(( 1 << (small + 1) )) -lt "$pops" ]; do small=$(( small + 1 )); done
     if [ "$small" -ge 8 ]; then
         lake_ski composed budget "$dir/public.txt" "$small" "$li" "$OUT/stmt/$name.small.txt" > /dev/null
         if "$AVON" witness --statement="$OUT/stmt/$name.small.txt" --jet-table="$jets" "$dir/witness.txt" \
