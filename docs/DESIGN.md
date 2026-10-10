@@ -1437,7 +1437,7 @@ spine. Spine cells are 61 to 65% of what instances write, and 55 to 95%
 of them sit under a head that steps at once (`BENCHMARK.md`, "Most spine
 cells are contracted through at once"). Now, in share mode with
 templates, an instance leaves its root and spine in the reducer's stack,
-as the Reduceron does (`src/reduce.c`, "Deferred roots").
+as the Reduceron does (`src/stack.h`).
 
 **The stack holds three kinds of entry.**
 
