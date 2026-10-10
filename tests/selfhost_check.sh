@@ -19,6 +19,9 @@ set -euo pipefail
 SKIJACK=${SKIJACK:-$HOME/skijack}
 AVON=${AVON:-build/avon}
 OUT=${OUT:-build/selfhost}
+. tests/pins.sh
+pin_check skijack "$SKIJACK" "$SKIJACK_PIN"
+pin_aviary_kernel
 
 rm -rf "$OUT"
 mkdir -p "$OUT"

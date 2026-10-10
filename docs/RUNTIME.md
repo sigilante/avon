@@ -427,8 +427,14 @@ enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
 | `tests/workloads/reduceron/*.ascii.ski` | five Reduceron benchmarks in SKIjack; `run.py` compiles, runs and times them (`docs/BENCHMARK.md`) | written by hand |
 | `jets/birds.tsv`, `jets/joy.tsv` | bird and Joy dictionaries; `*_names.tsv` label them | `jets/birds.py`, `jets/joy.py` |
 | `tests/selfhost/*` | the compiler core's terms and calls | `tests/selfhost/export.py` |
-| `tests/kernel/*` | kernel pills, events, expected values | `tests/kernel/export.py` |
+| `tests/kernel/*` | kernel pills, events, expected values | `tests/kernel/export.py`, `tests/kernel/entropy_export.py` |
+| `tests/fixtures/*` | the paper's targets T0 to T2, T0's reference result, and `corpus.tsv`, every distinct corpus term | `tests/fixtures/export.py` |
 | a front0 `DIR` | `front.skit`, the input's constructors, templates | skijack `run0.term_dir()` |
+
+Every exported file in the repository regenerates byte for byte at the
+revisions `tests/pins.sh` pins: skijack, SKIlark, and aviary for
+`aviary_kernel` and its bird fixtures. `make fixtures-check` runs every
+exporter on a copy of `tests/` and `jets/` and compares the 193 files.
 
 ## The checks
 
@@ -437,7 +443,8 @@ enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
 | `make check` | every unit test, under ASan and UBSan | |
 | `make smoke` | the release binary, asserts compiled out, gives the exit status, stdout and stderr recorded from `build/dbg/avon` for 26 commands: every subcommand but `front0`, each strategy, jets, templates, data jets, `--fix`, `--no-defer`, and three piers | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
-| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line, and of size <= 10 at horizons 1 to 21; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`) |
+| `make fixtures-check` | every exported fixture is what its exporter writes at the pins | skijack, SKIlark, aviary |
+| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line, and of size <= 10 at horizons 1 to 21; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`, in starlings) |
 | `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | skijack |
 | `make front1-check` | the full language's front end, through M4: its own source and every corpus program to the expander's terms, and 303 edge programs and 400 random ones as the expander does (bar 12 edges aviary's environment decides), in the same four modes | skijack |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |
@@ -446,3 +453,14 @@ enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
 | `make zk-jet-witness-check` | composed statements with jets: Avon's tables are ski-air's, accepted by `check-cj`, proved under hiding and verified; bad witnesses and budgets refused (`docs/ZK-JETS.md`) | lean-ski |
 | `make p2-witness-check` | the Poseidon2 statements: Avon's tables are byte-identical to ski-air's for `p2pre` and the two `p2commit` hand-off stages, proved and verified, a flipped bit refused; `reduce --p2` runs each test vector's permutation natively in one step, and a chain of three in three | lean-ski |
 | `tests/diff_aviary.py` | `copy` mode against `aviary_kernel` on random terms | aviary-kernel |
+
+A check that needs another repository runs against the commit
+`tests/pins.sh` pins, and refuses a checkout at any other commit, or with
+tracked changes, unless `AVON_UNPINNED=1`. The checkouts default to
+`~/skijack`, `~/lean-ski`, `~/Code/ski/skilark` and `~/Code/urbit/aviary`
+(`SKIJACK`, `LEAN_SKI`, `SKILARK`, `AVIARY`); the paper's scripts have no
+default. The skijack checks also need the `aviary_kernel` Python imports
+to be aviary's at its pin. `.github/workflows/pinned.yml` runs
+`fixtures-check`, `selfhost-check`, `front0-check` and `front1-check`
+weekly against the public repositories at their pins; lean-ski and
+starlings are private, so their checks run by hand.

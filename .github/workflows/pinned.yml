@@ -1,0 +1,61 @@
+# The checks against other repositories, weekly, at the revisions
+# tests/pins.sh pins (AUDIT.md items 16 and 19): every fixture regenerates
+# byte for byte from its exporter (make fixtures-check), and the
+# selfhost, SKIjack-0 and full-language front-end checks pass against
+# SKIjack.  lean-ski and the paper's scripts are private repositories;
+# their checks stay manual, and refuse a checkout off their pins.
+name: pinned
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"            # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+jobs:
+  pinned:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360          # front1-check alone took 106 min on an M-series Mac
+    env:
+      CC: clang-18
+      SKIJACK: ${{ github.workspace }}/ext/skijack
+      SKILARK: ${{ github.workspace }}/ext/skilark
+      AVIARY: ${{ github.workspace }}/ext/aviary
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - name: pins
+        id: pins
+        run: |
+          . tests/pins.sh
+          echo "skijack=$SKIJACK_PIN" >> "$GITHUB_OUTPUT"
+          echo "skilark=$SKILARK_PIN" >> "$GITHUB_OUTPUT"
+          echo "aviary=$AVIARY_PIN" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          repository: sigilante/SKIjack
+          ref: ${{ steps.pins.outputs.skijack }}
+          path: ext/skijack
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          repository: sigilante/SKIlark
+          ref: ${{ steps.pins.outputs.skilark }}
+          path: ext/skilark
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          repository: sigilante/aviary
+          ref: ${{ steps.pins.outputs.aviary }}
+          path: ext/aviary
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: aviary-kernel at its pin
+        run: pip install ./ext/aviary
+      - name: release build
+        run: make -j4 CC=$CC build/avon
+      - name: fixtures regenerate
+        run: tests/fixtures_check.sh
+      - name: selfhost check
+        run: tests/selfhost_check.sh
+      - name: SKIjack-0 front end
+        run: tests/front0_check.sh
+      - name: full-language front end
+        run: tests/front1_check.sh

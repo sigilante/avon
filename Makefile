@@ -9,8 +9,10 @@
 # need a lean-ski checkout), `make selfhost-check` runs
 # tests/selfhost_check.sh, `make front0-check` runs tests/front0_check.sh
 # and `make front1-check` runs tests/front1_check.sh (the three need a
-# skijack checkout), `make hider-check`
-# runs tests/hider_check.sh (needs the pure-S paper's scripts), `make stats`
+# skijack checkout), `make fixtures-check` runs tests/fixtures_check.sh
+# (skijack, SKIlark and aviary), `make hider-check`
+# runs tests/hider_check.sh (needs the pure-S paper's scripts); each runs
+# at the revisions tests/pins.sh pins.  `make stats`
 # builds build/stats/avon, which reports what becomes of template instances'
 # cells (src/sstats.h), `make clean`
 # removes build/.  Requires GNU Make 3.81+.
@@ -35,7 +37,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
 .PHONY: all check smoke clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check \
-	selfhost-check front0-check front1-check hider-check
+	selfhost-check front0-check front1-check fixtures-check hider-check
 .SECONDARY:
 
 all: $(BUILD)/avon
@@ -107,6 +109,11 @@ front0-check: $(BUILD)/avon
 
 front1-check: $(BUILD)/avon
 	tests/front1_check.sh
+
+# Every fixture another repository exports regenerates byte for byte at the
+# pinned revisions (AUDIT.md item 16).
+fixtures-check:
+	tests/fixtures_check.sh
 
 # Frame traces against the pure-S paper's hider census (docs/DESIGN.md §22);
 # needs the paper's scripts at $$HIDER_SCRIPTS.

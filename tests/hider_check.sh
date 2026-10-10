@@ -13,16 +13,21 @@
 #   5. the five named cases.
 #
 # Run from the repository root after `make`.  HIDER_SCRIPTS names the
-# paper's scripts/ directory; HIDER_N the largest size (default 12).
+# paper's scripts/ directory, in a starlings checkout at its pin
+# (tests/pins.sh); HIDER_N the largest size (default 12).
 
 set -euo pipefail
 AVON=${AVON:-build/avon}
 N=${HIDER_N:-12}
-SCRIPTS=${HIDER_SCRIPTS:-"$HOME/Documents/Davis2026 Universality of the Pure S Calculus/scripts"}
-if [ ! -f "$SCRIPTS/fixed_points_hider.py" ]; then
-    echo "no hider census at $SCRIPTS (fixed_points_hider.py)"
+SCRIPTS=${HIDER_SCRIPTS:-}
+if [ -z "$SCRIPTS" ] || [ ! -f "$SCRIPTS/fixed_points_hider.py" ]; then
+    echo "no hider census at '$SCRIPTS': set HIDER_SCRIPTS to the paper's scripts/"
     exit 1
 fi
+. tests/pins.sh
+# the census and what it imports
+pin_check starlings "$SCRIPTS" "$STARLINGS_PIN" fixed_points.py fixed_points_hider.py \
+    verify_murmuration_i.py ../starling_machines.py
 export HIDER_SCRIPTS="$SCRIPTS"
 P="python3 tests/hider/parity.py"
 $P enum "$N" --avon "$AVON"
