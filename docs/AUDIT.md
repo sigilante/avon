@@ -10,13 +10,13 @@ The core holds. No reviewer found a way to make a verifier accept a wrong result
 to forge an entropy reply. `make check` passes, with 25 suites under ASan and UBSan.
 The weak spots are the pier, and the jets admitted by testing rather than by identity.
 
-**Status, 2026-10-10.** Items 1 to 15, 20, 21, 23 and 24 are fixed, as "Fixed
+**Status, 2026-10-10.** Items 1 to 15, 18, 20, 21, 23 and 24 are fixed, as "Fixed
 since" lists; the findings below are as the reviewers found them, with the code's
 line numbers of 2026-10-05. The pier now syncs, locks and checksums its log, and
 every jet binds by identity. Items 25 and 26 are measured: deferral's extra peak is
 memory malloc keeps, and deferral, which costs plain SKI about 3% of its cycles, is
-retained. Open: the gates (16 to 19), the options `options_fit` lets through (22),
-and the shape (27).
+retained. Open: the gates (16, 17 and 19), the options `options_fit` lets through
+(22), and the shape (27).
 
 ## 1. Data loss and secrecy
 
@@ -302,6 +302,12 @@ and the shape (27).
     blocks for the case join and deferred roots. The interpreter jet's wall
     clock still has no harness, and says so.
   - Item 22, the options `options_fit` lets through, is code, and is open.
+- Item 18 (`gate-fixtures`). Every test reads its fixtures through
+  `test_open`, which fails the whole suite on a file it cannot open, and a
+  case that makes no check fails. Run from an empty directory, the 15
+  suites that read a file fail, and the 12 that pass read none. Before,
+  one case passed so: `cue_never_crashes_and_is_bijective` mutated `S K`
+  in place of the corpus; six suites crashed instead of failing.
 
 ## Fixed on `stage8-m1`
 

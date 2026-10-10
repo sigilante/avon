@@ -95,8 +95,7 @@ typedef struct { char *text; char **line; size_t n; } corpus;
 
 static corpus load_corpus(void) {
     corpus c = { NULL, NULL, 0 };
-    FILE *f = fopen("tests/fixtures/corpus.tsv", "rb");
-    if (!f) return c;
+    FILE *f = test_open("tests/fixtures/corpus.tsv");
     fseek(f, 0, SEEK_END);
     size_t len = (size_t)ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -310,8 +309,9 @@ TEST(cue_never_crashes_and_is_bijective) {
 
     /* mutants of valid containers: most of the interesting damage */
     corpus c = load_corpus();
+    REQUIRE(c.n >= 40);
     for (int i = 0; i < cases; i++) {
-        const char *s = c.n ? c.line[next() % 40] : "S K";
+        const char *s = c.line[next() % 40];
         av_arena *a = av_arena_new(0);
         uint32_t t = av_parse(a, s, strlen(s), NULL);
         av_buf j = { 0 };

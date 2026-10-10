@@ -19,8 +19,7 @@
 #include "test.h"
 
 static char *slurp(const char *path, size_t *len) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
+    FILE *f = test_open(path);
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     fseek(f, 0, SEEK_SET);
