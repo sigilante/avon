@@ -332,10 +332,15 @@ multiple of the Reduceron's time.
   argument read tested the entry's kind, even in runs that defer
   nothing: plain SKI ran 5 to 10% slower than at `c46df7d`, interleaved.
   `whnf_share` is now compiled twice, deferral a constant in each, and
-  the copy that defers nothing reads the stack as before. Plain SKI still
-  retires 1.5% more instructions and takes 1.9 to 3.9% longer on
-  Queens2, OrdList and Taut. With `--fix`, the same pairs run 4 to 9%
-  faster than at `c46df7d`.
+  the copy that defers nothing reads the stack as before. Against
+  `50d74d8`, the last commit before deferral, plain SKI at `66634fa`
+  retires 2.9 to 3.2% more instructions on all five ports and takes 1.0
+  to 3.4% more cycles, best of three, interleaved (`reduce --whnf` on
+  each port's `main.ski`). `2851dff`, before the split, retired 20.0 to
+  21.9% more. The remaining 3% is not the head pointer passed by address,
+  which `50d74d8` also passes, and inlining `hensure`, `ensure` or
+  `reserved_app` does not recover it (`AUDIT.md` item 25). With `--fix`,
+  the same pairs run 4 to 9% faster than at `c46df7d`.
 - **The SKI column is not the table above's.** Clausify's and PermSort's
   ports call the prelude's numeral operations since "With data jets",
   which cost more as pure SKI.
@@ -739,7 +744,11 @@ so are the runs with templates alone and with `--fix`.
   largest live set after a collection is the same within 0.1% on OrdList,
   PermSort and Clausify, the arena reaches the same size, and on OrdList
   malloc's heap in use peaks at 160 MB in both runs; the extra is memory
-  the allocator keeps. Why it differs is not measured here.
+  the allocator keeps. At OrdList's peak, freed large blocks that malloc
+  keeps resident total 180 MB in 14 regions deferred, against 140 MB in 7
+  undeferred, which accounts for the footprints' 252.3 MB against 212.8.
+  The reducer's stacks peak at 1,024 and 64 entries. On Taut the peak
+  falls by 8 MB instead (`AUDIT.md` item 26).
 - **Near a node cap the outcome can differ.** A run that stops writes its
   deferred roots, and the arena keeps a node free for every virtual entry
   so that this cannot fail, so when `--max-nodes` binds the deferred run
