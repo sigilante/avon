@@ -10,11 +10,13 @@ The core holds. No reviewer found a way to make a verifier accept a wrong result
 to forge an entropy reply. `make check` passes, with 25 suites under ASan and UBSan.
 The weak spots are the pier, and the jets admitted by testing rather than by identity.
 
-**Status, 2026-10-09.** Items 1 to 15, 20, 21, 23 and 24 are fixed, as "Fixed
+**Status, 2026-10-10.** Items 1 to 15, 20, 21, 23 and 24 are fixed, as "Fixed
 since" lists; the findings below are as the reviewers found them, with the code's
 line numbers of 2026-10-05. The pier now syncs, locks and checksums its log, and
-every jet binds by identity. Open: the gates (16 to 19), the options `options_fit`
-lets through (22), and the shape and performance questions (25 to 27).
+every jet binds by identity. Items 25 and 26 are measured: deferral's extra peak is
+memory malloc keeps, and plain SKI's residual has no located cause. Open: the gates
+(16 to 19), the options `options_fit` lets through (22), item 25's cause, and the
+shape (27).
 
 ## 1. Data loss and secrecy
 
@@ -150,18 +152,30 @@ lets through (22), and the shape and performance questions (25 to 27).
 
 ## 6. The shape of `reduce.c` and `main.c`, and the two slated questions
 
-25. **Plain SKI's residual 1.9 to 3.9% since deferred roots (hypotheses, unmeasured).**
-    - Most likely: `cur` is passed by address to non-inlined helpers (`hensure`,
-      `materialize`, `prepare`, `dispatch`, `case_join`, `tmpl_defer`), which keeps
-      it in memory.
-    - Next: `hensure` and the stack-kind tests run unguarded in the `D=false` copy.
-    - Try first: make `hensure` `D`-aware, then pass `cur` by value, then split the
-      jet path out of the leaf loop into a `noinline` function.
-26. **Deferral's 8 to 39 MB of extra peak (hypotheses, unmeasured).**
-    - Most likely: the live-set figure counts arena nodes only, not `stk`, `dstk`
-      and the `nvirt` reserve, which double and never shrink.
-    - Next: power-of-two arena growth, which makes the deltas step-sized.
-    - Measure first: record peak `top`, `ndstk`, the reserve and `cap`.
+25. **Plain SKI retires 2.9 to 3.2% more instructions since deferred roots (measured,
+    cause open).**
+    - Against `50d74d8`, the last commit before deferral, `66634fa` retires 2.9 to
+      3.2% more instructions on all five ports' plain SKI and takes 1.0 to 3.4% more
+      cycles, best of three, interleaved (`BENCHMARK.md`, "Remeasured,
+      2026-10-04").
+    - Refuted: `cur` by address. `50d74d8` also passes `&cur`, to `try_interp`,
+      `word_fire` and `dispatch`.
+    - Tried without gain: `hensure`'s fast path inlined (+4.5% instructions);
+      `hensure`, `ensure` and `reserved_app` as separate `noinline` functions, or
+      `reserved_app` always inlined (−0.6% instructions, cycles unchanged).
+    - Next: an instruction-level profile of `whnf_share` at both commits.
+26. **Deferral's 8 to 39 MB of extra peak is memory malloc keeps (measured).**
+    - The arena is not the cause. On OrdList it ends at 8,388,608 nodes in both
+      modes, after seven doublings, each forced by the live set.
+    - The stacks are not the cause: at most 37 virtual entries, `stk` at 1,024
+      and `dstk` at 64.
+    - Freed large blocks are. At OrdList's peak, vmmap shows `MALLOC_LARGE (empty)`
+      at 180 MB in 14 regions deferred, against 140 MB in 7 undeferred; the
+      footprints are 252.3 MB and 212.8 MB. On Taut the peak falls by 8 MB instead.
+    - Reusing the collector's to-space and forwarding table across collections
+      leaves the footprint unchanged.
+    - Open, if it matters: map the arena and the collector's buffers with `mmap`
+      and `munmap`, or report malloc's bytes in use beside the footprint.
 27. **Shape.**
     - `reduce.c` is four programs in one file: the copy reference, the share
       machine, the deferred spine stack, and jet and template dispatch.
