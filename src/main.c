@@ -369,6 +369,7 @@ static char *slurp(FILE *f, size_t *len) {
         if (!p) { free(s); return NULL; }
         s = p;
     }
+    s[n] = '\0';                        /* n < cap: callers read it as a string */
     *len = n;
     return s;
 }

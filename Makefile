@@ -1,6 +1,7 @@
 # Avon.  `make` builds the release binary, `make check` runs the unit tests
 # under ASan and UBSan and builds build/dbg/avon, a sanitized binary for
-# tests/diff_aviary.py, `make witness-check` runs tests/witness_check.sh,
+# tests/diff_aviary.py, `make smoke` runs tests/smoke.tsv's commands on the
+# release binary (tests/smoke.sh), `make witness-check` runs tests/witness_check.sh,
 # `make jet-witness-check` runs tests/jet_witness_check.sh,
 # `make probe-witness-check` runs tests/probe_witness_check.sh,
 # `make zk-jet-witness-check` runs tests/zk_jet_witness_check.sh,
@@ -33,7 +34,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
-.PHONY: all check clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check \
+.PHONY: all check smoke clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check \
 	selfhost-check front0-check front1-check hider-check
 .SECONDARY:
 
@@ -75,6 +76,11 @@ $(BUILD)/dbg/test_%: tests/test_%.c $(DBG_OBJ) $(HDRS)
 
 check: $(TEST_BIN) $(BUILD)/dbg/avon
 	@status=0; for t in $(TEST_BIN); do $$t || status=1; done; exit $$status
+
+# The release binary, asserts compiled out, against the outputs recorded from
+# build/dbg/avon (AUDIT.md item 17).
+smoke: $(BUILD)/avon
+	tests/smoke.sh $(BUILD)/avon
 
 # The witness strategy against lean-ski's aircheck and Plonky3 prover
 # (docs/DESIGN.md §17); needs a lean-ski checkout at $$LEAN_SKI (~/lean-ski).

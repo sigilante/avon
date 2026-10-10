@@ -10,13 +10,13 @@ The core holds. No reviewer found a way to make a verifier accept a wrong result
 to forge an entropy reply. `make check` passes, with 25 suites under ASan and UBSan.
 The weak spots are the pier, and the jets admitted by testing rather than by identity.
 
-**Status, 2026-10-10.** Items 1 to 15, 18, 20, 21, 23 and 24 are fixed, as "Fixed
+**Status, 2026-10-10.** Items 1 to 15, 17, 18, 20, 21, 23 and 24 are fixed, as "Fixed
 since" lists; the findings below are as the reviewers found them, with the code's
 line numbers of 2026-10-05. The pier now syncs, locks and checksums its log, and
 every jet binds by identity. Items 25 and 26 are measured: deferral's extra peak is
 memory malloc keeps, and deferral, which costs plain SKI about 3% of its cycles, is
-retained. Open: the gates (16, 17 and 19), the options `options_fit` lets through
-(22), and the shape (27).
+retained. Open: the gates (16 and 19), the options `options_fit` lets through (22),
+and the shape (27).
 
 ## 1. Data loss and secrecy
 
@@ -308,6 +308,15 @@ retained. Open: the gates (16, 17 and 19), the options `options_fit` lets throug
   suites that read a file fail, and the 12 that pass read none. Before,
   one case passed so: `cue_never_crashes_and_is_bijective` mutated `S K`
   in place of the corpus; six suites crashed instead of failing.
+- Item 17 (`gate-release`). `make smoke`, a CI step after the release build,
+  runs the 26 commands of `tests/smoke.tsv` on `build/avon` and compares
+  exit status, stdout and stderr with those recorded from `build/dbg/avon`:
+  every subcommand but `front0`, both strategies, jets, templates, data
+  jets, `--fix`, `--no-defer`, and three piers. It found a bug: `slurp` in
+  `main.c` left its text unterminated, and `scry`, `selfhost` and scry's
+  resolution reader parse it as a string. Under ASan, `scry` read a 13th
+  line of heap garbage and exited 1; the release binary read a zero by
+  chance.
 
 ## Fixed on `stage8-m1`
 
