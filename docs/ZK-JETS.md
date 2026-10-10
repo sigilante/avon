@@ -18,8 +18,9 @@
 >
 > **Update (2026-10-11).** lean-ski's jet table no longer licenses a
 > template that compiles to a bare `S`, `K` or `I` (lean-ski `79c7026`,
-> tag `paper-v2`). The release was remade, Avon writing every witness
-> table, byte for byte ski-air's (§1, last measurement; §9, milestone 9).
+> tag `paper-v2`). lean-ski #22 remakes the release, Avon writing every
+> witness table, byte for byte ski-air's (§1, last measurement; §9,
+> milestone 9).
 
 ## 1. Why
 
@@ -582,8 +583,8 @@ compression).
    exe skilark statement`, `cstatement`), verifies each proof through
    `compj-verify`, and refuses a changed byte, the plain statement,
    another budget and the jet table without the closure rule; with Avon
-   nowhere on the verifier's side. *Remade 2026-10-11* without jets at
-   bare combinators: `log 17 18 14 14` and `log 17 18 15 16`. Avon
+   nowhere on the verifier's side. *Remade 2026-10-11* (lean-ski #22)
+   without jets at bare combinators: `log 17 18 14 14` and `log 17 18 15 16`. Avon
    (`e2905bb`) wrote each witness table, byte for byte ski-air's.
    `split8` takes 11,167 CPU rows, 1,520 instantiations, 7,154 pops and
    11,931 written cells. `csplit8` takes 118,222 rows, 4,968

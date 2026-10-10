@@ -143,8 +143,11 @@ for c in $cases; do
     if [ "$small" -ge 8 ]; then
         lake_ski composed budget "$dir/public.txt" "$small" "$li" "$OUT/stmt/$name.small.txt" > /dev/null
         if "$AVON" witness --statement="$OUT/stmt/$name.small.txt" --jet-table="$jets" "$dir/witness.txt" \
-                > /dev/null 2>&1; then
+                > /dev/null 2> "$OUT/avon/$name.small.err"; then
             echo "FAIL $name: Avon wrote a table over POP's budget 2^$small"
+            fail=1
+        elif ! grep -q "pops exceed POP's budget" "$OUT/avon/$name.small.err"; then
+            echo "FAIL $name: Avon refused POP's budget 2^$small for another reason: $(cat "$OUT/avon/$name.small.err")"
             fail=1
         elif "$SKI_AIR" compj-prove "$OUT/stmt/$name.small.txt" "$jets" "$SRC" "$dir/witness.txt" \
                 "$OUT/proofs/$name.small.proof" > /dev/null 2>&1; then
