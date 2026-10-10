@@ -14,9 +14,9 @@ The weak spots are the pier, and the jets admitted by testing rather than by ide
 since" lists; the findings below are as the reviewers found them, with the code's
 line numbers of 2026-10-05. The pier now syncs, locks and checksums its log, and
 every jet binds by identity. Items 25 and 26 are measured: deferral's extra peak is
-memory malloc keeps, and plain SKI's residual has no located cause. Open: the gates
-(16 to 19), the options `options_fit` lets through (22), item 25's cause, and the
-shape (27).
+memory malloc keeps, and deferral, which costs plain SKI about 3% of its cycles, is
+retained. Open: the gates (16 to 19), the options `options_fit` lets through (22),
+and the shape (27).
 
 ## 1. Data loss and secrecy
 
@@ -152,18 +152,32 @@ shape (27).
 
 ## 6. The shape of `reduce.c` and `main.c`, and the two slated questions
 
-25. **Plain SKI retires 2.9 to 3.2% more instructions since deferred roots (measured,
-    cause open).**
+25. **Plain SKI retires 2.9 to 3.2% more instructions since deferred roots (closed,
+    deferral retained).**
     - Against `50d74d8`, the last commit before deferral, `66634fa` retires 2.9 to
       3.2% more instructions on all five ports' plain SKI and takes 1.0 to 3.4% more
       cycles, best of three, interleaved (`BENCHMARK.md`, "Remeasured,
       2026-10-04").
-    - Refuted: `cur` by address. `50d74d8` also passes `&cur`, to `try_interp`,
-      `word_fire` and `dispatch`.
-    - Tried without gain: `hensure`'s fast path inlined (+4.5% instructions);
-      `hensure`, `ensure` and `reserved_app` as separate `noinline` functions, or
-      `reserved_app` always inlined (−0.6% instructions, cycles unchanged).
-    - Next: an instruction-level profile of `whnf_share` at both commits.
+    - Two commits share the cost. Queens2 and Clausify, best of five, interleaved:
+      deferral (`a9677c0`) adds 1.47% instructions and 3.5 to 3.6% cycles; the
+      release checks of item 12 (`9bd012d`) add 1.7% instructions and no cycles
+      beyond the runs' spread. Master is +3.2% and +2.6 to 3.6%.
+    - Deferral's extra instructions are reloads in the copy of `whnf_share` that
+      defers nothing: `o` and `bottom` spilled, `stk[p]` read again after the
+      store, and `nvirt` added in `hensure`. Copying `max_steps`, `profile` and
+      `interrupt` into `R`, and reading `stk[p]` before the store, retire 0.24 to
+      0.33% fewer instructions than `50d74d8`, yet take 2.2 to 4.0% more cycles.
+    - The residual is not instructions, code alignment (aligned to 64 bytes on
+      both, +1.1%), the two copies of the loop (one copy, +1.7 to 3.5%), stack
+      placement (eight environment sizes, +1.7 to 2.5%), page faults or peak
+      memory, and not `cur` by address, which `50d74d8` also passes. Instruments
+      puts the extra 2G cycles of Queens2 at the leaf check and dispatch after the
+      unwind loop, as back-end stalls; its cause is not located.
+    - Retained: deferral makes the runs with templates and data jets 5.8 to
+      14.5% faster (`BENCHMARK.md`, "Deferred roots"). Rolling it back would
+      recover about 3% of plain SKI's cycles and none of the checks'
+      instructions. The `R` fields stay out of the code, since they recover
+      instructions and not time.
 26. **Deferral's 8 to 39 MB of extra peak is memory malloc keeps (measured).**
     - The arena is not the cause. On OrdList it ends at 8,388,608 nodes in both
       modes, after seven doublings, each forced by the live set.
