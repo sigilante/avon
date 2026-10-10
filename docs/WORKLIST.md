@@ -42,9 +42,9 @@ design lives. Last revised 2026-10-05.
    `reduce.c` and `main.c`. Slated into it: plain SKI's residual 1.9 to 3.9% since
    deferred roots (code generation), and deferral's 8 to 39 MB of extra peak memory with
    the same live set (the allocator).
-5. **Fixes and hygiene refactors** from the audit's findings, each its own pull request,
-   in `AUDIT.md`'s order. First the pier: replay deletes an acknowledged event, and
-   the pier's files are readable by every local user.
+5. **Fixes and hygiene refactors** from the audit's findings: done 2026-10-11 (#24 to
+   #44), each its own pull request, in `AUDIT.md`'s order. Every item is closed: 25
+   fixed, and the two measured (25, 26) closed with deferral retained.
 
 ## In progress
 

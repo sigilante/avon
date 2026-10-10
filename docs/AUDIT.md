@@ -10,12 +10,13 @@ The core holds. No reviewer found a way to make a verifier accept a wrong result
 to forge an entropy reply. `make check` passes, with 25 suites under ASan and UBSan.
 The weak spots are the pier, and the jets admitted by testing rather than by identity.
 
-**Status, 2026-10-11.** Items 1 to 24 are fixed, as "Fixed since" lists;
-the findings below are as the reviewers found them, with the code's line numbers of
-2026-10-05. The pier now syncs, locks and checksums its log, every jet binds by
-identity, and every outside revision is pinned. Items 25 and 26 are measured:
-deferral's extra peak is memory malloc keeps, and deferral, which costs plain SKI
-about 3% of its cycles, is retained. Open: the shape (27).
+**Status, 2026-10-11.** Every item is closed. Items 1 to 24 and 27 are fixed, as
+"Fixed since" lists; the findings below are as the reviewers found them, with the
+code's line numbers of 2026-10-05. The pier now syncs, locks and checksums its log,
+every jet binds by identity, every outside revision is pinned, and each command
+refuses an option it would ignore. Items 25 and 26 are measured: deferral's extra
+peak is memory malloc keeps, and deferral, which costs plain SKI about 3% of its
+cycles, is retained.
 
 ## 1. Data loss and secrecy
 
@@ -346,6 +347,17 @@ about 3% of its cycles, is retained. Open: the shape (27).
   `--pier`. The kernel commands refuse `boot --snapshot`, `--pma` and
   `--subject` where the pier is reopened, and `boot --pier --budget`
   without `--entropy`. `make smoke` runs six refusals.
+- Item 27 (`shape-reduce`, `shape-main`). `reduce.c`, 1589 lines, is now
+  the share machine, its dispatch and `av_reduce`, in 1100. The copy
+  machine is `copy.c`; the spine stack with deferred roots is `stack.h`,
+  static and included by `reduce.c` alone, so the share loop inlines it;
+  `machine.h` is `R` and what both machines use. Queens2 and Clausify
+  retire within 0.2% of the instructions they did before, in copy mode,
+  plain SKI and data jets: `decompose`, left out of line in `copy.c`, had
+  cost copy mode 24%, and is `static inline`. `main.c`, 2449 lines, is
+  now the usage and the dispatch, in 194; each command is a file of
+  `src/cli`, with `cli.h` for what they share. `ARENA_START` names the
+  arena a command starts with.
 
 ## Fixed on `stage8-m1`
 
