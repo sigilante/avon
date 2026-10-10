@@ -26,6 +26,9 @@ if [ ! -f "$SKIJACK/python/skijack/selfhost/run0.py" ]; then
     echo "no SKIjack-0 front end in $SKIJACK (python/skijack/selfhost/run0.py)"
     exit 1
 fi
+. tests/pins.sh
+pin_check skijack "$SKIJACK" "$SKIJACK_PIN"
+pin_aviary_kernel
 fail=0
 for mode in "" "--templates" "--templates --data" "--templates --data --fix"; do
     echo "--- the front end${mode:+, with $mode}"

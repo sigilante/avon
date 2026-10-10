@@ -1,9 +1,14 @@
 # make check on every push to master and every pull request: the release
 # binary and its smoke test, the stats build, and every unit test under
 # ASan and UBSan, on Linux; pushes to master also run it on macOS.  The
-# checks that need a lean-ski or skijack checkout (witness-check,
-# zk-jet-witness-check, p2-witness-check, front0-check, selfhost-check,
-# hider-check) stay manual: see the Makefile's header.
+# checks against SKIjack and SKIlark run weekly at their pins (pinned.yml);
+# those that need lean-ski or the paper's scripts (witness-check,
+# jet-witness-check, probe-witness-check, zk-jet-witness-check,
+# p2-witness-check, hider-check) stay manual: see the Makefile's header.
+#
+# Pinned (AUDIT.md item 19): the images, the compiler (the image's
+# clang-18 on Linux, Xcode 16.4's clang on macOS), and each action by
+# commit.
 name: check
 
 on:
@@ -18,21 +23,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-24.04", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      CC: ${{ startsWith(matrix.os, 'macos') && 'clang' || 'clang-18' }}
+      DEVELOPER_DIR: ${{ startsWith(matrix.os, 'macos') && '/Applications/Xcode_16.4.app/Contents/Developer' || '' }}
     steps:
-      - uses: actions/checkout@v4
-      - name: clang
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
       - name: clang version
-        run: clang --version
+        run: $CC --version
       - name: release build
-        run: make -j4 build/avon
+        run: make -j4 CC=$CC build/avon
       - name: release smoke test
-        run: make smoke
+        run: make CC=$CC smoke
       - name: stats build
-        run: make -j4 stats
+        run: make -j4 CC=$CC stats
       - name: unit tests under ASan and UBSan
-        run: make -j4 check
+        run: make -j4 CC=$CC check

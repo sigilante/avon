@@ -44,6 +44,8 @@
 set -euo pipefail
 
 export LEAN_SKI=${LEAN_SKI:-$HOME/lean-ski}   # ski-air finds Lean through it
+. tests/pins.sh
+pin_check lean-ski "$LEAN_SKI" "$LEAN_SKI_PIN"
 AVON=${AVON:-build/avon}
 OUT=${OUT:-build/p2-witness}
 AVON=$(cd "$(dirname "$AVON")" && pwd)/$(basename "$AVON")

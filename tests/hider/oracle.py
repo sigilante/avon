@@ -1,15 +1,14 @@
 """The paper's hider census, imported as the oracle (docs/DESIGN.md §22).
 
-HIDER_SCRIPTS names the directory of fixed_points_hider.py (default: the
-paper's scripts/).  Nothing here re-derives a verdict: the census's own
+HIDER_SCRIPTS names the directory of fixed_points_hider.py, the paper's
+scripts/; there is no default.  Nothing here re-derives a verdict: the census's own
 functions are used as they are.
 """
 
 import os
 import sys
 
-SCRIPTS = os.environ.get("HIDER_SCRIPTS", os.path.expanduser(
-    "~/Documents/Davis2026 Universality of the Pure S Calculus/scripts"))
+SCRIPTS = os.environ.get("HIDER_SCRIPTS", "")
 
 
 def load():

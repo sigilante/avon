@@ -10,13 +10,13 @@ The core holds. No reviewer found a way to make a verifier accept a wrong result
 to forge an entropy reply. `make check` passes, with 25 suites under ASan and UBSan.
 The weak spots are the pier, and the jets admitted by testing rather than by identity.
 
-**Status, 2026-10-10.** Items 1 to 15, 17, 18, 20, 21, 23 and 24 are fixed, as "Fixed
-since" lists; the findings below are as the reviewers found them, with the code's
-line numbers of 2026-10-05. The pier now syncs, locks and checksums its log, and
-every jet binds by identity. Items 25 and 26 are measured: deferral's extra peak is
-memory malloc keeps, and deferral, which costs plain SKI about 3% of its cycles, is
-retained. Open: the gates (16 and 19), the options `options_fit` lets through (22),
-and the shape (27).
+**Status, 2026-10-11.** Items 1 to 21, 23 and 24 are fixed, as "Fixed since" lists;
+the findings below are as the reviewers found them, with the code's line numbers of
+2026-10-05. The pier now syncs, locks and checksums its log, every jet binds by
+identity, and every outside revision is pinned. Items 25 and 26 are measured:
+deferral's extra peak is memory malloc keeps, and deferral, which costs plain SKI
+about 3% of its cycles, is retained. Open: the options `options_fit` lets through
+(22), and the shape (27).
 
 ## 1. Data loss and secrecy
 
@@ -317,6 +317,27 @@ and the shape (27).
   resolution reader parse it as a string. Under ASan, `scry` read a 13th
   line of heap garbage and exited 1; the release binary read a zero by
   chance.
+- Item 16 (`gate-pins`). `tests/pins.sh` pins skijack, SKIlark, aviary,
+  lean-ski and starlings by commit. `make fixtures-check` runs every
+  exporter on a copy of `tests/` and `jets/` and compares the 193 committed
+  files byte for byte: the paper's targets, the data, kernel, selfhost and
+  conformance fixtures, SKIlark's workloads and the bird and Joy
+  dictionaries. All 193 match at the pins, in 49 s; the `aviary_kernel` that
+  skijack imports is aviary's `ec4b418`, not its head.
+  `.github/workflows/pinned.yml` runs `fixtures-check`, `selfhost-check`,
+  `front0-check` and `front1-check` weekly against the three public
+  repositories at their pins, with a 360-minute limit: here they take 56 s,
+  27 min and 106 min, and pass. lean-ski and starlings are private: their
+  checks stay manual. The lean-ski pin is the checkout of 2026-10-10, and the
+  starlings pin the paper's; the five witness checks and `hider-check` were
+  not rerun under the pins.
+- Item 19 (`gate-pins`). CI runs on `ubuntu-24.04` with the image's
+  `clang-18`, and on `macos-15` with Xcode 16.4's clang; `actions/checkout`
+  and `actions/setup-python` are pinned by commit. Every check that needs
+  another repository refuses a checkout off its pin, or with tracked
+  changes, unless `AVON_UNPINNED=1`; the skijack checks also require the
+  imported `aviary_kernel` to be aviary's at its pin. `hider_check.sh` has
+  no default path: it needs `HIDER_SCRIPTS`, in starlings at its pin.
 
 ## Fixed on `stage8-m1`
 
