@@ -337,9 +337,12 @@ multiple of the Reduceron's time.
   retires 2.9 to 3.2% more instructions on all five ports and takes 1.0
   to 3.4% more cycles, best of three, interleaved (`reduce --whnf` on
   each port's `main.ski`). `2851dff`, before the split, retired 20.0 to
-  21.9% more. The remaining 3% is not the head pointer passed by address,
-  which `50d74d8` also passes, and inlining `hensure`, `ensure` or
-  `reserved_app` does not recover it (`AUDIT.md` item 25). With `--fix`,
+  21.9% more. Of the remaining 3%, deferral costs 1.5% of instructions
+  and all of the extra cycles; the release checks of `9bd012d` cost 1.7%
+  of instructions and no cycles. Removing deferral's extra instructions
+  leaves the cycles 2 to 4% over `50d74d8`, from back-end stalls whose
+  cause is not located. Deferral stays, for its 5.8 to 14.5% on the
+  template runs (`AUDIT.md` item 25). With `--fix`,
   the same pairs run 4 to 9% faster than at `c46df7d`.
 - **The SKI column is not the table above's.** Clausify's and PermSort's
   ports call the prelude's numeral operations since "With data jets",
