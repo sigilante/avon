@@ -34,8 +34,7 @@
 #define SUC "S (K K) (S (K (S I)) K)"
 
 static char *slurp(const char *path) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
+    FILE *f = test_open(path);
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     rewind(f);

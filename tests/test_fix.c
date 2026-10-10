@@ -27,8 +27,7 @@
 #define Y "S (K (S I I)) (S (S (K S) K) (K (S I I)))"
 
 static char *slurp(const char *path) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
+    FILE *f = test_open(path);
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     rewind(f);

@@ -54,8 +54,7 @@ typedef struct { char *text; char **hash; size_t *atoms; char **term; size_t n; 
 
 static dict load_dict(void) {
     dict d = { 0 };
-    FILE *f = fopen(DICT, "rb");
-    if (!f) return d;
+    FILE *f = test_open(DICT);
     fseek(f, 0, SEEK_END);
     size_t len = (size_t)ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -109,10 +108,10 @@ TEST(every_dictionary_hash_matches) {
 /*  The rows the loader finds inside a term, counted by distinct hash --
  *  skijack's hash_all over the same term gives these (§6.2). */
 static const char *term_named(const dict *d, const char *program, const char *name) {
-    FILE *f = fopen(NAMES, "rb");
+    FILE *f = test_open(NAMES);
     char line[512], *hash = NULL;
     static char found[32];
-    while (f && fgets(line, sizeof line, f)) {
+    while (fgets(line, sizeof line, f)) {
         char *t1 = strchr(line, '\t'), *t2 = t1 ? strchr(t1 + 1, '\t') : NULL;
         if (!t2) continue;
         *t1 = *t2 = '\0';
@@ -122,7 +121,7 @@ static const char *term_named(const dict *d, const char *program, const char *na
             hash = found;
         }
     }
-    if (f) fclose(f);
+    fclose(f);
     for (size_t k = 0; hash && k < d->n; k++)
         if (strcmp(d->hash[k], hash) == 0) return d->term[k];
     return NULL;
@@ -401,9 +400,7 @@ TEST(a_jet_matches_a_copy_that_shares_less) {
 }
 
 TEST(jets_survive_collection) {
-    FILE *f = fopen("tests/fixtures/t1.ski", "rb");
-    CHECK(f != NULL);
-    if (!f) return;
+    FILE *f = test_open("tests/fixtures/t1.ski");
     static char src[1 << 16];
     size_t len = fread(src, 1, sizeof src, f);
     fclose(f);
@@ -423,10 +420,10 @@ TEST(jets_survive_collection) {
 TEST(a_snapshot_holds_no_jets) {
     av_arena *a = av_arena_new(0);
     CHECK(av_jets_load(a, DICT, 8, NULL) == 135);
-    FILE *f = fopen("tests/fixtures/t0.ski", "rb");
+    FILE *f = test_open("tests/fixtures/t0.ski");
     static char src[1 << 14];
-    size_t len = f ? fread(src, 1, sizeof src, f) : 0;
-    if (f) fclose(f);
+    size_t len = fread(src, 1, sizeof src, f);
+    fclose(f);
     uint32_t t = av_jets_match(a, av_parse(a, src, len, NULL));
     bool wrapped = false;
     for (uint32_t i = 0; i < a->used; i++) wrapped |= av_tag(a, i) == AV_JET;
