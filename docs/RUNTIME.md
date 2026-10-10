@@ -18,6 +18,7 @@ later.
 ```sh
 make                  # build/avon, optimized
 make check            # every tests/test_*.c under ASan and UBSan; also build/dbg/avon
+make smoke            # tests/smoke.tsv's commands on build/avon, as recorded
 make clean            # removes build/
 ```
 
@@ -434,6 +435,7 @@ enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
 | target | what it proves | needs |
 |---|---|---|
 | `make check` | every unit test, under ASan and UBSan | |
+| `make smoke` | the release binary, asserts compiled out, gives the exit status, stdout and stderr recorded from `build/dbg/avon` for 26 commands: every subcommand but `front0`, each strategy, jets, templates, data jets, `--fix`, `--no-defer`, and three piers | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
 | `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line, and of size <= 10 at horizons 1 to 21; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`) |
 | `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | skijack |

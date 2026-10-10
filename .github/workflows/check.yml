@@ -1,6 +1,6 @@
 # make check on every push to master and every pull request: the release
-# binary, the stats build, and every unit test under ASan and UBSan, on
-# Linux; pushes to master also run it on macOS.  The
+# binary and its smoke test, the stats build, and every unit test under
+# ASan and UBSan, on Linux; pushes to master also run it on macOS.  The
 # checks that need a lean-ski or skijack checkout (witness-check,
 # zk-jet-witness-check, p2-witness-check, front0-check, selfhost-check,
 # hider-check) stay manual: see the Makefile's header.
@@ -30,6 +30,8 @@ jobs:
         run: clang --version
       - name: release build
         run: make -j4 build/avon
+      - name: release smoke test
+        run: make smoke
       - name: stats build
         run: make -j4 stats
       - name: unit tests under ASan and UBSan
