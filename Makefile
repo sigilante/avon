@@ -28,13 +28,14 @@ DEBUG   := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
 
 BUILD   := build
 LIB_SRC := $(filter-out src/main.c,$(wildcard src/*.c))
+CLI_SRC := src/main.c $(wildcard src/cli/*.c)     # the command, built into avon alone
 TESTS   := $(wildcard tests/test_*.c)
 
 REL_OBJ := $(patsubst src/%.c,$(BUILD)/rel/%.o,$(LIB_SRC))
 DBG_OBJ := $(patsubst src/%.c,$(BUILD)/dbg/%.o,$(LIB_SRC))
 TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
-HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
+HDRS    := $(wildcard include/*.h src/*.h src/cli/*.h tests/*.h)
 
 .PHONY: all check smoke clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check \
 	selfhost-check front0-check front1-check fixtures-check hider-check
@@ -42,13 +43,13 @@ HDRS    := $(wildcard include/*.h src/*.h tests/*.h)
 
 all: $(BUILD)/avon
 
-$(BUILD)/avon: src/main.c $(REL_OBJ) $(HDRS)
+$(BUILD)/avon: $(CLI_SRC) $(REL_OBJ) $(HDRS)
 	@mkdir -p $(@D)
-	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -o $@ src/main.c $(REL_OBJ)
+	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -o $@ $(CLI_SRC) $(REL_OBJ)
 
-$(BUILD)/dbg/avon: src/main.c $(DBG_OBJ) $(HDRS)
+$(BUILD)/dbg/avon: $(CLI_SRC) $(DBG_OBJ) $(HDRS)
 	@mkdir -p $(@D)
-	$(CC) $(CSTD) $(WARN) $(INC) $(DEBUG) -o $@ src/main.c $(DBG_OBJ)
+	$(CC) $(CSTD) $(WARN) $(INC) $(DEBUG) -o $@ $(CLI_SRC) $(DBG_OBJ)
 
 # build/stats/avon: the release build counting what becomes of template
 # instances' cells (src/sstats.h), for one reduce or front0 run at a time.
@@ -56,9 +57,9 @@ STATS_OBJ := $(patsubst src/%.c,$(BUILD)/stats/%.o,$(LIB_SRC))
 
 stats: $(BUILD)/stats/avon
 
-$(BUILD)/stats/avon: src/main.c $(STATS_OBJ) $(HDRS)
+$(BUILD)/stats/avon: $(CLI_SRC) $(STATS_OBJ) $(HDRS)
 	@mkdir -p $(@D)
-	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -DAV_STRICT_STATS -o $@ src/main.c $(STATS_OBJ)
+	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -DAV_STRICT_STATS -o $@ $(CLI_SRC) $(STATS_OBJ)
 
 $(BUILD)/stats/%.o: src/%.c $(HDRS)
 	@mkdir -p $(@D)
