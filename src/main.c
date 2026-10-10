@@ -126,6 +126,32 @@
 
 #define AVON_VERSION "0.1.0"
 
+/*  Each option parse_args takes, a bit of args.given, so options_fit can
+ *  refuse one the command would ignore (AUDIT.md item 22). */
+enum {
+    O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES,
+    O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_INTERP, O_JET_TABLE, O_PLAN,
+    O_STATEMENT, O_JET_FLOOR, O_JET_CHECK, O_FUEL, O_MAX_NODES, O_BUDGET, O_ROWS,
+    O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_FILE, O_COUNT
+};
+static const char *const option_name[O_COUNT] = {
+    "--strategy", "--whnf", "--allow-bird-atoms", "--jets", "--ctors", "--no-jets",
+    "--profile", "--templates", "--data", "--fix", "--memory", "--no-defer", "--p2",
+    "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
+    "--fuel", "--max-nodes", "--budget", "--rows", "--cells", "--trace-frame",
+    "--passenger", "--records", "--frame-dump", "a FILE",
+};
+#define OPT(o) (1u << (o))
+
+/*  The O_ of an argument parse_args accepted: its name up to any '='. */
+static int option_of(const char *s) {
+    if (s[0] != '-') return O_FILE;
+    size_t n = strcspn(s, "=");
+    for (int o = 0; o < O_FILE; o++)
+        if (strlen(option_name[o]) == n && memcmp(s, option_name[o], n) == 0) return o;
+    return O_FILE;                      /* unreachable: every option is named */
+}
+
 typedef struct {
     av_opts     o;
     size_t      budget;
@@ -152,7 +178,7 @@ typedef struct {
     uint64_t    dump_steps[64];   /* --frame-dump steps */
     size_t      ndump;
     bool        dump_records, dump_halt, dump_restart, dump_census;
-    bool        share, passenger_set, jet_tuning;   /* asked for, for options_fit */
+    uint32_t    given;            /* OPT(O_...) of each option given */
 } args;
 
 static int usage(void) {
@@ -162,12 +188,12 @@ static int usage(void) {
         "       avon batch  [same options]\n"
         "       avon jam    [--budget=N] [FILE]\n"
         "       avon cue    [--budget=N] [FILE]\n"
-        "       avon prefix [FILE]\n"
+        "       avon prefix [--budget=N] [FILE]\n"
         "       avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [--plan=PLAN]\n"
         "       avon witness --statement=PUBLIC --jet-table=JETS [WITNESS]\n"
         "       avon witness --statement=P2PUBLIC [WITNESS]\n"
         "                    [FILE]\n"
-        "       (all accept --allow-bird-atoms; reduce and batch accept\n"
+        "       (all but witness --statement accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
         "        --profile=NAMES --templates=DIR --data --fix --memory --no-defer --p2=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
@@ -229,12 +255,12 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->records = 0;
     g->ndump = 0;
     g->dump_records = g->dump_halt = g->dump_restart = g->dump_census = false;
-    g->share = g->passenger_set = g->jet_tuning = false;
+    g->given = 0;
     for (int i = 2; i < argc; i++) {
         const char *s = argv[i];
         uint64_t v;
         if (strcmp(s, "--strategy=copy") == 0)       g->o.strategy = AV_COPY;
-        else if (strcmp(s, "--strategy=share") == 0) { g->o.strategy = AV_SHARE; g->share = true; }
+        else if (strcmp(s, "--strategy=share") == 0) g->o.strategy = AV_SHARE;
         else if (strcmp(s, "--whnf") == 0)           g->o.whnf_only = true;
         else if (strcmp(s, "--allow-bird-atoms") == 0) g->birds = true;
         else if (strncmp(s, "--jets=", 7) == 0 && s[7]) {
@@ -268,9 +294,9 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--plan=", 7) == 0 && s[7]) g->plan = s + 7;
         else if (strncmp(s, "--statement=", 12) == 0 && s[12]) g->statement = s + 12;
         else if (strncmp(s, "--jet-floor=", 12) == 0 && number(s + 12, &v))
-            g->jet_floor = v, g->jet_tuning = true;
+            g->jet_floor = v;
         else if (strncmp(s, "--jet-check=", 12) == 0 && number(s + 12, &v))
-            g->o.jet_check = v, g->jet_tuning = true;
+            g->o.jet_check = v;
         else if (strncmp(s, "--fuel=", 7) == 0 && number(s + 7, &v))
             g->o.max_steps = v;
         else if (strncmp(s, "--max-nodes=", 12) == 0 && number(s + 12, &v)
@@ -287,7 +313,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--trace-frame") == 0)    g->trace = 2;
         else if (strcmp(s, "--trace-frame=summary") == 0) g->trace = 1;
         else if (strncmp(s, "--passenger=", 12) == 0 && s[12])
-            g->passenger = s + 12, g->passenger_set = true;
+            g->passenger = s + 12;
         else if (strcmp(s, "--records") == 0)        g->records = 150;
         else if (strncmp(s, "--records=", 10) == 0 && number(s + 10, &v) && v)
             g->records = (size_t)v;
@@ -315,46 +341,62 @@ static bool parse_args(int argc, char **argv, args *g) {
         }
         else if (s[0] != '-' && !g->file) g->file = s;
         else return false;
+        g->given |= OPT(option_of(s));
     }
     return true;
 }
 
-/*  Refuse an option the command would ignore: --trace-frame runs copy
- *  mode's head run with no jets, templates or profile, the frame-trace
- *  options mean nothing without it, and witness reads neither. */
+/*  Refuse an option the command would ignore (AUDIT.md item 22), naming
+ *  the first such.  reduce and batch read the reduction's options; batch
+ *  reads its terms from stdin, not a FILE.  --trace-frame runs copy mode's
+ *  head run with no jets, templates or profile and prints no term
+ *  (--strategy=copy, --whnf and --no-jets agree with it), and the
+ *  frame-trace options mean nothing without it.  jam, cue and prefix read
+ *  a term and print it; witness reads its budgets and lean-ski's files,
+ *  and with --statement only the statement, the jet table and a witness. */
 static bool options_fit(const args *g, const char *cmd) {
-    bool reduce = strcmp(cmd, "reduce") == 0 || strcmp(cmd, "batch") == 0;
-    bool traced = reduce && g->trace;
-    const char *bad = NULL;
-    if (traced || strcmp(cmd, "witness") == 0) {
-        if (g->templates) bad = "--templates";
-        else if (g->data) bad = "--data";
-        else if (g->fix) bad = g->o.fix_shared ? "--memory" : "--fix";
-        else if (g->o.no_defer) bad = "--no-defer";
-        else if (g->p2) bad = "--p2";
-        else if (g->profile) bad = "--profile";
+    const uint32_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP);
+    const uint32_t untraced = OPT(O_TEMPLATES) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
+                              OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_PROFILE) | OPT(O_JETS) |
+                              OPT(O_CTORS) | OPT(O_INTERP) |
+                              OPT(O_JET_FLOOR) | OPT(O_JET_CHECK) | OPT(O_BUDGET);
+    const uint32_t reducing = (OPT(O_FILE) - 1) & ~(OPT(O_JET_TABLE) | OPT(O_PLAN) |
+                              OPT(O_STATEMENT) | OPT(O_ROWS) | OPT(O_CELLS));
+    bool reduce = strcmp(cmd, "reduce") == 0, batch = strcmp(cmd, "batch") == 0;
+    uint32_t takes, moded = 0;          /* moded: refused for the mode, not the command */
+    const char *mode = "";
+    if (reduce || batch) {
+        takes = reducing | (reduce ? OPT(O_FILE) : 0);
+        moded = g->trace ? untraced : frames;
+        mode = g->trace ? " with --trace-frame" : " without --trace-frame";
+        takes &= ~moded;
+    } else if (strcmp(cmd, "jam") == 0 || strcmp(cmd, "cue") == 0 ||
+               strcmp(cmd, "prefix") == 0) {
+        takes = OPT(O_BIRDS) | OPT(O_BUDGET) | OPT(O_FILE);
+    } else if (strcmp(cmd, "witness") == 0 && g->statement) {
+        takes = OPT(O_STATEMENT) | OPT(O_JET_TABLE) | OPT(O_FILE);
+        moded = ~takes;
+        mode = " with --statement";
+    } else if (strcmp(cmd, "witness") == 0) {
+        takes = OPT(O_BIRDS) | OPT(O_ROWS) | OPT(O_CELLS) | OPT(O_JET_TABLE) | OPT(O_PLAN) |
+                OPT(O_FILE);
+    } else {
+        return true;                    /* run_main answers with the usage */
     }
-    if (!bad && traced) {
-        if (g->share) bad = "--strategy=share";
-        else if (g->njets) bad = "--jets";
-        else if (g->ctors) bad = "--ctors";
-        else if (g->interp) bad = "--interp";
-        else if (g->jet_tuning) bad = "--jet-floor or --jet-check";
+    uint32_t idle = g->given & ~takes;
+    const char *name = NULL;
+    if (idle) {
+        int o = 0;
+        while (!(idle & OPT(o))) o++;
+        name = option_name[o];
+        if (!(moded & OPT(o))) mode = "";
+        if (o == O_FILE && batch) mode = ", which reads its terms from stdin";
+    } else if (g->trace && (g->given & OPT(O_STRATEGY)) && g->o.strategy == AV_SHARE) {
+        name = "--strategy=share";      /* the trace runs copy mode */
+        mode = " with --trace-frame";
     }
-    if (!bad && !traced) {
-        if (g->trace) bad = "--trace-frame";
-        else if (g->passenger_set) bad = "--passenger";
-        else if (g->records) bad = "--records";
-        else if (g->ndump || g->dump_records || g->dump_halt || g->dump_restart ||
-                 g->dump_census) bad = "--frame-dump";
-    }
-    if (!bad) return true;
-    fprintf(stderr, "avon: %s has no effect %s\n", bad,
-            traced ? "with --trace-frame" :
-            g->trace || g->passenger_set || g->records || g->ndump || g->dump_records ||
-            g->dump_halt || g->dump_restart || g->dump_census
-                ? (reduce ? "without --trace-frame" : "outside reduce and batch")
-                : "on witness");
+    if (!name) return true;
+    fprintf(stderr, "avon: %s has no effect on %s%s\n", name, cmd, mode);
     return false;
 }
 
@@ -910,6 +952,7 @@ static int kernel_main(int argc, char **argv) {
     int nf = 0;
     bool snap = false, pma = false;
     uint64_t budget = 100000, v;
+    bool budget_set = false;
     av_opts o = av_opts_default();
     o.strategy = AV_SHARE;                      /* §9: kernel loops share */
     o.max_steps = 100000000;
@@ -920,13 +963,31 @@ static int kernel_main(int argc, char **argv) {
         else if (strcmp(s, "--strategy=copy") == 0) o.strategy = AV_COPY;
         else if (strcmp(s, "--strategy=share") == 0) o.strategy = AV_SHARE;
         else if (strncmp(s, "--fuel=", 7) == 0 && number(s + 7, &v)) o.max_steps = v;
-        else if (strncmp(s, "--budget=", 9) == 0 && number(s + 9, &v)) budget = v;
+        else if (strncmp(s, "--budget=", 9) == 0 && number(s + 9, &v)) budget = v, budget_set = true;
         else if (strcmp(s, "--snapshot") == 0) snap = true;
         else if (strcmp(s, "--pma") == 0) pma = true;
         else if (strcmp(s, "--entropy") == 0) eny = true;
         else if (strncmp(s, "--entropy=", 10) == 0 && s[10]) { eny = true; eny_file = s + 10; }
         else if (s[0] != '-' && nf < 256) files[nf++] = s;
         else return usage();
+    }
+    /* refuse an option the command would ignore (AUDIT.md item 22): boot
+     * takes no snapshot, and without a pier makes no arena, answers no
+     * entropy and prints no event; the others reopen the pier as it was
+     * made, and only load reads a subject */
+    bool boot = strcmp(cmd, "boot") == 0;
+    const char *idle = snap && boot ? "--snapshot"
+                     : pma && !boot ? "--pma"
+                     : subject_file && !boot && strcmp(cmd, "load") != 0 ? "--subject"
+                     : boot && !pier && pma ? "--pma"
+                     : boot && !pier && eny ? "--entropy"
+                     : boot && pier && !eny && budget_set ? "--budget"
+                     : NULL;
+    if (idle) {
+        fprintf(stderr, "avon: %s has no effect on %s%s\n", idle, cmd,
+                !boot || strcmp(idle, "--snapshot") == 0 ? ""
+                : pier ? " without --entropy" : " without --pier");
+        return 2;
     }
     const char *err = NULL;
     size_t ns = 0;

@@ -10,13 +10,12 @@ The core holds. No reviewer found a way to make a verifier accept a wrong result
 to forge an entropy reply. `make check` passes, with 25 suites under ASan and UBSan.
 The weak spots are the pier, and the jets admitted by testing rather than by identity.
 
-**Status, 2026-10-11.** Items 1 to 21, 23 and 24 are fixed, as "Fixed since" lists;
+**Status, 2026-10-11.** Items 1 to 24 are fixed, as "Fixed since" lists;
 the findings below are as the reviewers found them, with the code's line numbers of
 2026-10-05. The pier now syncs, locks and checksums its log, every jet binds by
 identity, and every outside revision is pinned. Items 25 and 26 are measured:
 deferral's extra peak is memory malloc keeps, and deferral, which costs plain SKI
-about 3% of its cycles, is retained. Open: the options `options_fit` lets through
-(22), and the shape (27).
+about 3% of its cycles, is retained. Open: the shape (27).
 
 ## 1. Data loss and secrecy
 
@@ -338,6 +337,15 @@ about 3% of its cycles, is retained. Open: the options `options_fit` lets throug
   changes, unless `AVON_UNPINNED=1`; the skijack checks also require the
   imported `aviary_kernel` to be aviary's at its pin. `hider_check.sh` has
   no default path: it needs `HIDER_SCRIPTS`, in starlings at its pin.
+- Item 22 (`options-fit`). Each option `parse_args` takes sets a bit, and
+  `options_fit` holds, per command, the options it reads: `reduce` and
+  `batch` the reduction's, `jam`, `cue` and `prefix` a term's budget and
+  atoms, `witness` its budgets and lean-ski's files, `witness --statement`
+  the statement, the jet table and a witness. Any other exits 2 and names
+  itself: `reduce --rows`, `batch FILE`, `boot --entropy` without
+  `--pier`. The kernel commands refuse `boot --snapshot`, `--pma` and
+  `--subject` where the pier is reopened, and `boot --pier --budget`
+  without `--entropy`. `make smoke` runs six refusals.
 
 ## Fixed on `stage8-m1`
 
