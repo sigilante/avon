@@ -459,8 +459,10 @@ exporter on a copy of `tests/` and `jets/` and compares the 193 files.
 
 A check that needs another repository runs against the commit
 `tests/pins.sh` pins. It also accepts a descendant of that commit whose
-commits since, and whose tracked changes, touch only documentation
-(`*.md` files; a rename counts on both sides). It refuses any other
+commits since, and whose tracked changes, touch only documentation:
+`*.md`, `*.tex` and `*.txt` files, except lean-ski's statements,
+witnesses and corpora (`*public*.txt`, `*witness*.txt`, `*corpus*.txt`),
+which the checks read. A rename counts on both sides. It refuses any other
 checkout unless `AVON_UNPINNED=1`. The checkouts default to
 `~/skijack`, `~/Code/ski/lean-ski`, `~/Code/ski/skilark` and
 `~/Code/urbit/aviary` (`SKIJACK`, `LEAN_SKI`, `SKILARK`, `AVIARY`); the
