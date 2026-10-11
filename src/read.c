@@ -88,7 +88,7 @@ uint32_t av_parse(av_arena *a, const char *src, size_t len,
             }
             if (!a->allow_bird_atoms && av_is_bird(src + start, i - start)) {
                 i = start;
-                msg = "atom named like a live aviary combinator (§4.3)";
+                msg = "atom named like a live aviary combinator";
                 goto done;
             }
             uint32_t leaf = av_leaf(a, src + start, i - start);
@@ -205,7 +205,7 @@ uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg
                 }
             if (!(i - s2 == 1 && (src[s2] == 'S' || src[s2] == 'K' || src[s2] == 'I')) &&
                 !a->allow_bird_atoms && av_is_bird(src + s2, i - s2)) {
-                *msg = "atom named like a live aviary combinator (§4.3)";
+                *msg = "atom named like a live aviary combinator";
                 goto out;
             }
             node = av_leaf(a, src + s2, i - s2);

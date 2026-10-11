@@ -210,7 +210,7 @@ uint32_t av_cue(av_arena *a, const uint8_t *p, size_t n, const char **err) {
         r.pos += len;
         if (!valid_name(nm, len)) { msg = "invalid atom name"; goto done; }
         if (!a->allow_bird_atoms && av_is_bird((const char *)nm, len)) {
-            msg = "atom named like a live aviary combinator (§4.3)";
+            msg = "atom named like a live aviary combinator";
             goto done;
         }
     }

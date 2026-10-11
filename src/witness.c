@@ -87,7 +87,7 @@ static const char *build(const av_arena *a, uint32_t t, av_witness *w,
         if (av_tag(a, n) != AV_LEAF) { msg = "a jet node in a witnessed term"; goto done; }
         ski_leaf id = av_right(a, n);
         if (!ski_is_comb(id)) {
-            msg = "a witness of a term with atoms is not supported yet (§17.3)";
+            msg = "a witness of a term with atoms is not supported yet";
             goto done;
         }
         uint32_t tag = id == SKI_S ? AV_CELL_S : id == SKI_K ? AV_CELL_K : AV_CELL_I;

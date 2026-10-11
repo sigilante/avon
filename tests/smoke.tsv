@@ -1,4 +1,4 @@
-# The release binary's smoke test (tests/smoke.sh, AUDIT.md item 17).  Columns:
+# The release binary's smoke test (tests/smoke.sh).  Columns:
 # name, exit status, SHA-256 of stdout, of stderr, and the command.  Record with
 # tests/smoke.sh --record build/dbg/avon after a change that alters an output.
 reduce-copy	0	15046f300f79126b4944700e23930a41532f7ebc45f123c300437ba9c1c703b7	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	$AVON reduce tests/fixtures/t0.ski
@@ -7,6 +7,7 @@ reduce-whnf	0	9643f6996e2cf5db3f9165900f3f4be92629aa2d1ecd7bc70fc627e8ee672063	e
 reduce-fuel	0	f79d9cc7433e48e8ec0562cd58be086f907e3b2408ed7bfa113989efe99e5d69	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	$AVON reduce --fuel=1000 tests/fixtures/t2.ski
 reduce-size	0	6c7ea7ac817e337baaade0811d079d14eff269f49d91181f0c546419ed4ba5e3	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	printf 'S I I (S (K (S I I)) (S (S (K S) K) (K (S I I))))\n' | $AVON reduce --max-nodes=1000
 reduce-parse	1	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	b3a77833dec930a2b0821f6b7e63e02883d3127ccf8a8164e76a7ec51098659f	printf 'S (K\n' | $AVON reduce
+reduce-bird	1	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	45013e1b29f1999a28a3ef346a45f7e13325c4f1c52b33847c22f40a0cd5fb5b	printf 'B x\n' | $AVON reduce
 batch	0	6fc38503949b72cb697056a31c9d19762ca3fea3a322e12ef45762667198244f	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	printf 'I X\nK Foo Bar\nS K K Z\nS I I (S I I)\n' | $AVON batch --fuel=500
 jam-cue	0	c282fe79c22888333023020b129c17dc5789ab537b8e39dc283f23b5be70e02f	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	$AVON jam tests/fixtures/t0.ski | $AVON cue
 prefix	0	4c70de8d0427c8b9596ebee31bf3c77d4404a6ed1695932ebfe9509b1f79e557	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	$AVON prefix tests/fixtures/t0.ski
@@ -22,6 +23,7 @@ selfhost	0	108634a9f8274e4c1198bd0915f831cf02746fe7d7d9f2c30946f887406e19ff	e3b0
 selfhost-jet	0	f6dd5ca660c21ebf963c8c2e8cfdf1dbbffe8834b9bd0e61dae917de3e91b53f	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	$AVON selfhost --jets --jet-check=1 tests/selfhost tests/selfhost/own.tsv
 scry	0	a8f79c739427bd0ad1de5482f190d78136a9a86cb76501f62b39974971783ba6	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	$AVON scry tests/conformance/namespaces.tsv
 witness	0	fcba20c8ebadb82c9f1040299af152b2685adad89eb297ee4beb3df4e3b850fb	4a5e7670bfa5b78c92af0ce9020b6cc65ec180009dcdb2ec585e65bf40f5b6aa	$AVON witness tests/fixtures/t0.ski
+witness-atom	1	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	27f417dc6d0c98b6698db1bc8390e0c2209dcc3f05357760c12358e1ee36d1f2	printf 'K x y\n' | $AVON witness
 enum	0	bdf28bc8b936fd00a842ee1e6833d2d4f5243ac640b29f103f495da5783220a3	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	$AVON enum 8
 trace	0	4d8ed6d316247c1dad7c98f996ffde28cf221278499b12cecb846528eb601d8e	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	printf 'S (S S) X S S\nS (S (S S) (S X)) S S S\n' | $AVON batch --strategy=copy --whnf --trace-frame --records --fuel=60
 pier	0	60063eb0b4a50a97a1bba4e1937da1ba3babcb03c1b009946f1304f4592d8918	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	d=$(mktemp -d) && ln -s "$R" "$d/r" && cd "$d" && $AVON boot --pier=p r/tests/kernel/pill.skit && $AVON poke --pier=p r/tests/kernel/events.tick.skit r/tests/kernel/events.poke5.skit && $AVON load --pier=p r/tests/kernel/pill.skit && $AVON peek --pier=p r/tests/kernel/events.zero.skit; s=$?; cd / && rm -rf "$d"; exit $s
