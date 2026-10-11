@@ -6,6 +6,11 @@ design lives. Last revised 2026-10-05.
 
 ## Done since the last revision
 
+- **lean-ski at `paper-v4`** (2026-10-11). `tests/pins.sh` moves to `3e30892`, the
+  lean-ski the Zero-knowledge SKI paper describes: its release script stops unless each
+  of Avon's four jetted witness tables is ski-air's, byte for byte (lean-ski #22, #23).
+  No Lean source changed since `paper-v2`; the five checks the pin serves pass there.
+
 - **lean-ski at `paper-v2`** (2026-10-11; `ZK-JETS.md` §1 and §9). lean-ski's jet table
   no longer licenses a template that compiles to a bare `S`, `K` or `I`. `tests/pins.sh`
   moves to that commit, `79c7026`, and the five checks it serves pass there. Avon writes
