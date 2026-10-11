@@ -8,7 +8,7 @@
 SKIJACK_PIN=e978e58445c2bf3bdc87c683261fcd29fc876d33     # sigilante/SKIjack, public
 SKILARK_PIN=8a988a13b73f819b82723162640605c7e195f55b     # sigilante/SKIlark, public
 AVIARY_PIN=ec4b418c527408c3a513bee2735e6b0f862accda      # sigilante/aviary, public
-LEAN_SKI_PIN=3e30892c5b12fdc87a2e57c5f05f0604ab30e5ff    # sigilante/lean-ski, private, tag paper-v4
+LEAN_SKI_PIN=5614cb4c2f33071f32264efa72879e6d9b3fa5ed    # sigilante/lean-ski, private: paper-v4 and a WORKLIST change
 STARLINGS_PIN=0b2779ed732ed37d1eea4751ed897015e12d4cdc   # sigilante/starlings, private
 
 # pin_check NAME DIR PIN [PATH...]: DIR is a git checkout at PIN with no

@@ -20,9 +20,9 @@
 > template that compiles to a bare `S`, `K` or `I` (lean-ski `79c7026`,
 > tag `paper-v2`). lean-ski #22 remakes the release, Avon writing every
 > witness table, byte for byte ski-air's (§1, last measurement; §9,
-> milestone 9).  lean-ski #23 (`3e30892`, tag `paper-v4`, Avon's pin)
-> makes the release script compare all four of Avon's jetted tables with
-> ski-air's.
+> milestone 9).  lean-ski #23 (`3e30892`, tag `paper-v4`) makes the
+> release script compare all four of Avon's jetted tables with ski-air's.
+> Avon pins lean-ski master, `5614cb4`, one WORKLIST change past it.
 
 ## 1. Why
 
