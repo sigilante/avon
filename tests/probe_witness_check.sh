@@ -27,11 +27,11 @@
 # and with check-probe's --row.
 #
 # Run from the repository root after `make`.  LEAN_SKI defaults to
-# ~/lean-ski.  Nothing here runs in parallel.
+# ~/Code/ski/lean-ski.  Nothing here runs in parallel.
 
 set -euo pipefail
 
-export LEAN_SKI=${LEAN_SKI:-$HOME/lean-ski}   # ski-air finds Lean through it
+export LEAN_SKI=${LEAN_SKI:-$HOME/Code/ski/lean-ski}   # ski-air finds Lean through it
 . tests/pins.sh
 pin_check lean-ski "$LEAN_SKI" "$LEAN_SKI_PIN"
 AVON=${AVON:-build/avon}

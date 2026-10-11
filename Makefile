@@ -86,7 +86,7 @@ smoke: $(BUILD)/avon
 	tests/smoke.sh $(BUILD)/avon
 
 # The witness strategy against lean-ski's aircheck and Plonky3 prover;
-# needs a lean-ski checkout at $$LEAN_SKI (~/lean-ski).
+# needs a lean-ski checkout at $$LEAN_SKI (~/Code/ski/lean-ski).
 witness-check: $(BUILD)/avon
 	tests/witness_check.sh
 
