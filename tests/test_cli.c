@@ -1,9 +1,9 @@
 /**  test_cli.c
  *
- *  The command line's exit codes (AUDIT.md item 15), run on build/dbg/avon,
- *  which `make check` builds first.  A run's status is its line's: FUEL
- *  and SIZE exit 0.  A failure of Avon's own exits 1: output that could not
- *  be written, or a term that does not parse.
+ *  The command line's exit codes, run on build/dbg/avon, which `make
+ *  check` builds first.  A run's status is its line's: FUEL and SIZE exit
+ *  0.  A failure of Avon's own exits 1: output that could not be written,
+ *  or a term that does not parse.
  */
 
 #include <stdbool.h>

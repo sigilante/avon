@@ -1,13 +1,12 @@
 /**  interp.c
  *
- *  The interpreter jet (docs/DESIGN.md §7): a generated interpreter's fuel
- *  loop run natively.  What it must reproduce is the generator's
- *  (python/skijack/generate.py): one loop iteration per fuel unit; each
- *  iteration walks the object term's spine to its head and either
- *  contracts an S, K or I redex, or ends -- a combinator short of arguments
- *  is the value, another leaf runs its arm.  Copy-mode reduction with the
- *  object fuel as max_steps is exactly that loop, attempt for attempt, and
- *  stops where an arm must run, since the other leaves are inert atoms.
+ *  The interpreter jet: a generated interpreter's fuel loop run natively.
+ *  It must reproduce is the generator's results (python/skijack/generate.py):
+ *  one loop iteration per fuel unit; each iteration walks the object term's
+ *  spine to its head and either contracts an S, K or I redex, or ends---a
+ *  combinator short of arguments is the value, another leaf runs its arm.
+ *  That loop is the copy-mode reduction with the object fuel as max_steps,
+ *  and stops where an arm must run, since the other leaves are inert atoms.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -46,7 +45,7 @@ static int drow_cmp(const void *x, const void *y) {
 }
 
 /*  The dictionary's term for a published hash, parsed into the arena; a
- *  row whose term does not have that hash is none (AUDIT.md item 8). */
+ *  row whose term does not have that hash is none. */
 static uint32_t dict_term(av_arena *a, const drow *rows, size_t n, const char *hash) {
     drow key = { hash, NULL, 0 };
     const drow *r = bsearch(&key, rows, n, sizeof *rows, drow_cmp);
@@ -372,14 +371,14 @@ done:
 
 /*  --------------------------------------------------------------- firing */
 
-/*  The native lookup (docs/DESIGN.md §8): when the resolver is a fact
- *  store's (a jet key tagged by av_facts_resolver), find the path among
- *  the facts it encodes instead of reducing it.  The first use checks the
- *  lookup against the term -- every fact's key must hit with its answer,
- *  and a path longer than every key must be not-yet -- and a resolver
- *  that disagrees is never looked up natively.  1 a hit, *ans the answer
- *  datum; 0 not yet; -1 no native answer: reduce the resolver.  *spent is
- *  what the check's probes cost, not part of the fire's own work. */
+/*  The native lookup: when the resolver is a fact store's (a jet key
+ *  tagged by av_facts_resolver), find the path among the facts it encodes
+ *  instead of reducing it.  The first use checks the lookup against the
+ *  term---every fact's key must hit with its answer, and a path longer
+ *  than every key must be not-yet---and a resolver that disagrees is
+ *  never looked up natively.  1 a hit, *ans the answer datum; 0 not yet;
+ *  -1 no native answer: reduce the resolver.  *spent is what the check's
+ *  probes cost, not part of the fire's own work. */
 static int native_lookup(av_arena *a, const av_interp *in, uint32_t resolver,
                          uint32_t path, const av_opts *po, uint32_t *ans,
                          uint64_t *spent) {
@@ -458,7 +457,7 @@ int interp_fire(av_arena *a, uint32_t id, const uint32_t *argv,
     po.strategy = AV_COPY;
     po.whnf_only = true;
     po.jets = o->jets;
-    po.interp_jets = false;                  /* object fuel is bounded: §7 */
+    po.interp_jets = false;                  /* object fuel is bounded */
     po.jet_check = o->jet_check;
     po.max_steps = host_left;
     po.interrupt = o->interrupt;

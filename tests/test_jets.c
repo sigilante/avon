@@ -1,13 +1,12 @@
 /**  test_jets.c
  *
- *  Stage 4's acceptance (docs/DESIGN.md §5, §6, §10.2 item 6, §11): the
- *  structural hash matches skijack's strings on every dictionary row; the
- *  loader finds the rows skijack's hash_all finds; and residual jets
- *  (§6.5) leave every copy-mode count, every stopped state and every value
- *  as it was without them -- on every registered jet over random
- *  arguments and fuel, and with --jet-check on every fire, which catches a
- *  corrupted jet.  tests/test_conformance.c runs the corpus with jets on.
- *  Run from the repository root.
+ *  Hash and residual jets' acceptance: the structural hash matches
+ *  skijack's strings on every dictionary row; the loader finds the rows
+ *  skijack's hash_all finds; and residual jets leave every copy-mode count,
+ *  every stopped state and every value as it was without them---on every
+ *  registered jet over random arguments and fuel, and with --jet-check on
+ *  every fire, which catches a corrupted jet.  tests/test_conformance.c
+ *  runs the corpus with jets on.  Run from the repository root.
  */
 
 #include <stdlib.h>
@@ -105,8 +104,8 @@ TEST(every_dictionary_hash_matches) {
     free_dict(&d);
 }
 
-/*  The rows the loader finds inside a term, counted by distinct hash --
- *  skijack's hash_all over the same term gives these (§6.2). */
+/*  The rows the loader finds inside a term, counted by distinct
+ *  hash---skijack's hash_all over the same term gives these. */
 static const char *term_named(const dict *d, const char *program, const char *name) {
     FILE *f = test_open(NAMES);
     char line[512], *hash = NULL;
@@ -346,9 +345,9 @@ static size_t jet_nodes(const av_arena *a, uint32_t t, size_t depth) {
 }
 
 /*  A node is a jet's only if it is the jet's term: the 64-bit digest
- *  finds a candidate, and the trees must match (AUDIT.md item 8).  Here
- *  the jet's term is changed after registration, as a colliding term
- *  under the same digest would be. */
+ *  finds a candidate, and the trees must match.  Here the jet's term is
+ *  changed after registration, as a colliding term under the same digest
+ *  would be. */
 TEST(a_digest_match_is_not_enough) {
     av_arena *a = av_arena_new(0);
     const char *pair = "S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K)";
@@ -444,8 +443,8 @@ TEST(a_snapshot_holds_no_jets) {
 }
 
 /*  The bug this guards against: share mode writes in place, and a jet
- *  node's term -- the dashboard's, or reached through a residual's inner
- *  jets -- must never be written, or a later copy-mode run charges a
+ *  node's term---the dashboard's, or reached through a residual's inner
+ *  jets---must never be written, or a later copy-mode run charges a
  *  registered cost against a different tree.  Share runs over jetted
  *  terms leave every dashboard term's hash unchanged, and a graph a share
  *  run has already reduced still counts the same jets on and off. */
@@ -503,7 +502,7 @@ TEST(share_mode_never_writes_the_dashboard) {
 
 /*  A fire rebuilds its residual's closed subterms, where stepping shares
  *  them.  Under a node cap that stepping fits, a fire that cannot have its
- *  nodes steps instead (docs/DESIGN.md §6.5): S I (K B), B 2,001 nodes. */
+ *  nodes steps instead: S I (K B), B 2,001 nodes. */
 TEST(a_fire_short_of_nodes_steps) {
     size_t n = 2000, len = 1;
     char *b = malloc(4 * n + 64);

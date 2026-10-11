@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# The SKIjack-0 front end's acceptance (docs/DESIGN.md §20.3; skijack
-# docs/SKIJACK-0.md §5): skijack's front end, a SKIjack-0 program compiled
-# by Python, run in Avon's share mode,
+# The SKIjack-0 front end's acceptance: skijack's front end, a SKIjack-0
+# program compiled by Python, run in Avon's share mode,
 #
 #   1. compiles its own source to Python's terms, hash for hash: the fixed
 #      point from source text;
@@ -9,9 +8,9 @@
 #   3. accepts or refuses every edge program as spec0 does;
 #
 # and then all three again with the front end's supercombinator templates
-# (docs/DESIGN.md §6.9), which Avon checks against the terms before using,
-# with the templates and data jets (§6.10), and with those and Y unfolded
-# in one step (§6.11): the same terms, from fewer contractions.
+# which Avon checks against the terms before using, with the templates and
+# data jets, and with those and Y unfolded in one step: the same terms,
+# from fewer contractions.
 #
 # Run from the repository root after `make`.  SKIJACK defaults to
 # ~/skijack, on a branch with python/skijack/selfhost/.

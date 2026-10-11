@@ -1,13 +1,12 @@
 /**  front0.c
  *
- *  avon front0: the SKIjack-0 front end (docs/DESIGN.md §20.3) on a
- *  source.
+ *  avon front0: the SKIjack-0 front end on a source.
  */
 
 #include "cli.h"
 
 /*  avon front0 [--profile=NAMES] [--fuel=N] [--max-nodes=N] DIR SOURCE:
- *  the SKIjack-0 front end (§20.3) on SOURCE, DIR holding its term and the
+ *  the SKIjack-0 front end on SOURCE, DIR holding its term and the
  *  input's constructors as SKIT files; a line `name TAB hash` per name, or
  *  `RErr`, and the contractions on stderr. */
 int front0_main(int argc, char **argv) {

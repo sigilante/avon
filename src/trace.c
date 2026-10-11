@@ -1,8 +1,8 @@
 /**  trace.c
  *
- *  Frame traces (docs/DESIGN.md §22): an observer of copy mode's head run
- *  for the pure S calculus with one opaque atom, the passenger X, as the
- *  hider census of the pure-S paper reads it (its fixed_points_hider.py).
+ *  Frame traces: an observer of copy mode's head run for the pure S
+ *  calculus with one opaque atom, the passenger X, as the hider census of
+ *  the pure-S paper reads it (its fixed_points_hider.py).
  *
  *  The frame is the argument vector of the S head, fr = [u_1 .. u_L], u_1
  *  at the x-seat; in copy mode it is the argument slots stk[base..top),
@@ -22,8 +22,8 @@
  *  (X-headed, contains X, sigma capped at 2, arity) are filled in index
  *  order on demand: no walk over paths, which on these shared terms would
  *  be exponential.  Prefix counts over the slots are recomputed only for
- *  the slots a step rewrote -- a step leaves everything below its top
- *  three slots alone -- so a trace costs what the run costs.
+ *  the slots a step rewrote---a step leaves everything below its top
+ *  three slots alone---so a trace costs what the run costs.
  */
 
 #include <stdio.h>

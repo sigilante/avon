@@ -1,8 +1,7 @@
 /**  wire.c
  *
  *  Terms at rest: the container, Tromp's bitstring with a third leaf, and
- *  the atom-name hygiene check (docs/DESIGN.md §4.2, §4.3).  Neither jam
- *  nor cue recurses.
+ *  the atom-name hygiene check.  Neither jam nor cue recurses.
  */
 
 #include <stdlib.h>
@@ -202,7 +201,7 @@ uint32_t av_cue(av_arena *a, const uint8_t *p, size_t n, const char **err) {
     if (!atoms) { msg = "out of memory"; goto done; }
     atoms[0] = AV_NODE_I;
     /* the whole table checked before any name is interned, so a refused
-     * container leaves the arena's atoms as they were (AUDIT.md item 9) */
+     * container leaves the arena's atoms as they were */
     size_t names_at = r.pos;
     for (uint64_t k = 1; k <= natoms; k++) {
         if (!get_le(&r, 4, &v) || v > n - r.pos) { msg = "truncated atom name"; goto done; }

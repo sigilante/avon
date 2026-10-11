@@ -1,6 +1,6 @@
 /**  arena.c
  *
- *  Allocation, leaf interning, and caller roots (docs/DESIGN.md §2).
+ *  Allocation, leaf interning, and caller roots.
  */
 
 #include <stdio.h>
@@ -57,8 +57,8 @@ __attribute__((cold)) _Noreturn void av_invariant_failed(const char *what, const
  *  the host's memory.  A collection holds the old arena, up to twice the
  *  live set, a new one as large, and a forwarding word a node, about 40
  *  bytes a live node at its peak, so physical memory over 64 leaves room;
- *  AV_MAX_NODES if the memory is not known.  The fixed default of 2^30
- *  nodes could need 20 GiB before SIZE (AUDIT.md item 11). */
+ *  AV_MAX_NODES if the memory is not known.  A fixed default of 2^30
+ *  nodes could need 20 GiB before SIZE. */
 uint32_t av_default_max_nodes(void) {
     long pages = sysconf(_SC_PHYS_PAGES), size = sysconf(_SC_PAGESIZE);
     if (pages <= 0 || size <= 0) return AV_MAX_NODES;

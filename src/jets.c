@@ -1,7 +1,7 @@
 /**  jets.c
  *
  *  The structural hash, the dashboard, residual jets, and the loader's
- *  match (docs/DESIGN.md §5, §6).  The hash is skijack's (dictionary.py):
+ *  match.  The hash is skijack's (dictionary.py):
  *  computed at load and registration only, never while reducing.
  */
 
@@ -396,7 +396,7 @@ static bool arity_by_running(av_arena *a, const uint32_t *tp, uint64_t max_steps
 
 /*  A residual over k markers is a constructor's when its normal form is
  *  @x_h @x_0 .. @x_(f-1), h >= f: f fields, then k - f continuations, of
- *  which the (h - f)th is applied (§6.8).  res must be rooted. */
+ *  which the (h - f)th is applied.  res must be rooted. */
 static av_ctor classify(av_arena *a, uint32_t res, unsigned k, uint64_t max_steps) {
     av_ctor none = { 0, 0, 0 };
     av_opts o = av_opts_default();
@@ -537,14 +537,14 @@ uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner) {
     return jet_node(a, id, inner);
 }
 
-/*  Trees by identity, for the matcher (AUDIT.md item 8): each node, seen
- *  through views, gets a canonical id, a leaf its interned node and an
- *  application the pair of its children's ids, so two nodes are the same
- *  tree exactly when their ids are equal.  The memo and the pair table
- *  last a whole match, so canonicalizing the program and the jets' terms
- *  costs their nodes once, with no budget to run past: an av_equal with a
- *  budget on the jet's size refused a program whose copy of the term
- *  shared less, 92 templates on front1's own source. */
+/*  Trees by identity, for the matcher: each node, seen through views, gets
+ *  a canonical id, a leaf its interned node and an application the pair of
+ *  its children's ids, so two nodes are the same tree exactly when their
+ *  ids are equal.  The memo and the pair table last a whole match, so
+ *  canonicalizing the program and the jets' terms costs their nodes once,
+ *  with no budget to run past: an av_equal with a budget on the jet's size
+ *  refused a program whose copy of the term shared less, 92 templates on
+ *  front1's own source. */
 typedef struct {
     nmap memo;                  /* viewed node -> canonical id */
     uint64_t *key;              /* (left id, right id) + 1, 0 empty */
@@ -675,7 +675,7 @@ static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared) {
         nmap_get(&dig, it.node, &d);
         uint32_t id = jet_find(a, d);
         /* a digest is 64 bits: the node is the jet's only if it is the
-         * jet's term, tree for tree (AUDIT.md item 8) */
+         * jet's term, tree for tree */
         if (id != AV_NONE) {
             uint32_t cn = canon_of(a, &canon, it.node), cj = canon_of(a, &canon, a->jets[id].fallback);
             if (cn == AV_NONE || cj == AV_NONE) goto done;

@@ -1,9 +1,9 @@
 /**  jetstats.c
  *
- *  What each jet does on a run (docs/DESIGN.md §6.7): its fires and the
- *  contractions they absorb, its misses -- reached at the head with fewer
- *  arguments than its arity -- and, in share mode, its demotions.  And for
- *  each fire, where its jet node came from:
+ *  What each jet does on a run: its fires and the contractions they
+ *  absorb, its misses---reached at the head with fewer arguments than its
+ *  arity---and, in share mode, its demotions.  And for each fire, where
+ *  its jet node came from:
  *
  *    top      the program as loaded, outside every jet;
  *    residual an instance of another jet J's residual, so the fire happens
@@ -19,7 +19,7 @@
  *  nodes when it instantiates a residual or copies a term, and records
  *  each as it goes.  The origins follow the nodes through collections.
  *
- *  Stats persist across runs and arenas, keyed by a jet's §5 digest.
+ *  Stats persist across runs and arenas, keyed by a jet's structural digest.
  */
 
 #define _POSIX_C_SOURCE 200809L

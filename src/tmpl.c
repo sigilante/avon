@@ -1,15 +1,15 @@
 /**  tmpl.c
  *
- *  Supercombinator templates (docs/DESIGN.md §6.9): a rule's formals and
- *  open body, as skijack writes them (python/skijack/templates.py) beside
- *  the pure SKI term the rule compiles to.  In share mode a template's key
- *  at the head with its arguments is replaced by the body, instantiated
- *  over them: one step for the S/K plumbing bracket abstraction built.
+ *  Supercombinator templates: a rule's formals and open body, as skijack
+ *  writes them (python/skijack/templates.py) beside the pure SKI term the
+ *  rule compiles to.  In share mode a template's key at the head with its
+ *  arguments is replaced by the body, instantiated over them: one step for
+ *  the S/K plumbing bracket abstraction built.
  *
  *  Nothing is trusted.  A template is used only if abstracting its body
  *  over its formals, the last first, gives its key; the check runs here,
  *  on terms built in one hash-consed table, so equal trees are one node
- *  and every comparison is node identity.  The §5 hash only finds
+ *  and every comparison is node identity.  The hash only finds
  *  candidates: a loaded term's jet node is kept for a template only if its
  *  subterm, interned in the same table, is the template's term.
  *
@@ -17,7 +17,7 @@
  *  (with their inner templates wrapped, so a nested root stays a root) and
  *  held by a->tmpl_globals, a collection root.  An instance writes only the
  *  body's open part, in children-first order: lean-ski's ibuild, so that a
- *  template here and a supercombinator proof jet (§18.1) are one object.
+ *  template here and a supercombinator proof jet are one object.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -32,7 +32,7 @@
 /*  ------------------------------------------------------ the hash-cons */
 
 /*  Canonical nodes: one per distinct tree, leaves the arena's interned
- *  leaves, applications by their canonical children.  Each carries its §5
+ *  leaves, applications by their canonical children.  Each carries its
  *  digest and the set of formal markers in it (bit i: @x<i>). */
 typedef struct {
     uint64_t *key;              /* (l << 32 | r) + 1, 0 empty: S S is 0 0 */
@@ -199,7 +199,7 @@ static bool body_push(body *b, bnode x) {
     return true;
 }
 
-/*  A referenced term, by its 16 hex digits of §5 hash. */
+/*  A referenced term, by its 16 hex digits of hash. */
 typedef struct { uint64_t digest; uint32_t node; } tref;
 
 static int tref_cmp(const void *x, const void *y) {
@@ -257,8 +257,8 @@ struct av_tmplset {
     uint64_t collections;       /* the arena's, at load: the table's node
                                    ids hold only until the next one */
     long     accepted, refused, eta, open, duplicate, wide, unbound;
-    long     words, words_refused;      /* numeral operations (§6.10) */
-    bool     fix;                       /* Y registered (§6.11) */
+    long     words, words_refused;      /* numeral operations */
+    bool     fix;                       /* Y registered */
 };
 
 static bool global_push(av_arena *a, uint32_t node, uint32_t *ix) {
@@ -375,7 +375,7 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
     T->root_last = T->nops && T->root == TMPL_OPND(TMPL_RES, T->nops - 1);
     T->key = t;
     free(opnd);
-    /* a constructor (§6.10): the body is argument h applied to the first
+    /* a constructor: the body is argument h applied to the first
      * m arguments in order, h past them; its shape (m, h - m, k - m) */
     {
         uint32_t x = T->root, m = 0;
@@ -393,7 +393,7 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
             (x & AV_PAYLOAD) >= m && (x & AV_PAYLOAD) < k)
             T->ctor = (av_ctor){ m, (x & AV_PAYLOAD) - m, k - m };
     }
-    /* a case (§6.10): the body is a formal applied to p operands, its root
+    /* a case: the body is a formal applied to p operands, its root
      * the last instruction, each application of its spine below the root
      * used by its parent alone; an instance meeting that formal as a value
      * joins the dispatch after it (reduce.c, case_join) */
@@ -614,7 +614,7 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         else if (why == 3 || why == 5) ts->eta++;
         else ts->duplicate++;
     }
-    /* the numeral operations (§6.10), when words are on: each term checked
+    /* the numeral operations, when words are on: each term checked
      * against its hash, then run on small numerals before it is keyed */
     free(text);
     text = NULL;
@@ -660,7 +660,7 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
             ts->words++;
         }
     }
-    /* Curry's Y (§6.11), when asked for: keyed like a numeral operation, so
+    /* Curry's Y, when asked for: keyed like a numeral operation, so
      * its occurrences in the term and in the globals are wrapped */
     if (a->fix_on) {
         static const char Y[] = "S (K (S I I)) (S (S (K S) K) (K (S I I)))";

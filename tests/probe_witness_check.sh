@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The probe witness's acceptance (docs/DESIGN.md §17.4): Avon's table binds
-# a corpus row's output, byte for byte as lean-ski's prover writes it.
+# The probe witness's acceptance: Avon's table binds a corpus row's
+# output, byte for byte as lean-ski's prover writes it.
 #
 # For every row of lean-ski's corpus, with its outcome from the row's Joy
 # program (below):

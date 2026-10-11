@@ -1,7 +1,6 @@
 /**  kernel.c
  *
- *  avon boot | poke | peek | load: a kernel in a pier directory
- *  (docs/DESIGN.md §9, §20).
+ *  avon boot | poke | peek | load: a kernel in a pier directory.
  */
 
 #include "cli.h"
@@ -14,8 +13,8 @@ static uint8_t *read_file(const char *path, size_t *len) {
     return (uint8_t *)b;
 }
 
-/*  The default initial subject: skijack's standard subject is unbuilt
- *  (SPEC.md §5), so until it is, a program is applied to I. */
+/*  The default initial subject: skijack's standard subject is unbuilt,
+ *  so until it is, a program is applied to I. */
 static uint8_t *default_subject(size_t *len) {
     av_arena *a = av_arena_new(0);
     av_buf b = { 0 };
@@ -48,7 +47,7 @@ static void print_value(av_arena *a, uint32_t t, size_t budget) {
 }
 
 /*  Each event a poke applies, as it applies: the outside event, then its
- *  entropy replies (§9.1). */
+ *  entropy replies. */
 typedef struct { av_pier *p; size_t budget; } event_out;
 
 static void print_event(void *ctx, uint64_t event, uint64_t steps, uint32_t effects, bool reply) {
@@ -81,7 +80,7 @@ static bool report_unanswered(const av_pier *p) {
     return report_commit(p) && !e;
 }
 
-/*  avon boot | poke | peek | load: a kernel in a pier directory (§9, §20). */
+/*  avon boot | poke | peek | load: a kernel in a pier directory. */
 int kernel_main(int argc, char **argv) {
     const char *cmd = argv[1], *pier = NULL, *subject_file = NULL, *eny_file = NULL;
     bool eny = false;
@@ -91,7 +90,7 @@ int kernel_main(int argc, char **argv) {
     uint64_t budget = 100000, v;
     bool budget_set = false;
     av_opts o = av_opts_default();
-    o.strategy = AV_SHARE;                      /* §9: kernel loops share */
+    o.strategy = AV_SHARE;                      /* kernel loops share */
     o.max_steps = 100000000;
     for (int i = 2; i < argc; i++) {
         const char *s = argv[i];
@@ -108,10 +107,10 @@ int kernel_main(int argc, char **argv) {
         else if (s[0] != '-' && nf < 256) files[nf++] = s;
         else return usage();
     }
-    /* refuse an option the command would ignore (AUDIT.md item 22): boot
-     * takes no snapshot, and without a pier makes no arena, answers no
-     * entropy and prints no event; the others reopen the pier as it was
-     * made, and only load reads a subject */
+    /* refuse an option the command would ignore: boot takes no snapshot,
+     * and without a pier makes no arena, answers no entropy and prints no
+     * event; the others reopen the pier as it was made, and only load reads
+     * a subject */
     bool boot = strcmp(cmd, "boot") == 0;
     const char *idle = snap && boot ? "--snapshot"
                      : pma && !boot ? "--pma"

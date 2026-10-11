@@ -1,4 +1,4 @@
-"""The paper's hider census, imported as the oracle (docs/DESIGN.md §22).
+"""The paper's hider census, imported as the oracle.
 
 HIDER_SCRIPTS names the directory of fixed_points_hider.py, the paper's
 scripts/; there is no default.  Nothing here re-derives a verdict: the census's own

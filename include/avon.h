@@ -1,7 +1,6 @@
 /**  avon.h
  *
- *  The runtime's public interface.  Representation follows docs/DESIGN.md
- *  §2; the reducer §3; statuses §3.4.
+ *  The runtime's public interface.
  */
 
 #ifndef AVON_H
@@ -16,7 +15,7 @@
 #include "ski.h"
 
 /*  A node: eight bytes, tag in the top two bits of l.  Nodes are addressed
- *  by 32-bit index into one arena, never by pointer.
+ *  by 32-bit index into one arena (not by pointer).
  */
 typedef struct { uint32_t l, r; } av_node;
 
@@ -29,33 +28,33 @@ typedef struct { uint32_t l, r; } av_node;
 #define AV_LEAF 2u   /* l = tag only,     r = ski_leaf               */
 #define AV_JET  3u   /* l = jet id,       r = fallback term index    */
 
-/*  A jet node's id field: the jet id, and whether its term is the
- *  dashboard's (shared, never to be written) or its own (docs/DESIGN.md
- *  §6.5: share mode writes only nodes its run created). */
+//  A jet node's id field: the jet id, and whether its term is the
+//  dashboard's (shared, never to be written) or its own (share mode writes
+//  only nodes its run created).
 #define AV_JET_SHARED (1u << 29)
 
-/*  A word (docs/DESIGN.md §6.10) is a jet node too, flagged here, and seen
- *  through by av_view like any jet node: W n, the numeral n >= 1 held as a
- *  number, its term SUC (W (n-1)), W 0 being K, so the predecessor is
- *  always its term's right child.  The id field of a word holds n; of any
- *  other jet node, the jet id. */
+//  A word is a jet node too, flagged here, and seen through by av_view
+//  like any jet node: W n, the numeral n >= 1 held as a number,
+//  its term SUC (W (n-1)), W 0 being K, so the predecessor is always its
+//  term's right child.  A word's id field holds n; any other jet
+//  node's id holds the jet id.
 #define AV_JET_WORD   (1u << 28)
 #define AV_JET_ID(l)  ((l) & (AV_JET_WORD - 1))
 #define AV_WORD_MAX   (AV_JET_WORD - 1u)
 
-/*  The most arguments a residual jet takes (§6.5).  Joy's words are
- *  constructors of a 12-way sum; Lit and Quote carry a field, so take 13. */
+//  The most arguments a residual jet takes.  SKIlark's words are constructors
+//  of a 12-way sum; Lit and Quote carry a field, so take 13.
 #define AV_JET_ARITY_MAX 32u
 
-/*  The leaf nodes of S, K, I are interned at indices 0, 1, 2. */
+//  The leaf nodes of S, K, I are interned at indices 0, 1, 2.
 #define AV_NODE_S 0u
 #define AV_NODE_K 1u
 #define AV_NODE_I 2u
 
-/*  No node: an allocation failure or an absent term. */
+//  No node: an allocation failure or an absent term.
 #define AV_NONE   UINT32_MAX
 
-/*  The most nodes an arena can hold: indices must fit in 30 bits. */
+//  An arena can hold up to this many nodes; indices must fit in 30 bits.
 #define AV_MAX_NODES (1u << AV_TAG_SHIFT)
 
 typedef enum {
@@ -72,7 +71,7 @@ const char *av_status_name(av_status s);
  *
  *  One flat array of nodes, bump-allocated.  Atoms (leaf ids >= 3) have
  *  names in a side table and one interned leaf node each.  A collection
- *  (§2, stop-and-copy) moves nodes, so an index the caller holds across a
+ *  (stop-and-copy) moves nodes, so an index the caller holds across a
  *  reduction is valid afterwards only if it was registered with
  *  av_root_push.  A root may hold AV_NONE, and a collection leaves it so.
  */
@@ -84,16 +83,16 @@ typedef struct {
     uint32_t  *atom_node;   /* by ski_leaf id: its interned leaf     */
     uint32_t   n_leaves, leaf_cap;
     uint32_t  *leaf_index;  /* atom names hashed to ids, 0 empty: a lookup
-                               is a probe, not a scan (AUDIT.md item 9) */
+                               is a probe, not a scan                 */
     uint32_t   leaf_index_cap, leaf_indexed;   /* slots; ids indexed so far */
 
     uint32_t **roots;       /* addresses of indices held by callers  */
     uint32_t   n_roots, root_cap;
 
     uint64_t   collections;
-    bool       allow_bird_atoms;   /* §4.3: off unless asked for */
+    bool       allow_bird_atoms;   /* off unless asked for */
 
-    struct av_jet *jets;        /* the dashboard (§6): its terms are roots */
+    struct av_jet *jets;        /* the dashboard: its terms are roots */
     uint32_t   njets, jetcap;
     uint32_t  *jet_index;       /* open addressing, hash -> jet id */
     uint32_t   jet_index_cap;
@@ -103,27 +102,27 @@ typedef struct {
     bool       jet_scratch_busy;   /* instances do not nest */
 
     struct av_active *active;   /* reductions in progress, innermost first */
-    struct av_interp *interps;  /* interpreter jets (§7) */
+    struct av_interp *interps;  /* interpreter jets */
     uint32_t   ninterps;
     uint64_t   probe_steps;     /* contractions probes have spent, all told */
     uint32_t  *nats;            /* known numerals: zero, suc pairs: roots  */
     uint32_t   nnats;
-    const struct av_facts *facts;   /* the store resolvers here read (§8) */
+    const struct av_facts *facts;   /* the store resolvers here read */
     struct av_jetstats *jetstats;   /* set while a reduction counting jets
                                        runs, for the jet-node makers */
-    struct av_tmpl *tmpls;      /* supercombinator templates (§6.9)       */
+    struct av_tmpl *tmpls;      /* supercombinator templates      */
     uint32_t   ntmpls, tmplcap;
     uint32_t  *tmpl_globals;    /* their bodies' closed parts: roots      */
     uint32_t   nglobals, globcap;
     uint32_t  *tmpl_scratch;    /* an instance's intermediate results    */
     uint32_t   tmpl_scratch_cap;
-    uint32_t   compiler[9];     /* the compiler jet's terms (§20.3), roots:
+    uint32_t   compiler[9];     /* the compiler jet's terms, roots:
                                    abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
-    uint32_t   word_suc;        /* words' successor term (§6.10), a root;
+    uint32_t   word_suc;        /* words' successor term, a root;
                                    0 while words are off                  */
-    bool       fix_on;          /* Y unfolds in one step (§6.11): the next
+    bool       fix_on;          /* Y unfolds in one step: the next
                                    template load registers it             */
-    struct av_pma *pma;         /* the persistent image (§19.1), or NULL  */
+    struct av_pma *pma;         /* the persistent image, or NULL  */
     uint64_t   lookups;         /* scries answered natively from it      */
 } av_arena;
 
@@ -144,7 +143,7 @@ uint32_t  av_leaf(av_arena *a, const char *name, size_t len);
 const char *av_leaf_name(const av_arena *a, ski_leaf id);
 
 /*  Register *idx as a root: a collection updates it in place.  Aborts the
- *  process if the root stack cannot grow -- a lost root would corrupt the
+ *  process if the root stack cannot grow---a lost root would corrupt the
  *  heap silently.  Pop in reverse order. */
 void av_root_push(av_arena *a, uint32_t *idx);
 void av_root_pop(av_arena *a);
@@ -165,7 +164,7 @@ static inline uint32_t av_res(const av_arena *a, uint32_t i) {
     return i;
 }
 
-/*  A word (§6.10), and its value; a numeral held natively: K is 0. */
+/*  A word, and its value; a numeral held natively: K is 0. */
 static inline bool av_is_word(const av_arena *a, uint32_t i) {
     return av_tag(a, i) == AV_JET && (a->nodes[i].l & AV_JET_WORD);
 }
@@ -205,7 +204,7 @@ typedef void (*av_roots_fn)(av_gc *g, void *ctx);
 uint32_t av_gc_evac(av_gc *g, uint32_t i);
 
 /*  A reduction in progress registers its roots, so a reduction nested in
- *  another -- a probe, or an interpreter jet's object run -- may collect
+ *  another---a probe, or an interpreter jet's object run---may collect
  *  without invalidating the outer one's indices.  av_collect evacuates
  *  every registered reduction's roots, and runs every `after` hook. */
 typedef struct av_active {
@@ -237,7 +236,7 @@ typedef struct { size_t pos; const char *msg; } av_parse_error;
 /*  Parse a whole term.  Returns its root, or AV_NONE with *err filled.
  *  A NUL byte anywhere is an error: atom names are C strings.  An atom
  *  named like one of the reference host's live combinators is an error
- *  unless a->allow_bird_atoms (§4.3).  An atom name may not begin with "@",
+ *  unless a->allow_bird_atoms.  An atom name may not begin with "@",
  *  reserved for probe markers, or contain "`", which marks the prefix form.
  */
 uint32_t av_parse(av_arena *a, const char *src, size_t len,
@@ -246,7 +245,7 @@ uint32_t av_parse(av_arena *a, const char *src, size_t len,
 /*  Append the printed form of a term to b, visiting at most `budget`
  *  nodes of its tree unfolding.  Returns false, leaving b holding a
  *  prefix, if the budget runs out: a reduced state's unfolding can be
- *  exponential in its size (§4.1).
+ *  exponential in its size.
  */
 bool av_print(const av_arena *a, uint32_t t, size_t budget, av_buf *b);
 
@@ -254,7 +253,7 @@ bool av_print(const av_arena *a, uint32_t t, size_t budget, av_buf *b);
  *
  *  True if aviary_kernel 0.1.0 would contract an atom of this name: one of
  *  its 52 live combinators other than S, K, I.  Avon holds such atoms
- *  inert, so a term carrying one would diverge from the oracle (§4.3).
+ *  inert, so a term carrying one would diverge from the oracle.
  */
 bool av_is_bird(const char *name, size_t len);
 
@@ -269,7 +268,7 @@ void av_sha256(const void *data, size_t n, uint8_t out[32]);
 
 /*  ---------------------------------------------------------- wire format
  *
- *  A term at rest is a container (docs/DESIGN.md §4.2):
+ *  A term at rest is a container:
  *
  *      "SKIT"  u8 version = 1  u8[3] zero
  *      u32 atom count n, then n atoms, each u32 length and its bytes
@@ -300,14 +299,14 @@ uint32_t av_cue(av_arena *a, const uint8_t *p, size_t n, const char **err);
 
 /*  ------------------------------------------------------------- snapshots
  *
- *  An image of one term's graph, preserving sharing (§4.2, §19).  Save
- *  copies the graph below root out of the live arena, which it does not
- *  change -- indirections resolved, jet nodes seen through, and nothing
+ *  An image of one term's graph, preserving sharing.  Save copies the
+ *  graph below root out of the live arena, which it does not
+ *  change---indirections resolved, jet nodes seen through, and nothing
  *  else, so neither the caller's other terms nor the jet dashboard (never
- *  persisted, §19) reach the image -- and refuses a graph that carries a
- *  probe marker.  It writes the image, syncs it, then writes the sidecar
- *  PATH.sum -- the root, the node count, and the SHA-256 of image and root
- *  -- and syncs that, each through a temporary file and a rename.  Load
+ *  persisted) reach the image---and refuses a graph that carries a probe
+ *  marker.  It writes the image, syncs it, then writes the sidecar
+ *  PATH.sum---the root, the node count, and the SHA-256 of image and
+ *  root---and syncs that, each through a temporary file and a rename.  Load
  *  verifies the checksum before reading anything else, then every node:
  *  tags, indices, interned leaves, no marker pointed at, and no cycle.
  */
@@ -318,7 +317,7 @@ av_arena *av_snapshot_load(const char *path, uint32_t *root, const char **err);
 /*  ----------------------------------------------------------------- reduce */
 
 typedef enum {
-    AV_COPY,    /* no update in place: the reference host's counts (§1.1) */
+    AV_COPY,    /* no update in place: the reference host's counts      */
     AV_SHARE,   /* update in place: same values, fewer contractions      */
 } av_strategy;
 
@@ -331,42 +330,42 @@ typedef struct {
     volatile sig_atomic_t *interrupt;   /* polled with fuel; may be NULL */
     bool        no_collect;     /* grow instead of collecting, so every
                                    index the caller holds stays valid */
-    bool        jets;           /* fire residual jets (§6.5); off, a jet
+    bool        jets;           /* fire residual jets; off, a jet
                                    node is only the term it stands for */
-    bool        interp_jets;    /* fire interpreter jets (§7): these
+    bool        interp_jets;    /* fire interpreter jets: these
                                    change counts, so off by default */
-    bool        install_jets;   /* fire the unquoter's jet (§20.2):
+    bool        install_jets;   /* fire the unquoter's jet:
                                    it changes counts too; off by default */
-    bool        compile_jets;   /* fire the compiler jet (§20.3): it
+    bool        compile_jets;   /* fire the compiler jet: it
                                    changes counts too; off by default */
     uint64_t    jet_check;      /* check every Nth fire against the
-                                   unjetted run (§6.6); 0 never */
+                                   unjetted run; 0 never */
     struct av_census *census;   /* copy mode: record calls; NULL off */
-    struct av_trace *trace;     /* copy mode: observe the head run (§22);
-                                   NULL off                               */
+    struct av_trace *trace;     /* copy mode: observe the head run; NULL
+                                   off                                    */
     struct av_profile *profile; /* share mode: charge each contraction to
-                                   a named term (§6.7); NULL off */
+                                   a named term; NULL off */
     struct av_jetstats *jetstats;   /* count each jet's fires, misses and
-                                   demotions, and each fire's origin
-                                   (§6.7); NULL off */
+                                   demotions, and each fire's origin;
+                                   NULL off */
     bool        templates;      /* share mode: instantiate supercombinator
-                                   templates (§6.9); copy mode ignores it */
-    bool        data;           /* share mode: data jets (§6.10), numeral
+                                   templates; copy mode ignores it */
+    bool        data;           /* share mode: data jets, numeral
                                    operations on words and constructor
                                    dispatch; copy mode ignores it         */
     bool        fix;            /* share mode: Y g unfolds to g (Y g) in
-                                   one step (§6.11); copy mode ignores it */
+                                   one step; copy mode ignores it */
     bool        fix_shared;     /* with fix: every unfolding of a g passes
-                                   on one Y g, never written (§6.11,
-                                   "Shared"): less memory, not less time  */
+                                   on one Y g, never written: less
+                                   memory, not less time                  */
     bool        p2;             /* share mode: P applied to a state of
                                    sixteen 31-bit elements runs natively,
-                                   one step (§6.12); copy mode ignores it */
+                                   one step; copy mode ignores it */
     bool        no_join;        /* with data: never join a case to its
-                                   instance (§6.10), for tests comparing
+                                   instance, for tests comparing
                                    the two; every count is the same       */
     bool        no_defer;       /* with templates: write every instance's
-                                   root and spine at once (§6.13), for
+                                   root and spine at once, for
                                    tests comparing the two; every count
                                    and state is the same                  */
 } av_opts;
@@ -375,25 +374,25 @@ typedef struct {
     uint32_t  term;     /* the state reached: the value, or where it stopped */
     uint64_t  steps;    /* host contractions, a jet's charge included       */
     av_status status;
-    uint64_t  jet_calls;    /* jets fired, reported beside steps (§6.5)   */
+    uint64_t  jet_calls;    /* jets fired, reported beside steps          */
     uint64_t  interp_calls; /* interpreter jets fired, among jet_calls    */
     uint64_t  jet_steps;    /* contractions the fires charged, among steps */
     bool      jet_fault;    /* a jet check disagreed: status INTERRUPTED  */
     uint64_t  tmpl_calls;   /* template instantiations, one step each,
-                               among steps (§6.9)                         */
-    uint64_t  dispatches;   /* data jets (§6.10): a word or a constructor
+                               among steps                                */
+    uint64_t  dispatches;   /* data jets: a word or a constructor
                                template meeting its continuations, one
                                step each, among steps                     */
     uint64_t  fused;        /* dispatches that instantiated the branch's
                                template in the same step, among them      */
     uint64_t  word_ops;     /* numeral operations run on words, one step
                                each, among steps                          */
-    uint64_t  fix_calls;    /* Y unfolded (§6.11), one step each, among
+    uint64_t  fix_calls;    /* Y unfolded, one step each, among
                                steps                                      */
-    uint64_t  joins;        /* cases joined to their instances (§6.10):
+    uint64_t  joins;        /* cases joined to their instances:
                                an instantiation and the dispatch after
                                it, two steps each, among steps            */
-    uint64_t  p2_calls;     /* P run natively (§6.12), one step each,
+    uint64_t  p2_calls;     /* P run natively, one step each,
                                among steps                                */
     uint64_t  p2_declines;  /* P met an argument neither a state as it
                                stands nor a chain of P calls ending in
@@ -401,7 +400,7 @@ typedef struct {
     uint64_t  p2_unbound;   /* jet nodes whose term was not P's at a fire
                                or a decline, made indirections            */
     uint64_t  deferred;     /* instances whose root and spine were left in
-                               the stack (§6.13), among tmpl_calls and
+                               the stack, among tmpl_calls and
                                fused                                      */
 } av_result;
 
@@ -416,15 +415,15 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o);
 
 /*  ---------------------------------------------------------------- probing
  *
- *  Reading a value by running it, never by reading its syntax (docs/
- *  DESIGN.md §0, python/skijack/run.py): a Scott datum of an n-constructor
+ *  Reading a value by running it, never by reading its syntax
+ *  (python/skijack/run.py): a Scott datum of an n-constructor
  *  type, applied to n fresh marker atoms and reduced to weak head normal
  *  form, returns the marker of its own constructor applied to its fields.
  *  Markers are atoms named "@" and a number.  The parser and cue refuse
  *  any atom name beginning with "@", so a term read from outside cannot
  *  carry one; a caller building atoms with av_leaf must not either.  A
- *  snapshot may hold such leaves -- an arena that has probed or loaded
- *  jets interns them -- but the loader refuses an image in which any node
+ *  snapshot may hold such leaves---an arena that has probed or loaded
+ *  jets interns them---but the loader refuses an image in which any node
  *  or the root points at one.
  *  Probes reduce with the caller's options but never collect, so the
  *  fields and memo keys they hand back stay valid.
@@ -444,8 +443,8 @@ typedef struct {
 bool av_peel(av_arena *a, uint32_t t, unsigned nctors, const av_opts *o,
              av_peeled *out, const char **err);
 
-/*  Decode a quoted datum of an object type -- nctors constructors, names
- *  in declaration order, app_ctor the application constructor -- into a
+/*  Decode a quoted datum of an object type---nctors constructors, names
+ *  in declaration order, app_ctor the application constructor---into a
  *  term whose leaves are the constructor names, for printing.  Memoized by
  *  node, and at most max_probes probes.
  */
@@ -459,11 +458,11 @@ bool av_read_nat(av_arena *a, uint32_t t, size_t max_depth, const av_opts *o,
 
 /*  ---------------------------------------------------------------- witness
  *
- *  The witness strategy (docs/DESIGN.md §17): lean-ski's heap machine,
+ *  The witness strategy: lean-ski's heap machine,
  *  Air.stepG, run literally over its own append-only heap of the circuit's
  *  cells.  Its contraction count equals copy mode's, and its table is the
  *  one Ski/AirCheck.lean decides and bench/plonky3 proves.  Weak head normal
- *  form only.  Terms with atoms are refused for now (§17.3).
+ *  form only.  Terms with atoms are refused for now.
  */
 
 /*  Cell tags, numbered as the Plonky3 tables' mem bus numbers them. */
@@ -551,8 +550,8 @@ av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *
  *  lean-ski's output bound (Ski/AirProbe.lean, Air.AcceptsP): a jetted run
  *  proves a term halts; probe segments prove what it halts to.  A plan
  *  (`lake exe jets plan OUTCOME`) has one segment per constructor of the
- *  outcome, depth first.  Each segment probes a pointer -- the loaded
- *  head, or a field its parent popped -- by writing k fresh markers and a
+ *  outcome, depth first.  Each segment probes a pointer---the loaded
+ *  head, or a field its parent popped---by writing k fresh markers and a
  *  stack of them, running jetted to a halt, and requiring the marker
  *  ctor + base at the head over exactly `arity` fields.
  */
@@ -583,7 +582,7 @@ typedef struct {
  *  segment a probe row, the markers, and a jetted run to a halt with every
  *  row but the halted one; then the final state as the last row.  AV_WHNF
  *  on success; AV_INTERRUPTED, with *err naming the segment, when one ends
- *  anywhere but its marker over exactly its fields -- for a plan from
+ *  anywhere but its marker over exactly its fields---for a plan from
  *  `jets plan` and a licensed jet table, the term does not decode to the
  *  plan's outcome; AV_SIZE on a budget or a malformed plan.  *err may
  *  point into pr, valid until av_probe_free.  An accepted table's meaning
@@ -606,9 +605,9 @@ bool av_probe_table(const av_witness *w, const av_probe *pr, unsigned min_log,
  *  lean-ski's composed statement (`public.txt`, ComposedText.publicTextC):
  *  a header line, the region size, the log heights, the bit count, the
  *  segments' roots, the nil, the registers, and the composed machine's
- *  heap with its private cells -- the bits at 3 and the region after them
- *  -- blank (`W`).  A statement for the circuit with jets
- *  (docs/ZK-JETS.md, milestone 8) names four log heights, `log R M Lp Li`:
+ *  heap with its private cells---the bits at 3 and the region after
+ *  them---blank (`W`).  A statement for the circuit with jets names four log
+ *  heights, `log R M Lp Li`:
  *  the CPU's, the memory's, POP's and INSTW's, its public budgets.  Avon
  *  decides nothing here: lean-ski's `composed statement-jets` checks the
  *  statement, `composed check-cj` the table.
@@ -674,26 +673,25 @@ av_status av_witness_run_p2(const av_cstmt *s, const av_cell *priv, av_witness *
 void av_p2_permute(uint32_t s[16]);
 bool av_p2_selftest(void);
 
-/*  The Poseidon2 jet (docs/DESIGN.md §6.12).  lean-ski's term P
- *  (Ski/ZK/Poseidon2SKI.lean, printed by `lake exe p2run`) takes a state
- *  `stateN vs` -- sixteen 31-bit elements, each `bitsT 31 v`, least
- *  significant bit first, in pairs `pairT a b = S (S I (K a)) (K b)`, a
- *  bit K (1) or K I (0), each list ending in K -- to `stateN (permute vs)`
- *  (P_specN).  av_p2_register makes p a dashboard entry with the p2 flag,
- *  refusing p unless its full digest (av_p2_digest: §5's Merkle hash with
- *  every digest kept whole, 256 bits, over S, K and I) is P's,
- *  AV_P2_SHA256, pinned here;
- *  then, after av_jets_match, av_p2_bind keeps a jet node for it only
- *  where its term is p's, node for node, and makes every other one an
- *  indirection.  With av_opts.p2, share mode rewrites P at the head with
- *  an argument that is such a state, as it stands, to the permuted state,
- *  one step; over a chain P (P … x) ending in one, it fires the innermost
- *  call first, in place.  Any other argument runs a fresh copy of P's
- *  term, a decline counted, so the node's own term is never written.  At
- *  every fire and decline the jet node's term is checked against p's
- *  again, so a jet node made after the bind is held to it too.  av_p2_state_read reads a state through
- *  indirections and jet nodes: false unless t is one. */
-#define AV_P2_DIGEST "skijack-1:43f97c21e068ebe7"   /* lean-ski's Poseidon2SKI.P, §5 */
+/*  The Poseidon2 jet.  lean-ski's term P (Ski/ZK/Poseidon2SKI.lean, printed
+ *  by `lake exe p2run`) takes a state `stateN vs`---sixteen 31-bit
+ *  elements, each `bitsT 31 v`, least significant bit first, in pairs
+ *  `pairT a b = S (S I (K a)) (K b)`, a bit K (1) or K I (0), each list
+ *  ending in K---to `stateN (permute vs)` (P_specN).  av_p2_register makes
+ *  p a dashboard entry with the p2 flag, refusing p unless its full digest
+ *  (av_p2_digest: the structural hash with every digest kept whole, 256
+ *  bits, over S, K and I) is P's, AV_P2_SHA256, pinned here; then, after
+ *  av_jets_match, av_p2_bind keeps a jet node for it only where its term is
+ *  p's, node for node, and makes every other one an indirection.  With
+ *  av_opts.p2, share mode rewrites P at the head with an argument that is
+ *  such a state, as it stands, to the permuted state, one step; over a
+ *  chain P (P … x) ending in one, it fires the innermost call first, in
+ *  place.  Any other argument runs a fresh copy of P's term, a decline
+ *  counted, so the node's own term is never written.  At every fire and
+ *  decline the jet node's term is checked against p's again, so a jet node
+ *  made after the bind is held to it too.  av_p2_state_read reads a state
+ *  through indirections and jet nodes: false unless t is one. */
+#define AV_P2_DIGEST "skijack-1:43f97c21e068ebe7"   /* lean-ski's Poseidon2SKI.P */
 #define AV_P2_SHA256 "391f7d9a5ad5e744711e18be27b9952a1bb802f8243672552fab4b2e870405b3"
 bool     av_p2_digest(const av_arena *a, uint32_t t, char out[65]);
 uint32_t av_p2_register(av_arena *a, uint32_t p, const char **err);
@@ -702,10 +700,10 @@ bool     av_p2_state_read(const av_arena *a, uint32_t t, uint32_t s[16]);
 
 /*  The table in lean-ski's `composed check-cj` format, as bench/plonky3's
  *  compj-prove writes it: the header, `W w`, the memory padded with nil
- *  cells to 2^M, `ends n` and the segments' ends -- the restarts, then the
- *  padded table's last row -- and the rows padded to 2^R by repeating the
+ *  cells to 2^M, `ends n` and the segments' ends---the restarts, then the
+ *  padded table's last row---and the rows padded to 2^R by repeating the
  *  last.  The statement's heights, not the run's: they are its public
- *  budgets (docs/DESIGN.md §17.2). */
+ *  budgets. */
 bool av_composed_table(const av_cstmt *s, const av_witness *w, const size_t *ends,
                        av_buf *out);
 
@@ -724,8 +722,9 @@ bool av_prefix(const av_arena *a, uint32_t t, size_t budget, av_buf *out);
 /*  Parse the prefix form: S, K, I, and ` before an application's function
  *  and argument, surrounding whitespace allowed.  AV_NONE on anything else.
  */
-/*  The DAG form, `dag <id>=<rhs> ... @<root>` on one line (docs/RUNTIME.md,
- *  "Frame traces"): AV_NONE with *msg on anything malformed. */
+/*  The DAG form, `dag <id>=<rhs> ... @<root>` on one line: each <rhs> is
+ *  S, K, I, an atom, or `<id>.<id>`, an application of earlier ids.
+ *  AV_NONE with *msg on anything malformed. */
 uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg);
 
 uint32_t av_parse_prefix(av_arena *a, const char *src, size_t len,
@@ -733,8 +732,8 @@ uint32_t av_parse_prefix(av_arena *a, const char *src, size_t len,
 
 /*  ------------------------------------------------------ structural hash
  *
- *  skijack's dictionary hash (python/skijack/dictionary.py, docs/DESIGN.md
- *  §5): a Merkle hash over the tree, a leaf hashing its name and an
+ *  skijack's dictionary hash (python/skijack/dictionary.py): a Merkle
+ *  hash over the tree, a leaf hashing its name and an
  *  application "(" + h(fn) + " " + h(arg) + ")", each SHA-256 truncated to
  *  16 hex digits, published as "skijack-1:" and the digits.  For dispatch,
  *  never for commitment.  A digest is the hash's first 8 bytes.
@@ -749,22 +748,24 @@ bool av_hash_parse(const char *s, uint64_t *digest);
 
 /*  --------------------------------------------------------------- jets
  *
- *  The dashboard (docs/DESIGN.md §6): digest -> jet.  A jet is a residual
- *  jet (§6.5): its term g is reduced in copy mode, jets off, applied to k
- *  fresh atoms, until an atom reaches the head or the run halts; the
- *  state reached is the residual and the contractions its cost.  k is the
- *  least in 1..AV_JET_ARITY_MAX for which an atom reaches the head -- the
- *  genericity
- *  argument of §6.5 holds for any k, so this is a choice of how much work
- *  one fire does, not of correctness.  A jet fires when its node is at the
- *  head with at least k arguments and the fuel left covers the cost: the
- *  residual is instantiated over the arguments and the cost charged, so a
- *  copy-mode count is the unjetted count, contraction for contraction.
+ *  The dashboard: digest -> jet.  A jet is a residual jet: its term g is
+ *  reduced in copy mode, jets off, applied to k fresh atoms, until an atom
+ *  reaches the head or the run halts; the state reached is the residual and
+ *  the contractions its cost.  An argument is inert until it reaches the
+ *  head, and the atom run halts exactly there, so g applied to any k
+ *  arguments takes the same contractions to the residual with the arguments
+ *  for the atoms.  k is the least in 1..AV_JET_ARITY_MAX for which an atom
+ *  reaches the head; the argument holds for any k, so this is a choice of
+ *  how much work one fire does, not of correctness.  A jet fires when its
+ *  node is at the head with at least k arguments and the fuel left covers
+ *  the cost: the residual is instantiated over the arguments and the cost
+ *  charged, so a copy-mode count is the unjetted count, contraction for
+ *  contraction.
  */
-/*  A Scott constructor (docs/DESIGN.md §6.8): the term takes `fields`
- *  fields, then `count` continuations, and applies continuation `index` to
- *  the fields, in order: C a1 .. af k0 .. k(n-1) = k_index a1 .. af.  K is
- *  (0, 0, 2), K I (0, 1, 2), T (1, 0, 1), V (2, 0, 1).  count 0: not one.
+/*  A Scott constructor: the term takes `fields` fields, then `count`
+ *  continuations, and applies continuation `index` to the fields, in
+ *  order: C a1 .. af k0 .. k(n-1) = k_index a1 .. af.  K is (0, 0, 2),
+ *  K I (0, 1, 2), T (1, 0, 1), V (2, 0, 1).  count 0: not one.
  */
 typedef struct { unsigned fields, index, count; } av_ctor;
 
@@ -780,37 +781,37 @@ typedef struct av_jet {
     uint32_t  term_nodes;       /* nodes a private copy of the term takes  */
     size_t    atoms;            /* the term's size, in leaves              */
 
-    /*  The residual compiled (docs/DESIGN.md §6.5): one instruction per
-     *  node an instance builds, in post-order, two operands each; an
-     *  operand names a constant, an argument, or an earlier result.  The
-     *  constants are node indices, and roots. */
+    /*  The residual compiled: one instruction per node an instance builds,
+     *  in post-order, two operands each; an operand names a constant, an
+     *  argument, or an earlier result.  The constants are node indices, and
+     *  roots. */
     uint32_t *ops;
     uint32_t  nops;
     uint32_t *consts;
     uint32_t  nconsts;
     uint32_t  root;             /* the operand the instance is            */
 
-    bool      residual_ok;      /* a residual jet (§6.5); else only an
+    bool      residual_ok;      /* a residual jet; else only an
                                    interpreter jet's key                   */
-    int32_t   interp;           /* its interpreter jet (§7), or -1         */
-    av_ctor   ctor;             /* its constructor shape (§6.8), if any    */
-    uint32_t  resolves;         /* a fact store's resolver (§8): 1 + the
+    int32_t   interp;           /* its interpreter jet, or -1              */
+    av_ctor   ctor;             /* its constructor shape, if any           */
+    uint32_t  resolves;         /* a fact store's resolver: 1 + the
                                    facts it encodes; 0 if not one         */
     uint8_t   admitted;         /* its native lookup: 0 unchecked, 1 agrees
                                    with the term, 2 refused               */
-    bool      unquote;          /* the unquoter, UQ (§20.2): install      */
-    bool      compiler;         /* the compiler's abstraction (§20.3)     */
-    uint32_t  tmpl;             /* 1 + its template in a->tmpls (§6.9), or 0 */
-    uint8_t   word_op;          /* a numeral operation on words (§6.10):
+    bool      unquote;          /* the unquoter, UQ: install              */
+    bool      compiler;         /* the compiler's abstraction             */
+    uint32_t  tmpl;             /* 1 + its template in a->tmpls, or 0     */
+    uint8_t   word_op;          /* a numeral operation on words:
                                    an AV_WOP_*, or 0                      */
-    bool      fix;              /* Curry's Y (§6.11): Y g unfolds to g (Y g) */
-    bool      p2;               /* Poseidon2's term P (§6.12): P applied to a
+    bool      fix;              /* Curry's Y: Y g unfolds to g (Y g)      */
+    bool      p2;               /* Poseidon2's term P: P applied to a
                                    state runs natively                    */
     uint32_t  p2_nodes;         /* its term's distinct nodes, the bound on
                                    comparing a jet node's term with it    */
 } av_jet;
 
-/*  The numeral operations (§6.10), skijack's natAdd .. natIfLe. */
+/*  The numeral operations, skijack's natAdd .. natIfLe. */
 enum { AV_WOP_ADD = 1, AV_WOP_SUB, AV_WOP_MUL, AV_WOP_IFEQ, AV_WOP_IFLE };
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
@@ -830,20 +831,20 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
 long av_jets_load(av_arena *a, const char *path, size_t min_atoms,
                   const char **err);
 
-/*  The constructor jets (docs/DESIGN.md §6.8): register every distinct
- *  subterm of t, of 2 to max_atoms leaves, that is a Scott constructor --
- *  whatever its encoding, in a dictionary or not -- and wrap the inner
- *  jets.  Match t afterwards, as for a dictionary.  Returns the number of
- *  new jets, or -1 when out of memory.
+/*  The constructor jets: register every distinct subterm of t, of 2 to
+ *  max_atoms leaves, that is a Scott constructor---whatever its encoding,
+ *  in a dictionary or not---and wrap the inner jets.  Match t afterwards,
+ *  as for a dictionary.  Returns the number of new jets, or -1 when out of
+ *  memory.
  */
 long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms);
 
-/*  t's constructor shape, by running it on fresh atoms (§6.8); count 0 if
+/*  t's constructor shape, by running it on fresh atoms; count 0 if
  *  t is not a constructor within max_steps a run. */
 av_ctor av_ctor_of(av_arena *a, uint32_t t, uint64_t max_steps);
 
-/*  The loader's match (§6.3): a fresh copy of t -- no node of t is reused,
- *  so the result shares nothing with the dashboard -- in which every
+/*  The loader's match: a fresh copy of t---no node of t is reused,
+ *  so the result shares nothing with the dashboard---in which every
  *  subterm whose hash is a jet's is wrapped in a jet node.  AV_NONE if out
  *  of memory.
  */
@@ -856,13 +857,13 @@ int av_equal(const av_arena *a, uint32_t x, uint32_t y, size_t budget);
 
 /*  ------------------------------------------------------- interpreter jets
  *
- *  The interpreter jet (docs/DESIGN.md §7): a generated interpreter's fuel
- *  loop, `loop params fuel <t>`, run natively.  The datum is decoded to a
- *  live object term by probing, reduced in copy mode with object fuel --
- *  so the fuel boundary is the interpreter's, attempt for attempt -- with
- *  residual jets as the host has them and interpreter jets off inside, and the outcome
- *  encoded with the program's own constructors.  The spec comes from
- *  skijack's interpreters.tsv, each arm classified there by running it; the
+ *  The interpreter jet: a generated interpreter's fuel loop, `loop params
+ *  fuel <t>`, run natively.  The datum is decoded to a live object term by
+ *  probing, reduced in copy mode with object fuel---so the fuel boundary
+ *  is the interpreter's, attempt for attempt---with residual jets as the
+ *  host has them and interpreter jets off inside, and the outcome encoded
+ *  with the program's own constructors.  The spec comes from skijack's
+ *  interpreters.tsv, each arm classified there by running it; the
  *  constructor terms from its dictionary.tsv.  A `diverge` arm reached at
  *  the head makes the jet decline, so the unjetted interpreter diverges as
  *  it would.  These jets change counts: a fire charges the contractions it
@@ -897,16 +898,16 @@ typedef struct av_interp {
  *  that is one of the object type's constructor terms, or the application
  *  constructor over two fields, and a fuel numeral that is a known zero or
  *  a known suc over a numeral, decode at once; anything else is probed.
- *  The runtime may recognize structure (§3 of RUNTIME-DESIGN.md), and a
- *  node that is a constructor applied to its fields behaves as one. */
+ *  The runtime may recognize structure: a node that is a constructor
+ *  applied to its fields behaves as one. */
 long av_interps_load(av_arena *a, const char *interps, const char *dictionary,
                      const char **err);
 
 /*  ------------------------------------------------------------ templates
  *
- *  Supercombinator templates (docs/DESIGN.md §6.9): each rule's formals and
- *  open body, from skijack's templates.tsv and template_terms.tsv, keyed
- *  by the §5 hash of the SKI term it compiles to.  Load them after every
+ *  Supercombinator templates: each rule's formals and open body, from
+ *  skijack's templates.tsv and template_terms.tsv, keyed by the structural
+ *  hash of the SKI term it compiles to.  Load them after every
  *  dictionary and before av_jets_match, then bind them to the matched
  *  term; nothing may collect between.  A template of more than
  *  AV_JET_ARITY_MAX formals is skipped.  A template is kept only if its body
@@ -928,14 +929,14 @@ typedef struct av_tmpl {
                                    instance may write it over the redex   */
     bool      globals_made;
     uint8_t  *sucop;            /* per instruction: it applies SUC, so an
-                                   instance may build a word (§6.10); NULL
+                                   instance may build a word; NULL
                                    when none does                         */
     uint32_t  nsuc;             /* such instructions: an instance takes
                                    nops + nsuc nodes at most              */
-    av_ctor   ctor;             /* a Scott constructor's shape (§6.8), if
-                                   its body is v_h v0 .. v(m-1): data jets
-                                   dispatch it (§6.10)                    */
-    uint8_t   case_h, case_p;   /* a case (§6.10): the body is formal
+    av_ctor   ctor;             /* a Scott constructor's shape, if its
+                                   body is v_h v0 .. v(m-1): data jets
+                                   dispatch it                            */
+    uint8_t   case_h, case_p;   /* a case: the body is formal
                                    case_h - 1 applied to case_p operands,
                                    written over the redex root; 0 none    */
     uint8_t  *case_spine;       /* per instruction: on that spine, used by
@@ -959,34 +960,33 @@ bool        av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t);
 void        av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,
                                 long *skipped, long *unbound);
 void        av_templates_free(av_tmplset *ts);
-/*  Numeral operations (§6.10) the templates' DIR/words.tsv offered: those
+/*  Numeral operations the templates' DIR/words.tsv offered: those
  *  admitted, and those whose terms failed their probes. */
 void        av_templates_word_counts(const av_tmplset *ts, long *admitted, long *refused);
-/*  Whether the load registered Y (§6.11): av_fix_on was called first. */
+/*  Whether the load registered Y: av_fix_on was called first. */
 bool        av_templates_fix(const av_tmplset *ts);
 
 /*  ------------------------------------------------------------ words
  *
- *  Data jets on numerals (docs/DESIGN.md §6.10).  Turn words on before
- *  av_templates_load, which then reads DIR/words.tsv, skijack's numeral
- *  operations; after av_templates_bind, av_words_scan turns the closed
- *  numerals of t and of the templates' globals into words, in place, and
- *  av_words_mark finds the template instructions that apply SUC.  With
- *  av_opts.data, share mode runs an operation natively when its operands
- *  are words already, and otherwise runs its term.  A word meeting its
- *  continuations dispatches in one step whether or not the option is on:
- *  it exists only where these calls made it.
+ *  Data jets on numerals.  Turn words on before av_templates_load, which
+ *  then reads DIR/words.tsv, skijack's numeral operations; after
+ *  av_templates_bind, av_words_scan turns the closed numerals of t and of
+ *  the templates' globals into words, in place, and av_words_mark finds the
+ *  template instructions that apply SUC.  With av_opts.data, share mode
+ *  runs an operation natively when its operands are words already, and
+ *  otherwise runs its term.  A word meeting its continuations dispatches in
+ *  one step whether or not the option is on: it exists only where these
+ *  calls made it.
  */
 bool av_words_on(av_arena *a);
 
 /*  ------------------------------------------------------------ frame traces
  *
- *  An observer of copy mode's head run (docs/DESIGN.md §22), for the pure S
- *  calculus with one opaque atom, the passenger: before each S contraction
- *  a line `n L positions d D event arity` (docs/RUNTIME.md, "Frame
- *  traces"), frames dumped as a node table at chosen steps, and, at the
- *  end, the halt and the records.  It decides nothing.  Set av_opts.trace
- *  with av_opts.no_collect, strategy copy and whnf_only.
+ *  An observer of copy mode's head run, for the pure S calculus with one
+ *  opaque atom, the passenger: before each S contraction a line `n L
+ *  positions d D event arity`, frames dumped as a node table at chosen
+ *  steps, and, at the end, the halt and the records.  It decides nothing.
+ *  Set av_opts.trace with av_opts.no_collect, strategy copy and whnf_only.
  */
 typedef struct av_trace av_trace;
 typedef struct {
@@ -1006,29 +1006,29 @@ bool      av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_
 /*  The confirmed records' steps n and n+1, for a second pass; malloc'd. */
 size_t    av_trace_record_steps(const av_trace *t, size_t conf, uint64_t **out);
 /*  The frames the census reads over the confirmed records, in its order
- *  (docs/RUNTIME.md, "Frame traces": --frame-dump=census); malloc'd. */
+ *  (--frame-dump=census); malloc'd. */
 size_t    av_trace_census_steps(const av_trace *t, size_t conf, uint64_t **out);
 uint64_t  av_trace_steps_seen(const av_trace *t);
 void      av_trace_flush(av_trace *t);
-/*  Y unfolded in one step (docs/DESIGN.md §6.11): call before
- *  av_templates_load, which then registers Curry's Y, found in the loaded
- *  term and the templates' globals by tree identity.  With av_opts.fix,
- *  share mode rewrites Y g, Y at the head with an argument, to g (Y g), a
- *  fresh Y g: convertible, acyclic, one step. */
+/*  Y unfolded in one step: call before av_templates_load, which then
+ *  registers Curry's Y, found in the loaded term and the templates' globals
+ *  by tree identity.  With av_opts.fix, share mode rewrites Y g, Y at the
+ *  head with an argument, to g (Y g), a fresh Y g: convertible, acyclic,
+ *  one step. */
 void av_fix_on(av_arena *a);
 long av_words_scan(av_arena *a, uint32_t t);    /* words made, or -1 */
 bool av_words_mark(av_arena *a);
 
 /*  ------------------------------------------------------------ jet stats
  *
- *  What each jet does on a run (docs/DESIGN.md §6.7): fires and the
- *  contractions they absorb; misses, reached at the head with fewer
- *  arguments than its arity; share-mode demotions, and those that copied
- *  its term.  And each fire's origin: its jet node from the program as
- *  loaded (top), from an instance of another jet's residual -- after that
- *  jet fired -- or from another jet's term, entered because that jet did
- *  not.  Keyed by §5 digest, across runs and arenas; av_jetstats_begin
- *  once per loaded, matched program, before its reductions.
+ *  What each jet does on a run: fires and the contractions they absorb;
+ *  misses, reached at the head with fewer arguments than its arity;
+ *  share-mode demotions, and those that copied its term.  And each fire's
+ *  origin: its jet node from the program as loaded (top), from an instance
+ *  of another jet's residual---after that jet fired---or from another jet's
+ *  term, entered because that jet did not.  Keyed by digest, across runs
+ *  and arenas; av_jetstats_begin once per loaded, matched program, before
+ *  its reductions.
  */
 typedef struct av_jetstats av_jetstats;
 
@@ -1063,10 +1063,10 @@ long av_jets_load_only(av_arena *a, const char *path, size_t min_atoms,
 
 /*  ------------------------------------------------------- the front end
  *
- *  The SKIjack-0 front end (docs/DESIGN.md §20.3): `front` applied to a
- *  program's 7-bit character codes reduces to ROk (OCons name tm ..) or
- *  RErr.  The terms are the front end's own: SCons, SNil and Code, Lo, Hi
- *  build the input, each code's datum once.
+ *  The SKIjack-0 front end: `front` applied to a program's 7-bit character
+ *  codes reduces to ROk (OCons name tm ..) or RErr.  The terms are the
+ *  front end's own: SCons, SNil and Code, Lo, Hi build the input, each
+ *  code's datum once.
  */
 typedef struct { uint32_t front, scons, snil, code, lo, hi; } av_front0;
 
@@ -1077,16 +1077,16 @@ uint32_t av_front0_input(av_arena *a, const av_front0 *f, const char *src, size_
  *  collection on: a line `name TAB hash` per name, in its order, or
  *  `RErr`.  0 for ROk, 1 for RErr, -1 with *err if it does not read.
  *  *steps counts every probe's contractions, and *tally (if not NULL)
- *  sums them with the template instantiations (§6.9), dispatches and
- *  numeral operations (§6.10) among them. */
+ *  sums them with the template instantiations, dispatches and numeral
+ *  operations among them. */
 int      av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
                         uint64_t *steps, av_result *tally, const char **err);
 
 /*  ---------------------------------------------------------------- profile
  *
- *  Which named terms a share-mode run executes (docs/DESIGN.md §6.7): at
- *  av_profile_begin every node of the loaded term belongs to the innermost
- *  subterm a name's §5 hash matches, and each contraction is charged to the
+ *  Which named terms a share-mode run executes: at av_profile_begin every
+ *  node of the loaded term belongs to the innermost subterm a name's
+ *  structural hash matches, and each contraction is charged to the
  *  owner of the first loaded node among its combinator's partial
  *  applications (`S f`, `S f g`; `K x`; the redex `I x`), or to a row for
  *  code the run built.
@@ -1110,21 +1110,21 @@ uint64_t    av_profile_total(const av_profile *p);
 
 /*  ----------------------------------------------------------------- census
  *
- *  Which terms a program calls, for choosing jets (docs/DESIGN.md §6.7).
+ *  Which terms a program calls, for choosing jets.
  *  In copy mode a contraction puts a term in function position: the x of
  *  S x y z, K x y and I x; the run starts with the loaded term there.  The
  *  census records every left-spine prefix of
- *  it -- the nodes a jet could be matched on -- by a structural fingerprint,
+ *  it---the nodes a jet could be matched on---by a structural fingerprint,
  *  with how many arguments were there to meet it.  A second pass captures
  *  the chosen prefixes' terms into the census's own arena, and the analysis
- *  registers each as a residual jet (§6.5), for its arity and cost; a third
+ *  registers each as a residual jet, for its arity and cost; a third
  *  pass measures what each alone would absorb, a call that falls inside a
  *  fire's own window counting as absorbed rather than as another fire.
  */
 typedef struct av_census av_census;
 
 typedef struct {
-    uint64_t  fp;               /* the census's fingerprint, not §5's hash */
+    uint64_t  fp;               /* the census's fingerprint, not the hash  */
     uint64_t  calls;            /* times the prefix met the head           */
     uint64_t  hist[10];         /* arguments there: 0 .. 8, and 9 or more  */
     size_t    atoms;            /* its size, in leaves                     */
@@ -1134,11 +1134,11 @@ typedef struct {
     uint64_t  fires, saved;     /* measured, this jet alone: a call inside
                                    a fire's own window is absorbed, not a
                                    fire (recursion re-enters its window)   */
-    char      hash[27];         /* §5's, when captured                     */
-    av_ctor   ctor;             /* its constructor shape (§6.8), if one    */
+    char      hash[27];         /* the structural hash, when captured     */
+    av_ctor   ctor;             /* its constructor shape, if one           */
     int64_t   folds_into;       /* the higher-ranked row it folds into: a
                                    subterm of it (or the reverse), with as
-                                   many calls -- one call's layers; -1 if
+                                   many calls---one call's layers; -1 if
                                    rows fold into it instead               */
     size_t    folded;           /* rows folded into it, when it heads      */
 } av_census_row;
@@ -1155,8 +1155,8 @@ void           av_census_select(av_census *c, size_t n, size_t min_atoms);
 void           av_census_analyze(av_census *c);
 
 /*  Before each run, with the term it loaded: only a subterm of loaded code
- *  can become a jet -- the matcher wraps loaded code, never what a run
- *  builds -- so only those are counted.  A fire's window does not cross
+ *  can become a jet---the matcher wraps loaded code, never what a run
+ *  builds---so only those are counted.  A fire's window does not cross
  *  from one run into the next. */
 bool           av_census_begin_run(av_census *c, const av_arena *a, uint32_t loaded);
 
@@ -1168,15 +1168,15 @@ uint64_t       av_census_calls(const av_census *c);
 
 /*  ------------------------------------------------------------------- scry
  *
- *  §8: the fact store, the resolver it specifies, and the resume loop, as
+ *  The fact store, the resolver it specifies, and the resume loop, as
  *  skijack's run.py has them (make_resolver, run_with_namespace).
  *
  *  A fact is (key datum, answer datum): the path a run blocked on, as the
  *  run left it, and the answer the namespace gave.  The store is append-
- *  only with unique keys -- keys compared as the object terms they decode
- *  to, as EQ5 compares encodings -- and keeps its terms in its own arena,
+ *  only with unique keys---keys compared as the object terms they decode
+ *  to, as EQ5 compares encodings---and keeps its terms in its own arena,
  *  which nothing reduces.  With a log, each fact is written and synced
- *  before it is used (§19's order), and av_facts_open replays the log.
+ *  before it is used, and av_facts_open replays the log.
  */
 typedef struct av_facts av_facts;   /* src/scry.c */
 
@@ -1199,7 +1199,7 @@ size_t    av_facts_count(const av_facts *f);
 const char *av_facts_key(const av_facts *f, size_t i);
 
 /*  Append (key datum, answer datum), both terms of arena a.  False, with
- *  *err, if the key is already known -- the store is append-only -- or the
+ *  *err, if the key is already known---the store is append-only---or the
  *  log cannot be written. */
 bool av_facts_append(av_facts *f, av_arena *a, uint32_t key, uint32_t answer,
                      const char **err);
@@ -1213,7 +1213,7 @@ uint32_t av_abstract(av_arena *a, uint32_t x, uint32_t body);
  *  resolver_term, [p] EQ5 p k1 (hit a1) (EQ5 p k2 (hit a2) (... notyet)),
  *  eq, hit and notyet being terms of a.  It is registered as a jet key
  *  tagged with n, so a matched program's interpreter jet may look paths up
- *  natively (§8) once the lookup agrees with this term. */
+ *  natively once the lookup agrees with this term. */
 uint32_t av_facts_resolver(av_arena *a, const av_facts *f, size_t n,
                            uint32_t eq, uint32_t hit, uint32_t notyet);
 
@@ -1252,10 +1252,10 @@ typedef struct {
     unsigned  rounds;
 } av_nsrun;
 
-/*  The resume loop (§8; run_with_namespace): each round, build the
- *  resolver from every fact learned so far, run the program from scratch
- *  -- at `fuel`, or with fuel 0 deepening from start, doubling, to cap --
- *  and peel it.  A value or any constructor but `block` ends the run; a
+/*  The resume loop (run_with_namespace): each round, build the resolver
+ *  from every fact learned so far, run the program from scratch---at
+ *  `fuel`, or with fuel 0 deepening from start, doubling, to cap---and
+ *  peel it.  A value or any constructor but `block` ends the run; a
  *  block decodes its path, and if the path is unknown to the store and the
  *  namespace answers it, the fact is appended and the next round starts;
  *  otherwise STUCK.  Events: "budget N", "BLOCK on P", "STUCK", a result
@@ -1270,8 +1270,8 @@ void av_nsrun_free(av_nsrun *r);
 
 /*  ---------------------------------------------------------------- install
  *
- *  §20.2: an encoded term -- a Scott datum of S | K | I | App t u, the
- *  constructors in that order -- becomes the live term it encodes.  This
+ *  An encoded term---a Scott datum of S | K | I | App t u, the
+ *  constructors in that order---becomes the live term it encodes.  This
  *  runs from data to a live term, the direction Proposition 3.1 permits;
  *  nothing here quotes a live term.  Install is where code arriving
  *  mid-run has its jets matched, as the loader matches a program's.
@@ -1296,7 +1296,7 @@ bool av_unquote_register(av_arena *a, uint32_t uq, const char **err);
 
 /*  ----------------------------------------------------------------- kernel
  *
- *  §9: a kernel is a door, [[poke [peek load]] state], read by axis and
+ *  A kernel is a door, [[poke [peek load]] state], read by axis and
  *  never by name.  An arm is pulled Nock 9's way: (n@k) k arg, n@k the
  *  ABI's Scott pair selectors, hd = S I (K K) and tl = S I (K (K I)),
  *  applied down the bits of n after the leading 1.  A poke's value is
@@ -1322,11 +1322,11 @@ typedef struct {
     uint64_t  events;           /* pokes and loads applied */
 } av_kernel;
 
-/*  Boot (§9, §20.1): apply the pill's term to the initial subject and
- *  reduce to weak head normal form.  If the value is a kernel it is
- *  installed and *is_kernel set; otherwise *value is it, reduced, as a
- *  program that is not a kernel is applied once.  k->k is rooted in a
- *  until av_kernel_free. */
+/*  Boot: apply the pill's term to the initial subject and reduce to weak
+ *  head normal form.  If the value is a kernel it is installed and
+ *  *is_kernel set; otherwise *value is it, reduced, as a program that is
+ *  not a kernel is applied once.  k->k is rooted in a until av_kernel_free.
+ */
 av_status av_kernel_boot(av_kernel *k, av_arena *a, uint32_t pill, uint32_t subject,
                          const av_opts *o, bool *is_kernel, uint32_t *value,
                          av_result *r);
@@ -1346,7 +1346,7 @@ av_status av_kernel_peek(av_kernel *k, uint32_t path, uint32_t *answer, av_resul
 
 /*  Upgrade: pull load from new_kernel with the installed kernel's state,
  *  3@k, and install the result, unreduced; the new battery migrates the
- *  state (§9, NockApp's rule). */
+ *  state (NockApp's rule). */
 bool av_kernel_load(av_kernel *k, uint32_t new_kernel);
 
 /*  3@k. */
@@ -1354,20 +1354,20 @@ uint32_t av_kernel_state(av_kernel *k);
 
 /*  ------------------------------------------------------------------ pier
  *
- *  A kernel's durable home (§19, §20.4): a directory holding the event
- *  log, `events.log`, and snapshots, `snap-N` with `snap-N.sum`, N the
- *  events applied.  Each event is appended and synced before it is
- *  applied, and a snapshot is written image first, sidecar last
- *  (av_snapshot_save).  Opening a pier loads the newest snapshot that
- *  verifies and replays the log's later events, so a pier reopened after
- *  a crash holds the kernel the events it logged produce.  Log records:
- *  `poke N <event SKIT, hex>`, `load N <new kernel's pill SKIT, hex>
- *  <subject SKIT, hex>`, and, under entropy (below), `entropy 0` and
- *  `eny N <id SKIT, hex> <16 bytes, hex>`, hex in lowercase.  Each ends
- *  ` =` and the first 4 bytes of the SHA-256 of the text before it, in
- *  hex; a record that fails it stops the open, and one without it, as an
- *  Avon before 2026-10-09 wrote, is read as it is.  A record without its
- *  newline was cut short by a crash, and is dropped.
+ *  A kernel's durable home: a directory holding the event log,
+ *  `events.log`, and snapshots, `snap-N` with `snap-N.sum`, N the events
+ *  applied.  Each event is appended and synced before it is applied, and a
+ *  snapshot is written image first, sidecar last (av_snapshot_save).
+ *  Opening a pier loads the newest snapshot that verifies and replays the
+ *  log's later events, so a pier reopened after a crash holds the kernel
+ *  the events it logged produce.  Log records: `poke N <event SKIT, hex>`,
+ *  `load N <new kernel's pill SKIT, hex> <subject SKIT, hex>`, and, under
+ *  entropy (below), `entropy 0` and `eny N <id SKIT, hex> <16 bytes, hex>`,
+ *  hex in lowercase.  Each ends ` =` and the first 4 bytes of the SHA-256
+ *  of the text before it, in hex; a record that fails it stops the open,
+ *  and one without it, as an Avon before 2026-10-09 wrote, is read as it
+ *  is.  A record without its newline was cut short by a crash, and is
+ *  dropped.
  */
 typedef struct av_pier av_pier;
 
@@ -1376,7 +1376,7 @@ typedef struct av_pier av_pier;
 av_pier *av_pier_new(const char *dir, const uint8_t *pill, size_t npill,
                      const uint8_t *subject, size_t nsubject, const av_opts *o,
                      const char **err);
-/*  The same, on a persistent arena (§19.1) in dir/pma: every event is
+/*  The same, on a persistent arena in dir/pma: every event is
  *  committed to it after it is logged and applied, and a reopen maps it
  *  and replays only the log after its last commit. */
 av_pier *av_pier_new_pma(const char *dir, const uint8_t *pill, size_t npill,
@@ -1397,19 +1397,18 @@ bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *
 /*  Snapshot the installed kernel at the current event count. */
 bool av_pier_snapshot(av_pier *p, const char **err);
 
-/*  Entropy (§9.1).  A pier made with AV_PIER_ENTROPY answers each
- *  request [0 id] in a poke's effects list with the event [0 [id bits]],
- *  bits 128 Scott Booleans, each reply logged as `eny N <id jammed> <16
- *  bytes>` before it is applied; one outside event draws AV_ENY_MAX
- *  replies at most.  An outside event is accepted only when probing shows
- *  it a cell [tag data] with tag a successor: tag 0 is the replies'.  The
- *  opt-in is the log's `entropy 0` record, written before the pier's
- *  image, and records whether the pier draws from a file
- *  (AV_PIER_ENTROPY_FILE, for tests) or from getentropy; it never mixes
- *  them.  av_pier_entropy gives this session's file (from byte 16 n, n the
- *  replies logged), NULL for getentropy, and answers
- *  boot's own request, [0 [0 bits]], if no reply is logged yet; the first
- *  poke does too, after a crash took it.  A failure while answering a
+/*  Entropy.  A pier made with AV_PIER_ENTROPY answers each request [0 id]
+ *  in a poke's effects list with the event [0 [id bits]], bits 128 Scott
+ *  Booleans, each reply logged as `eny N <id jammed> <16 bytes>` before it
+ *  is applied; one outside event draws AV_ENY_MAX replies at most.  An
+ *  outside event is accepted only when probing shows it a cell [tag data]
+ *  with tag a successor: tag 0 is the replies'.  The opt-in is the log's
+ *  `entropy 0` record, written before the pier's image, and records whether
+ *  the pier draws from a file (AV_PIER_ENTROPY_FILE, for tests) or from
+ *  getentropy; it never mixes them.  av_pier_entropy gives this session's
+ *  file (from byte 16 n, n the replies logged), NULL for getentropy, and
+ *  answers boot's own request, [0 [0 bits]], if no reply is logged yet; the
+ *  first poke does too, after a crash took it.  A failure while answering a
  *  poke's requests leaves the poke applied and successful, the failure in
  *  av_pier_entropy_error. */
 #define AV_ENY_BYTES 16
@@ -1441,9 +1440,9 @@ uint64_t av_pier_replies(const av_pier *p, uint64_t *unanswered);
 
 /*  ---------------------------------------------------------- the compiler
  *
- *  §20.3: the compiler's core as a term -- bracket abstraction written in
+ *  The compiler's core as a term---bracket abstraction written in
  *  SKIjack (tests/selfhost/abstract.ascii.ski), `abs x t` over encoded
- *  terms tm = TS | TK | TI | TV nat | TA ap, ap = Ap tm tm -- and its jet,
+ *  terms tm = TS | TK | TI | TV nat | TA ap, ap = Ap tm tm---and its jet,
  *  native abstraction (av_abstract), licensed by differential against the
  *  term.  A term here is S, K, I and atoms `vN`, the variable numbered N.
  */
@@ -1463,7 +1462,7 @@ uint32_t av_tm_decode(av_arena *a, uint32_t datum, const av_opts *o, const char 
 uint32_t av_tm_nat(av_arena *a, const av_compiler *c, uint64_t n);
 
 /*  Make c.abs the compiler jet's key: admitted only if, on sample terms,
- *  abs x t -- reduced, decoded -- is native abstraction's [vx] t.  With
+ *  abs x t---reduced, decoded---is native abstraction's [vx] t.  With
  *  compile_jets, `abs x t` at the head is answered natively, charged its
  *  probes' contractions; --jet-check compares a fire with the term's own
  *  reduction, decoded. */
@@ -1471,13 +1470,13 @@ bool av_compiler_register(av_arena *a, const av_compiler *c, const char **err);
 
 /*  -------------------------------------------------------- persistent arena
  *
- *  §19.1: an arena whose node array is an image file mapped copy-on-write
+ *  An arena whose node array is an image file mapped copy-on-write
  *  into reserved address space.  Opening reads the header and the leaf
  *  names, not the nodes; a commit writes the chunks changed since the last
  *  one, through a redo journal, so a crash at any point leaves the image
  *  as it was before the commit or after it.  An arena with a jet
  *  dashboard is refused a commit: jet nodes carry dashboard ids, and the
- *  dashboard is never persisted (§19).
+ *  dashboard is never persisted.
  */
 typedef struct av_pma av_pma;
 

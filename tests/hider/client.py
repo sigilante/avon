@@ -1,4 +1,4 @@
-"""The hider census driven by avon's frame traces (docs/DESIGN.md §22).
+"""The hider census driven by avon's frame traces.
 
 The census's run/descend/classify (fixed_points_hider.py), with each head
 run done by avon --trace-frame instead of in Python.  Every decision the
@@ -6,11 +6,11 @@ census makes is made here the way it makes it, on the oracle's own objects
 and with the oracle's own functions: the frames avon dumps are rebuilt as
 the oracle's tuples (S the string 'S', X the oracle's passenger), sharing
 by node as its tuples share by identity, and FROZEN is decided by the
-oracle's certified_frozen -- the fold lookup, unchanged.  Avon supplies the
+oracle's certified_frozen---the fold lookup, unchanged.  Avon supplies the
 run: its exit, its confirmed records, and the positions at each.  Every
 position a decision rests on is checked against the dumped frames before
 the certificate is asked (decide); the exits and record times are Avon's
-reduction, equal to the census's on sizes 1 to 12 (docs/DESIGN.md §22).
+reduction, equal to the census's on sizes 1 to 12.
 """
 
 import subprocess

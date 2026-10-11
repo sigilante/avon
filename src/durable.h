@@ -2,8 +2,8 @@
  *
  *  Internal to the runtime: syncs that reach the disk.  On macOS fsync
  *  only hands the data to the drive, which may hold it in its cache past
- *  a power loss; F_FULLFSYNC asks the drive to write it to the media
- *  (AUDIT.md item 3).  Not part of the public interface.
+ *  a power loss; F_FULLFSYNC asks the drive to write it to the media.
+ *  Not part of the public interface.
  */
 
 #ifndef DURABLE_H

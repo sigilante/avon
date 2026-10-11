@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Differential: Avon's copy strategy against aviary_kernel.reduce, the
-reference host (docs/DESIGN.md §1, §10.3).
+reference host.
 
 Random {S,K,I} terms with the inert atoms X and Z, reduced to weak head
 normal form and to full normal form under a fuel cap.  For every term the
 status, the contraction count and the printed term reached must agree
-exactly -- including the state a FUEL run stops in.  share mode is checked
+exactly---including the state a FUEL run stops in.  share mode is checked
 against copy by tests/test_reduce.c.
 
     python3 tests/diff_aviary.py [N] [SEED]     (from the repository root)
@@ -23,11 +23,11 @@ from aviary_kernel.environment import Environment
 from aviary_kernel.reduce import reduce
 from aviary_kernel.terms import App, Atom, pretty
 
-LEAVES = ["S", "K", "I", "X", "Z"]      # X and Z are not aviary birds (§4.3)
+LEAVES = ["S", "K", "I", "X", "Z"]      # X and Z are not aviary birds
 FUELS = [3, 17, 400]
 # aviary measures size as a tree walk after every contraction, which is
 # exponential on a shared graph; cap it, and skip the runs the cap stops
-# (SIZE is never a conformance target, DESIGN.md §3.3)
+# (SIZE is never a conformance target)
 MAX_SIZE = 20000
 OMEGA = App(App(App(Atom("S"), Atom("I")), Atom("I")),
             App(App(Atom("S"), Atom("I")), Atom("I")))

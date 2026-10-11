@@ -1,13 +1,12 @@
 /**  test_conformance.c
  *
- *  Stage 3's acceptance (docs/DESIGN.md §10.2 items 1 and 2, §11): every
- *  target skijack exports -- each level-1 declaration of the corpus, the
- *  EXAMPLES.md §4 fuel boundary, the paper's T3 and scry tables and the
- *  tower -- is reduced to weak head normal form in both strategies, peeled
- *  and decoded by probing, and must give the exported constructor and
- *  rendered payload.  In copy mode the status and the contraction count
- *  must match exactly.  The manifest is python/skijack/export.py's; run from
- *  the repository root.
+ *  The conformance harness: every target skijack exports---each level-1
+ *  declaration of the corpus, skijack's fuel-boundary examples, the paper's
+ *  T3 and scry tables and the tower---is reduced to weak head normal form
+ *  in both strategies, peeled and decoded by probing, and must give the
+ *  exported constructor and rendered payload.  In copy mode the status and
+ *  the contraction count must match exactly.  The manifest is
+ *  python/skijack/export.py's; run from the repository root.
  */
 
 #include <stdlib.h>
@@ -62,7 +61,7 @@ static uint64_t jets_fired, interps_fired;
 static bool interp_pass;           /* interpreter jets on: counts change */
 
 /*  With `shared` an arena holding the dictionary's jets: the target is
- *  matched against them, run with every fire checked (§6.6), and must give
+ *  matched against them, run with every fire checked, and must give
  *  exactly what it gives without them. */
 static void check_target(const target *t, av_strategy st, av_arena *shared) {
     char path[512];
@@ -198,9 +197,9 @@ TEST(every_exported_target_conforms) {
            targets_checked, values_checked);
 }
 
-/*  Stage 4 (§6.5, §11): the same targets with the corpus dictionary's
- *  residual jets, in one arena for all of them, so the dashboard outlives
- *  collections and both strategies' runs. */
+/*  The same targets with the corpus dictionary's residual jets, in one
+ *  arena for all of them, so the dashboard outlives collections and both
+ *  strategies' runs. */
 TEST(every_target_conforms_with_jets) {
     av_arena *a = av_arena_new(1u << 16);
     const char *err = NULL;
@@ -217,9 +216,9 @@ TEST(every_target_conforms_with_jets) {
     av_arena_free(a);
 }
 
-/*  Stage 5 (§7, §11): the same targets with interpreter jets too.  They
- *  change counts, so only statuses and values are compared -- and every
- *  fire is checked against the unjetted interpreter. */
+/*  The same targets with interpreter jets too.  They change counts, so
+ *  only statuses and values are compared---and every fire is checked
+ *  against the unjetted interpreter. */
 TEST(every_target_conforms_with_interpreter_jets) {
     av_arena *a = av_arena_new(1u << 16);
     const char *err = NULL;

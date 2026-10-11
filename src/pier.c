@@ -1,10 +1,10 @@
 /**  pier.c
  *
- *  A kernel's durable home (docs/DESIGN.md §19, §20.4): an event log and
- *  snapshots, in Nockchain's order -- the event appended and synced
- *  before it is applied, a snapshot's image before its sidecar -- so that
- *  reopening after a crash replays onto the newest snapshot that verifies
- *  exactly the events that were logged.
+ *  A kernel's durable home: an event log and snapshots, in Nockchain's
+ *  order---the event appended and synced before it is applied, a
+ *  snapshot's image before its sidecar---so that reopening after a crash
+ *  replays onto the newest snapshot that verifies exactly the events that
+ *  were logged.
  */
 
 #include <dirent.h>
@@ -27,8 +27,8 @@ struct av_pier {
     av_kernel  k;
     av_opts    o;
     int        log;             /* events.log, appended, locked: -1 if none */
-    bool       pma;             /* committed to a persistent arena (§19.1) */
-    bool       eny;             /* booted with --entropy (§9.1)           */
+    bool       pma;             /* committed to a persistent arena */
+    bool       eny;             /* booted with --entropy           */
     bool       eny_from_file;   /* booted with --entropy=FILE: only a file */
     char      *eny_file;        /* --entropy=FILE: bits from it, not getentropy */
     uint64_t   eny_n;           /* eny records in the log                 */
@@ -62,8 +62,7 @@ static int nibble(char c) {
 }
 
 /*  Lowercase hex, two digits a byte, as hex_put writes it, and nothing
- *  else: linear, where a sscanf per byte rescanned the rest of the line
- *  (AUDIT.md item 10). */
+ *  else, read in one linear pass. */
 static uint8_t *unhex(const char *s, size_t n, size_t *len) {
     if (n % 2) return NULL;
     uint8_t *out = malloc(n / 2 + 1);
@@ -78,8 +77,8 @@ static uint8_t *unhex(const char *s, size_t n, size_t *len) {
 }
 
 /*  A record's checksum: the first 4 bytes of the SHA-256 of its text
- *  before ` =`, in hex.  A flipped digit in a record no longer replays as
- *  another event (AUDIT.md item 10). */
+ *  before ` =`, in hex, so a flipped digit in a record does not replay as
+ *  another event. */
 #define SUM_HEX 8
 static void record_sum(const char *rec, size_t n, char out[SUM_HEX]) {
     uint8_t h[32];
@@ -94,7 +93,7 @@ static bool log_cut(int log, off_t off) {
 
 /*  Append one record, whole, and sync it; *at is where it starts.  A
  *  record that fails to write or to sync is cut away again, so a pier
- *  kept open writes its next record after a whole one (AUDIT.md item 4). */
+ *  kept open writes its next record after a whole one. */
 static bool log_record(int log, const char *kind, uint64_t n, const uint8_t *a1, size_t n1,
                        const uint8_t *a2, size_t n2, off_t *at) {
     char head[48];
@@ -177,9 +176,9 @@ void av_pier_free(av_pier *p) {
 }
 
 /*  The log, opened to append, created (with create) readable by its owner
- *  only, as it holds the kernel's entropy (docs/DESIGN.md §9.1), and
- *  locked for the pier's life: one process writes a pier (AUDIT.md item
- *  5).  -1 with *err; or, without create, with *missing if it is not there. */
+ *  only, as it holds the kernel's entropy, and locked for the pier's
+ *  life: one process writes a pier.  -1 with *err; or, without create,
+ *  with *missing if it is not there. */
 static int open_log(const char *path, bool create, bool *missing, const char **err) {
     if (missing) *missing = false;
     int fd = open(path, O_RDWR | O_APPEND | (create ? O_CREAT : 0), 0600);
@@ -302,7 +301,7 @@ av_pier *av_pier_new_ex(const char *dir, const uint8_t *pill, size_t npill, cons
 
 /*  ------------------------------------------------------------ entropy
  *
- *  §9.1: under --entropy, a request is an element [0 id] of a poke's
+ *  Under --entropy, a request is an element [0 id] of a poke's
  *  effects list, and its reply the event [0 [id bits]], bits 128 Scott
  *  Booleans in a list.  The pier finds requests by probing, never by
  *  name, and logs each reply as `eny N <id, jammed> <16 bytes>`. */
@@ -612,7 +611,7 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
  *  removed again if the poke does not reach weak head normal form.  An
  *  event applied and logged is the pier's whether or not its image then
  *  commits: a failed commit is p->commit_err, beside the event, not its
- *  failure, so that no caller retries an applied event (AUDIT.md item 6);
+ *  failure, so that no caller retries an applied event;
  *  the image's writes stay dirty, and the next commit or a reopen's
  *  replay carries them. */
 static av_status poke_logged(av_pier *p, const char *kind, const uint8_t *a1, size_t n1,

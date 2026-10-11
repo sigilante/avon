@@ -1,8 +1,8 @@
 /**  test_scry.c
  *
- *  Stage 6's acceptance (docs/DESIGN.md §8, §11): the resume loop replays
- *  every run skijack's tests/test_scry.py pins -- tests/conformance/
- *  namespaces.tsv, from `skijack.export` -- event for event, including
+ *  Scry's acceptance: the resume loop replays every run skijack's
+ *  tests/test_scry.py pins---tests/conformance/namespaces.tsv, from
+ *  `skijack.export`---event for event, including
  *  STUCK, the fuel policy and the round cap, and every level-1 attempt at
  *  the reference host's fuel, status and contraction count.  With the
  *  interpreter jet and the native lookup, every fire checked, the events
@@ -313,7 +313,7 @@ TEST(the_log_replays_the_facts) {
 
 /*  EQ5 replaced by a comparison that is always false: the resolver term
  *  answers not-yet for everything, so the native lookup, which would hit,
- *  must be refused -- the run blocks again on K, which the store knows:
+ *  must be refused---the run blocks again on K, which the store knows:
  *  STUCK, jets on or off. */
 TEST(a_resolver_that_disagrees_is_not_looked_up) {
     char *text;
@@ -331,8 +331,8 @@ TEST(a_resolver_that_disagrees_is_not_looked_up) {
                         c.rounds, &o, (const char *const *)c.rnames, &r));
         char *ev = joined(&r);
         CHECK(strcmp(ev, "BLOCK on K|BLOCK on K|STUCK") == 0);
-        /* round 1, the store empty: the term and the lookup agree -- all
-         * not yet -- so jets answer natively; round 2 holds K, the check
+        /* round 1, the store empty: the term and the lookup agree---all
+         * not yet---so jets answer natively; round 2 holds K, the check
          * finds the term disagrees, and nothing is answered natively */
         CHECK_EQ(r.nattempts, 2);
         if (r.nattempts == 2) {

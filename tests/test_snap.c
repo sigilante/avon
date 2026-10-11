@@ -1,10 +1,10 @@
 /**  test_snap.c
  *
- *  Arena snapshots (docs/DESIGN.md §4.2, §19): a share-mode state with its
- *  sharing and indirections survives save and load, and reduction resumes
- *  from it to the same answer; a damaged image, a damaged or missing
- *  sidecar, and images that carry a valid checksum but a bad structure are
- *  all refused.  Writes under build/.  Run from the repository root.
+ *  Arena snapshots: a share-mode state with its sharing and indirections
+ *  survives save and load, and reduction resumes from it to the same
+ *  answer; a damaged image, a damaged or missing sidecar, and images that
+ *  carry a valid checksum but a bad structure are all refused.  Writes
+ *  under build/.  Run from the repository root.
  */
 
 #include <stdio.h>
@@ -247,8 +247,8 @@ static void forge_atom(const char *atom, const uint32_t *nodes, uint32_t used,
 
 /*  No term in an image carries a probe or jet marker: save refuses such a
  *  graph, and the loader refuses a forged image in which any node or the
- *  root points at a marker leaf -- though it may hold one, since an arena
- *  that has probed or loaded jets interns them (a stage 4 review's
+ *  root points at a marker leaf---though it may hold one, since an arena
+ *  that has probed or loaded jets interns them (a jets review's
  *  finding: a planted "@x3" would alias the dashboard's marker). */
 TEST(no_term_in_an_image_carries_a_marker) {
     av_arena *a = av_arena_new(0);

@@ -1,11 +1,11 @@
 /**  test_jetstats.c
  *
- *  Jet stats (docs/DESIGN.md §6.7): each jet's fires, misses and
- *  demotions, and each fire's origin, on programs whose every contraction
- *  is worked out by hand.  M = S I I (M a = a a) is the inner jet.
+ *  Jet stats: each jet's fires, misses and demotions, and each fire's
+ *  origin, on programs whose every contraction is worked out by hand.
+ *  M = S I I (M a = a a) is the inner jet.
  *
  *  - X1 = S (K S) K I, B I, holds B = S (K S) K: on X1 g x the outer fires
- *    from the top and B, alone a fire, does nothing -- eaten.
+ *    from the top and B, alone a fire, does nothing---eaten.
  *  - X = K (S I (K M)): X a b reaches b (K M b), so its residual carries M;
  *    on X z I w, X fires and then M fires from X's residual.
  *  - X z: one argument short of X's two, a miss; in share mode a demotion

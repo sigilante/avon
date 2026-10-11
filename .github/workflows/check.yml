@@ -6,9 +6,8 @@
 # jet-witness-check, probe-witness-check, zk-jet-witness-check,
 # p2-witness-check, hider-check) stay manual: see the Makefile's header.
 #
-# Pinned (AUDIT.md item 19): the images, the compiler (the image's
-# clang-18 on Linux, Xcode 16.4's clang on macOS), and each action by
-# commit.
+# Pinned: the images, the compiler (the image's clang-18 on Linux, Xcode
+# 16.4's clang on macOS), and each action by commit.
 name: check
 
 on:

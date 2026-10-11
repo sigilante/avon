@@ -1,13 +1,13 @@
 /**  witness.c
  *
- *  The witness strategy (docs/DESIGN.md §17): lean-ski's write-once heap
- *  machine, Air.stepG, executed literally, and its trace written as the
- *  table Ski/AirCheck.lean reads and bench/plonky3 proves.
+ *  The witness strategy: lean-ski's write-once heap machine, Air.stepG,
+ *  executed literally, and its trace written as the table Ski/AirCheck.lean
+ *  reads and bench/plonky3 proves.
  *
  *  Nothing here shares the arena's representation.  A witness heap holds
- *  the circuit's cells -- S, K, I, A f x, N, C x r -- each written once at
+ *  the circuit's cells---S, K, I, A f x, N, C x r---each written once at
  *  the counter, which is the heap's length; nothing is overwritten,
- *  collected or hash-consed (§19).  So a contraction here is a contraction
+ *  collected or hash-consed.  So a contraction here is a contraction
  *  of the term, and the count equals copy mode's (Mach.machine_count).
  */
 

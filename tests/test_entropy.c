@@ -1,17 +1,16 @@
 /**  test_entropy.c
  *
- *  Entropy for kernels (docs/DESIGN.md §9.1), on tests/kernel/
- *  entropy.ascii.ski: a pier booted with --entropy answers boot's request
- *  and each [0 id] in a poke's effects list, in order, a reply's own
- *  requests too, with [0 [id bits]], bit 8i + j bit j of byte i; replay
- *  gives the same bits, and a FILE reopened draws from where it stopped;
- *  one event draws 16 replies at most; an outside event tagged 0 is
- *  refused, a tag reaching 0 past the probes' fuel too; a file that runs
- *  out leaves its event applied, the failure reported beside it; boot's
- *  reply, if a crash took it, comes with the first poke; a pier keeps to
- *  one source of bits; a collection in the event hook loses no request;
- *  and a pier booted without --entropy passes every effect through.  Run
- *  from the repository root.
+ *  Entropy for kernels, on tests/kernel/entropy.ascii.ski: a pier booted
+ *  with --entropy answers boot's request and each [0 id] in a poke's
+ *  effects list, in order, a reply's own requests too, with [0 [id bits]],
+ *  bit 8i + j bit j of byte i; replay gives the same bits, and a FILE
+ *  reopened draws from where it stopped; one event draws 16 replies at
+ *  most; an outside event tagged 0 is refused, a tag reaching 0 past the
+ *  probes' fuel too; a file that runs out leaves its event applied, the
+ *  failure reported beside it; boot's reply, if a crash took it, comes with
+ *  the first poke; a pier keeps to one source of bits; a collection in the
+ *  event hook loses no request; and a pier booted without --entropy passes
+ *  every effect through.  Run from the repository root.
  */
 
 #include <stdlib.h>

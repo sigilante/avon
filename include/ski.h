@@ -1,8 +1,7 @@
 /**  ski.h
  *
- *  The calculus Avon runs, independent of how Avon stores it: leaves
- *  (S, K, I and opaque atoms), their arities, and expressions as trees.
- *  The arena representation is avon.h's business, not this file's.
+ *  The SKI combinator calculus:  leaves (S, K, I and opaque atoms),
+ *  their arities, and expressions as trees.
  */
 
 #ifndef SKI_H
@@ -12,7 +11,8 @@
 #include <stdint.h>
 
 /*  A leaf.  Ids 0, 1, 2 are the combinators; ids >= SKI_ATOM_FIRST are
- *  opaque atoms: inert, never contracted, named in a side table.
+ *  inert opaque atoms, which are named in a side table and never
+ *  contracted.
  */
 typedef uint32_t ski_leaf;
 
@@ -51,8 +51,8 @@ typedef enum { SKI_LEAF, SKI_APP } ski_kind;
 struct ski_expr {
     ski_kind kind;
     union {
-        ski_leaf leaf;                                    /* SKI_LEAF */
-        struct { const ski_expr *fn, *arg; } app;          /* SKI_APP  */
+        ski_leaf leaf;                              /* SKI_LEAF */
+        struct { const ski_expr *fn, *arg; } app;   /* SKI_APP  */
     };
 };
 

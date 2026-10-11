@@ -1,4 +1,4 @@
-"""Fixtures for tests/test_data.c: data jets (docs/DESIGN.md §6.10).
+"""Fixtures for tests/test_data.c: data jets.
 
     PYTHONPATH=~/skijack/python python3 tests/data/export.py
 

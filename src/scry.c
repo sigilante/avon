@@ -1,15 +1,10 @@
 /**  scry.c
  *
- *  Stage 6 (docs/DESIGN.md §8): the fact store, the resolver it
- *  specifies, and the resume loop, transcribing skijack's run.py
- *  (make_resolver, run_with_namespace) and expand.py (resolver_term).
- *
- *  The store keeps its terms in its own arena, which nothing reduces, so
- *  nothing there moves.  Each attempt of the loop runs in a fresh arena,
- *  as run.py rebuilds its term each round: the program's terms and the
- *  facts are copied in, the resolver is built there, and whatever outlives
- *  the attempt -- a blocked path, the answer given for it -- is copied
- *  back out.
+ *  The fact store, its resolver, and its resume loop.  The store keeps its
+ *  terms in its own arena, which nothing reduces, so nothing there moves.
+ *  Each attempt of the loop runs in a fresh arena:  the program's terms and
+ *  the facts are copied in, the resolver is built there, and whatever outlives
+ *  the attempt---a blocked path, the answer given for it---is copied back out.
  */
 
 #include <stdio.h>
@@ -32,9 +27,9 @@ struct av_facts {
 
 /*  ----------------------------------------------------------- copying */
 
-/*  The log's names (§8): a run's key may hold probe markers, `@N`, in
- *  positions nothing reads, and a container refuses `@` names.  In the log
- *  a name starting with `@` or `~` gains a `~`; on replay it loses one. */
+//  The log's names:  a run's key may hold probe markers, `@N`, in
+//  positions nothing reads, and a container refuses `@` names.  In the log
+//  a name starting with `@` or `~` gains a `~`; on replay it loses one.
 enum { AS_IS, ESCAPE, UNESCAPE };
 
 static uint32_t leaf_named(av_arena *dst, const char *nm, int mode) {
@@ -52,8 +47,8 @@ static uint32_t leaf_named(av_arena *dst, const char *nm, int mode) {
     return av_leaf(dst, nm, strlen(nm));
 }
 
-/*  t from arena src into arena dst, sharing kept, jets looked through,
- *  names as mode says. */
+//  t from arena src into arena dst, sharing kept, jets looked through,
+//  names as mode says.
 static uint32_t copy_as(av_arena *dst, const av_arena *src, uint32_t t, int mode) {
     typedef struct { uint32_t node; bool done; } item;
     size_t cap = 256, top = 0;
@@ -100,7 +95,7 @@ static uint32_t copy_term(av_arena *dst, const av_arena *src, uint32_t t) {
     return copy_as(dst, src, t, AS_IS);
 }
 
-/*  x in arena a and y in arena b are the same tree, leaves by name. */
+//  x in arena a and y in arena b are the same tree, leaves by name.
 static bool same_term(const av_arena *a, uint32_t x, const av_arena *b, uint32_t y) {
     size_t cap = 256, top = 0;
     uint32_t (*st)[2] = malloc(cap * sizeof *st);
@@ -191,7 +186,7 @@ void av_facts_free(av_facts *f) {
 size_t av_facts_count(const av_facts *f) { return f->n; }
 const char *av_facts_key(const av_facts *f, size_t i) { return i < f->n ? f->render[i] : NULL; }
 
-/*  A datum's path, decoded and printed, in arena a. */
+//  A datum's path, decoded and printed, in arena a.
 static char *render_path(av_arena *a, const av_objtype *obj, uint32_t datum,
                          uint32_t *path_out) {
     av_opts o = av_opts_default();
@@ -206,7 +201,7 @@ static char *render_path(av_arena *a, const av_objtype *obj, uint32_t datum,
     return b.s;
 }
 
-/*  Append without logging: the terms are copied into the store. */
+//  Append without logging: the terms are copied into the store.
 static bool store_put(av_facts *f, av_arena *a, uint32_t key, uint32_t answer,
                       char *render, uint32_t path, const char **err) {
     for (size_t i = 0; i < f->n; i++)
@@ -249,8 +244,8 @@ static bool hex_out(FILE *out, const av_buf *b) {
     return true;
 }
 
-/*  One log record: `fact <key SKIT, hex> <answer SKIT, hex>`, written and
- *  synced before the fact is used (§19). */
+//  One log record: `fact <key SKIT, hex> <answer SKIT, hex>`, written and
+//  synced before the fact is used.
 static bool log_fact(FILE *log, av_arena *a, uint32_t key, uint32_t answer) {
     av_buf k = { 0 }, v = { 0 };
     const char *msg = NULL;
@@ -380,10 +375,12 @@ uint32_t av_facts_resolver(av_arena *a, const av_facts *f, size_t n,
     return r;
 }
 
-/*  For the interpreter jet (src/interp.c): which of the first n facts has
- *  the path `path` of arena a, whose leaves are the object type's
- *  constructors (leaf[i] the i-th constructor's leaf).  1 with *which, 0
- *  if none, -1 if the path cannot be printed. */
+//  For the interpreter jet (src/interp.c):  which of the first n facts has
+//  the path `path` of arena a, whose leaves are the object type's
+//  constructors (leaf[i] the i-th constructor's leaf).
+//    1 with *which,
+//    0 if none,
+//    -1 if the path cannot be printed.
 int facts_find(const av_facts *f, size_t n, av_arena *a, uint32_t path,
                const uint32_t *leaf, size_t *which) {
     /* rename the leaves to the constructors' names, as av_decode does */

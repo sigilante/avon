@@ -5,9 +5,8 @@
  *
  *  An instance writes its body over the redex root, and the reducer at
  *  once unwinds the body's spine again: those spine cells are 61 to 65% of
- *  what instances write, and most are contracted through at the next step
- *  (docs/BENCHMARK.md, "Most spine cells are contracted through at
- *  once").  The Reduceron writes no spine; neither does a deferred
+ *  what instances write, and most are contracted through at the next
+ *  step.  The Reduceron writes no spine; neither does a deferred
  *  instance.  It leaves the redex root's node as it was, SK_DEFER, keeps
  *  the body's outermost argument in the root's stack entry, and pushes the
  *  rest of the root's spine as SK_VIRT entries, applications with no node,
@@ -24,13 +23,13 @@
  *  - before the rarer steps that read the stack as nodes: interpreter,
  *    Poseidon2 and residual jets (materialize from the bottom).
  *  A contraction whose redex root it is writes it as an undeferred root.
- *  The graph is acyclic (§2), so no reduction in progress can reach a
+ *  The graph is acyclic, so no reduction in progress can reach a
  *  deferred node through another path, so a deferred node is overwritten
  *  with I I, holding nothing; writing the deferred roots never fails,
  *  since the arena keeps a node free for each virtual entry (nvirt).
  *  Every contraction is the one the undeferred reducer makes, at the same
  *  step: the steps, the counts and every state reported are the same, and
- *  only nodes go unwritten -- unless a node cap binds, where the reserve
+ *  only nodes go unwritten---unless a node cap binds, where the reserve
  *  and a stop's writes may move the step that hits it.
  *
  *  A real entry's node has the entry above it as its function part; a

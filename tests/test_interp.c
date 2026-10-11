@@ -1,13 +1,13 @@
 /**  test_interp.c
  *
- *  Stage 5's acceptance (docs/DESIGN.md §7, §11): the interpreter jet.
- *  The specs load; T2's cost is its object run, T0, plus the probes that
- *  decode its datum; and over random object terms and fuel, the jet gives
- *  the unjetted interpreter's outcome -- constructor and decoded payload --
- *  for whnfF, wf5Abs (an error arm) and wf5Omg (a diverging arm, where the
- *  jet declines and both run out of host fuel).  tests/test_conformance.c
- *  runs the corpus, scry tables and fuel boundaries included, jets on.
- *  Run from the repository root.
+ *  The interpreter jet's acceptance.  The specs load; T2's cost is its
+ *  object run, T0, plus the probes that decode its datum; and over random
+ *  object terms and fuel, the jet gives the unjetted interpreter's
+ *  outcome---constructor and decoded payload---for whnfF, wf5Abs (an error
+ *  arm) and wf5Omg (a diverging arm, where the jet declines and both run
+ *  out of host fuel).  tests/test_conformance.c runs the corpus, scry
+ *  tables and fuel boundaries included, jets on.  Run from the repository
+ *  root.
  */
 
 #include <stdlib.h>
@@ -253,7 +253,7 @@ TEST(a_diverging_arm_declines_and_diverges) {
 }
 
 /*  A dictionary row is used only if its term has the row's hash: the
- *  numeral Zero's row given S for its K refuses the load (AUDIT.md item 8). */
+ *  numeral Zero's row given S for its K refuses the load. */
 TEST(a_dictionary_row_must_be_its_hash) {
     size_t len;
     uint8_t *raw = slurp(DIR "dictionary.tsv", &len);

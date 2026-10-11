@@ -1,11 +1,11 @@
 /**  test_workloads.c
  *
- *  The constructor jets and the jet dictionaries (docs/DESIGN.md §6.8).
- *  Known terms have their constructor shapes, Joy's word constructors
- *  past the old arity cap among them; and every run of SKIjack's corpus
- *  and SKIlark's workloads, with the constructors found in it and the
- *  bird and Joy dictionaries jetted, every fire checked, gives the
- *  manifest's copy-mode count.  Run from the repository root.
+ *  The constructor jets and the jet dictionaries.  Known terms have their
+ *  constructor shapes, Joy's word constructors past the old arity cap among
+ *  them; and every run of SKIjack's corpus and SKIlark's workloads, with
+ *  the constructors found in it and the bird and Joy dictionaries jetted,
+ *  every fire checked, gives the manifest's copy-mode count.  Run from the
+ *  repository root.
  */
 
 #include <stdlib.h>

@@ -1,4 +1,4 @@
-"""Joy's word list as jets (docs/DESIGN.md §6.8), from SKIlark.
+"""Joy's word list as jets, from SKIlark.
 
     PYTHONPATH=~/skijack/python:~/skilark python3 jets/joy.py
 

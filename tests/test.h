@@ -54,7 +54,7 @@ static unsigned long test_checks_;
     } while (0)
 
 /*  Open a file the suite reads, or end the suite failed: a missing fixture
- *  must fail, never let a case check less (AUDIT.md item 18). */
+ *  must fail, never let a case check less. */
 static inline FILE *test_open(const char *path) {
     FILE *f = fopen(path, "rb");
     if (!f) {

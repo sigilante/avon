@@ -1,6 +1,6 @@
 /**  reduce.c
  *
- *  Normal-order reduction, two strategies (docs/DESIGN.md §1.1, §3).
+ *  Normal-order reduction, two strategies.
  *
  *  copy   The reference host's algorithm, aviary_kernel.reduce, on nodes:
  *         nothing is ever mutated, and its contraction counts are the
@@ -116,7 +116,7 @@ bool ensure_slow(R *r, size_t k) {
 
 /*  ------------------------------------------------------------------ jets */
 
-/*  --jet-check (§6.6): run the jet node's own term over the arguments in
+/*  --jet-check: run the jet node's own term over the arguments in
  *  copy mode, jets off, for exactly the charge, and compare the state it
  *  reaches with an instance.  Allocates without collecting.  False only on
  *  a definite disagreement; a check that runs out of memory or of its
@@ -159,8 +159,8 @@ int try_interp(R *r, uint32_t *nodep, size_t have, av_status *st,
     av_arena *a = r->a;
     uint32_t node = *nodep;
     uint32_t id = AV_JET_ID(av_left(a, node));
-    bool uq = a->jets[id].unquote && r->o->install_jets;    /* §20.2 */
-    bool cj = !uq && a->jets[id].compiler && r->o->compile_jets;   /* §20.3 */
+    bool uq = a->jets[id].unquote && r->o->install_jets;    /* install */
+    bool cj = !uq && a->jets[id].compiler && r->o->compile_jets;   /* compile */
     if (!uq && !cj && (!r->o->interp_jets || a->jets[id].interp < 0)) return 0;
     unsigned nargs = fire_nargs(r, id);
     if (have < nargs || r->steps >= r->o->max_steps) return 0;
@@ -255,16 +255,16 @@ static inline bool tmpl_defer(R *r, const av_tmpl *T, const uint32_t *args, size
     return true;
 }
 
-/*  The most nodes one numeral operation builds (§6.10).  Beyond it the
+/*  The most nodes one numeral operation builds.  Beyond it the
  *  operation runs its term, which builds its result lazily: a product
  *  nobody reads past its first successor should not cost its whole size. */
 #define WORD_BUILD_MAX (1u << 20)
 
-/*  Data jets (§6.10): a constructor template at the head with its fields
+/*  Data jets: a constructor template at the head with its fields
  *  and continuations, and the continuation its index selects, applied to
  *  the fields, replaces the redex root: one step.  When that continuation
  *  is a template's key applied to exactly the arguments that, with the
- *  fields, it takes -- a case branch, lifted with what it captured -- that
+ *  fields, it takes---a case branch, lifted with what it captured---that
  *  template is instantiated in the same step, fused.  Otherwise the redex
  *  root is rewritten in place, as S rewrites. */
 typedef struct {
@@ -382,7 +382,7 @@ static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
     return AV_WHNF;
 }
 
-/*  A numeral operation (§6.10) at the head with its k operands, the two
+/*  A numeral operation at the head with its k operands, the two
  *  numerals first: 1 fired, both being held already (K or words), the
  *  redex root now its result; 0 declined, to run its term; -1 SIZE. */
 static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
@@ -509,7 +509,7 @@ static int p2_chain(R *r, uint32_t *curp) {
     }
 }
 
-/*  The Poseidon2 jet (§6.12), its jet node *curp, of jet id, at the head
+/*  The Poseidon2 jet, its jet node *curp, of jet id, at the head
  *  with its argument: 1 fired, the redex root now the permuted state; 3 an
  *  inner call of a chain fired or unbound, the head and stack as they
  *  were, for the next pass to take the next; 0 declined, the argument
@@ -544,16 +544,16 @@ static int p2_fire(R *r, uint32_t id, uint32_t *curp) {
     return 1;
 }
 
-/*  A case joined to its instance (§6.10).  T's body is its formal h
- *  applied to p operands (T->case_h, T->case_p), and h arrived as a value
- *  the step after the instance would dispatch on: a constructor with its
- *  fields and p continuations, or, with two, a word or zero (K).  The
- *  instance writes the body's other applications, not its spine or root,
- *  and the dispatch writes over the redex root nd what it would have
- *  written there after the instance: the same graph but for the spine,
- *  the same two steps, each counted as before.  False, nothing written,
- *  when h is no such value or the free nodes do not cover both writes
- *  without a collection; the caller then instantiates as before. */
+/*  A case joined to its instance.  T's body is its formal h applied to p
+ *  operands (T->case_h, T->case_p), and h arrived as a value the step after
+ *  the instance would dispatch on: a constructor with its fields and p
+ *  continuations, or, with two, a word or zero (K).  The instance writes
+ *  the body's other applications, not its spine or root, and the dispatch
+ *  writes over the redex root nd what it would have written there after the
+ *  instance: the same graph but for the spine, the same two steps, each
+ *  counted as before.  False, nothing written, when h is no such value or
+ *  the free nodes do not cover both writes without a collection; the caller
+ *  then instantiates as before. */
 enum { CJ_NONE, CJ_CTOR, CJ_WORD, CJ_ZERO };
 
 /*  Both writes of a join from the free nodes: the instance's T->nops +
@@ -690,10 +690,10 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
         if (interrupted(r)) return stop(r, bottom, cur, AV_INTERRUPTED);
         if (r->steps >= o->max_steps) return stop(r, bottom, cur, AV_FUEL);
         if (av_tag(a, cur) == AV_JET && (av_left(a, cur) & AV_JET_WORD)) {
-            /* a word (§6.10): with its two continuations, W n z s is
-             * s (W (n-1)), written over the redex root; short of them, a
-             * value -- but, making the normal form, its term SUC (W (n-1)),
-             * a redex, fresh so the word's own stays whole */
+            /* a word: with its two continuations, W n z s is s (W (n-1)),
+             * written over the redex root; short of them, a value---but,
+             * making the normal form, its term SUC (W (n-1)), a redex,
+             * fresh so the word's own stays whole */
             if (r->top - bottom < 2) {
                 if (!r->normal) break;
                 r->jnode = cur;
@@ -733,9 +733,9 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 continue;
             }
             if (o->fix && a->jets[id].fix) {
-                /* Y (§6.11): with its argument, Y g is rewritten to
-                 * g (Y g), a fresh Y g, one step -- convertible, not a
-                 * reduct, and acyclic; short of it, its term */
+                /* Y: with its argument, Y g is rewritten to g (Y g), a
+                 * fresh Y g, one step---convertible, not a reduct, and
+                 * acyclic; short of it, its term */
                 if (r->top - bottom >= 1) {
                     size_t p = r->top - 1;                  /* the redex root */
                     if (!hensure(r, 1, &cur)) return stop(r, bottom, cur, AV_SIZE);
@@ -803,7 +803,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 }
             }
             if (o->p2 && a->jets[id].p2) {
-                /* the Poseidon2 jet (§6.12): natively on a state as it
+                /* the Poseidon2 jet: natively on a state as it
                  * stands; else a fresh copy of P's term, so the node's own
                  * term is never written and stays P's for the next call */
                 if (r->top - bottom >= 1) {
@@ -824,7 +824,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 continue;
             }
             if (o->data && a->jets[id].word_op) {
-                /* a numeral operation (§6.10): natively on words; else its
+                /* a numeral operation: natively on words; else its
                  * term, the node kept for the next call */
                 unsigned op = a->jets[id].word_op, k = op >= AV_WOP_IFEQ ? 4u : 2u;
                 if (r->top - bottom >= k) {
@@ -839,12 +839,12 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 }
             }
             if (o->templates && a->jets[id].tmpl) {
-                /* a supercombinator template (§6.9): its body over the
+                /* a supercombinator template: its body over the
                  * arguments, one step; short of them, its term, the node
                  * left a root for the next full application */
                 const av_tmpl *T = &a->tmpls[a->jets[id].tmpl - 1];
                 if (o->data && av_ctor_is(T->ctor) && r->top - bottom >= T->k) {
-                    /* a constructor with every argument (§6.10) */
+                    /* a constructor with every argument */
                     if (!sprepare(r, D, r->top - T->k, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     av_status ds = dispatch(r, T->ctor, T->k, &cur);
                     if (ds != AV_WHNF) return stop(r, bottom, cur, ds);
@@ -902,9 +902,9 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 }
                 /* Unwrapped, and demoted: this run may write inside the
                  * term from here on, so the jet node becomes an
-                 * indirection to a term it owns -- a private copy when
-                 * the term is the dashboard's -- and no jet node's term
-                 * is ever written (§6.5). */
+                 * indirection to a term it owns---a private copy when
+                 * the term is the dashboard's---and no jet node's term
+                 * is ever written. */
                 uint32_t inner = av_right(a, cur);
                 if (av_left(a, cur) & AV_JET_SHARED) {
                     r->jnode = cur;
@@ -983,7 +983,7 @@ static av_status whnf_share(R *r) {
     return r->defer ? whnf_share_d(r, true) : whnf_share_d(r, false);
 }
 
-/*  Whether t's head is a word (§6.10). */
+/*  Whether t's head is a word. */
 static bool word_head(const av_arena *a, uint32_t t) {
     t = av_res(a, t);
     while (av_tag(a, t) == AV_APP) t = av_res(a, av_left(a, t));

@@ -1,9 +1,9 @@
 /**  machine.h
  *
  *  Internal to the reducer: R, the state both machines run on, and what
- *  the copy machine (copy.c) and the share machine (reduce.c) both use --
- *  allocation, the stack's growth, the jet tests -- with each one's entry
- *  points.  Not part of the public interface.
+ *  the copy machine (copy.c) and the share machine (reduce.c) both
+ *  use---allocation, the stack's growth, the jet tests---with each one's
+ *  entry points.  Not part of the public interface.
  */
 
 #ifndef MACHINE_H
@@ -119,7 +119,7 @@ static inline bool interrupted(const R *r) {
 
 /*  Whether a jet node at a position with `have` arguments fires: jets on,
  *  enough arguments, and the fuel left covers the charge, so that stepping
- *  instead would not have stopped part way (§6.5). */
+ *  instead would not have stopped part way. */
 static inline bool fires(const R *r, uint32_t id, size_t have) {
     const av_jet *j = &r->a->jets[id];
     return r->o->jets && have >= j->arity &&
@@ -133,7 +133,7 @@ static inline bool interp_role(const av_arena *a, uint32_t id) {
     return j->unquote || j->compiler || j->interp >= 0;
 }
 
-/*  The jets, in reduce.c: --jet-check's comparison (§6.6), the arguments
+/*  The jets, in reduce.c: --jet-check's comparison, the arguments
  *  a fire consumes, and an interpreter, unquoter or compiler jet's fire. */
 bool      check_fire(R *r, uint32_t node, uint32_t id, const uint32_t *args);
 unsigned  fire_nargs(const R *r, uint32_t id);

@@ -1,7 +1,7 @@
 /**  test_ski.c
  *
  *  The calculus interface and the node layout: arities, leaf ids, and the
- *  facts about av_node that docs/DESIGN.md §2 relies on.
+ *  facts about av_node the arena's representation relies on.
  */
 
 #include "avon.h"

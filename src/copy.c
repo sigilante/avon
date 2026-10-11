@@ -1,11 +1,10 @@
 /**  copy.c
  *
- *  The copy machine (docs/DESIGN.md §1.1, §3): the reference host's
- *  algorithm, aviary_kernel.reduce, on nodes.  The position is a head leaf
- *  and a flat argument vector, a contraction builds the combinator body
- *  fresh and re-decomposes it, and nothing is ever mutated.  Its
- *  contraction counts are the paper's.  It does not recurse: an argument
- *  being normalized is a frame (r->fr).
+ *  The copy machine: the reference host's algorithm, aviary_kernel.reduce,
+ *  on nodes.  The position is a head leaf and a flat argument vector, a
+ *  contraction builds the combinator body fresh and re-decomposes it, and
+ *  nothing is ever mutated.  Its contraction counts are the paper's.  It
+ *  does not recurse: an argument being normalized is a frame (r->fr).
  */
 
 #include <stdlib.h>
@@ -91,7 +90,7 @@ av_status run_copy(R *r) {
             if (interrupted(r)) return AV_INTERRUPTED;
             if (r->steps >= o->max_steps) return AV_FUEL;
             if (av_tag(a, r->head) == AV_JET && (av_left(a, r->head) & AV_JET_WORD)) {
-                /* a word (§6.10): copy mode runs its term */
+                /* a word: copy mode runs its term */
                 if (!decompose(r, av_right(a, r->head))) return AV_SIZE;
                 continue;
             }

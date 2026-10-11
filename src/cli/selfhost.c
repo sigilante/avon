@@ -1,14 +1,14 @@
 /**  selfhost.c
  *
- *  avon selfhost: the compiler's core as a term (docs/DESIGN.md §20.3),
- *  each call of a calls file checked against Python's by hash.
+ *  avon selfhost: the compiler's core as a term, each call of a calls
+ *  file checked against Python's by hash.
  */
 
 #include "cli.h"
 
 /*  avon selfhost DIR CALLS: every call of a calls file (tests/selfhost/
- *  export.py) through the compiler term DIR/abs.skit -- or its jet, with
- *  --jets -- decoded and compared with Python's result by hash. */
+ *  export.py) through the compiler term DIR/abs.skit---or its jet, with
+ *  --jets---decoded and compared with Python's result by hash. */
 int selfhost_main(int argc, char **argv) {
     const char *dir = NULL, *calls = NULL;
     bool jets = false;

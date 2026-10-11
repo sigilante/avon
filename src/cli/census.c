@@ -1,7 +1,7 @@
 /**  census.c
  *
  *  avon census: which terms the manifests' runs call, ranked by what a jet
- *  on each would absorb (docs/DESIGN.md §6.7).
+ *  on each would absorb.
  */
 
 #include "cli.h"

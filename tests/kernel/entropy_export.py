@@ -1,4 +1,4 @@
-"""The entropy kernel's fixtures (docs/DESIGN.md §9.1).
+"""The entropy kernel's fixtures.
 
     PYTHONPATH=~/skijack/python python3 tests/kernel/entropy_export.py
 

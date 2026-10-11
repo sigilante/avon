@@ -1,12 +1,12 @@
 /**  test_pma.c
  *
- *  Stage 9's acceptance (docs/DESIGN.md §19.1): a persistent arena
- *  reopens to the bytes it committed -- after in-place share-mode updates
- *  and after collections, which only dirty tracking carries -- without
- *  reading its nodes; a commit writes the chunks an event changed; a
- *  crash at each point of a commit reopens to the state before it or
- *  after it, and a damaged journal is refused before it is applied; a pier on it replays the rest of its log; an arena with jets
- *  is refused, and a damaged image fails its check.
+ *  The persistent arena's acceptance: an arena reopens to the bytes it
+ *  committed---after in-place share-mode updates and after collections,
+ *  which only dirty tracking carries---without reading its nodes; a commit
+ *  writes the chunks an event changed; a crash at each point of a commit
+ *  reopens to the state before it or after it, and a damaged journal is
+ *  refused before it is applied; a pier on it replays the rest of its log;
+ *  an arena with jets is refused, and a damaged image fails its check.
  */
 
 #include <fcntl.h>
@@ -122,7 +122,7 @@ static void image_matches(av_arena *a, const char *img, uint32_t t, uint64_t eve
     free(img_nodes);
 }
 
-/*  In-place writes -- share mode rewriting committed nodes -- with no
+/*  In-place writes---share mode rewriting committed nodes---with no
  *  collection to mark everything, then with collections: after each
  *  commit the image is the arena, byte for byte. */
 TEST(dirty_tracking_carries_every_write) {
@@ -499,8 +499,7 @@ TEST(a_pier_on_the_arena_commits_every_event) {
     }
 
     /* an image that will not commit after an event applied: the event is
-     * a success, the failure beside it, and the next commit carries it
-     * (AUDIT.md item 6) */
+     * a success, the failure beside it, and the next commit carries it */
     char img[160];
     snprintf(img, sizeof img, "%s/pma", pier);
     p = av_pier_open(pier, &o, &err);

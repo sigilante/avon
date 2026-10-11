@@ -1,9 +1,9 @@
 /**  gc.c
  *
- *  Stop-and-copy collection (docs/DESIGN.md §2).  Cheney's scan over a
- *  fresh to-space, with forwarding kept in a side array rather than
- *  written into from-space (§19).  Indirections are short-circuited: an
- *  evacuated IND becomes the copy of what it points at.
+ *  Stop-and-copy collection.  Cheney's scan over a fresh to-space, keeping
+ *  forwarding in a side array rather than being written into from-space.
+ *  Indirections are short-circuited: an evacuated IND becomes the copy of
+ *  what it points at.
  */
 
 #include <stdlib.h>

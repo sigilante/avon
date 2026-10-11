@@ -1,9 +1,8 @@
 /**  test_probe.c
  *
- *  Reading values by running them (docs/DESIGN.md §0): peel, decode and
- *  the Scott-numeral reader, on data built by hand from bracket
- *  abstraction, and their refusals.  tests/test_conformance.c exercises
- *  them on the corpus.
+ *  Reading values by running them: peel, decode and the Scott-numeral
+ *  reader, on data built by hand from bracket abstraction, and their
+ *  refusals.  tests/test_conformance.c exercises them on the corpus.
  */
 
 #include <string.h>
@@ -38,7 +37,7 @@ TEST(peel_reads_the_constructor_and_its_fields) {
     CHECK(av_peel(a, just, 2, &o, &p, NULL));
     CHECK_EQ(p.ctor, 1);
     CHECK_EQ(p.nfields, 1);
-    /* a field is handed back unreduced -- here K X m1 -- and read by
+    /* a field is handed back unreduced---here K X m1---and read by
      * reducing or probing it further, as run.py's fields are */
     av_result r = av_reduce(a, p.field[0], &o);
     av_buf b = { 0 };

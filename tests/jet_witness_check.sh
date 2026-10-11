@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The jetted witness's acceptance (docs/DESIGN.md §17, §18.1).
+# The jetted witness's acceptance.
 #
 # For every row of lean-ski's corpus:
 #

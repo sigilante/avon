@@ -1,4 +1,4 @@
-"""The bird dictionary (docs/DESIGN.md §6.8): Smullyan's birds as jets.
+"""The bird dictionary: Smullyan's birds as jets.
 
     PYTHONPATH=~/skijack/python python3 jets/birds.py [AVIARY_TESTS]
 

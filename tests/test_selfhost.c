@@ -1,13 +1,13 @@
 /**  test_selfhost.c
  *
- *  Stage 8 (docs/DESIGN.md §20.3): the compiler's core, bracket
- *  abstraction written in SKIjack (tests/selfhost/abstract.ascii.ski), run
- *  as a term in Avon, reproduces every abstraction skijack performed
- *  compiling that same source -- the fixed point -- result for result,
- *  text and hash; and so does its jet, native abstraction, every fire
- *  checked against the term.  A term that does not abstract as aviary does
- *  is not admitted as the compiler.  Run from the repository root;
- *  tests/selfhost_check.sh runs the corpus.
+ *  Self-hosting: the compiler's core, bracket abstraction written in
+ *  SKIjack (tests/selfhost/abstract.ascii.ski), run as a term in Avon,
+ *  reproduces every abstraction skijack performed compiling that same
+ *  source---the fixed point---result for result, text and hash; and so does
+ *  its jet, native abstraction, every fire checked against the term.  A
+ *  term that does not abstract as aviary does is not admitted as the
+ *  compiler.  Run from the repository root; tests/selfhost_check.sh runs
+ *  the corpus.
  */
 
 #include <stdlib.h>
@@ -136,7 +136,7 @@ TEST(the_compiler_jet_agrees_every_fire_checked) {
     CHECK_EQ(t.fires, t.calls);
 }
 
-/*  The compiler in a pill (§20.1): booted, a kernel whose event `Abs x t`
+/*  The compiler in a pill: booted, a kernel whose event `Abs x t`
  *  has the effect `Out ([vx] t)`; poked with every call of its own
  *  compilation, by the term and with the jet. */
 TEST(the_compiler_in_a_pill_answers_pokes) {
@@ -216,7 +216,7 @@ TEST(a_term_that_is_no_compiler_is_refused) {
 }
 
 /*  I abs abstracts as abs does, so the samples pass it; it is not the
- *  pinned compiler, and is refused (AUDIT.md item 8). */
+ *  pinned compiler, and is refused. */
 TEST(only_the_pinned_compiler_is_admitted) {
     av_arena *a = av_arena_new(1u << 16);
     av_compiler c = compiler(a);

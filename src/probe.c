@@ -1,9 +1,9 @@
 /**  probe.c
  *
- *  Reading values behaviourally (docs/DESIGN.md §0, §7): apply a term to
- *  fresh marker atoms, reduce to weak head normal form, and see which
- *  marker comes back with what.  A transcription of python/skijack/run.py's
- *  peel and decode and probe.py's read_nat.
+ *  Reading values behaviourally: apply a term to fresh marker atoms,
+ *  reduce to weak head normal form, and see which marker comes back with
+ *  what.  A transcription of python/skijack/run.py's peel and decode and
+ *  probe.py's read_nat.
  */
 
 #include <stdio.h>
