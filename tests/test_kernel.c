@@ -1,14 +1,13 @@
 /**  test_kernel.c
  *
- *  Stage 7's acceptance (docs/DESIGN.md §9, §11, §20): against the
- *  reference host's loop (tests/kernel/export.py, from skijack's
- *  test_examples), a kernel survives pokes, answers a peek, and `load`
- *  moves a state onto a new battery, count for count in copy mode; a
- *  kernel installs code its compiler emitted and runs it, with the
- *  unquoter's jet as without; a pill boots; per-poke cost in share mode
- *  stays flat over a thousand events; and a pier reloads from its
- *  snapshot and log to the same state, after a crash as without.  Run
- *  from the repository root.
+ *  Boot's acceptance: against the reference host's loop
+ *  (tests/kernel/export.py, from skijack's test_examples), a kernel
+ *  survives pokes, answers a peek, and `load` moves a state onto a new
+ *  battery, count for count in copy mode; a kernel installs code its
+ *  compiler emitted and runs it, with the unquoter's jet as without; a pill
+ *  boots; per-poke cost in share mode stays flat over a thousand events;
+ *  and a pier reloads from its snapshot and log to the same state, after a
+ *  crash as without.  Run from the repository root.
  */
 
 #include <stdlib.h>
@@ -160,7 +159,7 @@ TEST(the_events_kernel_runs_as_the_reference_does) {
 }
 
 /*  Tick, Run <double>, Run <triple>, Tick: the kernel installs what the
- *  compiler emitted and runs it -- with UQ reduced, and with UQ's jet
+ *  compiler emitted and runs it---with UQ reduced, and with UQ's jet
  *  installing natively, every fire checked. */
 TEST(a_kernel_installs_compiled_code_and_runs_it) {
     for (int jet = 0; jet < 2; jet++) {
@@ -254,7 +253,7 @@ TEST(a_pill_boots_to_a_kernel) {
     av_arena_free(a);
 }
 
-/*  §9: under share mode each state is computed once, so a Tick costs the
+/*  Under share mode each state is computed once, so a Tick costs the
  *  same however many came before; copy mode pays for the history. */
 TEST(share_mode_pokes_stay_flat) {
     av_arena *a = av_arena_new(1u << 12);            /* small: it collects */
@@ -509,8 +508,8 @@ TEST(a_pier_is_closed_to_others) {
 }
 
 /*  A record that fails to write is cut away again, so a pier kept open
- *  writes its next record after a whole one (AUDIT.md item 4); and one
- *  process holds a pier at a time (item 5). */
+ *  writes its next record after a whole one; and one process holds a pier
+ *  at a time. */
 TEST(a_torn_append_is_cut_and_a_pier_is_one_process_s) {
     char dir[] = "/tmp/avon-torn-XXXXXX";
     CHECK(mkdtemp(dir) != NULL);
@@ -566,7 +565,7 @@ TEST(a_torn_append_is_cut_and_a_pier_is_one_process_s) {
 
 /*  Each record carries a checksum: one digit flipped is refused, not
  *  replayed as another event; a record without one, as an earlier Avon
- *  wrote it, still replays (AUDIT.md item 10). */
+ *  wrote it, still replays. */
 TEST(a_record_must_match_its_checksum) {
     char dir[] = "/tmp/avon-sum-XXXXXX";
     CHECK(mkdtemp(dir) != NULL);

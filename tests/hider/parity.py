@@ -1,10 +1,10 @@
-"""Parity of avon's frame traces with the paper's hider census
-(docs/DESIGN.md §22), in the order that localizes a mismatch:
+"""Parity of avon's frame traces with the paper's hider census, in the
+order that localizes a mismatch:
 
     trace N [H]     every closed f of size 1..N (default 12): avon's trace of
-                    f X equals the oracle's run, line for line -- L and the
+                    f X equals the oracle's run, line for line---L and the
                     X-headed positions against the oracle's hist, and d, D,
-                    the event and the front arity against the definitions --
+                    the event and the front arity against the definitions---
                     and the exit equals the oracle's.
 
     verdict N       every closed f of size 1..N: the census through avon

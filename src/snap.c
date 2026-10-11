@@ -1,7 +1,7 @@
 /**  snap.c
  *
- *  Arena snapshots (docs/DESIGN.md §4.2, §19).  The image keeps sharing
- *  and indirections, which the bitstring cannot.  Its layout:
+ *  Arena snapshots.  The image keeps sharing and indirections, which the
+ *  bitstring cannot.  Its layout:
  *
  *      "AVIM"  u8 version = 1  u8[3] zero
  *      u32 node count  u32 leaf count
@@ -13,7 +13,7 @@
  *      "AVSM"  u8 version = 1  u8[3] zero
  *      u32 root  u32 node count  32-byte SHA-256 of (image, root, count)
  *
- *  Integers are little-endian.  A snapshot is not a proof witness (§17.1).
+ *  Integers are little-endian.  A snapshot is not a proof witness.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -107,8 +107,8 @@ static char *sum_path(const char *path) {
 }
 
 /*  Copy the graph below root into a fresh arena: sharing kept, indirections
- *  resolved, jet nodes seen through, and nothing else -- not the caller's
- *  other terms, not the dashboard (§19: never persisted).  A marker leaf
+ *  resolved, jet nodes seen through, and nothing else---not the caller's
+ *  other terms, not the dashboard, which is never persisted.  A marker leaf
  *  in the graph is refused. */
 static av_arena *copy_out(const av_arena *a, uint32_t root, uint32_t *broot,
                           const char **msg) {

@@ -1,10 +1,10 @@
 /**  test_front0.c
  *
- *  Reading the SKIjack-0 front end's result (docs/DESIGN.md §20.3) without
- *  the front end: results built here as Scott data and read by probing.
- *  The probes share --fuel; a name holding a control character or a space,
- *  or longer than 65,536 characters, is refused (AUDIT.md item 14).
- *  front0_check.sh runs the front end itself, against skijack.
+ *  Reading the SKIjack-0 front end's result without the front end: results
+ *  built here as Scott data and read by probing.  The probes share --fuel;
+ *  a name holding a control character or a space, or longer than 65,536
+ *  characters, is refused.  front0_check.sh runs the front end itself,
+ *  against skijack.
  */
 
 #include <stdlib.h>

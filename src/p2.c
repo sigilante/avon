@@ -9,8 +9,8 @@
  *  three test vectors (src/p2_consts.h, printed by lean-ski's
  *  bench/P2C.lean), which the Lean kernel checks against Plonky3's.
  *
- *  And the Poseidon2 jet (docs/DESIGN.md §6.12): P's term registered and
- *  bound, and the states it reads and writes.
+ *  And the Poseidon2 jet: P's term registered and bound, and the states
+ *  it reads and writes.
  */
 
 #include <stdint.h>
@@ -39,7 +39,7 @@ bool av_p2_selftest(void) {
 
 /*  ------------------------------------------------------------ the jet */
 
-/*  P's full digest: §5's Merkle hash with every digest kept whole, 32
+/*  P's full digest: the structural hash with every digest kept whole, 32
  *  bytes, over S, K and I only: an atom's, SHA-256 of its name; an
  *  application's, of "(" + hex(f) + " " + hex(x) + ")".  False on any other
  *  leaf, or out of memory. */

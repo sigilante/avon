@@ -1,11 +1,10 @@
 /**  install.c
  *
- *  Install (docs/DESIGN.md §20.2): an encoded term -- a Scott datum of
- *  S | K | I | App t u -- becomes the live term it encodes, read by
- *  probing as run.decode reads it, its jets matched.  And the unquoter's
- *  jet: UQ m = m S K I (UQA UQ), UQA f t u = f t (f u), the paper's 43
- *  atoms, which defines what install does; the native install is checked
- *  against it like any other jet (§6.6).
+ *  Install: an encoded term---a Scott datum of S | K | I | App t u---becomes
+ *  the live term it encodes, read by probing as run.decode reads it, with
+ *  jets matched.  Also the unquoter's jet: UQ m = m S K I (UQA UQ),
+ *  UQA f t u = f t (f u), which defines what install does; the native install
+ *  is checked against it.
  */
 
 #include <stdlib.h>

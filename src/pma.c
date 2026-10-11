@@ -1,12 +1,12 @@
 /**  pma.c
  *
- *  The persistent arena (docs/DESIGN.md §19.1).  The node array is the
- *  image file `nodes` -- a header page, then node i at header + 8i --
- *  mapped copy-on-write at the base of a reservation of address space big
- *  enough for every node an arena may hold, so the base never moves and
- *  indices stay positions.  Leaf names live in `atoms`.  Writes change
- *  memory only; a commit carries the changed 4 KiB chunks, the header and
- *  the names to the files through a redo journal:
+ *  The persistent arena.  The node array is the image file `nodes`---a
+ *  header page, then node i at header + 8i---mapped copy-on-write at the
+ *  base of a reservation of address space big enough for every node an
+ *  arena may hold, so the base never moves and indices stay positions.
+ *  Leaf names live in `atoms`.  Writes change memory only; a commit
+ *  carries the changed 4 KiB chunks, the header and the names to the
+ *  files through a redo journal:
  *
  *      journal.tmp written, synced; renamed to journal; directory synced;
  *      the records applied to the image; the image synced;
@@ -184,7 +184,7 @@ static uint8_t *atoms_blob(const av_arena *a, size_t *len) {
 /*  ------------------------------------------------------------ the journal */
 
 /*  The journal is written and read as a stream: memory holds one block of
- *  it and one record, never the whole (AUDIT.md item 15). */
+ *  it and one record, never the whole. */
 
 #define JBLOCK ((size_t)1 << 16)
 
@@ -455,7 +455,7 @@ bool av_pma_attach(av_arena *a, const char *dir, const char **err) {
     int fd = open(np, O_RDWR | O_CREAT | O_EXCL, 0600);
     if (fd < 0) { free(np); *err = "cannot create the image"; return false; }
     /* from here a failure removes the file it made, so a retry finds no
-     * image already there (AUDIT.md item 15) */
+     * image already there */
     if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
         close(fd); unlink(np); free(np); *err = "the image is in use"; return false;
     }
@@ -583,7 +583,7 @@ av_arena *av_pma_open(const char *dir, uint32_t *root, uint64_t *events, const c
     }
     p->committed = used;
     memcpy(p->atoms_sha, h + 44, 32);
-    /* leaves S, K and I sit at 0, 1, 2 in every arena (§2) */
+    /* leaves S, K and I sit at 0, 1, 2 in every arena */
     for (ski_leaf id = 0; id < SKI_ATOM_FIRST; id++)
         if (a->nodes[id].l >> AV_TAG_SHIFT != AV_LEAF || a->nodes[id].r != id) {
             *err = "the image's first nodes are not S, K and I";

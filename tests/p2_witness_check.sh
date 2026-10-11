@@ -22,7 +22,7 @@
 #      verifies the two proofs as a chain (lean-ski's
 #      Circuit.p2commit_chainB); a header with a 495-entry pattern is
 #      refused;
-#   7. the native jet (docs/DESIGN.md §6.12): for each test vector x,
+#   7. the native Poseidon2 jet: for each test vector x,
 #      `avon reduce --p2=P.dag` on lean-ski's `P ⬝ stateN x` (`lake exe
 #      p2run`) reaches `stateN (permute x)`, Plonky3's output, in one step,
 #      one permutation run natively (lean-ski's P_specN licenses it); and

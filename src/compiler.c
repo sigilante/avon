@@ -1,10 +1,10 @@
 /**  compiler.c
  *
- *  The compiler jet (docs/DESIGN.md §20.3): the compiler's core is a term,
- *  bracket abstraction written in SKIjack (tests/selfhost/abstract.ascii.ski),
- *  and the jet is native abstraction specified by it -- the only route by
- *  which compilation enters Avon's C.  Encoded terms are Scott data of the
- *  compiler's own types: tm = TS | TK | TI | TV nat | TA ap, ap = Ap tm tm.
+ *  The compiler jet: the compiler's core is a term, bracket abstraction
+ *  written in SKIjack (tests/selfhost/abstract.ascii.ski), and the jet is
+ *  thus a specified native abstraction---the only route by which compilation
+ *  enters Avon's C.  Encoded terms are Scott data of the compiler's own
+ *  types: tm = TS | TK | TI | TV nat | TA ap, ap = Ap tm tm.
  */
 
 #include <stdio.h>
@@ -175,9 +175,8 @@ static uint32_t native(av_arena *a, const av_compiler *c, uint64_t x, uint32_t t
 
 /*  The compiler's nine terms, pinned by their full digests (av_p2_digest):
  *  abs, compiled by skijack from tests/selfhost/abstract.ascii.ski, and
- *  the constructors of its tm, ap and nat types.  A compiler is admitted
- *  only if it is this one, so native abstraction stands in for no other
- *  term (AUDIT.md item 8); the samples below run as well. */
+ *  the constructors of its tm, ap and nat types.  Only this compiler is
+ *  admitted; the samples below run as well. */
 static const char *const PINNED[9] = {
     "31ef1f0698171f55f5c1c9d62e6c1924b9fc13f3e472fe147a70bf581ff2acce",   /* abs */
     "267020e689832bb9f4040fc8aa12c738e67b052601a045b90acef6649c7fef28",   /* TS */

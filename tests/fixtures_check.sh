@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # fixtures_check.sh: every fixture another repository's exporter writes
-# regenerates byte for byte at the pinned revisions (tests/pins.sh,
-# AUDIT.md item 16).  The exporters run on a copy of tests/ and jets/, so
-# the checkout is never written:
+# regenerates byte for byte at the revisions tests/pins.sh pins.  The
+# exporters run on a copy of tests/ and jets/, so the checkout is never
+# written:
 #
 #   tests/fixtures/       export.py: the paper's targets and the corpus
 #   tests/data/           export.py: data jets' templates and words

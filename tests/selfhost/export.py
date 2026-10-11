@@ -1,4 +1,4 @@
-"""Self-hosting fixtures for Avon's stage 8 (docs/DESIGN.md §20.3).
+"""Self-hosting fixtures.
 
     PYTHONPATH=~/skijack/python python3 tests/selfhost/export.py OUTDIR [--corpus]
 

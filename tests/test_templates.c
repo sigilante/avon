@@ -1,8 +1,8 @@
 /**  test_templates.c
  *
- *  Supercombinator templates (docs/DESIGN.md §6.9), on hand-made template
- *  files.  B's template -- formals f g x, body f (g x) -- has the key
- *  S (K S) K; M's -- x, x x -- has S I I.
+ *  Supercombinator templates, on hand-made template files.  B's
+ *  template---formals f g x, body f (g x)---has the key S (K S) K;
+ *  M's---x, x x---has S I I.
  *
  *  - Where the key meets its arguments in share mode the body is
  *    instantiated, one step, and the normal form is the unjetted one.

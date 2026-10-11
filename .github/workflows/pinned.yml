@@ -1,9 +1,9 @@
 # The checks against other repositories, weekly, at the revisions
-# tests/pins.sh pins (AUDIT.md items 16 and 19): every fixture regenerates
-# byte for byte from its exporter (make fixtures-check), and the
-# selfhost, SKIjack-0 and full-language front-end checks pass against
-# SKIjack.  lean-ski and the paper's scripts are private repositories;
-# their checks stay manual, and refuse a checkout off their pins.
+# tests/pins.sh pins: every fixture regenerates byte for byte from its
+# exporter (make fixtures-check), and the selfhost, SKIjack-0 and
+# full-language front-end checks pass against SKIjack.  lean-ski and the
+# paper's scripts are private repositories; their checks stay manual, and
+# refuse a checkout off their pins.
 name: pinned
 
 on:

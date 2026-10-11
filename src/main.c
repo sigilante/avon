@@ -12,15 +12,15 @@
  *      avon witness [--rows=N] [--cells=N] [--jet-table=JETS] [--plan=PLAN]
  *                   [FILE]
  *                                     the witness strategy's table, for
- *                                     lean-ski's aircheck and plonky3 (§17);
+ *                                     lean-ski's aircheck and plonky3;
  *                                     with JETS, lean-ski's jet file for the
- *                                     term, instantiation rows (§18.1)
+ *                                     term, instantiation rows
  *      avon witness --statement=PUBLIC --jet-table=JETS [WITNESS]
  *                                     a composed statement with jets: the
  *                                     witness's bits and region in the
  *                                     statement's heap, one jetted segment
  *                                     per root, padded to the statement's
- *                                     heights (docs/ZK-JETS.md, milestone 8)
+ *                                     heights
  *      avon witness --statement=PUBLIC [WITNESS]
  *                                     a `p2pre` or `p2commit` statement:
  *                                     the composed machine with the
@@ -31,7 +31,7 @@
  *                  [--names=FILE]... [--emit=DICT] MANIFEST...
  *                                     which terms the manifests' runs call,
  *                                     ranked by what a jet on each would
- *                                     absorb (docs/DESIGN.md §6.7); --emit
+ *                                     absorb; --emit
  *                                     writes the shown rows and their layers
  *                                     as a jet dictionary
  *      avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]
@@ -40,10 +40,10 @@
  *                                     runs: fires, absorbed contractions,
  *                                     misses, demotions, and each fire's
  *                                     origin; with --alone, each dictionary
- *                                     row by itself too (docs/DESIGN.md §6.7)
+ *                                     row by itself too
  *      avon scry [--log=DIR] [--jets=DICT [--interp=FILE]] [--jet-check=N]
  *                NAMESPACES
- *                                     the resume loop (docs/DESIGN.md §8) over
+ *                                     the resume loop over
  *                                     a namespaces.tsv export: each run's
  *                                     events and attempts, checked against
  *                                     the reference host's; --log keeps each
@@ -52,66 +52,66 @@
  *      avon poke --pier=DIR [--snapshot] [--entropy=FILE] EVENT...
  *      avon peek --pier=DIR PATH...
  *      avon load --pier=DIR [--subject=FILE] [--snapshot] PILL
- *                                     a kernel (docs/DESIGN.md §9, §20): boot
+ *                                     a kernel: boot
  *                                     applies a pill (SKIT) to the initial
  *                                     subject (default I: skijack's standard
  *                                     subject is unbuilt), and with --pier
- *                                     makes a pier -- an event log and
+ *                                     makes a pier---an event log and
  *                                     snapshots, or with --pma a persistent
- *                                     arena committed every event -- that
+ *                                     arena committed every event---that
  *                                     poke, peek and load reopen; share mode
- *                                     by default.  --entropy (§9.1): the
+ *                                     by default.  --entropy: the
  *                                     pier answers a kernel's requests for
  *                                     entropy, and boot's own; =FILE draws
  *                                     the bits from FILE, not getentropy
  *      avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS
- *                                     the compiler's core as a term
- *                                     (docs/DESIGN.md §20.3): every call of a
- *                                     calls file through DIR/abs.skit, or its
- *                                     jet, checked against Python's by hash
+ *                                     the compiler's core as a term: every
+ *                                     call of a calls file, through
+ *                                     DIR/abs.skit or its jet, checked
+ *                                     against Python's by hash
  *      avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]
  *                  [--templates=DIR [--data] [--fix] [--memory] [--no-defer]] [--names=FILE]... [--fuel=N]
  *                  [--max-nodes=N] DIR SOURCE
- *                                     the SKIjack-0 front end (docs/DESIGN.md
- *                                     §20.3) on SOURCE: DIR/front.skit and the
- *                                     input's constructors; each name and its
- *                                     term's hash, read by probing
+ *                                     the SKIjack-0 front end on SOURCE:
+ *                                     DIR/front.skit and the input's
+ *                                     constructors; each name and its term's
+ *                                     hash, read by probing
  *      avon enum N [--start=K] [--count=M]
  *      avon enum --base=FILE --shape=sxy,ssaq,hide
  *                                     the pure-S census's closed terms of
  *                                     size N (1 to 20), in its order, or
- *                                     shapes built on a file's terms (§22)
+ *                                     shapes built on a file's terms
  *      avon --version
  *
- *  A FILE may be in the printed form, a SKIT container (docs/DESIGN.md
- *  §4.2), or the prefix form, told apart by a magic or a leading `.  Options: --strategy=copy|share
- *  (default share), --whnf, --fuel=N, --max-nodes=N, --budget=N (nodes
- *  printed or jammed; default 1000000), --allow-bird-atoms (§4.3),
- *  --jets=DICT (a dictionary.tsv export: register it and match the term
- *  against it, §6; repeatable), --ctors[=N] (register every Scott
- *  constructor of up to N atoms, default 64, in the term, §6.8),
- *  --jet-floor=N (atoms, default 8), --jet-check=N (check
- *  every Nth fire against the unjetted run, §6.6), --no-jets,
- *  --interp=FILE (interpreters.tsv: interpreter jets, §7; needs --jets, and
- *  takes the constructors' terms from the first --jets= dictionary),
- *  --profile=NAMES (share mode: each contraction charged to the named term
- *  whose code it runs, reported on stderr, §6.7), --templates=DIR (share
- *  mode: DIR/templates.tsv and DIR/template_terms.tsv, supercombinator
- *  templates checked against the terms and instantiated, §6.9), --data
- *  (with --templates: data jets, §6.10: constructor templates dispatched,
- *  fused into the branch's template, numerals held as words, and
- *  DIR/words.tsv's numeral operations run on them natively), --fix (with
- *  --templates: Y g unfolded to g (Y g) in one step, §6.11), --no-defer
- *  (with --templates: every instance's root and spine written at once,
- *  §6.13, for comparing the two), --p2=FILE
- *  (share mode: FILE holds lean-ski's Poseidon2 term P, as `lake exe
- *  p2run` prints it; P applied to a state runs natively, §6.12).  reduce and
- *  batch take --trace-frame[=summary] (copy mode's head run observed for
- *  the hider census, §22) with --passenger=NAME, --records[=CONF] and
- *  --frame-dump=SPEC; options_fit refuses an option the command would
- *  ignore.  A term may also be in the DAG form, `dag <id>=... @<root>`.
- *  docs/RUNTIME.md is the user's guide.  Each command is a file of
- *  src/cli; this one dispatches.
+ *  A FILE may be in the printed form, a SKIT container, or the prefix
+ *  form, told apart by a magic or a leading `.  Options:
+ *  --strategy=copy|share (default share), --whnf, --fuel=N, --max-nodes=N,
+ *  --budget=N (nodes printed or jammed; default 1000000),
+ *  --allow-bird-atoms (admit atoms named as the Python oracle's bird
+ *  combinators are), --jets=DICT (a dictionary.tsv export: register it
+ *  and match the term against it; repeatable), --ctors[=N] (register
+ *  every Scott constructor of up to N atoms, default 64, in the term),
+ *  --jet-floor=N (atoms, default 8), --jet-check=N (check every Nth fire
+ *  against the unjetted run), --no-jets, --interp=FILE (interpreters.tsv:
+ *  interpreter jets; needs --jets, and takes the constructors' terms from
+ *  the first --jets= dictionary), --profile=NAMES (share mode: each
+ *  contraction charged to the named term whose code it runs, reported on
+ *  stderr), --templates=DIR (share mode: DIR/templates.tsv and
+ *  DIR/template_terms.tsv, supercombinator templates checked against the
+ *  terms and instantiated), --data (with --templates: data jets,
+ *  constructor templates dispatched, fused into the branch's template,
+ *  numerals held as words, and DIR/words.tsv's numeral operations run on
+ *  them natively), --fix (with --templates: Y g unfolded to g (Y g) in one
+ *  step), --no-defer (with --templates: every instance's root and spine
+ *  written at once, not deferred, for comparing the two), --p2=FILE (share
+ *  mode: FILE holds lean-ski's Poseidon2 term P, as `lake exe p2run`
+ *  prints it; P applied to a state runs natively).  reduce and batch take
+ *  --trace-frame[=summary] (copy mode's head run observed for the hider
+ *  census) with --passenger=NAME, --records[=CONF] and --frame-dump=SPEC;
+ *  options_fit refuses an option the command would ignore.  A term may
+ *  also be in the DAG form, `dag <id>=... @<root>`.  docs/RUNTIME.md is
+ *  the user's guide.  Each command is a file of src/cli; this one
+ *  dispatches.
  */
 
 #include "cli/cli.h"
@@ -160,8 +160,7 @@ int usage(void) {
 static int run_main(int argc, char **argv);
 
 /*  Every command, then its output checked: a write that failed, a full
- *  disk or a closed pipe, is a failure, not a run that printed nothing
- *  (AUDIT.md item 15). */
+ *  disk or a closed pipe, is a failure, not a run that printed nothing. */
 int main(int argc, char **argv) {
     int rc = run_main(argc, argv);
     if (fflush(stdout) != 0 || ferror(stdout)) {

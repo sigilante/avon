@@ -1,7 +1,7 @@
 /**  sha256.c
  *
- *  SHA-256 (FIPS 180-4), for snapshot checksums (docs/DESIGN.md §19) and
- *  the structural hash of §5.  Written from the standard; no dependency.
+ *  SHA-256 (FIPS 180-4), for snapshot checksums and the structural hash.
+ *  Written from the standard; no dependency.
  */
 
 #include <string.h>

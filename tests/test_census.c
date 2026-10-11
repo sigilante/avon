@@ -1,10 +1,10 @@
 /**  test_census.c
  *
- *  The dynamic census (docs/DESIGN.md §6.7).  A program that calls
- *  B = S (K S) K k times, the loaded root's call among them: the census must leave the count alone, find B
- *  with its arity and cost, measure k fires, and fold B's layers into one
- *  family.  A B that only a run builds is not loaded code and is not
- *  counted.
+ *  The dynamic census of called terms, for choosing jets.  A program that
+ *  calls B = S (K S) K k times, the loaded root's call among them: the
+ *  census must leave the count alone, find B with its arity and cost,
+ *  measure k fires, and fold B's layers into one family.  A B that only a
+ *  run builds is not loaded code and is not counted.
  */
 
 #include <stdlib.h>

@@ -1,11 +1,11 @@
 /**  words.c
  *
- *  Words (docs/DESIGN.md §6.10): Scott numerals held as numbers.  W n, for
- *  n >= 1, is a jet node flagged AV_JET_WORD whose id field holds n and
- *  whose term is SUC (W (n-1)), W 0 being K.  A reader sees the numeral
- *  through av_view, node for node, and the predecessor is the term's right
- *  child.  SUC is skijack's successor, \n z s. s n, the constructor term
- *  every `Zero | Suc t` type compiles to, so a numeral is recognized by its
+ *  Words: Scott numerals held as numbers.  W n, for n >= 1, is a jet node
+ *  flagged AV_JET_WORD whose id field holds n and whose term is
+ *  SUC (W (n-1)), W 0 being K.  A reader sees the numeral through av_view,
+ *  node for node, and the predecessor is the term's right child.  SUC is
+ *  skijack's successor, \n z s. s n, the constructor term every
+ *  `Zero | Suc t` type compiles to, so a numeral is recognized by its
  *  term, whatever the program calls its type.
  *
  *  Words come from three places, and none forces anything: closed

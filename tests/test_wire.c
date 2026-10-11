@@ -1,11 +1,10 @@
 /**  test_wire.c
  *
- *  Stage 2's acceptance (docs/DESIGN.md §10.2 items 4 and 5, §11): SHA-256
- *  against the standard's vectors; the bitstring's codes; print(parse(s))
- *  == s and cue(jam(t)) == t on every corpus term and on reduced states;
- *  hygiene; and cue on hostile bytes, which must never crash and must
- *  reject cleanly or decode to a term that jams back to the same bytes.
- *  Run from the repository root.
+ *  The wire format's acceptance: SHA-256 against the standard's vectors;
+ *  the bitstring's codes; print(parse(s)) == s and cue(jam(t)) == t on
+ *  every corpus term and on reduced states; hygiene; and cue on hostile
+ *  bytes, which must never crash and must reject cleanly or decode to a
+ *  term that jams back to the same bytes.  Run from the repository root.
  */
 
 #include <stdio.h>
@@ -342,10 +341,10 @@ TEST(cue_never_crashes_and_is_bijective) {
     CHECK(accepted > 0);
 }
 
-/*  Atoms are interned through a hash index (AUDIT.md item 9): names that
- *  share a prefix are distinct, a name is found again, a NUL is refused, a
- *  refused container interns nothing, and a hundred thousand atoms cue in
- *  linear time, where a scan per name took minutes. */
+/*  Atoms are interned through a hash index: names that share a prefix
+ *  are distinct, a name is found again, a NUL is refused, a refused
+ *  container interns nothing, and a hundred thousand atoms cue in linear
+ *  time, where a scan per name took minutes. */
 TEST(interning_is_a_probe) {
     av_arena *a = av_arena_new(0);
     uint32_t x = av_leaf(a, "ab", 2), y = av_leaf(a, "a", 1), z = av_leaf(a, "abc", 3);

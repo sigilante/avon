@@ -1,4 +1,4 @@
-"""Kernel fixtures for Avon's stage 7 (docs/DESIGN.md §9, §20).
+"""Kernel fixtures for tests/test_kernel.c.
 
     PYTHONPATH=~/skijack/python python3 tests/kernel/export.py
 
@@ -10,8 +10,8 @@ tests/test_kernel.c can do the same with Avon and compare:
   runs: Tick, Poke 5, Tick, a peek, and `load` of an old state onto the
   first kernel's battery, then Tick;
 - `install.ascii.ski` (this directory): a kernel whose `Run d` event takes
-  a quoted program d -- what the compiler emitted for `double` and
-  `triple` -- makes it live with `UQ` and applies it to the state: Tick,
+  a quoted program d---what the compiler emitted for `double` and
+  `triple`---makes it live with `UQ` and applies it to the state: Tick,
   Run <double>, Run <triple>, Tick.  It is compiled without Stage B,
   which cannot type a decoded term: installed code is untyped, as a Nock
   formula run with `.*` is.

@@ -1,7 +1,7 @@
 /**  read.c
  *
  *  The printed form, parsed without recursion: a stack of partial
- *  applications, one per open parenthesis (docs/DESIGN.md §4.1).
+ *  applications, one per open parenthesis.
  */
 
 #include <stdlib.h>
@@ -120,11 +120,11 @@ done:
 /*  ------------------------------------------------------------- the DAG form */
 
 /*  `dag <id>=<rhs> ... @<root>`: a shared graph on one line, the form frame
- *  dumps print (docs/RUNTIME.md, "Frame traces").  <rhs> is a leaf name (S,
- *  K, I or an atom) or <l>.<r>, two ids defined before it; ids are numbers
- *  below 2^64-1, local to the term, each defined once.  The root comes
- *  last: only blanks may follow it.  The graph is rebuilt node for node, so a
- *  term the tree printer would unfold exponentially is read in its size. */
+ *  dumps print.  <rhs> is a leaf name (S, K, I or an atom) or <l>.<r>,
+ *  two ids defined before it; ids are numbers below 2^64-1, local to the
+ *  term, each defined once.  The root comes last: only blanks may follow
+ *  it.  The graph is rebuilt node for node, so a term the tree printer
+ *  would unfold exponentially is read in its size. */
 /*  A dag id at src[*i]: digits, below 2^64 - 1 (the table keys id + 1). */
 static bool dag_id(const char *src, size_t len, size_t *i, uint64_t *id) {
     size_t s = *i;
@@ -196,8 +196,8 @@ uint32_t av_parse_dag(av_arena *a, const char *src, size_t len, const char **msg
             while (i < len && src[i] != ' ' && src[i] != '\t' && src[i] != '\n' && src[i] != '\r') i++;
             if (i == s2) { *msg = "a leaf name expected"; goto out; }
             if (src[s2] == '@' || src[s2] == '`') { *msg = "a reserved leaf name"; goto out; }
-            /* a name must print and parse back, as cue's names must
-             * (AUDIT.md item 13); a NUL would alias a shorter name */
+            /* a name must print and parse back, as cue's names must;
+             * a NUL would alias a shorter name */
             for (size_t k = s2; k < i; k++)
                 if (src[k] == '\0' || src[k] == '(' || src[k] == ')' || src[k] == '`') {
                     *msg = "a leaf name holds NUL, a parenthesis or a backtick";

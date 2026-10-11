@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The witness strategy's acceptance (docs/DESIGN.md §11 stage 3, §17).
+# The witness strategy's acceptance.
 #
 # For every conformance target that reaches weak head normal form:
 #

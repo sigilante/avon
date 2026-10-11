@@ -1,18 +1,18 @@
 /**  profile.c
  *
- *  A share-mode profile (docs/DESIGN.md §6.7): which named terms a run's
- *  contractions execute.  At load, every node of the term belongs to the
- *  innermost subterm whose §5 hash a names file gives, or to none; the
- *  ownership follows the nodes through collections.  Leaves are one node
- *  per atom, shared by every term, so they belong to no one.
+ *  A share-mode profile: which named terms a run's contractions execute.
+ *  At load, every node of the term belongs to the innermost subterm whose
+ *  hash a names file gives, or to none; the ownership follows the nodes
+ *  through collections.  Leaves are one node per atom, shared by every
+ *  term, so they belong to no one.
  *
  *  A contraction is charged to the first node of the loaded term among
  *  its combinator's partial applications, innermost first: `S f` then
  *  `S f g`, `K x`, the redex `I x`.  Share mode rewrites a redex root in
  *  place, and a loaded node it rewrites holds the run's work from then
  *  on, so it leaves the loaded term.  When the run built or rewrote them
- *  all -- a combinator passed as a value, a Scott boolean chosen by a
- *  case -- the contraction goes to a row of its own.
+ *  all---a combinator passed as a value, a Scott boolean chosen by a
+ *  case---the contraction goes to a row of its own.
  */
 
 /*  An owner entry for a loaded node the run has rewritten. */

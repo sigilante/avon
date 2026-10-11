@@ -81,12 +81,12 @@ check: $(TEST_BIN) $(BUILD)/dbg/avon
 	@status=0; for t in $(TEST_BIN); do $$t || status=1; done; exit $$status
 
 # The release binary, asserts compiled out, against the outputs recorded from
-# build/dbg/avon (AUDIT.md item 17).
+# build/dbg/avon under ASan and UBSan.
 smoke: $(BUILD)/avon
 	tests/smoke.sh $(BUILD)/avon
 
-# The witness strategy against lean-ski's aircheck and Plonky3 prover
-# (docs/DESIGN.md §17); needs a lean-ski checkout at $$LEAN_SKI (~/lean-ski).
+# The witness strategy against lean-ski's aircheck and Plonky3 prover;
+# needs a lean-ski checkout at $$LEAN_SKI (~/lean-ski).
 witness-check: $(BUILD)/avon
 	tests/witness_check.sh
 
@@ -112,11 +112,11 @@ front1-check: $(BUILD)/avon
 	tests/front1_check.sh
 
 # Every fixture another repository exports regenerates byte for byte at the
-# pinned revisions (AUDIT.md item 16).
+# revisions tests/pins.sh pins.
 fixtures-check:
 	tests/fixtures_check.sh
 
-# Frame traces against the pure-S paper's hider census (docs/DESIGN.md §22);
+# Frame traces against the pure-S paper's hider census;
 # needs the paper's scripts at $$HIDER_SCRIPTS.
 hider-check: $(BUILD)/avon
 	tests/hider_check.sh

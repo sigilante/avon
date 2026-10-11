@@ -1,9 +1,8 @@
 /**  census.c
  *
- *  A dynamic census of called terms, for choosing jets (docs/DESIGN.md
- *  §6.7).  Where SKIjack's avon/bench/jets.py counts the subterms a
- *  compiled program contains, this counts the terms a running program
- *  calls, weighted by what a residual jet on each would absorb.
+ *  A dynamic census of called terms, for choosing jets.  This counts
+ *  the terms a running program calls, weighted by what a residual jet
+ *  on each would absorb.
  */
 
 #include <stdlib.h>
@@ -264,7 +263,8 @@ void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail) {
         } else if (c->until && r->arity && extra >= r->arity &&
                    (c->until_epoch[i] != c->epoch || c->clock >= c->until[i])) {
             /* a fire: it absorbs the next `cost` contractions, the ones
-             * this run is about to make (the genericity of §6.5) */
+             * this run is about to make, as a residual computed on fresh
+             * atoms holds for any arguments */
             r->fires++;
             r->saved += r->cost;
             c->until[i] = c->clock + r->cost;

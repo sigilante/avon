@@ -1,8 +1,8 @@
 /**  test_fix.c
  *
- *  Y unfolded in one step (docs/DESIGN.md §6.11): with av_opts.fix, share
- *  mode rewrites Y g, Curry's Y at the head with an argument, to g (Y g), a
- *  fresh Y g.  Convertible, not a reduct, and acyclic.
+ *  Y unfolded in one step: with av_opts.fix, share mode rewrites Y g,
+ *  Curry's Y at the head with an argument, to g (Y g), a fresh Y g.
+ *  Convertible, not a reduct, and acyclic.
  *
  *  - A normal form is the unjetted one, in fewer steps.
  *  - A term with no normal form still stops at FUEL, at exactly the fuel
@@ -11,9 +11,9 @@
  *  - Collections keep the answer; copy mode ignores fix; Y with no argument
  *    is left alone; Y g to weak head normal form is g (Y g), the one place
  *    the state's form differs, pinned here.
- *  - With fix_shared (§6.11, "Shared"), every unfolding of a g passes on
- *    one Y g: the same answers and normal forms, a term with no normal form
- *    still stops at exactly its fuel, and collections keep the answer.
+ *  - With fix_shared, every unfolding of a g passes on one Y g: the same
+ *    answers and normal forms, a term with no normal form still stops at
+ *    exactly its fuel, and collections keep the answer.
  */
 
 #include <stdio.h>

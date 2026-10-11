@@ -13,8 +13,8 @@
 
 /*  An invariant whose breach would write past the arena: checked in
  *  release builds too, as assert is not, and fatal, so a wrong
- *  reservation stops the process instead of corrupting the heap
- *  (AUDIT.md item 12).  One compare on the allocation path. */
+ *  reservation stops the process instead of corrupting the heap.  One
+ *  compare on the allocation path. */
 __attribute__((cold)) _Noreturn void av_invariant_failed(const char *what, const char *file,
                                                          int line);
 #define AV_ALWAYS(cond, what) \
@@ -26,7 +26,7 @@ bool     nmap_get(const nmap *m, uint32_t k, uint64_t *v);
 bool     nmap_put(nmap *m, uint32_t k, uint64_t v);
 void     nmap_free(nmap *m);
 
-/*  §5 digests: an atom's, from its name; an application's, from its
+/*  Structural digests: an atom's, from its name; an application's, from its
  *  two parts'. */
 uint64_t digest_leaf(const char *name);
 uint64_t digest_app(uint64_t f, uint64_t x);
@@ -46,8 +46,8 @@ void     profile_remap(av_profile *p, const av_gc *g);
  *  may write it); tmpl_instance, at the end of this file, an instance of
  *  T over args[0 .. T->k-1], allocating T->nops + T->nsuc nodes at most
  *  (reserve them first; it never collects).  With `into` a redex root, the
- *  instance is written there -- its root application over the node, or an
- *  indirection to it -- and `into` returned; AV_NONE, the instance's root. */
+ *  instance is written there---its root application over the node, or an
+ *  indirection to it---and `into` returned; AV_NONE, the instance's root. */
 #define TMPL_CONST 0u
 #define TMPL_ARG   1u
 #define TMPL_RES   2u
@@ -56,7 +56,7 @@ uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner);
 /*  The residual markers @x0 .. @x31, made if not yet: templates' formals. */
 bool     jet_marks(av_arena *a);
 
-/*  Words (words.c, §6.10): W (n+1) over pred, a numeral held (K or a
+/*  Words (words.c): W (n+1) over pred, a numeral held (K or a
  *  word), in two reserved nodes, or AV_NONE if pred is not one; a word's
  *  predecessor; whether a numeral operation's term computes it on the
  *  operands 0 .. 5, run in share mode on private copies, never collecting. */
@@ -92,7 +92,7 @@ uint32_t jet_instance(av_arena *a, uint32_t id, const uint32_t *args,
 uint32_t jet_term_copy(av_arena *a, uint32_t id);
 
 /*  A dashboard entry for term t under its digest, with no residual: the
- *  key an interpreter jet (§7) attaches to.  The existing entry if any. */
+ *  key an interpreter jet attaches to.  The existing entry if any. */
 uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t);
 
 /*  Fire the interpreter jet of dashboard entry id over argv[0 .. params+1]
@@ -123,7 +123,7 @@ int  compile_fire(av_arena *a, const uint32_t *argv, const av_opts *o, uint64_t 
                   uint32_t *out, uint64_t *charge);
 bool compile_check(av_arena *a, uint32_t node, const uint32_t *argv, uint32_t out);
 
-/*  The Poseidon2 jet's output (p2.c, §6.12): stateN s in P2_STATE_NODES
+/*  The Poseidon2 jet's output (p2.c): stateN s in P2_STATE_NODES
  *  reserved nodes at most; it never collects. */
 #define P2_STATE_NODES (2u + 16u * 32u * 5u)
 uint32_t p2_state_build(av_arena *a, const uint32_t s[16]);
@@ -210,7 +210,7 @@ uint32_t tmpl_instance(av_arena *a, const av_tmpl *T, const uint32_t *args,
     } else {
         for (uint32_t i = 0; i < end; i++) {
             uint32_t f = OPND(ops[2 * i]), x = OPND(ops[2 * i + 1]), v;
-            /* SUC of a numeral held: a word (§6.10), two nodes where one was */
+            /* SUC of a numeral held: a word, two nodes where one was */
             out[i] = T->sucop[i] && av_numeral(a, x, &v) && v < AV_WORD_MAX
                    ? word_succ(a, x) : arena_app_reserved(a, f, x);
         }

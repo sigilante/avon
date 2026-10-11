@@ -1,13 +1,12 @@
 /**  test_profile.c
  *
- *  The share-mode profile (docs/DESIGN.md §6.7).  E_0 = z and E_k =
- *  B I (K E_{k-1}) a, with B = S (K S) K named: each level reduces in six
- *  contractions.  Two run B's code (`S (K S)`, `K S`).  Two run loaded
- *  nodes no name covers: `S (K I)` reaches `S f g` = `S (K I) (K E)`, the
- *  level's own node, after the run rewrote `S f`; and `K E`.  The run built
- *  `K I` and rewrote the root that became `I x`, so those two go to the
- *  run-time rows.  The charges must hold through collections, and change
- *  no count.
+ *  The share-mode profile.  E_0 = z and E_k = B I (K E_{k-1}) a, with
+ *  B = S (K S) K named: each level reduces in six contractions.  Two run
+ *  B's code (`S (K S)`, `K S`).  Two run loaded nodes no name covers:
+ *  `S (K I)` reaches `S f g` = `S (K I) (K E)`, the level's own node, after
+ *  the run rewrote `S f`; and `K E`.  The run built `K I` and rewrote the
+ *  root that became `I x`, so those two go to the run-time rows.  The
+ *  charges must hold through collections, and change no count.
  */
 
 #include <stdlib.h>

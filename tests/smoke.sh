@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # smoke.sh: run every command of tests/smoke.tsv on one binary and compare
-# its exit status, stdout and stderr with the recorded ones (AUDIT.md item
-# 17).  `make smoke` runs it on build/avon, whose asserts are compiled out;
-# the expectations are recorded from build/dbg/avon, under ASan and UBSan,
-# so the release binary must behave as the checked one does.
+# its exit status, stdout and stderr with the recorded ones.  `make smoke`
+# runs it on build/avon, whose asserts are compiled out; the expectations
+# are recorded from build/dbg/avon, under ASan and UBSan, so the release
+# binary must behave as the checked one does.
 #
 #   tests/smoke.sh BIN              check BIN, from the repository root
 #   tests/smoke.sh --record BIN     rewrite the expectations from BIN

@@ -1,7 +1,7 @@
 # pins.sh: the revisions the checks that need another repository run
-# against (AUDIT.md items 16 and 19), sourced by those checks and read by
-# .github/workflows/pinned.yml.  Every fixture here regenerates byte for
-# byte from them (tests/fixtures_check.sh).  A check refuses a checkout at
+# against, sourced by those checks and read by .github/workflows/pinned.yml.
+# Every fixture here regenerates byte for byte from them
+# (tests/fixtures_check.sh).  A check refuses a checkout at
 # another commit, or with tracked changes, unless AVON_UNPINNED=1; to move
 # a pin, run the checks it serves at the new commit and change it here.
 

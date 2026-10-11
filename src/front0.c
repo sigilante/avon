@@ -1,13 +1,12 @@
 /**  front0.c
  *
- *  Running the SKIjack-0 front end (docs/DESIGN.md §20.3; skijack's
- *  docs/SKIJACK-0.md §5).  The front end is one term, `front`, that takes a
- *  program as a list of 7-bit character codes and reduces to every name's
- *  closed term: ROk (OCons name tm ..) or RErr.  Here the input is built
- *  in the arena, each code's datum once and shared, and the result is read
- *  by probing -- a Scott datum applied to one marker per constructor
- *  returns its own marker applied to its fields -- into lines of a name
- *  and its term's §5 hash.  No term is rebuilt.
+ *  Running the SKIjack-0 front end.  The front end consists of one term,
+ *  `front`, that takes a program as a list of 7-bit character codes and
+ *  reduces to every name's closed term: ROk (OCons name tm ..) or RErr.
+ *  The input is built in the arena, each code's datum once and shared,
+ *  and the result is read by probing---a Scott datum applied to one marker
+ *  per constructor returns its own marker applied to its fields---into
+ *  lines of a name and its term's hash.  No term is rebuilt.
  *
  *  The front end's work happens inside the probes, lazily, so unlike
  *  av_peel's these collect.  Every node the reader holds sits on one stack
@@ -100,7 +99,7 @@ static int probe(reader *r, unsigned nctors, const unsigned *fields, const av_op
     av_opts po = *o;
     po.whnf_only = true;
     /* the probes share the run's fuel: --fuel bounds the read, not each
-     * probe of it (AUDIT.md item 14) */
+     * probe of it */
     if (o->max_steps != UINT64_MAX)
         po.max_steps = r->steps < o->max_steps ? o->max_steps - r->steps : 0;
     av_result res = av_reduce(a, t, &po);
@@ -143,8 +142,7 @@ static const unsigned F_AP[1]     = { 2 };              /* Ap tm tm             
 
 /*  The name on top of the stack, into buf (NUL-terminated): at most
  *  NAME_MAX_LEN characters, none of them a control character or a space, as
- *  the output is a line per name and a tab before its hash (AUDIT.md item
- *  14). */
+ *  the output is a line per name and a tab before its hash. */
 #define NAME_MAX_LEN 65536
 static bool read_name(reader *r, const av_opts *o, char **buf, size_t *cap,
                       const char **err) {
@@ -173,7 +171,7 @@ static bool read_name(reader *r, const av_opts *o, char **buf, size_t *cap,
     }
 }
 
-/*  The term on top of the stack to its §5 digest, each node read once:
+/*  The term on top of the stack to its digest, each node read once:
  *  a node is replaced by a JOIN of itself, then read; an atom's digest is
  *  its name's, an application's joins its two fields' digests. */
 static bool read_term(reader *r, const av_opts *o, uint64_t *digest, const char **err) {

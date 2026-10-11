@@ -1,11 +1,11 @@
 /**  enum.c
  *
- *  avon enum: closed S-terms, streamed (docs/RUNTIME.md, "Frame traces").
+ *  avon enum: closed S-terms, streamed.
  */
 
 #include "cli.h"
 
-/*  avon enum: closed S-terms, streamed (docs/RUNTIME.md, "Frame traces").
+/*  avon enum: closed S-terms, streamed.
  *
  *  enum N [--start=K] [--count=M]   every closed term of size N (leaves), in
  *      the order of the census's V.trees(n): the left size from 1 to N-1,

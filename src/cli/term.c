@@ -1,14 +1,14 @@
 /**  term.c
  *
- *  The commands on one term -- reduce, batch, jam, cue, prefix and witness --
- *  over one set of options, args, each refused where its command would
- *  ignore it (options_fit, AUDIT.md item 22).
+ *  The commands on one term---reduce, batch, jam, cue, prefix and
+ *  witness---over one set of options, args, each refused where its command
+ *  would ignore it (options_fit).
  */
 
 #include "cli.h"
 
 /*  Each option parse_args takes, a bit of args.given, so options_fit can
- *  refuse one the command would ignore (AUDIT.md item 22). */
+ *  refuse one the command would ignore. */
 enum {
     O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES,
     O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_INTERP, O_JET_TABLE, O_PLAN,
@@ -48,11 +48,11 @@ typedef struct {
     uint64_t    jet_floor;
     const char *profile;          /* --profile: a names file, or NULL */
     const char *templates;        /* --templates: a directory, or NULL */
-    bool        data;             /* --data: data jets (§6.10) */
-    bool        fix;              /* --fix: Y unfolded in one step (§6.11) */
-    const char *p2;               /* --p2: P's term, a file (§6.12), or NULL */
+    bool        data;             /* --data: data jets */
+    bool        fix;              /* --fix: Y unfolded in one step */
+    const char *p2;               /* --p2: P's term, a file, or NULL */
     const char *file;
-    /* frame traces (§22) */
+    /* frame traces */
     int         trace;            /* 0 off, 1 summary, 2 a line per step */
     const char *passenger;
     size_t      records;          /* the confirmation window; 0: no records */
@@ -177,14 +177,14 @@ static bool parse_args(int argc, char **argv, args *g) {
     return true;
 }
 
-/*  Refuse an option the command would ignore (AUDIT.md item 22), naming
- *  the first such.  reduce and batch read the reduction's options; batch
- *  reads its terms from stdin, not a FILE.  --trace-frame runs copy mode's
- *  head run with no jets, templates or profile and prints no term
- *  (--strategy=copy, --whnf and --no-jets agree with it), and the
- *  frame-trace options mean nothing without it.  jam, cue and prefix read
- *  a term and print it; witness reads its budgets and lean-ski's files,
- *  and with --statement only the statement, the jet table and a witness. */
+/*  Refuse an option the command would ignore, naming the first such.
+ *  reduce and batch read the reduction's options; batch reads its terms
+ *  from stdin, not a FILE.  --trace-frame runs copy mode's head run with
+ *  no jets, templates or profile and prints no term (--strategy=copy,
+ *  --whnf and --no-jets agree with it), and the frame-trace options mean
+ *  nothing without it.  jam, cue and prefix read a term and print it;
+ *  witness reads its budgets and lean-ski's files, and with --statement
+ *  only the statement, the jet table and a witness. */
 static bool options_fit(const args *g, const char *cmd) {
     const uint32_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP);
     const uint32_t untraced = OPT(O_TEMPLATES) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
@@ -260,7 +260,7 @@ static av_arena *new_arena(const args *g) {
     return a;
 }
 
-/*  A profile of t (§6.7) named by a names file, `kind TAB name TAB hash`
+/*  A profile of t named by a names file, `kind TAB name TAB hash`
  *  per line, as census --names reads. */
 av_profile *profile_load(const char *path, const av_arena *a, uint32_t t) {
     FILE *f = fopen(path, "rb");
@@ -287,7 +287,7 @@ av_profile *profile_load(const char *path, const av_arena *a, uint32_t t) {
     return p;
 }
 
-/*  Supercombinator templates from dir (§6.9), loaded after every other jet,
+/*  Supercombinator templates from dir, loaded after every other jet,
  *  then *t matched and the templates bound to it.  counts: accepted,
  *  refused, skipped, unbound.  False, with a message, on failure. */
 bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
@@ -312,7 +312,7 @@ bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
     bool ok = *t != AV_NONE && av_templates_bind(a, ts, *t);
     if (ok) av_templates_counts(ts, &counts[0], &counts[1], &counts[2], &counts[3]);
     else fprintf(stderr, "avon: could not bind the templates\n");
-    if (ok && data) {           /* data jets (§6.10): the numerals, as words */
+    if (ok && data) {           /* data jets: the numerals, as words */
         av_templates_word_counts(ts, &wc[0], &wc[1]);
         wc[2] = av_words_scan(a, *t);
         ok = wc[2] >= 0 && av_words_mark(a);
@@ -322,7 +322,7 @@ bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
     return ok;
 }
 
-/*  The Poseidon2 jet (§6.12): P's term from path, registered.  Its id, or
+/*  The Poseidon2 jet: P's term from path, registered.  Its id, or
  *  AV_NONE with a message. */
 static uint32_t use_p2(av_arena *a, const char *path) {
     FILE *f = fopen(path, "rb");
@@ -346,7 +346,7 @@ static uint32_t use_p2(av_arena *a, const char *path) {
     return id;
 }
 
-/*  The data jets' report line (§6.10). */
+/*  The data jets' report line. */
 void report_data(const long wc[3], const av_result *r) {
     fprintf(stderr, "data: %ld numeral operations admitted, %ld refused; %ld numerals "
             "made words; %llu dispatches (%llu fused), %llu numeral operations "
@@ -356,7 +356,7 @@ void report_data(const long wc[3], const av_result *r) {
             (unsigned long long)r->word_ops, (unsigned long long)r->joins);
 }
 
-/*  The unfolding's report line (§6.11). */
+/*  The unfolding's report line. */
 void report_fix(const av_result *r) {
     fprintf(stderr, "fix: %llu unfoldings of Y among the contractions\n",
             (unsigned long long)r->fix_calls);
@@ -365,7 +365,7 @@ void report_fix(const av_result *r) {
 /*  The input line a term came from: 1 for reduce, counted by batch. */
 static uint64_t term_line = 1;
 
-/*  One frame-trace run (§22): copy mode, the head run, no collection. */
+/*  One frame-trace run: copy mode, the head run, no collection. */
 static bool trace_pass(const args *g, const char *src, size_t len, bool out,
                        const uint64_t *dumps, size_t ndumps, bool dump_halt,
                        uint64_t **rec_steps, size_t *nrec, int64_t *restart, bool census) {
@@ -551,8 +551,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     av_buf_free(&b);
     av_arena_free(a);
     /* the run's status is the line's, a script's to read: exit 1 is for a
-     * failure of Avon's own, here a jet that disagreed with its term
-     * (AUDIT.md item 15) */
+     * failure of Avon's own, here a jet that disagreed with its term */
     return r.jet_fault ? 1 : 0;
 }
 

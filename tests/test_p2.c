@@ -1,12 +1,12 @@
 /**  test_p2.c
  *
  *  Poseidon2 over BabyBear (src/p2.c): the specification's three test
- *  vectors, and inputs at or above p permuting as their residues do, as
- *  the jet's 31-bit elements may be.  The statements' readers.  And the
- *  native jet (docs/DESIGN.md §6.12), with a stand-in for P's term: a
- *  state is read only in exactly stateN's form; P at the head of one fires
- *  in one step, to the permuted state; any other argument runs the term;
- *  a jet node whose term is not the registered one is unbound.
+ *  vectors, and inputs at or above p permuting as their residues do, as the
+ *  jet's 31-bit elements may be.  The statements' readers.  And the native
+ *  jet, with a stand-in for P's term: a state is read only in exactly
+ *  stateN's form; P at the head of one fires in one step, to the permuted
+ *  state; any other argument runs the term; a jet node whose term is not
+ *  the registered one is unbound.
  */
 
 #include <stdint.h>

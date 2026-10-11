@@ -4,9 +4,9 @@
 
 Compiles each port with skijack, writes its supercombinator templates and
 numeral operations, and reduces ``main Tt Ff`` to weak head normal form in
-share mode four ways -- as SKI, with ``--templates``, with ``--templates
+share mode four ways---as SKI, with ``--templates``, with ``--templates
 --data`` (data jets), and with ``--templates --data --fix`` (Y unfolded in
-one step) -- best of ``--reps`` user CPU, interleaved.  Every count is its
+one step)---best of ``--reps`` user CPU, interleaved.  Every count is its
 own column: contractions and the instantiations, dispatches, numeral
 operations and unfoldings among them.  With
 ``--inline`` the ports are compiled with skijack's inlining pass.  Every port's

@@ -1,9 +1,9 @@
 /**  test_witness.c
  *
- *  The witness strategy (docs/DESIGN.md §17): its tables for I K and
- *  S K K S are lean-ski's, byte for byte; atoms and over-budget runs are
- *  refused; and on random closed terms it halts with copy mode's count on
- *  the term copy mode reaches, read back from its heap as Mach.decode does.
+ *  The witness strategy: its tables for I K and S K K S are lean-ski's,
+ *  byte for byte; atoms and over-budget runs are refused; and on random
+ *  closed terms it halts with copy mode's count on the term copy mode
+ *  reaches, read back from its heap as Mach.decode does.
  *  tests/witness_check.sh checks the corpus against lean-ski itself.
  */
 
@@ -181,7 +181,7 @@ TEST(the_witness_halts_where_copy_mode_does) {
     CHECK(compared > cases / 2);
 }
 
-/*  Jetted witnesses (§18.1): lean-ski's jet file, and instantiation rows.
+/*  Jetted witnesses: lean-ski's jet file, and instantiation rows.
  *  The jet `λx y. x` compiles to K, so K's cell is its root; it pops two
  *  arguments, writes no cell, and its root is its first argument. */
 
@@ -299,7 +299,7 @@ TEST(a_probe_binds_k_as_zero) {
 TEST(a_probe_refuses_another_outcome) {
     av_buf b = { 0 };
     const char *err = NULL;
-    /* Suc Zero: marker 1 over one field -- K ends at marker 0 */
+    /* Suc Zero: marker 1 over one field---K ends at marker 0 */
     CHECK(!probe_of("K", "plan 2\n0 2 1 1 0 0\n2 2 0 0 0 0\n", &b, &err));
     CHECK(err && strstr(err, "segment 0 ends at marker 0, not its marker 1"));
     /* one marker only: K stops short of its arguments */

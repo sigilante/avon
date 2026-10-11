@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Frame traces against the pure-S paper's hider census (docs/DESIGN.md §22),
+# Frame traces against the pure-S paper's hider census,
 # in the order that localizes a mismatch:
 #
 #   1. enumeration: avon enum N gives the census's closed terms, in its order;

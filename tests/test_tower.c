@@ -1,7 +1,6 @@
 /**  test_tower.c
  *
- *  The paper's targets (docs/DESIGN.md §1, §11 stage 1), from fixtures
- *  exported by aviary_kernel's printer:
+ *  The paper's targets, from fixtures exported by aviary_kernel's printer:
  *
  *      T0  whnfF 3 <I K>
  *      T1  whnfF 120 <UQ <I K>>
@@ -82,7 +81,7 @@ TEST(copy_mode_reaches_the_reference_state_on_t0) {
 }
 
 TEST(share_mode_counts_are_its_own) {
-    /* Reported beside the paper's, never in place of them (§1.1).  They
+    /* Reported beside the paper's, never in place of them.  They
      * depend on the sharing the input carries, and a printed fixture
      * carries none. */
     static const struct { const char *name; uint64_t steps; } t[] = {

@@ -284,7 +284,7 @@ TEST(a_stopped_state_too_large_to_rebuild_is_size) {
 }
 
 /*  The default node cap follows the host's memory, between 2^20 and
- *  AV_MAX_NODES (AUDIT.md item 11). */
+ *  AV_MAX_NODES. */
 TEST(the_default_node_cap_fits_the_host) {
     uint32_t n = av_default_max_nodes();
     CHECK(n >= (1u << 20) && n <= AV_MAX_NODES);
@@ -295,7 +295,7 @@ TEST(the_default_node_cap_fits_the_host) {
 }
 
 /*  An allocation past what was reserved stops the process, in release
- *  builds too, instead of writing past the arena (AUDIT.md item 12). */
+ *  builds too, instead of writing past the arena. */
 TEST(an_allocation_past_its_reservation_aborts) {
     pid_t pid = fork();
     REQUIRE(pid >= 0);

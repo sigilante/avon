@@ -1,9 +1,9 @@
 /**  kernel.c
  *
- *  The kernel door (docs/DESIGN.md §9; SKIjack SPEC.md §4.1): pulled by
- *  axis, never by name, and installed as the reference host's loop
- *  installs it (skijack tests/test_examples.py): tl of a poke's value,
- *  unreduced, so a sharing strategy computes each state once.
+ *  The kernel door (SKIjack SPEC.md §4.1): pulled by axis, never by
+ *  name, and installed as the reference host's loop installs it (skijack
+ *  tests/test_examples.py): tl of a poke's value, unreduced, so a sharing
+ *  strategy computes each state once.
  */
 
 #include <stdlib.h>

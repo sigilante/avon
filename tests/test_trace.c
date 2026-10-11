@@ -1,7 +1,7 @@
 /**  test_trace.c
  *
- *  Frame traces (docs/DESIGN.md §22): the observer of copy mode's head run
- *  for the pure S calculus with the passenger X.
+ *  Frame traces: the observer of copy mode's head run for the pure S
+ *  calculus with the passenger X.
  *
  *  - Hand-traced runs give their lines: a z-step then a halt with X at the
  *    head (HALT-X), a y-step, an OPEN, a HALT-B.
@@ -261,7 +261,7 @@ TEST(a_window_past_the_horizon_confirms_nothing) {
 TEST(census_dumps_are_the_frames_the_census_reads) {
     /* r10 X rides: no confirmed record has an X-headed item at or below
      * L-3 or at L-1, so the census reads frame n+1 of every one, for its
-     * mint -- and nothing else is dumped */
+     * mint---and nothing else is dumped */
     enum { H = 600, CONF = 150 };
     av_arena *a = av_arena_new(1u << 12);
     uint32_t t = av_parse(a, R10 " X", strlen(R10 " X"), NULL);
@@ -360,7 +360,7 @@ TEST(malformed_dag_terms_are_refused) {
         "dag 1=2.1 @1",
         "dag 1=S",
         "dag ",
-        /* names that would not print and parse back (AUDIT.md item 13) */
+        /* names that would not print and parse back */
         "dag 1=a(b @1",
         "dag 1=ab) @1",
         "dag 1=a`b @1",

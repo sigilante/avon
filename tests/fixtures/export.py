@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Regenerate the paper-target fixtures (docs/DESIGN.md §1, §16).
+"""Regenerate the paper-target fixtures.
 
-Writes t0.ski, t1.ski, t2.ski -- the printed forms of
+Writes t0.ski, t1.ski, t2.ski---the printed forms of
 
     T0  whnfF 3 <I K>
     T1  whnfF 120 <UQ <I K>>
     T2  whnfF 500 <whnfF 3 <I K>>
 
-as tower_harness.py builds them -- and t0.whnf, the reference host's status,
+as tower_harness.py builds them---and t0.whnf, the reference host's status,
 contraction count and reduced term for T0.  T1's and T2's reduced terms are
-not written: their tree unfoldings run past 85 million characters (§4.1).
+not written: their tree unfoldings run past 85 million characters.
 
 Also writes corpus.tsv: every distinct term skijack compiles from its corpus,
 one per line as "program<TAB>name<TAB>printed term", first name wins when
-several name one term (§6.2).  Programs that fail Stage A are skipped and
+several name one term.  Programs that fail Stage A are skipped and
 listed.
 
     python3 tests/fixtures/export.py

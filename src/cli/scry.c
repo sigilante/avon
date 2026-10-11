@@ -1,7 +1,7 @@
 /**  scry.c
  *
- *  avon scry: the resume loop (docs/DESIGN.md §8) over a namespaces.tsv
- *  export, each run checked against the reference host's.
+ *  avon scry: the resume loop over a namespaces.tsv export, each run
+ *  checked against the reference host's.
  */
 
 #include "cli.h"
@@ -60,7 +60,7 @@ static av_arena *scry_arena(void *ctx) {
 
 /*  avon scry: every run of a namespaces.tsv (skijack.export), each round's
  *  events and every attempt printed, and checked against the reference
- *  host's -- the attempts only when nothing changes counts. */
+ *  host's---the attempts only when nothing changes counts. */
 int scry_main(int argc, char **argv) {
     const char *manifest = NULL, *logdir = NULL, *dict = NULL, *interp = NULL;
     uint64_t check = 0, v;

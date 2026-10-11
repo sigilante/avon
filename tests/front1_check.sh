@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# The full language's front end, by milestone (docs/WORKLIST.md, Stage 8;
-# docs/DESIGN.md §20.3): skijack's front1, a SKIjack-0 program compiled by
-# Python, run in Avon's share mode,
+# The full language's front end, by milestone: skijack's front1, a
+# SKIjack-0 program compiled by Python, run in Avon's share mode,
 #
 #   1. compiles the corpus programs of every milestone through MILESTONE to
 #      the expander's terms, hash for hash;
@@ -11,9 +10,9 @@
 #      of the full language as the expander does;
 #   4. compiles its own source to Python's terms: the fixed point;
 #
-# and then all four again with the front end's supercombinator templates
-# (§6.9), with the templates and data jets (§6.10), and with those and Y
-# unfolded in one step (§6.11): the same terms, from fewer contractions.
+# and then all four again with the front end's supercombinator templates,
+# with the templates and data jets, and with those and Y unfolded in one
+# step: the same terms, from fewer contractions.
 #
 # Run from the repository root after `make`.  SKIJACK defaults to
 # ~/skijack (master since skijack #8).

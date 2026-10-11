@@ -1,8 +1,7 @@
 /**  print.c
  *
- *  The printed form, written without recursion and under a node budget
- *  (docs/DESIGN.md §4.1): a work stack of nodes still to print and the
- *  punctuation between them.
+ *  The printed form, written without recursion and under a node budget:
+ *  a work stack of nodes still to print and the punctuation between them.
  */
 
 #include <stdlib.h>

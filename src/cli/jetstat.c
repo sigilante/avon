@@ -1,7 +1,7 @@
 /**  jetstat.c
  *
- *  avon jetstat: what each jet does on the manifests' runs (docs/DESIGN.md
- *  §6.7); and the rows, names and table front0 reads too.
+ *  avon jetstat: what each jet does on the manifests' runs; and the rows,
+ *  names and table front0 reads too.
  */
 
 #include "cli.h"
@@ -18,7 +18,8 @@ typedef struct {
 } jetcfg;
 
 /*  One pass over the manifests' runs with cfg's jets, into s.  A copy-mode
- *  count must be the manifest's: jets keep counts (§6.5). */
+ *  count must be the manifest's: a fire charges the contractions it
+ *  absorbs, so jets keep counts. */
 static int jet_pass(char **manifests, int nm, const jetcfg *cfg, av_jetstats *s,
                     uint64_t *total, int *runs, int *wrong) {
     *total = 0;
@@ -296,7 +297,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
 }
 
 /*  avon jetstat: what each jet does on the manifests' runs, together and,
- *  with --alone, each by itself (docs/DESIGN.md §6.7). */
+ *  with --alone, each by itself. */
 int jetstat_main(int argc, char **argv) {
     char *dicts[16], *manifests[256], *namefiles[64];
     int nd = 0, nm = 0, nn = 0;

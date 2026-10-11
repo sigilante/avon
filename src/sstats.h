@@ -1,7 +1,7 @@
 /**  sstats.h
  *
- *  Strictness measurement (docs/WORKLIST.md item 1, docs/DESIGN.md §6.9):
- *  what becomes of the cells a template instance writes, in share mode.
+ *  Strictness measurement: what becomes of the cells a template instance
+ *  writes, in share mode.
  *  Built only with -DAV_STRICT_STATS (`make stats`, build/stats/avon), so
  *  the release and debug builds carry none of it.
  *
@@ -10,8 +10,8 @@
  *  function part of another application in the body, unwound as soon as
  *  the instance is; or an *argument* cell, passed somewhere as an operand.
  *  An argument cell is a *value* when it is already in weak head normal
- *  form -- a partial application, a constructor short of its continuations
- *  -- or a word; otherwise a *thunk*, a redex nobody has asked for yet.
+ *  form---a partial application, a constructor short of its continuations
+ *  ---or a word; otherwise a *thunk*, a redex nobody has asked for yet.
  *  A thunk is *forced* when the reducer first unwinds through it; one the
  *  collector finds dead, or the run ends with, was never forced.  The
  *  steps between writing a thunk and forcing it are what strictness could

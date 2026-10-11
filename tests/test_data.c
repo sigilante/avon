@@ -1,9 +1,9 @@
 /**  test_data.c
  *
- *  Data jets (docs/DESIGN.md §6.10), on skijack's own output: tests/data/
- *  holds two programs and what tests/data/export.py writes for each, its
- *  templates, its numeral operations (words.tsv), and its names main, lazy
- *  and out printed.  main and lazy check themselves and are True, Ff.
+ *  Data jets, on skijack's own output: tests/data/ holds two programs and
+ *  what tests/data/export.py writes for each, its templates, its numeral
+ *  operations (words.tsv), and its names main, lazy and out printed.  main
+ *  and lazy check themselves and are True, Ff.
  *
  *  - Every mode gives the same answer, and data jets dispatch constructors,
  *    fused into the branch's template, and run numeral operations on words.
@@ -16,7 +16,7 @@
  *  - Collections keep words; fuel stops a run.
  *  - A case joined to its instance is the instance and the dispatch after
  *    it: every count and state the same with joins and without.
- *  - An instance whose root is deferred (§6.13) leaves only nodes unwritten:
+ *  - An instance whose root is deferred leaves only nodes unwritten:
  *    every count and state the same with deferral and without, at every
  *    fuel to 400 and in an arena small enough to collect; and a deferred
  *    node keeps nothing alive, so a node cap the undeferred run fits within
@@ -385,8 +385,8 @@ TEST(a_term_that_is_not_its_operation_is_refused) {
 }
 
 /*  An addition that agrees with + on 0 .. 6 and not past it, under its own
- *  hash: word_admit's samples pass it, and only the pinned term refuses it
- *  (AUDIT.md item 7). */
+ *  hash: word_admit's samples pass it, and only the pinned term refuses
+ *  it. */
 static const char FAKE_ADD[] =
     "skijack-1:d9868dcd09572633\tadd\t0\t"
     "S S (K (S (K (S (K (S (K K) (S (K (S I)) K))))) (S (K (S (S S (K"
@@ -439,11 +439,11 @@ TEST(collections_keep_words_and_fuel_stops) {
     free(src);
 }
 
-/*  A case joined to its instance (§6.10) is the instance and the dispatch
- *  after it, minus the spine: with joins and without, every count and
- *  every state the same -- to normal form, to weak head normal form, at
- *  every fuel from 0 to 400 (a join is made only when both its steps
- *  fit), and through collections. */
+/*  A case joined to its instance is the instance and the dispatch after
+ *  it, minus the spine: with joins and without, every count and every
+ *  state the same---to normal form, to weak head normal form, at every
+ *  fuel from 0 to 400 (a join is made only when both its steps fit), and
+ *  through collections. */
 static bool same(const outcome *x, const outcome *y) {
     return x->status == y->status && x->steps == y->steps && x->tmpl_calls == y->tmpl_calls &&
            x->dispatches == y->dispatches && x->fused == y->fused &&

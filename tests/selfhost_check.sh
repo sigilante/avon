@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Stage 8's corpus acceptance (docs/DESIGN.md §20.3): every bracket
-# abstraction skijack performs compiling its corpus, run in Avon through the
-# compiler's core as a term -- tests/selfhost/abstract.ascii.ski, compiled
-# by skijack -- gives Python's result, hash for hash; and so does the
+# The self-hosted compiler's corpus acceptance: every bracket abstraction
+# skijack performs compiling its corpus, run in Avon through the compiler's
+# core as a term---tests/selfhost/abstract.ascii.ski, compiled by
+# skijack---gives Python's result, hash for hash; and so does the
 # compiler jet, every fire checked against the term.
 #
 #   1. tests/selfhost/export.py records the outermost bracket abstractions
