@@ -6,8 +6,8 @@ the files it reads and where they come from, and what each check proves.
 (§6.9) point there. `docs/BENCHMARK.md` has the measurements.
 
 Commands run from the repository root. Paths like `~/skijack` assume a
-skijack checkout there, and `~/lean-ski` a lean-ski checkout; the scripts
-take `SKIJACK=` and `LEAN_SKI=` to change them. (skijack's own
+skijack checkout there, and `~/Code/ski/lean-ski` a lean-ski checkout; the
+scripts take `SKIJACK=` and `LEAN_SKI=` to change them. (skijack's own
 `RUNTIME-DESIGN.md` is a design note about the runtime, not this guide.)
 
 ## Building
@@ -178,7 +178,7 @@ other computation between calls, `P (f (P x))`, declines unless each
 state is built before it is passed on.
 
 ```sh
-(cd ~/lean-ski && lake exe p2run 1 /tmp/p2)
+(cd ~/Code/ski/lean-ski && lake exe p2run 1 /tmp/p2)
 build/avon reduce --p2=/tmp/p2/P.dag /tmp/p2/p2.dag   # NORMAL 1, then p2.expected
 ```
 
@@ -460,9 +460,9 @@ exporter on a copy of `tests/` and `jets/` and compares the 193 files.
 A check that needs another repository runs against the commit
 `tests/pins.sh` pins, and refuses a checkout at any other commit, or with
 tracked changes, unless `AVON_UNPINNED=1`. The checkouts default to
-`~/skijack`, `~/lean-ski`, `~/Code/ski/skilark` and `~/Code/urbit/aviary`
-(`SKIJACK`, `LEAN_SKI`, `SKILARK`, `AVIARY`); the paper's scripts have no
-default. The skijack checks also need the `aviary_kernel` Python imports
+`~/skijack`, `~/Code/ski/lean-ski`, `~/Code/ski/skilark` and
+`~/Code/urbit/aviary` (`SKIJACK`, `LEAN_SKI`, `SKILARK`, `AVIARY`); the
+paper's scripts have no default. The skijack checks also need the `aviary_kernel` Python imports
 to be aviary's at its pin. `.github/workflows/pinned.yml` runs
 `fixtures-check`, `selfhost-check`, `front0-check` and `front1-check`
 weekly against the public repositories at their pins; lean-ski and

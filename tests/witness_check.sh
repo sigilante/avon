@@ -14,11 +14,11 @@
 #      the evaluation it ends on (Air.air_sound_eval).
 #
 # Targets stopped by host fuel diverge and have no witness.  Run from the
-# repository root after `make`.  LEAN_SKI defaults to ~/lean-ski.
+# repository root after `make`.  LEAN_SKI defaults to ~/Code/ski/lean-ski.
 
 set -euo pipefail
 
-export LEAN_SKI=${LEAN_SKI:-$HOME/lean-ski}   # ski-air finds Lean through it
+export LEAN_SKI=${LEAN_SKI:-$HOME/Code/ski/lean-ski}   # ski-air finds Lean through it
 . tests/pins.sh
 pin_check lean-ski "$LEAN_SKI" "$LEAN_SKI_PIN"
 AVON=${AVON:-build/avon}

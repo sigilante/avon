@@ -29,7 +29,7 @@ order; and the text of `av_p2_sbox`, which `sboxC` models step for step.
 
 Run from lean-ski, which supplies `Ski.ZK.Poseidon2Ex`:
 
-    cd ~/lean-ski && lake env lean --run ~/avon/lean/P2Prog.lean OUT.h
+    cd ~/Code/ski/lean-ski && lake env lean --run ~/avon/lean/P2Prog.lean OUT.h
 
 The kernel checks the theorems as the file elaborates; `main` then writes
 the header to `OUT.h`.  `tests/p2_witness_check.sh` compares it with
