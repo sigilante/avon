@@ -1,9 +1,10 @@
 # pins.sh: the revisions the checks that need another repository run
 # against, sourced by those checks and read by .github/workflows/pinned.yml.
 # Every fixture here regenerates byte for byte from them
-# (tests/fixtures_check.sh).  A check refuses a checkout at
-# another commit, or with tracked changes, unless AVON_UNPINNED=1; to move
-# a pin, run the checks it serves at the new commit and change it here.
+# (tests/fixtures_check.sh).  A check accepts a checkout at its pin, or at
+# a descendant of it whose commits and tracked changes touch only
+# documentation (*.md); it refuses any other, unless AVON_UNPINNED=1.  To
+# move a pin, run the checks it serves at the new commit and change it here.
 
 SKIJACK_PIN=e978e58445c2bf3bdc87c683261fcd29fc876d33     # sigilante/SKIjack, public
 SKILARK_PIN=8a988a13b73f819b82723162640605c7e195f55b     # sigilante/SKIlark, public
@@ -11,15 +12,23 @@ AVIARY_PIN=ec4b418c527408c3a513bee2735e6b0f862accda      # sigilante/aviary, pub
 LEAN_SKI_PIN=5614cb4c2f33071f32264efa72879e6d9b3fa5ed    # sigilante/lean-ski, private: paper-v4 and a WORKLIST change
 STARLINGS_PIN=0b2779ed732ed37d1eea4751ed897015e12d4cdc   # sigilante/starlings, private
 
-# pin_check NAME DIR PIN [PATH...]: DIR is a git checkout at PIN with no
-# tracked changes (in PATH..., when given), or the check stops.
+# pin_check NAME DIR PIN [PATH...]: DIR is a git checkout at PIN, or at a
+# descendant of PIN whose commits since change only *.md files, and has no
+# tracked changes but to *.md files (in PATH..., when given), or the check
+# stops.
 pin_check() {
-    local name=$1 dir=$2 pin=$3 head dirty
+    local name=$1 dir=$2 pin=$3 head dirty past=""
     shift 3
     head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || head="no git checkout"
-    dirty=$(git -C "$dir" status --porcelain --untracked-files=no -- "$@" 2>/dev/null) || dirty=""
-    if [ "$head" = "$pin" ] && [ -z "$dirty" ]; then
-        echo "$name at its pin, ${pin:0:12}"
+    # renames count on both sides, so no file leaves the check as a .md
+    dirty=$(git -C "$dir" diff --no-renames --name-only HEAD -- "$@" ':(exclude)*.md' \
+            2>/dev/null) || dirty=""
+    if [ "$head" != "$pin" ] && git -C "$dir" merge-base --is-ancestor "$pin" HEAD 2>/dev/null \
+       && [ -z "$(git -C "$dir" diff --no-renames --name-only "$pin" HEAD -- ':(exclude)*.md')" ]; then
+        past=" (${head:0:12}: documentation only since)"
+    fi
+    if { [ "$head" = "$pin" ] || [ -n "$past" ]; } && [ -z "$dirty" ]; then
+        echo "$name at its pin, ${pin:0:12}$past"
         return 0
     fi
     echo "$name in $dir is at $head${dirty:+, with tracked changes}; the pin is $pin (tests/pins.sh)" >&2

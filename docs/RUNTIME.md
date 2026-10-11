@@ -458,8 +458,10 @@ exporter on a copy of `tests/` and `jets/` and compares the 193 files.
 | `tests/diff_aviary.py` | `copy` mode against `aviary_kernel` on random terms | aviary-kernel |
 
 A check that needs another repository runs against the commit
-`tests/pins.sh` pins, and refuses a checkout at any other commit, or with
-tracked changes, unless `AVON_UNPINNED=1`. The checkouts default to
+`tests/pins.sh` pins. It also accepts a descendant of that commit whose
+commits since, and whose tracked changes, touch only documentation
+(`*.md` files; a rename counts on both sides). It refuses any other
+checkout unless `AVON_UNPINNED=1`. The checkouts default to
 `~/skijack`, `~/Code/ski/lean-ski`, `~/Code/ski/skilark` and
 `~/Code/urbit/aviary` (`SKIJACK`, `LEAN_SKI`, `SKILARK`, `AVIARY`); the
 paper's scripts have no default. The skijack checks also need the `aviary_kernel` Python imports
