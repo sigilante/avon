@@ -3,8 +3,9 @@
 # Every fixture here regenerates byte for byte from them
 # (tests/fixtures_check.sh).  A check accepts a checkout at its pin, or at
 # a descendant of it whose commits and tracked changes touch only
-# documentation (*.md); it refuses any other, unless AVON_UNPINNED=1.  To
-# move a pin, run the checks it serves at the new commit and change it here.
+# documentation (see not_docs); it refuses any other, unless
+# AVON_UNPINNED=1.  To move a pin, run the checks it serves at the new
+# commit and change it here.
 
 SKIJACK_PIN=e978e58445c2bf3bdc87c683261fcd29fc876d33     # sigilante/SKIjack, public
 SKILARK_PIN=8a988a13b73f819b82723162640605c7e195f55b     # sigilante/SKIlark, public
@@ -12,19 +13,35 @@ AVIARY_PIN=ec4b418c527408c3a513bee2735e6b0f862accda      # sigilante/aviary, pub
 LEAN_SKI_PIN=5614cb4c2f33071f32264efa72879e6d9b3fa5ed    # sigilante/lean-ski, private: paper-v4 and a WORKLIST change
 STARLINGS_PIN=0b2779ed732ed37d1eea4751ed897015e12d4cdc   # sigilante/starlings, private
 
+# not_docs: the file names on stdin that are not documentation.
+# Documentation is *.md, *.tex and *.txt, but for the .txt names lean-ski
+# gives its statements, witnesses and corpora, which the checks read.
+not_docs() {
+    local f
+    while IFS= read -r f; do
+        case $f in
+            *public*.txt|*witness*.txt|*corpus*.txt) echo "$f" ;;
+            *.md|*.tex|*.txt) ;;
+            *) echo "$f" ;;
+        esac
+    done
+}
+
 # pin_check NAME DIR PIN [PATH...]: DIR is a git checkout at PIN, or at a
-# descendant of PIN whose commits since change only *.md files, and has no
-# tracked changes but to *.md files (in PATH..., when given), or the check
-# stops.
+# descendant of PIN whose commits since change only documentation, and has
+# no tracked changes but to documentation (in PATH..., when given), or the
+# check stops.  Renames count on both sides, so no file leaves the check
+# by being renamed to documentation.
 pin_check() {
-    local name=$1 dir=$2 pin=$3 head dirty past=""
+    local name=$1 dir=$2 pin=$3 head dirty="" past="" changed
     shift 3
     head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || head="no git checkout"
-    # renames count on both sides, so no file leaves the check as a .md
-    dirty=$(git -C "$dir" diff --no-renames --name-only HEAD -- "$@" ':(exclude)*.md' \
-            2>/dev/null) || dirty=""
+    if changed=$(git -C "$dir" diff --no-renames --name-only HEAD -- "$@" 2>/dev/null); then
+        dirty=$(printf '%s\n' "$changed" | not_docs)
+    fi
     if [ "$head" != "$pin" ] && git -C "$dir" merge-base --is-ancestor "$pin" HEAD 2>/dev/null \
-       && [ -z "$(git -C "$dir" diff --no-renames --name-only "$pin" HEAD -- ':(exclude)*.md')" ]; then
+       && changed=$(git -C "$dir" diff --no-renames --name-only "$pin" HEAD) \
+       && [ -z "$(printf '%s\n' "$changed" | not_docs)" ]; then
         past=" (${head:0:12}: documentation only since)"
     fi
     if { [ "$head" = "$pin" ] || [ -n "$past" ]; } && [ -z "$dirty" ]; then

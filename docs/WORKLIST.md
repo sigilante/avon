@@ -7,9 +7,11 @@ design lives. Last revised 2026-10-05.
 ## Done since the last revision
 
 - **Pins tolerate documentation** (2026-10-11). `pin_check` accepts a checkout past its
-  pin when every commit since, and every tracked change, touches only `*.md` files, so
-  a WORKLIST commit in lean-ski or skijack no longer stops the checks. The pin must be
-  an ancestor of the checkout; a rename counts on both sides.
+  pin when every commit since, and every tracked change, touches only documentation:
+  `*.md`, `*.tex` and `*.txt`, but not lean-ski's statement, witness and corpus `.txt`
+  files, which the checks read. A WORKLIST commit in lean-ski or a `.tex` edit in the
+  paper's repository no longer stops the checks. The pin must be an ancestor of the
+  checkout; a rename counts on both sides.
 
 - **lean-ski at master, past `paper-v4`** (2026-10-11). `tests/pins.sh` moves to
   `5614cb4`: `paper-v4` (`3e30892`), the lean-ski the Zero-knowledge SKI paper
