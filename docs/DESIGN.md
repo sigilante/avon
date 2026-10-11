@@ -2762,7 +2762,8 @@ recomputation licenses them.
 - **Globals.** A compiled body inlines whole closed words, so writing
   every cell of the body costs 2.2–6.0× the plain run's rows on the
   compiled corpus rows and `3 sumto` (224% to 597%). With globals, a
-  jetted run takes 28–34% of the plain run's rows.
+  jetted run takes 28–34% of the plain run's rows, and 27–30% since
+  lean-ski stopped licensing jets at bare combinators (`ZK-JETS.md` §1).
 - **η-templates are never roots.** `λ xs. G xs`, with `G` closed,
   compiles to `G` itself; instantiating it rewrites `G xs` to `G xs`, and
   a run jetted there loops.

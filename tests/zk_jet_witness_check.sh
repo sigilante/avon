@@ -130,13 +130,24 @@ for c in $cases; do
     else
         echo "the forged region: refused by Avon"
     fi
-    # a POP budget below the run's: refused by both
-    small=$(( lp == 8 ? 0 : lp - 1 ))
+    # a POP budget below the run's: the largest power of two under the
+    # run's pops (Avon's report), refused by both
+    pops=$(sed -n 's/.* pops \([0-9][0-9]*\) .*/\1/p' "$OUT/avon/$name.err")
+    if [ -z "$pops" ]; then
+        echo "FAIL $name: no pop count in Avon's report"
+        fail=1
+        continue
+    fi
+    small=0
+    while [ $(( 1 << (small + 1) )) -lt "$pops" ]; do small=$(( small + 1 )); done
     if [ "$small" -ge 8 ]; then
         lake_ski composed budget "$dir/public.txt" "$small" "$li" "$OUT/stmt/$name.small.txt" > /dev/null
         if "$AVON" witness --statement="$OUT/stmt/$name.small.txt" --jet-table="$jets" "$dir/witness.txt" \
-                > /dev/null 2>&1; then
+                > /dev/null 2> "$OUT/avon/$name.small.err"; then
             echo "FAIL $name: Avon wrote a table over POP's budget 2^$small"
+            fail=1
+        elif ! grep -q "pops exceed POP's budget" "$OUT/avon/$name.small.err"; then
+            echo "FAIL $name: Avon refused POP's budget 2^$small for another reason: $(cat "$OUT/avon/$name.small.err")"
             fail=1
         elif "$SKI_AIR" compj-prove "$OUT/stmt/$name.small.txt" "$jets" "$SRC" "$dir/witness.txt" \
                 "$OUT/proofs/$name.small.proof" > /dev/null 2>&1; then
