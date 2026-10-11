@@ -339,7 +339,7 @@ av_arena *av_snapshot_load(const char *path, uint32_t *root, const char **err) {
         const char *nm = (const char *)img + pos;
         if (memchr(nm, 0, len)) { msg = "NUL in atom name"; goto done; }
         if (!a->allow_bird_atoms && av_is_bird(nm, len)) {
-            msg = "atom named like a live aviary combinator (§4.3)";
+            msg = "atom named like a live aviary combinator";
             goto done;
         }
         if (av_leaf(a, nm, len) == AV_NONE) { msg = "out of memory"; goto done; }

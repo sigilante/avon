@@ -444,7 +444,7 @@ exporter on a copy of `tests/` and `jets/` and compares the 193 files.
 | target | what it proves | needs |
 |---|---|---|
 | `make check` | every unit test, under ASan and UBSan | |
-| `make smoke` | the release binary, asserts compiled out, gives the exit status, stdout and stderr recorded from `build/dbg/avon` for 27 commands: every subcommand but `front0`, each strategy, jets, templates, data jets, `--fix`, `--no-defer`, three piers, and six refused options | |
+| `make smoke` | the release binary, asserts compiled out, gives the exit status, stdout and stderr recorded from `build/dbg/avon` for 29 commands: every subcommand but `front0`, each strategy, jets, templates, data jets, `--fix`, `--no-defer`, three piers, six refused options, a bird-named atom and a witness of a term with atoms | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
 | `make fixtures-check` | every exported fixture is what its exporter writes at the pins | skijack, SKIlark, aviary |
 | `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line, and of size <= 10 at horizons 1 to 21; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`, in starlings) |
