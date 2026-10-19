@@ -6,6 +6,13 @@ design lives. Last revised 2026-10-05.
 
 ## Done since the last revision
 
+- **lean-ski at `paper-v8`** (2026-10-20). `tests/pins.sh` moves to `b7fae43`, past
+  `paper-v4` by lean-ski #28–#49: the split predicates remade with secret witnesses and
+  heights that hold every witness (#34), hiding tables of at least `2^9` rows (#31),
+  and the Fiat–Shamir and Merkle work in the random oracle model. lean-ski now refuses
+  POP and INSTW budgets below `2^9`, so `zk_jet_witness_check.sh` asks `2^9` for `and`
+  and `or` where it asked `2^8`. The five checks the pin serves pass at `b7fae43`.
+
 - **Pins tolerate documentation** (2026-10-11). `pin_check` accepts a checkout past its
   pin when every commit since, and every tracked change, touches only documentation:
   `*.md`, `*.tex` and `*.txt`, but not lean-ski's statement, witness and corpus `.txt`

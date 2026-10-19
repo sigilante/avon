@@ -10,7 +10,7 @@
 SKIJACK_PIN=e978e58445c2bf3bdc87c683261fcd29fc876d33     # sigilante/SKIjack, public
 SKILARK_PIN=8a988a13b73f819b82723162640605c7e195f55b     # sigilante/SKIlark, public
 AVIARY_PIN=ec4b418c527408c3a513bee2735e6b0f862accda      # sigilante/aviary, public
-LEAN_SKI_PIN=5614cb4c2f33071f32264efa72879e6d9b3fa5ed    # sigilante/lean-ski, private: paper-v4 and a WORKLIST change
+LEAN_SKI_PIN=b7fae43a6e8d345a4bb2a350d0f38c570d2d897b    # sigilante/lean-ski, private: paper-v8
 STARLINGS_PIN=0b2779ed732ed37d1eea4751ed897015e12d4cdc   # sigilante/starlings, private
 
 # not_docs: the file names on stdin that are not documentation.

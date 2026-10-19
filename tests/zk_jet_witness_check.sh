@@ -47,7 +47,7 @@ echo "--- lean-ski: statements with jets, and their jet tables"
 lake_ski composed emit "$OUT/composed" > /dev/null
 SRC="$LEAN_SKI/bench/plonky3/skilark/split8/source.ski"
 # name, the statement's directory, POP's and INSTW's budgets
-cases="and:$OUT/composed/and:8:8 or:$OUT/composed/or:8:8 split8:$LEAN_SKI/bench/plonky3/skilark/split8:14:14"
+cases="and:$OUT/composed/and:9:9 or:$OUT/composed/or:9:9 split8:$LEAN_SKI/bench/plonky3/skilark/split8:14:14"
 for c in $cases; do
     IFS=: read -r name dir lp li <<< "$c"
     lake_ski composed budget "$dir/public.txt" "$lp" "$li" "$OUT/stmt/$name.txt" > /dev/null
@@ -141,7 +141,7 @@ for c in $cases; do
     fi
     small=0
     while [ $(( 1 << (small + 1) )) -lt "$pops" ]; do small=$(( small + 1 )); done
-    if [ "$small" -ge 8 ]; then
+    if [ "$small" -ge 9 ]; then
         lake_ski composed budget "$dir/public.txt" "$small" "$li" "$OUT/stmt/$name.small.txt" > /dev/null
         if "$AVON" witness --statement="$OUT/stmt/$name.small.txt" --jet-table="$jets" "$dir/witness.txt" \
                 > /dev/null 2> "$OUT/avon/$name.small.err"; then
