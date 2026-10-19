@@ -23,6 +23,16 @@
 > milestone 9).  lean-ski #23 (`3e30892`, tag `paper-v4`) makes the
 > release script compare all four of Avon's jetted tables with ski-air's.
 > Avon pins lean-ski master, `5614cb4`, one WORKLIST change past it.
+>
+> **Update (2026-10-20).** lean-ski remade the split predicates' release
+> (#34, `dc90ee9`, tag `paper-v6`). Each proof's witness is drawn in
+> secret, and its heights hold every witness's run, measured over all of
+> them by lean-ski's `scripts/split_sweep.py`: `csplit8` at `2^20 2^20`
+> without jets and `2^18 2^19 2^15 2^16` with them; `split8` is unchanged
+> at `2^17 2^18` and `2^17 2^18 2^14 2^14`. Every hiding table is padded
+> to at least `2^9` rows (#31). The figures in §1 and §9 are the
+> fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
+> `paper-v8`, `b7fae43`.
 
 ## 1. Why
 
