@@ -169,11 +169,8 @@ uint32_t p2_register(av_arena *a, uint32_t p, bool pin, const char **err) {
         return AV_NONE;
     }
     uint32_t before = a->njets;
-    uint32_t id = jet_entry_for(a, d, p);
-    if (id == AV_NONE) {
-        *err = "out of memory";
-        return AV_NONE;
-    }
+    uint32_t id = jet_entry_for(a, d, p, err);
+    if (id == AV_NONE) return AV_NONE;
     av_jet *j = &a->jets[id];
     if (j->tmpl || j->word_op || j->fix || j->interp >= 0) {
         *err = "P's digest is already another kind of jet";

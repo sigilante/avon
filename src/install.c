@@ -149,8 +149,9 @@ bool av_unquote_register(av_arena *a, uint32_t uq, const char **err) {
         if (err) *err = "out of memory";
         return false;
     }
-    uint32_t id = jet_entry_for(a, digest, av_view(a, uq));
-    if (id == AV_NONE) { if (err) *err = "out of memory"; return false; }
+    const char *why = NULL;
+    uint32_t id = jet_entry_for(a, digest, av_view(a, uq), &why);
+    if (id == AV_NONE) { if (err) *err = why; return false; }
     a->jets[id].unquote = true;
     return true;
 }

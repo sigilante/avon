@@ -190,8 +190,8 @@ long av_interps_load(av_arena *a, const char *ipath, const char *dpath,
         }
         uint32_t loop = dict_term(a, rows, n, f[0]);
         if (loop == AV_NONE) { msg = "the loop term is missing from the dictionary, or not its hash's term"; goto done; }
-        in.jet = jet_entry_for(a, in.digest, loop);
-        if (in.jet == AV_NONE) { msg = "out of memory"; goto done; }
+        in.jet = jet_entry_for(a, in.digest, loop, &msg);
+        if (in.jet == AV_NONE) goto done;
         av_interp *q = realloc(a->interps, (a->ninterps + 1) * sizeof *q);
         if (!q) { msg = "out of memory"; goto done; }
         a->interps = q;

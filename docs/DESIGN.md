@@ -553,6 +553,20 @@ plan left open:
     than the jet's term: 92 templates on front1's own source. That made
     front1's fixed point 9.7% dearer, 88,316,487 contractions, and
     front0's 3.5% dearer, until the ids replaced it (2026-10-09).
+- **An entry is its term, not its digest.** A template, a numeral
+  operation, an interpreter's loop, an unquoter, a compiler or a
+  resolver attaches to the dashboard through `jet_entry_for`, and a
+  dictionary row through registration; both look the digest up first.
+  - Before 2026-10-21 a hit was taken as the term's own entry, so a
+    template whose key collided with a dictionary row's took that jet's
+    arity, residual and fallback, and ran its occurrences as the other
+    term (SKIjack review, Chevalier).
+  - A hit now counts only if the entry's term is the offered one
+    (`av_equal`, its budget the 10^8 distinct pairs the reducer's
+    comparisons get, so a copy that shares less costs its nodes, not its
+    unfolding). Another term under the digest is refused as a collision
+    (`jet_collision`): the template is counted refused, the word
+    operation runs as its term, and the other callers report it.
 - **Compiled residuals.** At registration a residual becomes a list of
   instructions, one per node an instance builds, over constants,
   arguments and earlier results. A fire is that loop and nothing else; a

@@ -331,8 +331,9 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
     if (d != key) { why = 1; goto done; }                           /* refused */
     uint64_t have;
     if (nmap_get(&ts->key_jet, t, &have)) { why = 4; goto done; }   /* a duplicate */
-    uint32_t id = jet_entry_for(a, key, t);
-    if (id == AV_NONE) { why = -1; goto done; }
+    const char *refusal = NULL;
+    uint32_t id = jet_entry_for(a, key, t, &refusal);
+    if (id == AV_NONE) { why = refusal == jet_collision ? 1 : -1; goto done; }
     if (a->jets[id].tmpl) { why = 4; goto done; }
     if (!nmap_put(&ts->key_jet, t, (uint64_t)id + 1)) { why = -1; goto done; }
     /* compile: open applications are instructions, variables arguments,
@@ -652,7 +653,9 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
                 ts->words_refused++;
                 continue;
             }
-            uint32_t id = jet_entry_for(a, want, c);
+            const char *refusal = NULL;
+            uint32_t id = jet_entry_for(a, want, c, &refusal);
+            if (id == AV_NONE && refusal == jet_collision) { ts->words_refused++; continue; }
             if (id == AV_NONE) goto fail;
             if (a->jets[id].tmpl || a->jets[id].word_op) { ts->words_refused++; continue; }
             if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
@@ -670,9 +673,10 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         uint64_t d, have;
         if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
         if (!nmap_get(&ts->key_jet, c, &have)) {
-            uint32_t id = jet_entry_for(a, d, c);
-            if (id == AV_NONE) goto fail;
-            if (!a->jets[id].tmpl && !a->jets[id].word_op) {
+            const char *refusal = NULL;
+            uint32_t id = jet_entry_for(a, d, c, &refusal);
+            if (id == AV_NONE && refusal != jet_collision) goto fail;
+            if (id != AV_NONE && !a->jets[id].tmpl && !a->jets[id].word_op) {
                 if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
                 a->jets[id].fix = true;
                 ts->fix = true;
