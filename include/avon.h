@@ -691,7 +691,6 @@ bool av_p2_selftest(void);
  *  decline the jet node's term is checked against p's again, so a jet node
  *  made after the bind is held to it too.  av_p2_state_read reads a state
  *  through indirections and jet nodes: false unless t is one. */
-#define AV_P2_DIGEST "skijack-1:43f97c21e068ebe7"   /* lean-ski's Poseidon2SKI.P */
 #define AV_P2_SHA256 "391f7d9a5ad5e744711e18be27b9952a1bb802f8243672552fab4b2e870405b3"
 bool     av_p2_digest(const av_arena *a, uint32_t t, char out[65]);
 uint32_t av_p2_register(av_arena *a, uint32_t p, const char **err);
@@ -735,16 +734,34 @@ uint32_t av_parse_prefix(av_arena *a, const char *src, size_t len,
  *  skijack's dictionary hash (python/skijack/dictionary.py): a Merkle
  *  hash over the tree, a leaf hashing its name and an
  *  application "(" + h(fn) + " " + h(arg) + ")", each SHA-256 truncated to
- *  16 hex digits, published as "skijack-1:" and the digits.  For dispatch,
- *  never for commitment.  A digest is the hash's first 8 bytes.
+ *  32 hex digits, published as "skijack-2:" and the digits.  For dispatch,
+ *  never for commitment: a dashboard hit counts only when the terms are
+ *  equal.  A digest is the hash's first 16 bytes, 128 bits (skijack-1
+ *  kept 8, within a birthday search's reach).
  */
-#define AV_HASH_VERSION "skijack-1"
+#define AV_HASH_VERSION "skijack-2"
 
-/*  The published hash, "skijack-1:" and 16 hex digits, into out[27]. */
-bool av_structural_hash(const av_arena *a, uint32_t t, char out[27]);
+/*  The published hash's length: "skijack-2:" and 32 hex digits. */
+#define AV_HASH_LEN 42
 
-/*  Parse a published hash back to its digest. */
-bool av_hash_parse(const char *s, uint64_t *digest);
+/*  A digest, its first 8 bytes in hi and its next 8 in lo. */
+typedef struct { uint64_t hi, lo; } av_digest;
+
+static inline bool av_digest_eq(av_digest x, av_digest y) {
+    return x.hi == y.hi && x.lo == y.lo;
+}
+
+static inline int av_digest_cmp(av_digest x, av_digest y) {
+    if (x.hi != y.hi) return x.hi < y.hi ? -1 : 1;
+    return (x.lo > y.lo) - (x.lo < y.lo);
+}
+
+/*  The published hash into out[AV_HASH_LEN + 1]. */
+bool av_structural_hash(const av_arena *a, uint32_t t, char out[AV_HASH_LEN + 1]);
+
+/*  Parse a published hash back to its digest: the version, 32 lowercase
+ *  hex digits, then the end of the field. */
+bool av_hash_parse(const char *s, av_digest *digest);
 
 /*  --------------------------------------------------------------- jets
  *
@@ -772,7 +789,7 @@ typedef struct { unsigned fields, index, count; } av_ctor;
 static inline bool av_ctor_is(av_ctor c) { return c.count != 0; }
 
 typedef struct av_jet {
-    uint64_t  digest;
+    av_digest digest;
     uint32_t  fallback;         /* the term g, its inner jets wrapped      */
     uint32_t  residual;         /* over jet_mark[0 .. arity-1]             */
     unsigned  arity;
@@ -876,7 +893,7 @@ enum { AV_AROLE_HIT, AV_AROLE_MISS, AV_AROLE_NOTYET };
 #define AV_INTERP_CTORS 16
 
 typedef struct av_interp {
-    uint64_t  digest;           /* the loop term's                         */
+    av_digest digest;           /* the loop term's                         */
     uint32_t  jet;              /* its dashboard entry                     */
     unsigned  nparams;
     unsigned  nobj, nres, nans;
@@ -1048,7 +1065,7 @@ av_jetstats *av_jetstats_new(void);
 void         av_jetstats_free(av_jetstats *s);
 bool         av_jetstats_begin(av_jetstats *s, const av_arena *a, uint32_t t);
 size_t       av_jetstats_rows(const av_jetstats *s);
-void         av_jetstats_row(const av_jetstats *s, size_t i, char hash[27],
+void         av_jetstats_row(const av_jetstats *s, size_t i, char hash[AV_HASH_LEN + 1],
                              unsigned *arity, uint64_t *cost, size_t *atoms,
                              av_jetstat_row *counts);
 bool         av_jetstats_find(const av_jetstats *s, const char *hash, size_t *i);
@@ -1059,7 +1076,7 @@ bool         av_jetstats_lost(const av_jetstats *s);
 
 /*  av_jets_load, registering only the row whose hash is `only`. */
 long av_jets_load_only(av_arena *a, const char *path, size_t min_atoms,
-                       uint64_t only, const char **err);
+                       av_digest only, const char **err);
 
 /*  ------------------------------------------------------- the front end
  *
@@ -1134,7 +1151,7 @@ typedef struct {
     uint64_t  fires, saved;     /* measured, this jet alone: a call inside
                                    a fire's own window is absorbed, not a
                                    fire (recursion re-enters its window)   */
-    char      hash[27];         /* the structural hash, when captured     */
+    char      hash[AV_HASH_LEN + 1];  /* the structural hash, when captured */
     av_ctor   ctor;             /* its constructor shape, if one           */
     int64_t   folds_into;       /* the higher-ranked row it folds into: a
                                    subterm of it (or the reverse), with as

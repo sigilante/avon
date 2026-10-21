@@ -26,15 +26,22 @@ bool     nmap_get(const nmap *m, uint32_t k, uint64_t *v);
 bool     nmap_put(nmap *m, uint32_t k, uint64_t v);
 void     nmap_free(nmap *m);
 
+/*  A node-keyed map to digests, laid out as nmap is. */
+typedef struct { uint32_t *key; av_digest *val; size_t cap, n; } dmap;
+
+bool     dmap_get(const dmap *m, uint32_t k, av_digest *v);
+bool     dmap_put(dmap *m, uint32_t k, av_digest v);
+void     dmap_free(dmap *m);
+
 /*  Structural digests: an atom's, from its name; an application's, from its
  *  two parts'. */
-uint64_t digest_leaf(const char *name);
-uint64_t digest_app(uint64_t f, uint64_t x);
+av_digest digest_leaf(const char *name);
+av_digest digest_app(av_digest f, av_digest x);
 
 /*  Every node's digest below t, keyed by viewed node. */
-bool     hash_all(const av_arena *a, uint32_t t, nmap *m);
+bool     hash_all(const av_arena *a, uint32_t t, dmap *m);
 
-uint32_t jet_find(const av_arena *a, uint64_t digest);
+uint32_t jet_find(const av_arena *a, av_digest digest);
 
 /*  The profile's hooks (profile.c): charge one contraction of combinator
  *  c, whose partial applications are spine[-1] .. spine[-k], innermost
@@ -96,7 +103,7 @@ uint32_t jet_term_copy(av_arena *a, uint32_t id);
  *  t's; a digest is 64 bits, so an entry under it holding another term is
  *  a collision, refused.  AV_NONE when refused or out of memory, with *why
  *  saying which (why may be NULL). */
-uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t, const char **why);
+uint32_t jet_entry_for(av_arena *a, av_digest digest, uint32_t t, const char **why);
 
 /*  What jet_entry_for and registration say of a collision: a caller tells a
  *  refusal from running out of memory by this pointer. */

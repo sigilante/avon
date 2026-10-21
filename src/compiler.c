@@ -226,8 +226,8 @@ bool av_compiler_register(av_arena *a, const av_compiler *c, const char **err) {
         if (err) *err = "the term does not abstract the sample terms as aviary does";
         return false;
     }
-    char h[27];
-    uint64_t digest;
+    char h[AV_HASH_LEN + 1];
+    av_digest digest;
     uint32_t abs = a->compiler[0];
     if (!av_structural_hash(a, abs, h) || !av_hash_parse(h, &digest)) {
         if (err) *err = "out of memory";

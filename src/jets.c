@@ -55,13 +55,51 @@ bool nmap_put(nmap *m, uint32_t k, uint64_t v) {
     return true;
 }
 
+/*  ---------------------------------------------------------- digest maps */
+
+void dmap_free(dmap *m) {
+    free(m->key);
+    free(m->val);
+    memset(m, 0, sizeof *m);
+}
+
+bool dmap_get(const dmap *m, uint32_t k, av_digest *v) {
+    if (!m->cap) return false;
+    for (size_t i = slot(k, m->cap);; i = (i + 1) & (m->cap - 1)) {
+        if (m->key[i] == AV_NONE) return false;
+        if (m->key[i] == k) { *v = m->val[i]; return true; }
+    }
+}
+
+bool dmap_put(dmap *m, uint32_t k, av_digest v) {
+    if (2 * (m->n + 1) > m->cap) {
+        dmap g = { NULL, NULL, m->cap ? m->cap * 2 : 256, 0 };
+        g.key = malloc(g.cap * sizeof *g.key);
+        g.val = malloc(g.cap * sizeof *g.val);
+        if (!g.key || !g.val) { free(g.key); free(g.val); return false; }
+        for (size_t i = 0; i < g.cap; i++) g.key[i] = AV_NONE;
+        for (size_t i = 0; i < m->cap; i++)
+            if (m->key[i] != AV_NONE) dmap_put(&g, m->key[i], m->val[i]);
+        dmap_free(m);
+        *m = g;
+    }
+    size_t i = slot(k, m->cap);
+    while (m->key[i] != AV_NONE && m->key[i] != k) i = (i + 1) & (m->cap - 1);
+    if (m->key[i] == AV_NONE) m->n++;
+    m->key[i] = k;
+    m->val[i] = v;
+    return true;
+}
+
 /*  ----------------------------------------------------------------- hash */
 
-static uint64_t digest_of(const void *text, size_t n) {
+/*  A digest is SHA-256's first 16 bytes. */
+static av_digest digest_of(const void *text, size_t n) {
     uint8_t d[32];
     av_sha256(text, n, d);
-    uint64_t v = 0;
-    for (int i = 0; i < 8; i++) v = v << 8 | d[i];
+    av_digest v = { 0, 0 };
+    for (int i = 0; i < 8; i++) v.hi = v.hi << 8 | d[i];
+    for (int i = 8; i < 16; i++) v.lo = v.lo << 8 | d[i];
     return v;
 }
 
@@ -70,20 +108,26 @@ static void hex16(uint64_t v, char out[16]) {
     for (int i = 15; i >= 0; i--) { out[i] = hx[v & 15]; v >>= 4; }
 }
 
-uint64_t digest_leaf(const char *name) { return digest_of(name, strlen(name)); }
+/*  A digest's 32 hex digits, as the Python spells them. */
+static void hex32(av_digest v, char out[32]) {
+    hex16(v.hi, out);
+    hex16(v.lo, out + 16);
+}
 
-uint64_t digest_app(uint64_t f, uint64_t x) {
-    char text[35];
+av_digest digest_leaf(const char *name) { return digest_of(name, strlen(name)); }
+
+av_digest digest_app(av_digest f, av_digest x) {
+    char text[67];
     text[0] = '(';
-    hex16(f, text + 1);
-    text[17] = ' ';
-    hex16(x, text + 18);
-    text[34] = ')';
+    hex32(f, text + 1);
+    text[33] = ' ';
+    hex32(x, text + 34);
+    text[66] = ')';
     return digest_of(text, sizeof text);
 }
 
 /*  Every node's digest below t, into m keyed by viewed node. */
-bool hash_all(const av_arena *a, uint32_t t, nmap *m) {
+bool hash_all(const av_arena *a, uint32_t t, dmap *m) {
     typedef struct { uint32_t node; bool done; } item;
     size_t cap = 256, top = 0;
     item *todo = malloc(cap * sizeof *todo);
@@ -91,26 +135,20 @@ bool hash_all(const av_arena *a, uint32_t t, nmap *m) {
     if (ok) todo[top++] = (item){ av_view(a, t), false };
     while (ok && top) {
         item it = todo[--top];
-        uint64_t v;
-        if (nmap_get(m, it.node, &v)) continue;
+        av_digest v;
+        if (dmap_get(m, it.node, &v)) continue;
         if (av_tag(a, it.node) == AV_LEAF) {
             const char *nm = av_leaf_name(a, av_right(a, it.node));
-            ok = nmap_put(m, it.node, digest_of(nm, strlen(nm)));
+            ok = dmap_put(m, it.node, digest_of(nm, strlen(nm)));
             continue;
         }
         uint32_t f = av_view(a, av_left(a, it.node));
         uint32_t x = av_view(a, av_right(a, it.node));
         if (it.done) {
-            uint64_t hf, hx;
-            nmap_get(m, f, &hf);
-            nmap_get(m, x, &hx);
-            char text[35];
-            text[0] = '(';
-            hex16(hf, text + 1);
-            text[17] = ' ';
-            hex16(hx, text + 18);
-            text[34] = ')';
-            ok = nmap_put(m, it.node, digest_of(text, sizeof text));
+            av_digest hf, hx;
+            dmap_get(m, f, &hf);
+            dmap_get(m, x, &hx);
+            ok = dmap_put(m, it.node, digest_app(hf, hx));
             continue;
         }
         if (top + 3 > cap) {
@@ -126,43 +164,49 @@ bool hash_all(const av_arena *a, uint32_t t, nmap *m) {
     return ok;
 }
 
-bool av_structural_hash(const av_arena *a, uint32_t t, char out[27]) {
-    nmap m = { 0 };
-    uint64_t v;
-    bool ok = hash_all(a, t, &m) && nmap_get(&m, av_view(a, t), &v);
-    nmap_free(&m);
+bool av_structural_hash(const av_arena *a, uint32_t t, char out[AV_HASH_LEN + 1]) {
+    dmap m = { 0 };
+    av_digest v;
+    bool ok = hash_all(a, t, &m) && dmap_get(&m, av_view(a, t), &v);
+    dmap_free(&m);
     if (!ok) return false;
     memcpy(out, AV_HASH_VERSION ":", 10);
-    hex16(v, out + 10);
-    out[26] = '\0';
+    hex32(v, out + 10);
+    out[AV_HASH_LEN] = '\0';
     return true;
 }
 
-bool av_hash_parse(const char *s, uint64_t *digest) {
+bool av_hash_parse(const char *s, av_digest *digest) {
     if (strncmp(s, AV_HASH_VERSION ":", 10) != 0) return false;
-    uint64_t v = 0;
-    for (int i = 0; i < 16; i++) {
+    av_digest v = { 0, 0 };
+    for (int i = 0; i < 32; i++) {
         char c = s[10 + i];
         unsigned d = c >= '0' && c <= '9' ? (unsigned)(c - '0')
                    : c >= 'a' && c <= 'f' ? (unsigned)(c - 'a' + 10) : 16;
         if (d == 16) return false;
-        v = v << 4 | d;
+        if (i < 16) v.hi = v.hi << 4 | d;
+        else v.lo = v.lo << 4 | d;
     }
-    if (s[26] != '\0' && s[26] != '\t' && s[26] != '\n') return false;
+    char end = s[AV_HASH_LEN];
+    if (end != '\0' && end != '\t' && end != '\n') return false;
     *digest = v;
     return true;
 }
 
 /*  ----------------------------------------------------------- dashboard */
 
-uint32_t jet_find(const av_arena *a, uint64_t digest) {
+/*  The index probes by a digest's first word; an entry is found by all of it. */
+static size_t index_slot(av_digest d, size_t cap) {
+    return (size_t)(d.hi * 0x9e3779b97f4a7c15u >> 32) & (cap - 1);
+}
+
+uint32_t jet_find(const av_arena *a, av_digest digest) {
     if (!a->jet_index_cap) return AV_NONE;
     size_t cap = a->jet_index_cap;
-    for (size_t i = (size_t)(digest * 0x9e3779b97f4a7c15u >> 32) & (cap - 1);;
-         i = (i + 1) & (cap - 1)) {
+    for (size_t i = index_slot(digest, cap);; i = (i + 1) & (cap - 1)) {
         uint32_t id = a->jet_index[i];
         if (id == AV_NONE) return AV_NONE;
-        if (a->jets[id].digest == digest) return id;
+        if (av_digest_eq(a->jets[id].digest, digest)) return id;
     }
 }
 
@@ -178,9 +222,8 @@ static bool index_put(av_arena *a, uint32_t id) {
         for (uint32_t j = 0; j < a->njets; j++)
             if (j != id && !index_put(a, j)) return false;
     }
-    uint64_t d = a->jets[id].digest;
     size_t cap = a->jet_index_cap;
-    size_t i = (size_t)(d * 0x9e3779b97f4a7c15u >> 32) & (cap - 1);
+    size_t i = index_slot(a->jets[id].digest, cap);
     while (a->jet_index[i] != AV_NONE) i = (i + 1) & (cap - 1);
     a->jet_index[i] = id;
     return true;
@@ -457,8 +500,8 @@ static uint32_t register_term(av_arena *a, uint32_t t, size_t min_atoms,
     const char *msg = NULL;
     t = av_view(a, t);
     size_t atoms = tree_atoms(a, t);
-    char h[27];
-    uint64_t digest;
+    char h[AV_HASH_LEN + 1];
+    av_digest digest;
     if (atoms < min_atoms) { msg = "below the size floor"; goto done; }
     if (!av_structural_hash(a, t, h) || !av_hash_parse(h, &digest)) { msg = "out of memory"; goto done; }
     uint32_t have = jet_find(a, digest);
@@ -516,7 +559,7 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
     return register_term(a, t, min_atoms, max_steps, false, why);
 }
 
-uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t, const char **why) {
+uint32_t jet_entry_for(av_arena *a, av_digest digest, uint32_t t, const char **why) {
     /* *why is written only when the entry is refused: a caller may pass
      * the message it reports on failure */
     uint32_t have = jet_find(a, digest);
@@ -657,7 +700,8 @@ done:
  *  when skip_root, which is how a jet's own term is matched for its
  *  insides.  shared marks the jet nodes' terms as the dashboard's. */
 static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared) {
-    nmap dig = { 0 }, out = { 0 };
+    dmap dig = { 0 };
+    nmap out = { 0 };
     canon_tab canon = { 0 };
     typedef struct { uint32_t node; bool done; } item;
     size_t cap = 256, top = 0;
@@ -691,10 +735,10 @@ static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared) {
             built = av_app(a, (uint32_t)nf, (uint32_t)nx);   /* never reused */
             if (built == AV_NONE) goto done;
         }
-        uint64_t d;
-        nmap_get(&dig, it.node, &d);
+        av_digest d;
+        dmap_get(&dig, it.node, &d);
         uint32_t id = jet_find(a, d);
-        /* a digest is 64 bits: the node is the jet's only if it is the
+        /* a digest names a term: the node is the jet's only if it is the
          * jet's term, tree for tree */
         if (id != AV_NONE) {
             uint32_t cn = canon_of(a, &canon, it.node), cj = canon_of(a, &canon, a->jets[id].fallback);
@@ -711,7 +755,7 @@ static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared) {
     if (nmap_get(&out, root, &r)) result = (uint32_t)r;
 done:
     free(todo);
-    nmap_free(&dig);
+    dmap_free(&dig);
     nmap_free(&out);
     canon_free(&canon);
     return result;
@@ -723,17 +767,17 @@ uint32_t av_jets_match(av_arena *a, uint32_t t) {
 
 static bool wrap_insides(av_arena *a);
 
-typedef struct { uint64_t digest; uint32_t node; } dnode;
+typedef struct { av_digest digest; uint32_t node; } dnode;
 
 static int by_digest(const void *x, const void *y) {
-    uint64_t a = ((const dnode *)x)->digest, b = ((const dnode *)y)->digest;
-    return (a > b) - (a < b);
+    return av_digest_cmp(((const dnode *)x)->digest, ((const dnode *)y)->digest);
 }
 
 long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
     /* the distinct subterms, by digest, and every node's size: one pass
      * each, since sizing each subterm apart is quadratic in the term */
-    nmap dig = { 0 }, sizes = { 0 };
+    dmap dig = { 0 };
+    nmap sizes = { 0 };
     dnode *all = NULL;
     uint32_t *cand = NULL;
     size_t n = 0, m = 0;
@@ -743,11 +787,11 @@ long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
     for (size_t i = 0; ok && i < dig.cap; i++)
         if (dig.key[i] != AV_NONE && av_tag(a, dig.key[i]) == AV_APP)
             all[m++] = (dnode){ dig.val[i], dig.key[i] };
-    nmap_free(&dig);
+    dmap_free(&dig);
     if (ok) qsort(all, m, sizeof *all, by_digest);
     ok = ok && (cand = malloc((m ? m : 1) * sizeof *cand)) != NULL;
     for (size_t i = 0; ok && i < m; i++) {
-        if (i && all[i].digest == all[i - 1].digest) continue;
+        if (i && av_digest_eq(all[i].digest, all[i - 1].digest)) continue;
         if (jet_find(a, all[i].digest) != AV_NONE) continue;
         uint64_t atoms = 0;
         nmap_get(&sizes, all[i].node, &atoms);
@@ -786,20 +830,20 @@ static bool wrap_insides(av_arena *a) {
 }
 
 static long load(av_arena *a, const char *path, size_t min_atoms, bool filter,
-                 uint64_t only, const char **err);
+                 av_digest only, const char **err);
 
 long av_jets_load(av_arena *a, const char *path, size_t min_atoms,
                   const char **err) {
-    return load(a, path, min_atoms, false, 0, err);
+    return load(a, path, min_atoms, false, (av_digest){ 0, 0 }, err);
 }
 
 long av_jets_load_only(av_arena *a, const char *path, size_t min_atoms,
-                       uint64_t only, const char **err) {
+                       av_digest only, const char **err) {
     return load(a, path, min_atoms, true, only, err);
 }
 
 static long load(av_arena *a, const char *path, size_t min_atoms, bool filter,
-                 uint64_t only, const char **err) {
+                 av_digest only, const char **err) {
     FILE *f = fopen(path, "rb");
     if (!f) { if (err) *err = "cannot open the dictionary"; return -1; }
     char *line = NULL;
@@ -814,16 +858,16 @@ static long load(av_arena *a, const char *path, size_t min_atoms, bool filter,
         *t1 = '\0';
         char *term = t2 + 1;
         size_t len = strcspn(term, "\n");
-        uint64_t want;
+        av_digest want;
         if (!av_hash_parse(h, &want)) { msg = "malformed hash"; break; }
-        if (filter && want != only) continue;
+        if (filter && !av_digest_eq(want, only)) continue;
         av_parse_error pe;
         uint32_t t = av_parse(a, term, len, &pe);
         if (t == AV_NONE) { msg = "unparsable dictionary term"; break; }
-        char got[27];
-        uint64_t d;
+        char got[AV_HASH_LEN + 1];
+        av_digest d;
         if (!av_structural_hash(a, t, got) || !av_hash_parse(got, &d)) { msg = "out of memory"; break; }
-        if (d != want) { msg = "a dictionary hash does not match its term"; break; }
+        if (!av_digest_eq(d, want)) { msg = "a dictionary hash does not match its term"; break; }
         if (av_jet_register(a, t, min_atoms, 1000000, NULL) != AV_NONE) registered++;
     }
     free(line);

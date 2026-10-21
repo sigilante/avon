@@ -143,8 +143,8 @@ bool av_unquote_register(av_arena *a, uint32_t uq, const char **err) {
     }
     av_root_pop(a);
     if (!ok) { if (err) *err = "the term does not unquote the sample terms"; return false; }
-    char h[27];
-    uint64_t digest;
+    char h[AV_HASH_LEN + 1];
+    av_digest digest;
     if (!av_structural_hash(a, uq, h) || !av_hash_parse(h, &digest)) {
         if (err) *err = "out of memory";
         return false;

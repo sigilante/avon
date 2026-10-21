@@ -71,11 +71,11 @@ TEST(joys_words_are_wide_constructors) {
         *t2 = '\0';
         for (unsigned w = 0; w < 12; w++) {
             if (strcmp(t1 + 1, words[w]) != 0) continue;
-            uint64_t d;
+            av_digest d;
             CHECK(av_hash_parse(t2 + 1, &d));
             uint32_t id = AV_NONE;
             for (uint32_t j = 0; j < a->njets; j++)
-                if (a->jets[j].digest == d) id = j;
+                if (av_digest_eq(a->jets[j].digest, d)) id = j;
             CHECK(id != AV_NONE);
             if (id == AV_NONE) continue;
             unsigned fields = (w == 9 || w == 10) ? 1 : 0;   /* Lit, Quote */

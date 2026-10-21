@@ -310,7 +310,7 @@ static uint64_t pier_state(av_pier *p) {
 }
 
 static char *kernel_hash(av_pier *p) {
-    static char h[27];
+    static char h[AV_HASH_LEN + 1];
     av_kernel *k = av_pier_kernel(p);
     CHECK(av_structural_hash(k->a, k->k, h));
     return h;
@@ -341,7 +341,7 @@ TEST(a_pier_reloads_to_the_same_state) {
     CHECK(av_pier_snapshot(p, &err));                       /* at 2 */
     CHECK_EQ(av_pier_poke(p, tick, nt, &eff, &r, &err), AV_WHNF);
     CHECK_EQ(pier_state(p), 7);
-    char want[27];
+    char want[AV_HASH_LEN + 1];
     strcpy(want, kernel_hash(p));
     av_pier_free(p);                                        /* a crash, after 3 */
 

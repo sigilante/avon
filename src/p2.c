@@ -152,8 +152,8 @@ bool p2_same(const av_arena *a, uint32_t x, uint32_t id) {
 }
 
 uint32_t p2_register(av_arena *a, uint32_t p, bool pin, const char **err) {
-    char h[27];
-    uint64_t d;
+    char h[AV_HASH_LEN + 1];
+    av_digest d;
     if (!av_structural_hash(a, p, h) || !av_hash_parse(h, &d)) {
         *err = "cannot hash P's term";
         return AV_NONE;

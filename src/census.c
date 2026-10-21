@@ -335,7 +335,7 @@ void av_census_analyze(av_census *c) {
      * after this, so a term that is not a jet stays where it is. */
     for (size_t i = 0; i < c->nrow; i++)
         if (c->row[i].term != AV_NONE) {
-            uint64_t d;
+            av_digest d;
             char *h = c->row[i].hash;
             uint32_t id = av_hash_parse(h, &d) ? jet_find(c->cap, d) : AV_NONE;
             if (id != AV_NONE) c->row[i].term = c->cap->jets[id].fallback;

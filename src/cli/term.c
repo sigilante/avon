@@ -538,12 +538,18 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
                 (unsigned long long)r.tmpl_calls);
     if (g->data) report_data(wc, &r);
     if (g->fix) report_fix(&r);
-    if (g->p2)
+    if (g->p2) {
+        /* P's structural hash, of the term registered: its full digest is
+         * pinned (AV_P2_SHA256), this one names it */
+        char ph[AV_HASH_LEN + 1] = "?";
+        if (p2id != AV_NONE && !av_structural_hash(a, a->jets[p2id].fallback, ph))
+            memcpy(ph, "?", 2);
         fprintf(stderr, "p2: %ld occurrences of P bound (%s); %llu permutations run natively "
                 "among the contractions, %llu declined (an argument neither a state nor a chain "
                 "of calls ending in one), %llu unbound at a call\n",
-                p2kept, AV_P2_DIGEST, (unsigned long long)r.p2_calls,
+                p2kept, ph, (unsigned long long)r.p2_calls,
                 (unsigned long long)r.p2_declines, (unsigned long long)r.p2_unbound);
+    }
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE && av_print(a, r.term, g->budget, &b);
     printf("%s %" PRIu64 "%c%s%s\n", av_status_name(r.status), r.steps, sep,

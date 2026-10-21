@@ -194,7 +194,7 @@ TEST(a_word_prints_hashes_and_jams_as_its_numeral) {
     av_buf b = { 0 };
     CHECK(av_print(a, t, 10000, &b) && strcmp(b.s, src) == 0);
     av_buf_free(&b);
-    char h1[27], h2[27];
+    char h1[AV_HASH_LEN + 1], h2[AV_HASH_LEN + 1];
     CHECK(av_structural_hash(a, t, h1) && av_structural_hash(a, plain, h2));
     CHECK(strcmp(h1, h2) == 0);
     av_buf j1 = { 0 }, j2 = { 0 };
@@ -388,7 +388,7 @@ TEST(a_term_that_is_not_its_operation_is_refused) {
  *  hash: word_admit's samples pass it, and only the pinned term refuses
  *  it. */
 static const char FAKE_ADD[] =
-    "skijack-1:d9868dcd09572633\tadd\t0\t"
+    "skijack-2:69d694910576d08246bde51344e2d59f\tadd\t0\t"
     "S S (K (S (K (S (K (S (K K) (S (K (S I)) K))))) (S (K (S (S S (K"
     " (S (K (S (K (S (K K) (S (K (S I)) K))))) (S (K (S (S S (K (S (K"
     " (S (K (S (K K) (S (K (S I)) K))))) (S (K (S (S S (K (S (K (S (K"

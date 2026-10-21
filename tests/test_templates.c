@@ -26,7 +26,7 @@
 #define B_KEY  "S (K S) K"
 #define M_KEY  "S I I"
 
-static void hash_of(const char *term, char h[27]) {
+static void hash_of(const char *term, char h[AV_HASH_LEN + 1]) {
     av_arena *a = av_arena_new(1u << 10);
     CHECK(av_structural_hash(a, av_parse(a, term, strlen(term), NULL), h));
     av_arena_free(a);
@@ -43,7 +43,7 @@ static void tdir(char dir[64], const char *const *lines, int n,
     snprintf(path, sizeof path, "%s/templates.tsv", dir);
     FILE *f = fopen(path, "w");
     for (int i = 0; i < n; i++) {
-        char key[128], k[8], formals[256], body[256], h[27];
+        char key[128], k[8], formals[256], body[256], h[AV_HASH_LEN + 1];
         CHECK(sscanf(lines[i], "%127[^|]|%7[^|]|%255[^|]|%255[^\n]", key, k, formals, body) == 4);
         hash_of(key, h);
         fprintf(f, "%s\ttest\tt%d\t%s\t%s\t%s\n", h, i, k, formals, body);
@@ -52,7 +52,7 @@ static void tdir(char dir[64], const char *const *lines, int n,
     snprintf(path, sizeof path, "%s/template_terms.tsv", dir);
     f = fopen(path, "w");
     for (int i = 0; i < nrefs; i++) {
-        char h[27];
+        char h[AV_HASH_LEN + 1];
         hash_of(refs[i], h);
         fprintf(f, "%s\t0\t%s\n", h, refs[i]);
     }
@@ -146,7 +146,7 @@ TEST(a_body_that_is_not_its_key_is_refused) {
 TEST(eta_open_and_leaf_templates_are_skipped) {
     /* η: λx. B x compiles to B itself; open: v1 is no formal; a leaf key:
      * λx y. x is K */
-    char b_hash[27], eta[128];
+    char b_hash[AV_HASH_LEN + 1], eta[128];
     hash_of(B_KEY, b_hash);
     snprintf(eta, sizeof eta, B_KEY "|1|0|`#%s v0", b_hash + 10);
     /* and one of 33 formals, past the 32 a fire takes: skipped, not refused */
@@ -241,7 +241,7 @@ TEST(collections_keep_the_globals) {
      * W W B .. B, B's text n + 2 times (once in each W).  Its live set
      * grows, so a 256-node arena collects, and every instance points at the
      * one global B: a pointer left stale would print as something else. */
-    char b_hash[27], line[160];
+    char b_hash[AV_HASH_LEN + 1], line[160];
     hash_of(B_KEY, b_hash);
     snprintf(line, sizeof line, "S (S I I) (K (" B_KEY "))|1|0|``v0 v0 #%s", b_hash + 10);
     const char *lines[1] = { line };

@@ -89,7 +89,7 @@ int selfhost_main(int argc, char **argv) {
             out = av_tm_decode(a, r.term, &o, &err);
             av_root_pop(a);
         }
-        char h[27];
+        char h[AV_HASH_LEN + 1];
         bool ok = out != AV_NONE && av_structural_hash(a, out, h) && strcmp(h, fld[2]) == 0;
         if (!ok) fprintf(stderr, "avon: call %llu ([v%s] %.60s): %s\n", (unsigned long long)line_no,
                          fld[0], fld[1], r.jet_fault ? "A JET CHECK FAILED" :

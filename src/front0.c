@@ -30,9 +30,9 @@ typedef struct {
     uint32_t *node;             /* rooted: the collector moves these      */
     uint8_t  *kind;
     size_t    n, cap;
-    uint64_t *dig;              /* digests of the terms read so far       */
+    av_digest *dig;             /* digests of the terms read so far       */
     size_t    nd, dcap;
-    nmap      memo;             /* node -> digest, remapped on collection */
+    dmap      memo;             /* node -> digest, remapped on collection */
     ski_leaf  mark[5];          /* the markers' leaf ids                  */
     uint32_t  marknode[5];      /* rooted too: a collection moves leaves */
     uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, fix_calls, joins;
@@ -47,13 +47,13 @@ static void roots(av_gc *g, void *ctx) {
 
 static void after(av_gc *g, void *ctx) {
     reader *r = ctx;
-    nmap old = r->memo, fresh = { 0 };
+    dmap old = r->memo, fresh = { 0 };
     for (size_t i = 0; i < old.cap; i++) {
         if (old.key[i] == AV_NONE) continue;
         uint32_t j = av_gc_forwarded(g, old.key[i]);
-        if (j != AV_NONE && !nmap_put(&fresh, j, old.val[i])) r->lost = true;
+        if (j != AV_NONE && !dmap_put(&fresh, j, old.val[i])) r->lost = true;
     }
-    nmap_free(&old);
+    dmap_free(&old);
     r->memo = fresh;
 }
 
@@ -73,10 +73,10 @@ static bool push(reader *r, uint32_t node, uint8_t kind) {
     return true;
 }
 
-static bool push_digest(reader *r, uint64_t d) {
+static bool push_digest(reader *r, av_digest d) {
     if (r->nd == r->dcap) {
         size_t cap = r->dcap ? 2 * r->dcap : 1024;
-        uint64_t *q = realloc(r->dig, cap * sizeof *q);
+        av_digest *q = realloc(r->dig, cap * sizeof *q);
         if (!q) return false;
         r->dig = q;
         r->dcap = cap;
@@ -174,19 +174,19 @@ static bool read_name(reader *r, const av_opts *o, char **buf, size_t *cap,
 /*  The term on top of the stack to its digest, each node read once:
  *  a node is replaced by a JOIN of itself, then read; an atom's digest is
  *  its name's, an application's joins its two fields' digests. */
-static bool read_term(reader *r, const av_opts *o, uint64_t *digest, const char **err) {
+static bool read_term(reader *r, const av_opts *o, av_digest *digest, const char **err) {
     av_arena *a = r->a;
-    const uint64_t atom[3] = { digest_leaf("S"), digest_leaf("K"), digest_leaf("I") };
+    const av_digest atom[3] = { digest_leaf("S"), digest_leaf("K"), digest_leaf("I") };
     size_t base = r->n - 1, dbase = r->nd;
     while (r->n > base) {
         size_t top = r->n - 1;
         uint32_t node = av_res(a, r->node[top]);
-        uint64_t d;
+        av_digest d;
         if (r->kind[top] == JOIN) {
             r->n--;
-            uint64_t x = r->dig[--r->nd], f = r->dig[--r->nd];
+            av_digest x = r->dig[--r->nd], f = r->dig[--r->nd];
             d = digest_app(f, x);
-        } else if (nmap_get(&r->memo, node, &d)) {
+        } else if (dmap_get(&r->memo, node, &d)) {
             r->n--;
             if (!push_digest(r, d)) { *err = "out of memory"; return false; }
             continue;
@@ -204,7 +204,7 @@ static bool read_term(reader *r, const av_opts *o, uint64_t *digest, const char 
             node = av_res(a, r->node[--r->n]);  /* an atom: its JOIN is done */
             d = atom[c];
         }
-        if (!nmap_put(&r->memo, node, d) || !push_digest(r, d)) {
+        if (!dmap_put(&r->memo, node, d) || !push_digest(r, d)) {
             *err = "out of memory";
             return false;
         }
@@ -257,9 +257,10 @@ int av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
         if (c < 0) goto done;
         if (c == 0) break;
         if (!read_name(&r, o, &name, &ncap, err)) goto done;   /* the tm, rest below */
-        uint64_t d;
+        av_digest d;
         if (!read_term(&r, o, &d, err)) goto done;          /* the rest below */
-        fprintf(out, "%s\t" AV_HASH_VERSION ":%016llx\n", name, (unsigned long long)d);
+        fprintf(out, "%s\t" AV_HASH_VERSION ":%016llx%016llx\n", name,
+                (unsigned long long)d.hi, (unsigned long long)d.lo);
     }
     rc = r.lost ? -1 : 0;
     if (r.lost) *err = "out of memory remapping the reader's memo";
@@ -278,7 +279,7 @@ done:
     free(r.node);
     free(r.kind);
     free(r.dig);
-    nmap_free(&r.memo);
+    dmap_free(&r.memo);
     free(name);
     return rc;
 }

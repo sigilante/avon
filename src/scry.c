@@ -364,8 +364,8 @@ uint32_t av_facts_resolver(av_arena *a, const av_facts *f, size_t n,
     av_root_pop(a);
     uint32_t r = body == AV_NONE ? AV_NONE : av_abstract(a, p, body);
     if (r == AV_NONE) return AV_NONE;
-    char h[27];
-    uint64_t d;
+    char h[AV_HASH_LEN + 1];
+    av_digest d;
     if (!av_structural_hash(a, r, h) || !av_hash_parse(h, &d)) return AV_NONE;
     uint32_t id = jet_entry_for(a, d, r, NULL);
     if (id == AV_NONE) return AV_NONE;
