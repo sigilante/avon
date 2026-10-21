@@ -203,7 +203,7 @@ TEST(every_exported_target_conforms) {
 TEST(every_target_conforms_with_jets) {
     av_arena *a = av_arena_new(1u << 16);
     const char *err = NULL;
-    CHECK_EQ(av_jets_load(a, DIR "dictionary.tsv", 8, &err), 135);
+    CHECK_EQ(av_jets_load(a, DIR "dictionary.tsv", 8, &err), 139);
     targets_checked = values_checked = 0;
     jets_fired = 0;
     size_t lines = each_target(jetted, a);
@@ -222,7 +222,7 @@ TEST(every_target_conforms_with_jets) {
 TEST(every_target_conforms_with_interpreter_jets) {
     av_arena *a = av_arena_new(1u << 16);
     const char *err = NULL;
-    CHECK_EQ(av_jets_load(a, DIR "dictionary.tsv", 8, &err), 135);
+    CHECK_EQ(av_jets_load(a, DIR "dictionary.tsv", 8, &err), 139);
     CHECK_EQ(av_interps_load(a, DIR "interpreters.tsv", DIR "dictionary.tsv", &err), 5);
     targets_checked = values_checked = 0;
     jets_fired = interps_fired = 0;

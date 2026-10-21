@@ -6,6 +6,16 @@ design lives. Last revised 2026-10-05.
 
 ## Done since the last revision
 
+- **skijack-2: 128-bit structural hashes** (2026-10-21; `DESIGN.md` §5, SKIjack #18).
+  The §5 hash kept 16 hex digits, 64 bits, within a birthday search's reach of anyone
+  choosing both terms. It keeps 32 now, under the version `skijack-2`: `av_digest` is
+  two words, the dashboard, templates, words, interpreters, the census, the profile and
+  front0's reader carry it whole, and the dashboard's index probes by its first word.
+  `SKIJACK_PIN` moves to the commit that writes it, bringing SKIjack's literals,
+  binders, Stage B and number bound; every fixture regenerates (`fixtures_check.sh`:
+  193 files), and the corpus dictionary has 286 rows, four from the new `literals`
+  program. The P2 report computes `P`'s hash from the term it loaded.
+
 - **An entry is its term, not its digest** (2026-10-21; `DESIGN.md` §6.5). `jet_entry_for`
   and registration took any dashboard entry under a digest as the offered term's, so a
   64-bit collision between a template key and a dictionary row merged the two jets. A

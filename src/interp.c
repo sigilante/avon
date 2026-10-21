@@ -41,7 +41,7 @@ static char *slurp(const char *path, size_t *len) {
 typedef struct { const char *hash, *term; size_t tlen; } drow;
 
 static int drow_cmp(const void *x, const void *y) {
-    return strncmp(((const drow *)x)->hash, ((const drow *)y)->hash, 26);
+    return strncmp(((const drow *)x)->hash, ((const drow *)y)->hash, AV_HASH_LEN);
 }
 
 /*  The dictionary's term for a published hash, parsed into the arena; a
@@ -51,8 +51,8 @@ static uint32_t dict_term(av_arena *a, const drow *rows, size_t n, const char *h
     const drow *r = bsearch(&key, rows, n, sizeof *rows, drow_cmp);
     if (!r) return AV_NONE;
     uint32_t t = av_parse(a, r->term, r->tlen, NULL);
-    char h[27];
-    if (t == AV_NONE || !av_structural_hash(a, t, h) || strncmp(h, hash, 26) != 0) return AV_NONE;
+    char h[AV_HASH_LEN + 1];
+    if (t == AV_NONE || !av_structural_hash(a, t, h) || strncmp(h, hash, AV_HASH_LEN) != 0) return AV_NONE;
     return t;
 }
 

@@ -42,7 +42,7 @@ static void dictionary(char path[64], const char *const *terms, int n) {
     FILE *f = fdopen(fd, "w");
     av_arena *a = av_arena_new(1u << 10);
     for (int i = 0; i < n; i++) {
-        char h[27];
+        char h[AV_HASH_LEN + 1];
         CHECK(av_structural_hash(a, parse(a, terms[i]), h));
         fprintf(f, "%s\t0\t%s\n", h, terms[i]);
     }
@@ -50,14 +50,14 @@ static void dictionary(char path[64], const char *const *terms, int n) {
     fclose(f);
 }
 
-static void hash_of(const char *term, char h[27]) {
+static void hash_of(const char *term, char h[AV_HASH_LEN + 1]) {
     av_arena *a = av_arena_new(1u << 10);
     CHECK(av_structural_hash(a, parse(a, term), h));
     av_arena_free(a);
 }
 
 static av_jetstat_row row(const av_jetstats *s, const char *term) {
-    char h[27], got[27];
+    char h[AV_HASH_LEN + 1], got[AV_HASH_LEN + 1];
     hash_of(term, h);
     size_t i;
     av_jetstat_row c = { 0 };

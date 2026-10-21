@@ -14,7 +14,7 @@ typedef struct {
     bool     halting;           /* only the runs the manifest says halt    */
     bool     only;              /* register just one dictionary row        */
     int      only_file;
-    uint64_t only_digest;
+    av_digest only_digest;
 } jetcfg;
 
 /*  One pass over the manifests' runs with cfg's jets, into s.  A copy-mode
@@ -128,15 +128,15 @@ int load_rows(char **dicts, int nd, drow **out, size_t *count) {
         size_t cap = 0;
         while (getline(&line, &cap, f) > 0) {
             char *t1 = strchr(line, '\t'), *t2 = t1 ? strchr(t1 + 1, '\t') : NULL;
-            if (!t2 || t1 - line != 26) continue;
+            if (!t2 || t1 - line != AV_HASH_LEN) continue;
             if (nr == rcap) {
                 drow *q = realloc(rows, (rcap = rcap ? 2 * rcap : 256) * sizeof *q);
                 if (!q) return 1;
                 rows = q;
             }
             drow *r = &rows[nr];
-            memcpy(r->hash, line, 26);
-            r->hash[26] = '\0';
+            memcpy(r->hash, line, AV_HASH_LEN);
+            r->hash[AV_HASH_LEN] = '\0';
             if (!av_hash_parse(r->hash, &r->digest)) continue;
             t2[1 + strcspn(t2 + 1, "\n")] = '\0';
             r->term = strdup(t2 + 1);
@@ -196,7 +196,7 @@ int load_jnames(char **namefiles, int nn, jname **out, size_t *count) {
 static const av_jetstats *sort_stats;
 
 static int by_absorbed(const void *x, const void *y) {
-    char h[27];
+    char h[AV_HASH_LEN + 1];
     unsigned ar;
     uint64_t cost;
     size_t atoms;
@@ -225,7 +225,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
     qsort(order, n, sizeof *order, by_absorbed);
     uint64_t sum_together = 0, sum_alone = 0, sum_alone_together = 0, sum_fires = 0;
     for (size_t i = 0; i < n; i++) {
-        char h[27];
+        char h[AV_HASH_LEN + 1];
         unsigned ar;
         uint64_t cost;
         size_t atoms;
@@ -254,7 +254,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
            "cost", "atoms", "nodes", "jet");
     for (size_t k = 0; k < n && k < top; k++) {
         size_t i = order[k];
-        char h[27], label[64];
+        char h[AV_HASH_LEN + 1], label[64];
         unsigned ar;
         uint64_t cost;
         size_t atoms;
@@ -280,7 +280,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
     fprintf(out, "\nnested fires: the inner jet fired from the outer's residual (after it "
            "fired) or term (after it missed)\n");
     for (size_t k = 0; k < np && k < top; k++) {
-        char ho[27], hi[27], lo[64], li[64];
+        char ho[AV_HASH_LEN + 1], hi[AV_HASH_LEN + 1], lo[64], li[64];
         unsigned ar;
         uint64_t cost;
         size_t atoms;
@@ -324,7 +324,7 @@ int jetstat_main(int argc, char **argv) {
     size_t nnames = 0;
     if (load_rows(dicts, nd, &rows, &nr) || load_jnames(namefiles, nn, &names, &nnames)) return 1;
 
-    jetcfg cfg = { dicts, nd, ctors, share, halting, false, 0, 0 };
+    jetcfg cfg = { dicts, nd, ctors, share, halting, false, 0, { 0, 0 } };
     av_jetstats *all = av_jetstats_new();
     uint64_t total;
     int runs, wrong;
@@ -337,7 +337,7 @@ int jetstat_main(int argc, char **argv) {
     if (!alone_fires || !alone_abs || !alone_seen) return 1;
     for (size_t i = 0; alone && i < nr; i++) {
         bool dup = false;
-        for (size_t j = 0; j < i; j++) dup |= rows[j].digest == rows[i].digest;
+        for (size_t j = 0; j < i; j++) dup |= av_digest_eq(rows[j].digest, rows[i].digest);
         if (dup) continue;
         jetcfg one = { dicts, nd, 0, share, halting, true, rows[i].file, rows[i].digest };
         av_jetstats *s1 = av_jetstats_new();
@@ -347,7 +347,7 @@ int jetstat_main(int argc, char **argv) {
         wrong += w1;
         size_t k;
         if (av_jetstats_find(s1, rows[i].hash, &k)) {
-            char h[27];
+            char h[AV_HASH_LEN + 1];
             unsigned ar;
             uint64_t cost;
             size_t atoms;

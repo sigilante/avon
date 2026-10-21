@@ -27,7 +27,7 @@
 #include "avon.h"
 #include "jets.h"
 
-typedef struct { uint64_t digest; uint32_t row; } dname;
+typedef struct { av_digest digest; uint32_t row; } dname;
 
 struct av_profile {
     char    **names;            /* row i's name; rows 0-3 are fixed      */
@@ -68,14 +68,14 @@ void av_profile_free(av_profile *p) {
     free(p);
 }
 
-static dname *find(const av_profile *p, uint64_t digest) {
+static dname *find(const av_profile *p, av_digest digest) {
     for (size_t i = 0; i < p->ndig; i++)        /* before sorting: a scan */
-        if (p->by_digest[i].digest == digest) return &p->by_digest[i];
+        if (av_digest_eq(p->by_digest[i].digest, digest)) return &p->by_digest[i];
     return NULL;
 }
 
 bool av_profile_name(av_profile *p, const char *hash, const char *name) {
-    uint64_t d;
+    av_digest d;
     if (!av_hash_parse(hash, &d)) return false;
     dname *hit = find(p, d);
     if (hit) {                                  /* one term, several names */
@@ -113,11 +113,10 @@ bool av_profile_name(av_profile *p, const char *hash, const char *name) {
 }
 
 static int by_digest(const void *x, const void *y) {
-    uint64_t a = ((const dname *)x)->digest, b = ((const dname *)y)->digest;
-    return (a > b) - (a < b);
+    return av_digest_cmp(((const dname *)x)->digest, ((const dname *)y)->digest);
 }
 
-static uint32_t row_of(const av_profile *p, uint64_t digest) {
+static uint32_t row_of(const av_profile *p, av_digest digest) {
     dname key = { digest, 0 };
     const dname *hit = bsearch(&key, p->by_digest, p->ndig, sizeof key, by_digest);
     return hit ? hit->row : 0;
@@ -125,8 +124,8 @@ static uint32_t row_of(const av_profile *p, uint64_t digest) {
 
 bool av_profile_begin(av_profile *p, const av_arena *a, uint32_t t) {
     if (p->ndig) qsort(p->by_digest, p->ndig, sizeof *p->by_digest, by_digest);
-    nmap digests = { 0 };
-    if (!hash_all(a, t, &digests)) { nmap_free(&digests); return false; }
+    dmap digests = { 0 };
+    if (!hash_all(a, t, &digests)) { dmap_free(&digests); return false; }
     /* top down, each node owned by the innermost named subterm above it;
      * a node reached twice keeps its first owner */
     typedef struct { uint32_t node, row; } item;
@@ -138,8 +137,8 @@ bool av_profile_begin(av_profile *p, const av_arena *a, uint32_t t) {
         item it = todo[--top];
         uint64_t v;
         if (nmap_get(&p->owner, it.node, &v)) continue;
-        uint64_t d;
-        uint32_t row = nmap_get(&digests, it.node, &d) ? row_of(p, d) : 0;
+        av_digest d;
+        uint32_t row = dmap_get(&digests, it.node, &d) ? row_of(p, d) : 0;
         if (!row) row = it.row;
         if (av_tag(a, it.node) != AV_APP) continue;    /* leaves are shared */
         if (!nmap_put(&p->owner, it.node, row)) { ok = false; break; }
@@ -152,7 +151,7 @@ bool av_profile_begin(av_profile *p, const av_arena *a, uint32_t t) {
         todo[top++] = (item){ av_view(a, av_left(a, it.node)), row };
     }
     free(todo);
-    nmap_free(&digests);
+    dmap_free(&digests);
     return ok;
 }
 

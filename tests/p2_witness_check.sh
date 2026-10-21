@@ -134,7 +134,7 @@ for k in 0 1 2; do
     (cd "$LEAN_SKI" && lake exe p2run "$k" "$d" > /dev/null)
     "$AVON" reduce --p2="$d/P.dag" "$d/p2.dag" > "$d/out" 2> "$d/err" || { echo "FAIL: vector $k: $(cat "$d/err")"; fail=1; continue; }
     if [ "$(head -n 1 "$d/out")" = "NORMAL 1" ] && tail -n +2 "$d/out" | cmp -s - "$d/p2.expected" &&
-        grep -q '^p2: 1 occurrences of P bound (skijack-1:[0-9a-f]*); 1 permutations run natively among the contractions, 0 declined' "$d/err"; then
+        grep -q '^p2: 1 occurrences of P bound (skijack-2:[0-9a-f]*); 1 permutations run natively among the contractions, 0 declined' "$d/err"; then
         echo "vector $k: stateN (permute x) in one step: $(cat "$d/err")"
     else
         echo "FAIL: vector $k: $(head -c 80 "$d/out") / $(cat "$d/err")"
@@ -147,7 +147,7 @@ mkdir -p "$d"
 (cd "$LEAN_SKI" && lake exe p2run chain 1 3 "$d" > /dev/null)
 if "$AVON" reduce --p2="$d/P.dag" "$d/chain.dag" > "$d/out" 2> "$d/err" &&
     [ "$(head -n 1 "$d/out")" = "NORMAL 3" ] && tail -n +2 "$d/out" | cmp -s - "$d/chain.expected" &&
-    grep -q '^p2: 1 occurrences of P bound (skijack-1:[0-9a-f]*); 3 permutations run natively among the contractions, 0 declined' "$d/err"; then
+    grep -q '^p2: 1 occurrences of P bound (skijack-2:[0-9a-f]*); 3 permutations run natively among the contractions, 0 declined' "$d/err"; then
     echo "a chain of three: stateN (permute^3 x) in three steps: $(cat "$d/err")"
 else
     echo "FAIL: a chain of three: $(head -c 80 "$d/out") / $(cat "$d/err")"

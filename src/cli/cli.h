@@ -39,7 +39,7 @@ void      report_fix(const av_result *r);
 
 /*  jetstat.c: a dictionary's rows and a names file's names, and the jet
  *  table front0 prints too */
-typedef struct { uint64_t digest; char hash[27]; char *term; int file; } drow;
+typedef struct { av_digest digest; char hash[AV_HASH_LEN + 1]; char *term; int file; } drow;
 typedef struct { char *hash, *name; } jname;
 
 int       load_rows(char **dicts, int nd, drow **out, size_t *count);

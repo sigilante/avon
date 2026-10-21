@@ -338,8 +338,8 @@ never be able to come from this.
 
 `python/skijack/dictionary.py` already fixes it: a Merkle hash, leaf hashes
 its name, application hashes `"(" + h(fn) + " " + h(arg) + ")"`, `sha256`
-truncated to 16 hex digits, published with the version prefix
-`skijack-1:`. Avon computes the same values, in one bottom-up pass, with a
+truncated to 32 hex digits, 128 bits, published with the version prefix
+`skijack-2:`. Avon computes the same values, in one bottom-up pass, with a
 vendored public-domain `sha256.c` (~200 lines, no dependency).
 
 It is computed **at load time only** — once per dictionary entry and once
@@ -347,11 +347,14 @@ per candidate node in the loaded program — and never on the reduction hot
 path. §6 is why that suffices.
 
 **Built in stage 4** (`src/jets.c`): it matches skijack's string on all
-282 rows of the corpus dictionary (`tests/test_jets.c`).
+286 rows of the corpus dictionary (`tests/test_jets.c`).
 
-The hash is for **dispatch, not commitment**. Sixty-four bits admit a
-collision after about 2³² work, which is harmless when a wrong match only
-wastes a jet check and fatal when a verifier trusts it. Nothing a proof
+The hash is for **dispatch, not commitment**. Until 2026-10-21 it kept 16
+digits, 64 bits (`skijack-1`), and 64 bits admit a collision after about
+2³² work by anyone who picks both terms; it keeps 128 now (`skijack-2`,
+SKIjack #18), past that reach. A collision is still harmless here, as every
+dashboard hit is held to its term (§6.5), and would be fatal only where a
+verifier trusted the hash. Nothing a proof
 relies on is keyed by it: a proof binds terms by the circuit's own field
 fingerprints (`lean-ski`'s `zk/`, with a proved collision bound), and a jet
 inside a proof is licensed by recomputing the term it stands for (§18.1),
@@ -363,7 +366,7 @@ not by its hash.
 
 **The subterm, and nothing else.** The key is the Merkle hash of §5 over
 that node's tree — leaf names and application structure — published with
-the `skijack-1:` prefix. Not the name it was compiled from, not the type
+the `skijack-2:` prefix. Not the name it was compiled from, not the type
 declaration it came out of, not the subject it will be applied to, not its
 arity.
 
@@ -536,10 +539,10 @@ plan left open:
 - **Where the dashboard comes from.** `export.py` writes the corpus
   dictionary, `dictionary.tsv`; `avon --jets=` loads it, recomputes every
   row's hash from its term and refuses a mismatch, registers the rows at
-  or above a size floor (default 8 atoms: 135 of 282), and wraps each
+  or above a size floor (default 8 atoms: 139 of 286), and wraps each
   jet's inner jets in its term and residual.
 - **A match is tree identity, not a digest.** `av_jets_match` finds a
-  candidate by the 64-bit digest. It wraps the node only if the node is
+  candidate by the 128-bit digest. It wraps the node only if the node is
   the jet's term, tree for tree.
   - Before 2026-10-06 a digest alone sufficed, so a term built to
     collide in about 2^32 work ran as another (`AUDIT.md` item 8). An
@@ -1375,10 +1378,11 @@ FILE is the user's input, and the jet would assert a false equation for
 any other term. So `av_p2_register` refuses FILE unless its full digest
 is `P`'s, compiled in (`AV_P2_SHA256`). The full digest is §5's Merkle
 hash with every digest kept whole, 256 bits, over S, K and I only. The
-§5 digest alone, 64 bits, would admit a forged FILE after about 2^50
-hashes: an atom whose name hashes to one of `P`'s 12,753 subterms'
-digests, put in its place. Registration also refuses a digest that
-another jet already holds under another role or another term.
+§5 digest alone would admit a forged FILE: an atom whose name hashes to
+one of `P`'s 12,753 subterms' digests, put in its place, after about 2^50
+hashes at `skijack-1`'s 64 bits and 2^114 at `skijack-2`'s 128.
+Registration also refuses a digest that another jet already holds under
+another role or another term.
 
 `av_jets_match` wraps each occurrence of `P` in the program, which may be
 hostile. `av_p2_bind` compares each wrapped term with FILE's, node for
@@ -2055,7 +2059,7 @@ additive: no existing behaviour moves.
 4. `cue(jam(t)) == t` for every corpus term and for reduced states;
 5. `print(parse(s)) == s` for every printed form Python emits;
 6. the structural hash of every dictionary entry matches Python's, string
-   for string, including the `skijack-1:` prefix.
+   for string, including the `skijack-2:` prefix.
 
 ### 10.3 Fuzzing
 
@@ -2145,7 +2149,7 @@ allocations in the reducer's hot paths (now asserted in the debug build).
 (§4.3), and snapshots:
 
 - `print(parse(s)) = s` and `cue(jam(t)) = t`, with `jam` canonical, on all
-  281 distinct corpus terms (17 programs; 4 fail skijack's Stage A) and on
+  285 distinct corpus terms (18 programs; 4 fail skijack's Stage A) and on
   459 reduced states of them, each term run 200 steps in both strategies
   and kept when its tree prints within 200,000 nodes (`tests/test_wire.c`,
   `tests/fixtures/corpus.tsv`).
@@ -2197,7 +2201,7 @@ allocations in the reducer's hot paths (now asserted in the debug build).
 
 **Stage 4, done.** The structural hash, the dashboard and residual jets:
 
-- **Hashes match skijack's strings** on all 282 rows of the corpus
+- **Hashes match skijack's strings** on all 286 rows of the corpus
   dictionary, recomputed from each printed term, and on seven hand-checked
   terms (`tests/test_jets.c`). The loader finds inside `whnfF`, `wfN`, `UQ`
   and `wf5Abs` exactly the dictionary rows skijack's `hash_all` finds: 28,

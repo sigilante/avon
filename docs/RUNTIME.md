@@ -167,7 +167,7 @@ without a normal form still stops at FUEL, and a WHNF state may differ in
 form (`Y K` stops at `K (Y K)`).
 
 **Poseidon2 run natively** (`--p2=FILE`, §6.12) prints
-`p2: 1 occurrences of P bound (skijack-1:43f97c21e068ebe7); 1
+`p2: 1 occurrences of P bound (skijack-2:…, P's structural hash); 1
 permutations run natively among the contractions, 0 declined (an argument
 neither a state nor a chain of calls ending in one), 0 unbound at a call`. FILE must hold
 lean-ski's `P`: Avon pins its 256-bit digest and refuses any other term. Only a jet node whose term is `P`'s,

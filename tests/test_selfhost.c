@@ -89,7 +89,7 @@ static void run_calls(const av_opts *o, bool jet, tally *t) {
         av_root_pop(a);
         CHECK(out != AV_NONE);
         av_buf b = { 0 };
-        char h[27];
+        char h[AV_HASH_LEN + 1];
         bool same = out != AV_NONE && av_print(a, out, 10000000, &b) && strcmp(b.s, fld[3]) == 0 &&
                     av_structural_hash(a, out, h) && strcmp(h, fld[2]) == 0;
         if (!same) fprintf(stderr, "  [v%s] %.60s:\n    got  %.80s\n    want %.80s\n", fld[0], fld[1],
@@ -188,7 +188,7 @@ TEST(the_compiler_in_a_pill_answers_pokes) {
             if (av_peel(a, eff, 2, &po, &outs, NULL) && outs.ctor == 1 &&
                 av_peel(a, outs.field[0], 1, &po, &out, NULL) && out.nfields == 1)
                 got = av_tm_decode(a, out.field[0], &po, &err);
-            char h[27];
+            char h[AV_HASH_LEN + 1];
             same += got != AV_NONE && av_structural_hash(a, got, h) && strcmp(h, fld[2]) == 0;
             av_root_pop(a);
             n++;

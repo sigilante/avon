@@ -22,7 +22,7 @@
 static av_arena *loaded(void) {
     av_arena *a = av_arena_new(1u << 16);
     const char *err = NULL;
-    CHECK_EQ(av_jets_load(a, DIR "dictionary.tsv", 8, &err), 135);
+    CHECK_EQ(av_jets_load(a, DIR "dictionary.tsv", 8, &err), 139);
     CHECK_EQ(av_interps_load(a, DIR "interpreters.tsv", DIR "dictionary.tsv", &err), 5);
     return a;
 }
@@ -263,7 +263,7 @@ TEST(a_dictionary_row_must_be_its_hash) {
     memcpy(d, raw, len);
     d[len] = '\0';
     free(raw);
-    const char *zero = "skijack-1:86be9a55762d316a";   /* interpreters.tsv's nat Zero */
+    const char *zero = "skijack-2:86be9a55762d316a3026c2836d044f5f";   /* interpreters.tsv's nat Zero */
     char *row = strstr(d, zero);
     REQUIRE(row != NULL);
     char *t1 = strchr(row, '\t'), *t2 = t1 ? strchr(t1 + 1, '\t') : NULL, *nl = t2 ? strchr(t2, '\n') : NULL;

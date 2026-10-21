@@ -29,7 +29,7 @@ static uint32_t nest(av_arena *a, unsigned k) {
 static uint64_t profile_levels(uint32_t cap) {
     av_arena *a = av_arena_new(cap);
     uint32_t t = nest(a, LEVELS);
-    char h[27];
+    char h[AV_HASH_LEN + 1];
     uint32_t b = av_parse(a, "S (K S) K", 9, NULL);
     CHECK(av_structural_hash(a, b, h));
     av_profile *p = av_profile_new();
@@ -65,7 +65,7 @@ TEST(the_charges_follow_the_nodes_through_collections) {
 
 TEST(a_second_name_for_one_hash_joins_the_first) {
     av_arena *a = av_arena_new(1u << 10);
-    char h[27];
+    char h[AV_HASH_LEN + 1];
     CHECK(av_structural_hash(a, av_parse(a, "S (K S) K", 9, NULL), h));
     av_profile *p = av_profile_new();
     CHECK(av_profile_name(p, h, "B"));

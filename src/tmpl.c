@@ -38,7 +38,7 @@ typedef struct {
     uint64_t *key;              /* (l << 32 | r) + 1, 0 empty: S S is 0 0 */
     uint32_t *node;
     size_t    cap, n;
-    nmap      digest;           /* canonical node -> digest */
+    dmap      digest;           /* canonical node -> digest */
     nmap      vars;             /* canonical node -> marker bits, if any */
     nmap      canon;            /* any node -> its canonical node */
 } hcons;
@@ -46,7 +46,7 @@ typedef struct {
 static void hc_free(hcons *h) {
     free(h->key);
     free(h->node);
-    nmap_free(&h->digest);
+    dmap_free(&h->digest);
     nmap_free(&h->vars);
     nmap_free(&h->canon);
     memset(h, 0, sizeof *h);
@@ -78,10 +78,10 @@ static bool hc_grow(hcons *h) {
 
 /*  The leaf's canonical node: itself, its digest and marker bits noted. */
 static uint32_t hc_leaf(av_arena *a, hcons *h, uint32_t leaf) {
-    uint64_t d;
-    if (nmap_get(&h->digest, leaf, &d)) return leaf;
+    av_digest d;
+    if (dmap_get(&h->digest, leaf, &d)) return leaf;
     const char *nm = av_leaf_name(a, av_right(a, leaf));
-    if (!nmap_put(&h->digest, leaf, digest_leaf(nm))) return AV_NONE;
+    if (!dmap_put(&h->digest, leaf, digest_leaf(nm))) return AV_NONE;
     for (unsigned i = 0; i < AV_JET_ARITY_MAX; i++)
         if (leaf == a->jet_mark[i] && !nmap_put(&h->vars, leaf, (uint64_t)1 << i))
             return AV_NONE;
@@ -95,14 +95,15 @@ static uint32_t hc_app(av_arena *a, hcons *h, uint32_t l, uint32_t r) {
     size_t s = hc_slot(k, h->cap);
     while (h->key[s] && h->key[s] != k) s = (s + 1) & (h->cap - 1);
     if (h->key[s]) return h->node[s];
-    uint64_t dl, dr, vl = 0, vr = 0;
-    if (!nmap_get(&h->digest, l, &dl) || !nmap_get(&h->digest, r, &dr))
+    av_digest dl, dr;
+    uint64_t vl = 0, vr = 0;
+    if (!dmap_get(&h->digest, l, &dl) || !dmap_get(&h->digest, r, &dr))
         return AV_NONE;                     /* an operand not canonical */
     uint32_t n = av_app(a, l, r);
     if (n == AV_NONE) return AV_NONE;
     nmap_get(&h->vars, l, &vl);
     nmap_get(&h->vars, r, &vr);
-    if (!nmap_put(&h->digest, n, digest_app(dl, dr))) return AV_NONE;
+    if (!dmap_put(&h->digest, n, digest_app(dl, dr))) return AV_NONE;
     if ((vl | vr) && !nmap_put(&h->vars, n, vl | vr)) return AV_NONE;
     h->key[s] = k;
     h->node[s] = n;
@@ -199,12 +200,11 @@ static bool body_push(body *b, bnode x) {
     return true;
 }
 
-/*  A referenced term, by its 16 hex digits of hash. */
-typedef struct { uint64_t digest; uint32_t node; } tref;
+/*  A referenced term, by its 32 hex digits of hash. */
+typedef struct { av_digest digest; uint32_t node; } tref;
 
 static int tref_cmp(const void *x, const void *y) {
-    uint64_t a = ((const tref *)x)->digest, b = ((const tref *)y)->digest;
-    return (a > b) - (a < b);
+    return av_digest_cmp(((const tref *)x)->digest, ((const tref *)y)->digest);
 }
 
 /*  Parse a prefix body into b; its root's index.  AV_NONE if malformed. */
@@ -226,19 +226,19 @@ static uint32_t parse_body(av_arena *a, hcons *h, const char **p, const tref *re
             out = (uint32_t)(b->len - 1);
         *p = end;
     } else if (*s == '#') {
-        uint64_t d;
-        char hash[27] = AV_HASH_VERSION ":";
-        if (strlen(s + 1) >= 16) {
-            memcpy(hash + 10, s + 1, 16);
-            hash[26] = '\0';
-            tref key = { 0, 0 };
+        av_digest d;
+        char hash[AV_HASH_LEN + 1] = AV_HASH_VERSION ":";
+        if (strlen(s + 1) >= 32) {
+            memcpy(hash + 10, s + 1, 32);
+            hash[AV_HASH_LEN] = '\0';
+            tref key = { { 0, 0 }, 0 };
             if (av_hash_parse(hash, &d)) {
                 key.digest = d;
                 const tref *r = bsearch(&key, refs, nrefs, sizeof key, tref_cmp);
                 if (r && body_push(b, (bnode){ B_REF, r->node, 0 })) out = (uint32_t)(b->len - 1);
             }
         }
-        *p = s + 17;
+        *p = s + 33;
     } else if (*s == 'S' || *s == 'K' || *s == 'I') {
         uint32_t leaf = *s == 'S' ? AV_NODE_S : *s == 'K' ? AV_NODE_K : AV_NODE_I;
         if (hc_leaf(a, h, leaf) != AV_NONE && body_push(b, (bnode){ B_REF, leaf, 0 }))
@@ -275,7 +275,7 @@ static bool global_push(av_arena *a, uint32_t node, uint32_t *ix) {
 }
 
 /*  One template: validate, register, compile.  0 accepted, else why not. */
-static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *formals,
+static int load_one(av_arena *a, av_tmplset *ts, av_digest key, const uint32_t *formals,
                     unsigned k, const body *b, uint32_t root) {
     hcons *h = &ts->h;
     /* the variables' argument positions, the last occurrence binding */
@@ -326,9 +326,9 @@ static int load_one(av_arena *a, av_tmplset *ts, uint64_t key, const uint32_t *f
     for (unsigned i = k; i-- > 0 && t != AV_NONE;) t = hc_abstract(a, h, formals[i], t);
     if (t == AV_NONE) { why = -1; goto done; }
     if (av_tag(a, t) != AV_APP) { why = 5; goto done; }          /* S, K or I */
-    uint64_t d;
-    nmap_get(&h->digest, t, &d);
-    if (d != key) { why = 1; goto done; }                           /* refused */
+    av_digest d;
+    dmap_get(&h->digest, t, &d);
+    if (!av_digest_eq(d, key)) { why = 1; goto done; }              /* refused */
     uint64_t have;
     if (nmap_get(&ts->key_jet, t, &have)) { why = 4; goto done; }   /* a duplicate */
     const char *refusal = NULL;
@@ -552,15 +552,15 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         char *t1 = strchr(line, '\t'), *t2 = t1 ? strchr(t1 + 1, '\t') : NULL;
         if (!t2) { if (*line) { msg = "malformed template_terms.tsv line"; goto fail; } continue; }
         *t1 = '\0';
-        uint64_t want;
+        av_digest want;
         if (!av_hash_parse(line, &want)) { msg = "malformed hash in template_terms.tsv"; goto fail; }
         av_parse_error pe;
         uint32_t t = av_parse(a, t2 + 1, strlen(t2 + 1), &pe);
         if (t == AV_NONE) { msg = "unparsable term in template_terms.tsv"; goto fail; }
         uint32_t c = hc_canon(a, &ts->h, t);
-        uint64_t d;
-        if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
-        if (d != want) { msg = "a template term does not match its hash"; goto fail; }
+        av_digest d;
+        if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) goto fail;
+        if (!av_digest_eq(d, want)) { msg = "a template term does not match its hash"; goto fail; }
         if (nrefs == rcap) {
             tref *q = realloc(refs, (rcap = rcap ? 2 * rcap : 256) * sizeof *q);
             if (!q) goto fail;
@@ -585,7 +585,7 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
             if (q) *q++ = '\0';
         }
         if (k < 6) { if (*line) { msg = "malformed templates.tsv line"; goto fail; } continue; }
-        uint64_t key;
+        av_digest key;
         if (!av_hash_parse(fld[0], &key)) { msg = "malformed hash in templates.tsv"; goto fail; }
         unsigned long arity = strtoul(fld[3], NULL, 10);
         if (arity > AV_JET_ARITY_MAX) { ts->wide++; continue; }   /* past the cap */
@@ -636,15 +636,16 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
             unsigned op = 0;
             for (unsigned i = 1; i < sizeof opname / sizeof *opname; i++)
                 if (strcmp(fld[1], opname[i]) == 0) op = i;
-            uint64_t want;
+            av_digest want;
             if (!op || !av_hash_parse(fld[0], &want)) { msg = "malformed words.tsv line"; goto fail; }
             av_parse_error pe;
             uint32_t t = av_parse(a, fld[3], strlen(fld[3]), &pe);
             if (t == AV_NONE) { msg = "unparsable term in words.tsv"; goto fail; }
             uint32_t c = hc_canon(a, &ts->h, t);
-            uint64_t d, have;
-            if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
-            if (d != want) { msg = "a word operation does not match its hash"; goto fail; }
+            av_digest d;
+            uint64_t have;
+            if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) goto fail;
+            if (!av_digest_eq(d, want)) { msg = "a word operation does not match its hash"; goto fail; }
             /* skijack's operation, node for node, or it runs as its term */
             const char *pin = av_word_pinned(op);
             uint32_t pt = pin ? av_parse(a, pin, strlen(pin), &pe) : AV_NONE;
@@ -670,8 +671,9 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         av_parse_error pe;
         uint32_t t = av_parse(a, Y, sizeof Y - 1, &pe);
         uint32_t c = t == AV_NONE ? AV_NONE : hc_canon(a, &ts->h, t);
-        uint64_t d, have;
-        if (c == AV_NONE || !nmap_get(&ts->h.digest, c, &d)) goto fail;
+        av_digest d;
+        uint64_t have;
+        if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) goto fail;
         if (!nmap_get(&ts->key_jet, c, &have)) {
             const char *refusal = NULL;
             uint32_t id = jet_entry_for(a, d, c, &refusal);

@@ -34,7 +34,7 @@
 #define TOPMARK UINT64_MAX      /* an origin entry: outside every jet */
 
 typedef struct {
-    uint64_t digest;
+    av_digest digest;
     unsigned arity;
     uint64_t cost;
     size_t   atoms;
@@ -69,7 +69,7 @@ void av_jetstats_free(av_jetstats *s) {
 
 static uint32_t row_for(av_jetstats *s, const av_jet *j) {
     for (size_t i = 0; i < s->nrows; i++)
-        if (s->rows[i].digest == j->digest) return (uint32_t)i;
+        if (av_digest_eq(s->rows[i].digest, j->digest)) return (uint32_t)i;
     if (s->nrows == s->rowcap) {
         size_t cap = s->rowcap ? 2 * s->rowcap : 64;
         row *q = realloc(s->rows, cap * sizeof *q);
@@ -248,10 +248,12 @@ size_t av_jetstats_rows(const av_jetstats *s) { return s->nrows; }
 
 bool av_jetstats_lost(const av_jetstats *s) { return s->lost; }
 
-void av_jetstats_row(const av_jetstats *s, size_t i, char hash[27], unsigned *arity,
-                     uint64_t *cost, size_t *atoms, av_jetstat_row *counts) {
+void av_jetstats_row(const av_jetstats *s, size_t i, char hash[AV_HASH_LEN + 1],
+                     unsigned *arity, uint64_t *cost, size_t *atoms,
+                     av_jetstat_row *counts) {
     const row *r = &s->rows[i];
-    snprintf(hash, 27, AV_HASH_VERSION ":%016llx", (unsigned long long)r->digest);
+    snprintf(hash, AV_HASH_LEN + 1, AV_HASH_VERSION ":%016llx%016llx",
+             (unsigned long long)r->digest.hi, (unsigned long long)r->digest.lo);
     *arity = r->arity;
     *cost = r->cost;
     *atoms = r->atoms;
@@ -261,10 +263,10 @@ void av_jetstats_row(const av_jetstats *s, size_t i, char hash[27], unsigned *ar
 }
 
 bool av_jetstats_find(const av_jetstats *s, const char *hash, size_t *i) {
-    uint64_t d;
+    av_digest d;
     if (!av_hash_parse(hash, &d)) return false;
     for (size_t k = 0; k < s->nrows; k++)
-        if (s->rows[k].digest == d) { *i = k; return true; }
+        if (av_digest_eq(s->rows[k].digest, d)) { *i = k; return true; }
     return false;
 }
 

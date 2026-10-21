@@ -20,31 +20,33 @@
 #define NAMES "tests/conformance/dictionary_names.tsv"
 
 static char *hash_of(av_arena *a, const char *src) {
-    static char h[27];
+    static char h[AV_HASH_LEN + 1];
     uint32_t t = av_parse(a, src, strlen(src), NULL);
     return t != AV_NONE && av_structural_hash(a, t, h) ? h : NULL;
 }
 
 TEST(the_hash_is_skijacks) {
-    /* python/skijack/dictionary.py's structural_hash, 5dfc75 */
+    /* python/skijack/dictionary.py's structural_hash, skijack-2: 128 bits */
     static const char *const want[][2] = {
-        { "S", "skijack-1:8de0b3c47f112c59" },
-        { "K", "skijack-1:86be9a55762d316a" },
-        { "I", "skijack-1:a83dd0ccbffe39d0" },
-        { "S K", "skijack-1:cd1e0f4e27bd7f92" },
-        { "S K K", "skijack-1:2e490652d25a0ff9" },
-        { "S (K I)", "skijack-1:47b7611dc637f626" },
-        { "X1", "skijack-1:ad667b78ba8ed027" },
+        { "S", "skijack-2:8de0b3c47f112c59745f717a62693226" },
+        { "K", "skijack-2:86be9a55762d316a3026c2836d044f5f" },
+        { "I", "skijack-2:a83dd0ccbffe39d071cc317ddf6e97f5" },
+        { "S K", "skijack-2:5fd0a45d1d92a13f428c7ab3eadefb76" },
+        { "S K K", "skijack-2:8a5275fe6e97e6a8e814013a3064f7ed" },
+        { "S (K I)", "skijack-2:ac428b67879216212b692d33d1cc9c7d" },
+        { "X1", "skijack-2:ad667b78ba8ed0275868fcc1c3650f7d" },
     };
     av_arena *a = av_arena_new(0);
     for (size_t i = 0; i < sizeof want / sizeof want[0]; i++) {
         char *h = hash_of(a, want[i][0]);
         CHECK(h && strcmp(h, want[i][1]) == 0);
     }
-    uint64_t d;
-    CHECK(av_hash_parse("skijack-1:8de0b3c47f112c59", &d) && d == 0x8de0b3c47f112c59u);
-    CHECK(!av_hash_parse("skijack-2:8de0b3c47f112c59", &d));
-    CHECK(!av_hash_parse("skijack-1:8de0b3c47f112c5", &d));
+    av_digest d;
+    CHECK(av_hash_parse("skijack-2:8de0b3c47f112c59745f717a62693226", &d) &&
+          d.hi == 0x8de0b3c47f112c59u && d.lo == 0x745f717a62693226u);
+    CHECK(!av_hash_parse("skijack-1:8de0b3c47f112c59", &d));      /* the old width */
+    CHECK(!av_hash_parse("skijack-2:8de0b3c47f112c59745f717a6269322", &d));
+    CHECK(!av_hash_parse("skijack-2:8de0b3c47f112c59745f717a626932266", &d));
     av_arena_free(a);
 }
 
@@ -89,11 +91,11 @@ static size_t leaves(const av_arena *a, uint32_t t) {
 
 TEST(every_dictionary_hash_matches) {
     dict d = load_dict();
-    CHECK_EQ(d.n, 282);
+    CHECK_EQ(d.n, 286);
     av_arena *a = av_arena_new(0);
     for (size_t k = 0; k < d.n; k++) {
         uint32_t t = av_parse(a, d.term[k], strlen(d.term[k]), NULL);
-        char h[27];
+        char h[AV_HASH_LEN + 1];
         CHECK(t != AV_NONE && av_structural_hash(a, t, h));
         if (strcmp(h, d.hash[k]) != 0) {
             fprintf(stderr, "  row %zu: %s, want %s\n", k, h, d.hash[k]);
@@ -110,7 +112,7 @@ TEST(every_dictionary_hash_matches) {
 static const char *term_named(const dict *d, const char *program, const char *name) {
     FILE *f = test_open(NAMES);
     char line[512], *hash = NULL;
-    static char found[32];
+    static char found[AV_HASH_LEN + 1];
     while (fgets(line, sizeof line, f)) {
         char *t1 = strchr(line, '\t'), *t2 = t1 ? strchr(t1 + 1, '\t') : NULL;
         if (!t2) continue;
@@ -136,18 +138,18 @@ static void coverage(const dict *d, const char *program, const char *name,
     uint32_t t = av_parse(a, src, strlen(src), NULL);
     /* every subterm's hash, deduplicated */
     size_t cap = 1024, n = 0, top = 0;
-    char (*seen)[27] = malloc(cap * sizeof *seen);
+    char (*seen)[AV_HASH_LEN + 1] = malloc(cap * sizeof *seen);
     uint32_t *stk = malloc(4096 * sizeof *stk);
     stk[top++] = t;
     while (top) {
         uint32_t x = stk[--top];
-        char h[27];
+        char h[AV_HASH_LEN + 1];
         av_structural_hash(a, x, h);
         size_t i = 0;
         while (i < n && strcmp(seen[i], h) != 0) i++;
         if (i == n) {
             if (n == cap) seen = realloc(seen, (cap *= 2) * sizeof *seen);
-            memcpy(seen[n++], h, 27);
+            memcpy(seen[n++], h, AV_HASH_LEN + 1);
         }
         if (av_tag(a, x) == AV_APP) { stk[top++] = av_left(a, x); stk[top++] = av_right(a, x); }
     }
@@ -218,7 +220,7 @@ TEST(registration_follows_the_rules) {
 TEST(the_dictionary_registers) {
     av_arena *a = av_arena_new(0);
     const char *err = NULL;
-    CHECK_EQ(av_jets_load(a, DICT, 8, &err), 135);
+    CHECK_EQ(av_jets_load(a, DICT, 8, &err), 139);
     for (uint32_t i = 0; i < a->njets; i++) {
         CHECK(a->jets[i].arity >= 1 && a->jets[i].arity <= 8);
         CHECK(a->jets[i].cost > 0);
@@ -266,7 +268,7 @@ static run_out run(av_arena *a, uint32_t t, av_strategy st, bool whnf,
  *  off, and share mode reaches the same normal form. */
 TEST(every_jet_leaves_counts_and_states_alone) {
     av_arena *a = av_arena_new(1u << 16);
-    CHECK(av_jets_load(a, DICT, 8, NULL) == 135);
+    CHECK(av_jets_load(a, DICT, 8, NULL) == 139);
     int rounds = getenv("AVON_FUZZ") ? atoi(getenv("AVON_FUZZ")) : 20;
     uint64_t fired = 0, compared = 0;
     for (int round = 0; round < rounds; round++) {
@@ -382,8 +384,8 @@ TEST(a_collision_is_refused_not_merged) {
     uint32_t t = av_parse(a, "K I", 3, NULL);
     av_root_push(a, &x);
     av_root_push(a, &t);
-    char h[27];
-    uint64_t dx;
+    char h[AV_HASH_LEN + 1];
+    av_digest dx;
     REQUIRE(av_structural_hash(a, x, h) && av_hash_parse(h, &dx));
     const char *why = NULL;
     uint32_t id = jet_entry_for(a, dx, x, &why);
@@ -441,7 +443,7 @@ TEST(jets_survive_collection) {
     fclose(f);
     for (int st = 0; st < 2; st++) {
         av_arena *a = av_arena_new(64);
-        CHECK(av_jets_load(a, DICT, 8, NULL) == 135);
+        CHECK(av_jets_load(a, DICT, 8, NULL) == 139);
         uint32_t t = av_jets_match(a, av_parse(a, src, len, NULL));
         run_out r = run(a, t, st ? AV_SHARE : AV_COPY, true, UINT64_MAX, true);
         CHECK(a->collections > 0);
@@ -454,7 +456,7 @@ TEST(jets_survive_collection) {
 
 TEST(a_snapshot_holds_no_jets) {
     av_arena *a = av_arena_new(0);
-    CHECK(av_jets_load(a, DICT, 8, NULL) == 135);
+    CHECK(av_jets_load(a, DICT, 8, NULL) == 139);
     FILE *f = test_open("tests/fixtures/t0.ski");
     static char src[1 << 14];
     size_t len = fread(src, 1, sizeof src, f);
@@ -486,9 +488,9 @@ TEST(a_snapshot_holds_no_jets) {
  *  run has already reduced still counts the same jets on and off. */
 TEST(share_mode_never_writes_the_dashboard) {
     av_arena *a = av_arena_new(1u << 16);
-    CHECK(av_jets_load(a, DICT, 8, NULL) == 135);
+    CHECK(av_jets_load(a, DICT, 8, NULL) == 139);
     uint32_t n = a->njets;
-    char (*before)[2][27] = malloc(n * sizeof *before);
+    char (*before)[2][AV_HASH_LEN + 1] = malloc(n * sizeof *before);
     for (uint32_t i = 0; i < n; i++) {
         av_structural_hash(a, a->jets[i].fallback, before[i][0]);
         av_structural_hash(a, a->jets[i].residual, before[i][1]);
@@ -526,7 +528,7 @@ TEST(share_mode_never_writes_the_dashboard) {
         av_root_pop(a);
     }
     for (uint32_t i = 0; i < n; i++) {
-        char h[27];
+        char h[AV_HASH_LEN + 1];
         av_structural_hash(a, a->jets[i].fallback, h);
         CHECK(strcmp(h, before[i][0]) == 0);
         av_structural_hash(a, a->jets[i].residual, h);
