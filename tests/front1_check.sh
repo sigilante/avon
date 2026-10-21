@@ -5,7 +5,7 @@
 #   1. compiles the corpus programs of every milestone through MILESTONE to
 #      the expander's terms, hash for hash;
 #   2. accepts or refuses every edge program, run0's and each milestone's,
-#      as the expander does, but where aviary's environment decides (M5's);
+#      as the expander does;
 #   3. compiles RANDOM random SKIjack-0 programs and RANDOM random programs
 #      of the full language as the expander does;
 #   4. compiles its own source to Python's terms: the fixed point;
@@ -22,7 +22,7 @@ set -euo pipefail
 SKIJACK=${SKIJACK:-$HOME/skijack}
 AVON=${AVON:-build/avon}
 RANDOM_PROGRAMS=${RANDOM_PROGRAMS:-200}
-MILESTONE=${MILESTONE:-M4}
+MILESTONE=${MILESTONE:-Lit}
 
 if [ ! -f "$SKIJACK/python/skijack/selfhost/run1.py" ]; then
     echo "no full-language front end in $SKIJACK (python/skijack/selfhost/run1.py)"
