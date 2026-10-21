@@ -367,7 +367,7 @@ uint32_t av_facts_resolver(av_arena *a, const av_facts *f, size_t n,
     char h[27];
     uint64_t d;
     if (!av_structural_hash(a, r, h) || !av_hash_parse(h, &d)) return AV_NONE;
-    uint32_t id = jet_entry_for(a, d, r);
+    uint32_t id = jet_entry_for(a, d, r, NULL);
     if (id == AV_NONE) return AV_NONE;
     a->jets[id].resolves = (uint32_t)n + 1;
     a->jets[id].admitted = 0;

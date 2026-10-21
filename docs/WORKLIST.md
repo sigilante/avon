@@ -6,6 +6,13 @@ design lives. Last revised 2026-10-05.
 
 ## Done since the last revision
 
+- **An entry is its term, not its digest** (2026-10-21; `DESIGN.md` §6.5). `jet_entry_for`
+  and registration took any dashboard entry under a digest as the offered term's, so a
+  64-bit collision between a template key and a dictionary row merged the two jets. A
+  hit now counts only when the entry's term is the offered one; another term under the
+  digest is refused as `jet_collision`. `test_jets` pins both paths without searching
+  for a collision.
+
 - **lean-ski at `paper-v8`** (2026-10-20). `tests/pins.sh` moves to `b7fae43`, past
   `paper-v4` by lean-ski #28–#49: the split predicates remade with secret witnesses and
   heights that hold every witness (#34), hiding tables of at least `2^9` rows (#31),

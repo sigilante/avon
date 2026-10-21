@@ -233,8 +233,9 @@ bool av_compiler_register(av_arena *a, const av_compiler *c, const char **err) {
         if (err) *err = "out of memory";
         return false;
     }
-    uint32_t id = jet_entry_for(a, digest, av_view(a, abs));
-    if (id == AV_NONE) { if (err) *err = "out of memory"; return false; }
+    const char *why = NULL;
+    uint32_t id = jet_entry_for(a, digest, av_view(a, abs), &why);
+    if (id == AV_NONE) { if (err) *err = why; return false; }
     a->jets[id].compiler = true;
     return true;
 }

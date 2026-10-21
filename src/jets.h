@@ -92,8 +92,15 @@ uint32_t jet_instance(av_arena *a, uint32_t id, const uint32_t *args,
 uint32_t jet_term_copy(av_arena *a, uint32_t id);
 
 /*  A dashboard entry for term t under its digest, with no residual: the
- *  key an interpreter jet attaches to.  The existing entry if any. */
-uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t);
+ *  key an interpreter jet attaches to.  The existing entry if its term is
+ *  t's; a digest is 64 bits, so an entry under it holding another term is
+ *  a collision, refused.  AV_NONE when refused or out of memory, with *why
+ *  saying which (why may be NULL). */
+uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t, const char **why);
+
+/*  What jet_entry_for and registration say of a collision: a caller tells a
+ *  refusal from running out of memory by this pointer. */
+extern const char jet_collision[];
 
 /*  Fire the interpreter jet of dashboard entry id over argv[0 .. params+1]
  *  (the parameters, the fuel, the datum), spending at most host_left

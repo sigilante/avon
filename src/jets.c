@@ -440,6 +440,16 @@ av_ctor av_ctor_of(av_arena *a, uint32_t t, uint64_t max_steps) {
     return c;
 }
 
+/*  Whether the jet under a digest is t's: the digest names a term, and two
+ *  terms may share one.  The budget is the one a full comparison is given
+ *  elsewhere (reduce.c, interp.c): it counts distinct pairs, so it bounds
+ *  a shared graph by its size, never its unfolding. */
+static bool jet_is(const av_arena *a, uint32_t id, uint32_t t) {
+    return av_equal(a, a->jets[id].fallback, t, 100000000) == 1;
+}
+
+const char jet_collision[] = "a different term under the same digest";
+
 /*  Register t, deriving its arity, residual, cost and shape once; with
  *  ctors_only, only if the shape is a constructor's (the scan's filter). */
 static uint32_t register_term(av_arena *a, uint32_t t, size_t min_atoms,
@@ -452,7 +462,11 @@ static uint32_t register_term(av_arena *a, uint32_t t, size_t min_atoms,
     if (atoms < min_atoms) { msg = "below the size floor"; goto done; }
     if (!av_structural_hash(a, t, h) || !av_hash_parse(h, &digest)) { msg = "out of memory"; goto done; }
     uint32_t have = jet_find(a, digest);
-    if (have != AV_NONE) return have;
+    if (have != AV_NONE) {
+        if (jet_is(a, have, t)) return have;
+        msg = jet_collision;
+        goto done;
+    }
 
     unsigned k;
     uint32_t res;
@@ -502,25 +516,31 @@ uint32_t av_jet_register(av_arena *a, uint32_t t, size_t min_atoms,
     return register_term(a, t, min_atoms, max_steps, false, why);
 }
 
-uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t) {
+uint32_t jet_entry_for(av_arena *a, uint64_t digest, uint32_t t, const char **why) {
+    /* *why is written only when the entry is refused: a caller may pass
+     * the message it reports on failure */
     uint32_t have = jet_find(a, digest);
-    if (have != AV_NONE) return have;
-    if (a->njets >= AV_JET_WORD) return AV_NONE;       /* ids below the word flag */
+    if (have != AV_NONE) {
+        if (jet_is(a, have, t)) return have;
+        if (why) *why = jet_collision;
+        return AV_NONE;
+    }
+    if (a->njets >= AV_JET_WORD) { if (why) *why = "too many jets"; return AV_NONE; }
     if (a->njets == a->jetcap) {
         uint32_t cap = a->jetcap ? a->jetcap * 2 : 64;
         av_jet *j = realloc(a->jets, cap * sizeof *j);
-        if (!j) return AV_NONE;
+        if (!j) { if (why) *why = "out of memory"; return AV_NONE; }
         a->jets = j;
         a->jetcap = cap;
     }
     uint32_t id = a->njets;
     uint32_t tn = template_nodes(a, t);
-    if (tn == AV_NONE) return AV_NONE;
+    if (tn == AV_NONE) { if (why) *why = "out of memory"; return AV_NONE; }
     a->jets[id] = (av_jet){ .digest = digest, .fallback = t, .residual = t,
                             .term_nodes = tn, .atoms = tree_atoms(a, t),
                             .residual_ok = false, .interp = -1 };
     a->njets++;
-    if (!index_put(a, id)) { a->njets--; return AV_NONE; }
+    if (!index_put(a, id)) { a->njets--; if (why) *why = "out of memory"; return AV_NONE; }
     return id;
 }
 

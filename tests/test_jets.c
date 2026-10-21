@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "avon.h"
+#include "../src/jets.h"
 #include "test.h"
 
 #define DICT "tests/conformance/dictionary.tsv"
@@ -368,6 +369,41 @@ TEST(a_digest_match_is_not_enough) {
     av_arena_free(a);
 }
 
+/*  A digest is 64 bits, so two terms may share one.  An entry, or a
+ *  registration, offered a term under a digest whose jet holds another
+ *  term is refused as a collision: it is never merged into that jet, so a
+ *  template or an interpreter cannot inherit another term's behaviour.  No
+ *  collision is searched for: the colliding digest is passed in, as the
+ *  template loader passes its key, or the jet's term is replaced. */
+TEST(a_collision_is_refused_not_merged) {
+    av_arena *a = av_arena_new(0);
+    const char *suc = "S (K K) (S (K (S I)) K)";
+    uint32_t x = av_parse(a, suc, strlen(suc), NULL);
+    uint32_t t = av_parse(a, "K I", 3, NULL);
+    av_root_push(a, &x);
+    av_root_push(a, &t);
+    char h[27];
+    uint64_t dx;
+    REQUIRE(av_structural_hash(a, x, h) && av_hash_parse(h, &dx));
+    const char *why = NULL;
+    uint32_t id = jet_entry_for(a, dx, x, &why);
+    REQUIRE(id != AV_NONE);
+    CHECK_EQ(jet_entry_for(a, dx, x, &why), id);            /* its own term: its entry */
+    uint32_t x2 = av_parse(a, suc, strlen(suc), NULL);
+    CHECK_EQ(jet_entry_for(a, dx, x2, &why), id);           /* a copy of it: the same */
+    CHECK_EQ(jet_entry_for(a, dx, t, &why), AV_NONE);       /* another term: refused */
+    CHECK(why == jet_collision);
+    CHECK_EQ(a->njets, 1);
+    /* registration: the entry's term replaced, x is now the other term */
+    a->jets[id].fallback = t;
+    why = NULL;
+    CHECK_EQ(av_jet_register(a, x, 1, 1000, &why), AV_NONE);
+    CHECK(why == jet_collision);
+    av_root_pop(a);
+    av_root_pop(a);
+    av_arena_free(a);
+}
+
 /*  A program's copy of a jet's term may share less than the term: here the
  *  term holds a constant of 15 distinct nodes whose tree has 2^14 leaves,
  *  and the program holds the tree.  The match is by identity of trees,
@@ -548,6 +584,7 @@ TEST_MAIN(
     TEST_CASE(every_jet_leaves_counts_and_states_alone),
     TEST_CASE(the_check_catches_a_corrupted_jet),
     TEST_CASE(a_digest_match_is_not_enough),
+    TEST_CASE(a_collision_is_refused_not_merged),
     TEST_CASE(a_jet_matches_a_copy_that_shares_less),
     TEST_CASE(share_mode_never_writes_the_dashboard),
     TEST_CASE(jets_survive_collection),
