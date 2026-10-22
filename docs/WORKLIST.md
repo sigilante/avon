@@ -2,9 +2,15 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-22.
+design lives. Last revised 2026-10-23.
 
 ## Done since the last revision
+
+- **lean-ski at `paper-v9`, now public** (2026-10-23). `tests/pins.sh` moves to `fb65141`:
+  lean-ski's public release, past `paper-v8` by its satisfiability witnesses for the
+  hidden-term and composed Merkle-committed bounds and its CI. The five checks the pin
+  serves pass there, against a checkout one documentation commit past it. The README and
+  docs link lean-ski where they called it not yet public.
 
 - **The DAG form out** (2026-10-22; `RUNTIME.md`, "Reducing"). `reduce --dag` and `batch
   --dag` print the term reached as `dag <id>=<rhs> ... @<root>`, each node once, the

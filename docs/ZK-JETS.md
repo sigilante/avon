@@ -1,6 +1,6 @@
 # Jets under hiding
 
-The proof system is lean-ski, which is not yet public. The lean-ski revision the checks run against today is pinned in `tests/pins.sh`; the revisions named below are the ones each step was taken at.
+The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-ski revision the checks run against today is pinned in `tests/pins.sh`; the revisions named below are the ones each step was taken at.
 
 > **Status (2026-10-02).** Built: milestones 1–9 of §9 are done, and every proof's hiding randomness now comes from one 128-bit seed, expanded by ChaCha20 (§7, lean-ski `52244a3`).
 > The circuit exists as data in Lean and in Rust, the two agree constraint
@@ -34,7 +34,7 @@ The proof system is lean-ski, which is not yet public. The lean-ski revision the
 > at `2^17 2^18` and `2^17 2^18 2^14 2^14`. Every hiding table is padded
 > to at least `2^9` rows (#31). The figures in §1 and §9 are the
 > fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
-> `paper-v8`, `b7fae43`.
+> `paper-v9`, `fb65141`.
 
 ## 1. Why
 
