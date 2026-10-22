@@ -8,7 +8,7 @@ the files it reads and where they come from, and what each check proves.
 Commands run from the repository root. A few commands read another
 repository: `~/skijack` stands for a checkout of
 [SKIjack](https://github.com/sigilante/SKIjack) and `~/Code/ski/lean-ski`
-for one of lean-ski, which is not yet public; the scripts take `SKIJACK=`
+for one of [lean-ski](https://github.com/sigilante/lean-ski); the scripts take `SKIJACK=`
 and `LEAN_SKI=` to name others. (SKIjack's own `RUNTIME-DESIGN.md` is a
 design note about the runtime, not this guide.) `docs/GETTING-STARTED.md`
 is a shorter tour with each command's output.
