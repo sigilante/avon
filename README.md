@@ -105,7 +105,7 @@ Start at [`docs/README.md`](docs/README.md), the index.  In brief:
 |---|---|
 | `selfhost-check`, `front0-check`, `front1-check` | [SKIjack](https://github.com/sigilante/SKIjack) and [aviary](https://github.com/sigilante/aviary)'s `aviary_kernel` |
 | `fixtures-check` | SKIjack, [SKIlark](https://github.com/sigilante/SKIlark) and aviary |
-| `witness-check` and the other four `*-witness-check`s | lean-ski, not yet public |
+| `witness-check` and the other four `*-witness-check`s | [lean-ski](https://github.com/sigilante/lean-ski) |
 | `hider-check` | the pure-S paper's scripts, not yet public |
 
 `docs/TESTING.md` gives each check's variable, default path and running time.

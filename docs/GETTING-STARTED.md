@@ -245,7 +245,7 @@ $ build/avon witness tests/fixtures/t0.ski > $(mktemp -d)/t0.witness
 contractions 340 rows 831 cells 2369 loaded 1366 insts 0
 ```
 
-Checking and proving it needs lean-ski, which is not yet public.
+Checking and proving it needs [lean-ski](https://github.com/sigilante/lean-ski).
 
 ## Next
 

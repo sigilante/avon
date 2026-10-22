@@ -2,9 +2,15 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-22.
+design lives. Last revised 2026-10-23.
 
 ## Done since the last revision
+
+- **lean-ski at `paper-v9`, now public** (2026-10-23). `tests/pins.sh` moves to `fb65141`:
+  lean-ski's public release, past `paper-v8` by its satisfiability witnesses for the
+  hidden-term and composed Merkle-committed bounds and its CI. The five checks the pin
+  serves pass there, against a checkout one documentation commit past it. The README and
+  docs link lean-ski where they called it not yet public.
 
 - **SKIjack and SKIlark on Avon** (2026-10-22 and 23; SKIjack #20 and #21, SKIlark #1 and
   #2; skijack 0.2.1 on PyPI). skijack's
@@ -251,9 +257,15 @@ refusing the flag; measure the cost of breaking them before going further.
 - Scry beyond a resume loop's final run.
 - Witness rows for the numeral and constructor jets and the one-step Y, with the
   `Tr` simulation theorem (§6.11). Poseidon2 has them (`ZK-JETS.md` §8).
-- The Poseidon2 tables' constraints (`Sat`): the honest tables are proved to balance
-  and to carry clear flags, but not to satisfy each AIR.
-- Fiat–Shamir and ChaCha20's pseudorandomness, both assumed (`ZK-JETS.md` §7).
+- Fiat–Shamir's zero knowledge for the circuits with jets and with Poseidon2: lean-ski
+  proves it in the programmable random-oracle model for its Sudoku, hidden-term and
+  composed circuits (`*_fs_open4`), not yet for these two.
+- Assumed: Fiat–Shamir soundness past the counting step (`logup_fs`), the hiding of
+  every commitment but the first, and ChaCha20's pseudorandomness (`ZK-JETS.md` §7).
+
+The Poseidon2 tables' constraints are done in lean-ski: for `p2pre` and `p2commit`,
+the honest tables satisfy every AIR (`compPG_complete_log`, `compP_complete_log`,
+`compPC_complete_log`).
 
 When lean-ski changes a table format or the prover's inputs, Avon matches it and
 reruns `make zk-jet-witness-check`.
