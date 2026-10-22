@@ -275,7 +275,9 @@ void census_record(av_census *c, const av_arena *a, uint32_t x, size_t avail) {
 
 static int by_calls(const void *x, const void *y) {
     const av_census_row *a = x, *b = y;
-    return a->calls < b->calls ? 1 : a->calls > b->calls ? -1 : 0;
+    /* ties by fingerprint: qsort is not stable, and libcs break ties apart */
+    return a->calls < b->calls ? 1 : a->calls > b->calls ? -1
+         : (a->fp > b->fp) - (a->fp < b->fp);
 }
 
 void av_census_select(av_census *c, size_t n, size_t min_atoms) {

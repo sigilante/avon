@@ -203,12 +203,18 @@ static int by_absorbed(const void *x, const void *y) {
     av_jetstat_row a, b;
     av_jetstats_row(sort_stats, *(const size_t *)x, h, &ar, &cost, &atoms, &a);
     av_jetstats_row(sort_stats, *(const size_t *)y, h, &ar, &cost, &atoms, &b);
-    return (a.absorbed < b.absorbed) - (a.absorbed > b.absorbed);
+    /* ties in row order: qsort is not stable, and libcs break ties apart */
+    size_t i = *(const size_t *)x, j = *(const size_t *)y;
+    return a.absorbed != b.absorbed ? (a.absorbed < b.absorbed) - (a.absorbed > b.absorbed)
+                                    : (i > j) - (i < j);
 }
 
 static int by_pair_fires(const void *x, const void *y) {
-    uint64_t a = ((const av_jetstat_pair *)x)->fires, b = ((const av_jetstat_pair *)y)->fires;
-    return (a < b) - (a > b);
+    const av_jetstat_pair *p = x, *q = y;
+    if (p->fires != q->fires) return (p->fires < q->fires) - (p->fires > q->fires);
+    if (p->outer != q->outer) return (p->outer > q->outer) - (p->outer < q->outer);
+    if (p->inner != q->inner) return (p->inner > q->inner) - (p->inner < q->inner);
+    return (p->kind > q->kind) - (p->kind < q->kind);
 }
 
 /*  The jets' table, most absorbed first, then the nested fires; with the
