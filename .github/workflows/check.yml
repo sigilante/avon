@@ -1,6 +1,8 @@
 # make check on every push to master and every pull request: the release
 # binary and its smoke test, the stats build, and every unit test under
-# ASan and UBSan, on Linux; pushes to master also run it on macOS.  The
+# ASan and UBSan, on Linux; pushes to master also run it on macOS.  A push
+# or pull request that changes only documentation (Markdown, docs/, img/,
+# LICENSE) runs nothing: no build or test reads those files.  The
 # checks against SKIjack and SKIlark run weekly at their pins (pinned.yml);
 # those that need lean-ski or the paper's scripts (witness-check,
 # jet-witness-check, probe-witness-check, zk-jet-witness-check,
@@ -13,7 +15,17 @@ name: check
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "img/**"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "img/**"
+      - "LICENSE"
 
 # Linux on every push and pull request; macOS, billed at ten times the
 # rate on a private repository, only on pushes to master.

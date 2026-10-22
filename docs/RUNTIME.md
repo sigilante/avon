@@ -5,10 +5,13 @@ the files it reads and where they come from, and what each check proves.
 `docs/DESIGN.md` is the design and its reasons; section numbers below
 (§6.9) point there. `docs/BENCHMARK.md` has the measurements.
 
-Commands run from the repository root. Paths like `~/skijack` assume a
-skijack checkout there, and `~/Code/ski/lean-ski` a lean-ski checkout; the
-scripts take `SKIJACK=` and `LEAN_SKI=` to change them. (skijack's own
-`RUNTIME-DESIGN.md` is a design note about the runtime, not this guide.)
+Commands run from the repository root. A few commands read another
+repository: `~/skijack` stands for a checkout of
+[SKIjack](https://github.com/sigilante/SKIjack) and `~/Code/ski/lean-ski`
+for one of lean-ski, which is not yet public; the scripts take `SKIJACK=`
+and `LEAN_SKI=` to name others. (SKIjack's own `RUNTIME-DESIGN.md` is a
+design note about the runtime, not this guide.) `docs/GETTING-STARTED.md`
+is a shorter tour with each command's output.
 
 ## Building
 
@@ -19,6 +22,7 @@ later.
 make                  # build/avon, optimized
 make check            # every tests/test_*.c under ASan and UBSan; also build/dbg/avon
 make smoke            # tests/smoke.tsv's commands on build/avon, as recorded
+make stats            # build/stats/avon, which counts what becomes of template instances' cells
 make clean            # removes build/
 ```
 
@@ -51,7 +55,10 @@ The prefix form holds closed terms only: `prefix` refuses a term with an
 atom such as `x`. SKIT holds atoms: `S x` jams, and cues back to `S x`.
 
 Atom names beginning with `@` are reserved (Avon's probe markers), and an
-atom named like a live aviary bird is refused unless `--allow-bird-atoms`.
+atom named like a live aviary bird (`B`, `C`, `W`, `T`, `Y`, `M` and the
+rest of aviary's table) is refused unless `--allow-bird-atoms`: `echo 'B x'
+| build/avon reduce` exits 1 with "atom named like a live aviary
+combinator". `x`, `f`, `X` and `Foo` are atoms.
 
 ## Reducing: `reduce` and `batch`
 
@@ -63,21 +70,37 @@ echo 'S K K x' | build/avon reduce
 `reduce` prints two lines: the status and the contraction count, then the
 term reached. The status is `WHNF` or `NORMAL` when the run finished,
 `FUEL` or `SIZE` when a budget stopped it, and `INTERRUPTED` when a
-`--jet-check` found a jet disagreeing with its term. `batch`
+`--jet-check` found a jet disagreeing with its term. A run that spends its
+last fuel on its last contraction reports `FUEL`: `echo 'K a b' |
+build/avon reduce --fuel=1` prints `FUEL 1` and `a`. Fuel is unbounded by
+default, so a term with no normal form runs until it is stopped. A term
+cut by `--budget` ends in ` ...`; after `SIZE` the term is not printed,
+and its line is ` ...` alone. `batch`
 reduces each line of standard input and prints one `STATUS steps term`
 line per term. Jet and template reports go to standard error.
 
 **Exit status.** A run's status is its line's, for a script to read: a
-term that runs out of fuel or room still exits 0. Exit 1 is a failure of
-Avon's own:
+term that runs out of fuel or room still exits 0. Exit 1 is a failure:
 - a `--jet-check` that found a jet disagreeing with its term;
-- output that could not be written, a full disk or a closed pipe;
-- an input that does not parse.
+- output that could not be written, such as a full disk or a closed
+  stdout (a pipe whose reader has gone ends the process by `SIGPIPE`, as
+  for any filter: status 141 in the shell);
+- an input that does not parse, or a file that cannot be read;
+- a dictionary, template directory or interpreter file that does not
+  load;
+- an option missing what it needs: `--data` or `--fix` without
+  `--templates`, `--templates`, `--p2` or `--profile` in copy mode,
+  `--interp` without `--jets`;
+- `scry` finding a run off the reference, or a pier that will not open,
+  boot or commit.
 
 Exit 2 is a usage error, and so is an option the command would ignore:
 `reduce --rows`, `batch FILE` (batch reads standard input), `jam --fuel`,
 `witness --statement --rows`, `boot --entropy` without `--pier`, `poke
---pma`. The message names the option.
+--pma`. An ignored option's message names it; an unknown option, a
+malformed number or a missing argument prints the usage alone.
+
+`avon --version` prints `avon 0.1.0`.
 
 **Two strategies** (§1.1, §3):
 
@@ -139,7 +162,7 @@ bare-leaf keys, and templates of more than 32 formals (a constructor of a
 second line:
 
 ```
-data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dispatches (1395 fused), 8 numeral operations among the contractions
+data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dispatches (1395 fused), 8 numeral operations among the contractions; 391 cases joined to their instances
 ```
 
 - A constructor's template -- its body a formal applied to the fields --
@@ -300,9 +323,22 @@ build/avon poke --pier=/tmp/epier tests/kernel/entropy.ask5.skit
   byte 16 n, n the replies already logged; every later `poke` must give
   `--entropy=FILE` too, and a pier booted with plain `--entropy` refuses
   one.
-- All four accept `--strategy=`, `--fuel=` and `--budget=`. The defaults
-  differ from `reduce`'s: share mode, 100,000,000 contractions an event,
-  and 100,000 nodes printed.
+- All four accept `--strategy=` and `--fuel=`, and `--budget=`, the nodes
+  of a term printed, except that `boot --pier` takes it only with
+  `--entropy`, whose replies it prints. The defaults differ from `reduce`'s: share
+  mode, 100,000,000 contractions an event, and 100,000 nodes printed. A
+  printed term cut by the budget ends in ` ...`.
+- `--subject` is `boot`'s and `load`'s, and `--pma` is `boot`'s; each
+  other command refuses them. `--snapshot` on `poke`, `peek` or `load`
+  takes a snapshot after the command; `boot` refuses it, since boot
+  always takes one.
+- What each prints: `boot` without a pier, `a kernel, N contractions` or
+  `not a kernel: ...`; with one, `booted a kernel in DIR`, and `, on a
+  persistent arena` with `--pma`. `poke`, a line per event, `event N, M
+  contractions; effects: TERM`. `peek`, a line per path, `M contractions:
+  VALUE`. `load`, `event N: loaded the kernel that PILL boots to`.
+- A pier directory takes one boot: booting again into it refuses with "a
+  pier is already there".
 - A poke prints each event's effects as their normal form, reduced in copy
   mode, which writes nothing the kernel shares. With no normal form within
   1,000,000 contractions it prints `(no normal form within 1,000,000)` and
@@ -340,7 +376,10 @@ ski-air.
 
 ## Frame traces: `--trace-frame`, `enum`
 
-For the pure-S paper's hider census (§22): an observation of copy mode's
+The pure-S paper (not yet public) classifies a closed S-term f by what
+becomes of an opaque atom X, the passenger, when `f X` runs; its census
+does so for every term up to a size. A frame trace serves that census
+(§22): an observation of copy mode's
 head run on a term of S and one opaque atom, the passenger (`X` unless
 `--passenger=NAME`). Verdicts and certificates stay with the census's
 scripts; `tests/hider/client.py` runs the census through Avon:
@@ -452,33 +491,5 @@ exporter on a copy of `tests/` and `jets/` and compares the 193 files.
 
 ## The checks
 
-| target | what it proves | needs |
-|---|---|---|
-| `make check` | every unit test, under ASan and UBSan | |
-| `make smoke` | the release binary, asserts compiled out, gives the exit status, stdout and stderr recorded from `build/dbg/avon` for 29 commands: every subcommand but `front0`, each strategy, jets, templates, data jets, `--fix`, `--no-defer`, three piers, six refused options, a bird-named atom and a witness of a term with atoms | |
-| `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
-| `make fixtures-check` | every exported fixture is what its exporter writes at the pins | skijack, SKIlark, aviary |
-| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line, and of size <= 10 at horizons 1 to 21; the census through Avon gives its verdicts and trails; every defect count of a term of size <= 11 equals the definitions', and their totals the paper's mode `defect`; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`, in starlings) |
-| `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | skijack |
-| `make front1-check` | the full language's front end, through M4: its own source and every corpus program to the expander's terms, and 303 edge programs and 400 random ones as the expander does (bar 12 edges aviary's environment decides), in the same four modes | skijack |
-| `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |
-| `make jet-witness-check` | the same, jetted (§18) | lean-ski |
-| `make probe-witness-check` | the same, with probe segments | lean-ski |
-| `make zk-jet-witness-check` | composed statements with jets: Avon's tables are ski-air's, accepted by `check-cj`, proved under hiding and verified; bad witnesses and budgets refused (`docs/ZK-JETS.md`) | lean-ski |
-| `make p2-witness-check` | the Poseidon2 statements: Avon's tables are byte-identical to ski-air's for `p2pre` and the two `p2commit` hand-off stages, proved and verified, a flipped bit refused; `reduce --p2` runs each test vector's permutation natively in one step, and a chain of three in three | lean-ski |
-| `tests/diff_aviary.py` | `copy` mode against `aviary_kernel` on random terms | aviary-kernel |
-
-A check that needs another repository runs against the commit
-`tests/pins.sh` pins. It also accepts a descendant of that commit whose
-commits since, and whose tracked changes, touch only documentation:
-`*.md`, `*.tex` and `*.txt` files, except lean-ski's statements,
-witnesses and corpora (`*public*.txt`, `*witness*.txt`, `*corpus*.txt`),
-which the checks read. A rename counts on both sides. It refuses any other
-checkout unless `AVON_UNPINNED=1`. The checkouts default to
-`~/skijack`, `~/Code/ski/lean-ski`, `~/Code/ski/skilark` and
-`~/Code/urbit/aviary` (`SKIJACK`, `LEAN_SKI`, `SKILARK`, `AVIARY`); the
-paper's scripts have no default. The skijack checks also need the `aviary_kernel` Python imports
-to be aviary's at its pin. `.github/workflows/pinned.yml` runs
-`fixtures-check`, `selfhost-check`, `front0-check` and `front1-check`
-weekly against the public repositories at their pins; lean-ski and
-starlings are private, so their checks run by hand.
+`docs/TESTING.md` lists every check, what it proves, what it needs and how
+long it takes.

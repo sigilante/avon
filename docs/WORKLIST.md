@@ -2,9 +2,24 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-05.
+design lives. Last revised 2026-10-22.
 
 ## Done since the last revision
+
+- **CI green on Linux** (2026-10-22, #59). Every run had failed since CI began. glibc
+  hid POSIX under `-std=c11` (the Makefile defines `_DEFAULT_SOURCE`); `qsort` ran on
+  empty, unallocated arrays; four ranking sorts left ties to an unstable `qsort`, so
+  `jetstat` printed tied rows in another order on Linux; and `test_cli` closed stdout,
+  which a process can reopen, where it now opens it read-only.
+
+- **Publication files** (2026-10-22). An MIT licence; the README's quick start, input
+  syntax, checks and their outside checkouts; `docs/README.md` as the index, with a
+  getting-started tour, a map of the source and a guide to the checks; `DESIGN.md`'s
+  status, reading guide and terms; and CI that skips documentation-only changes.
+
+- **Smoke as skijack-2 has it** (2026-10-22, #56). #55 changed two recorded outputs,
+  `jets` (139 jets registered where 135 were) and `jetstat` (tied rows in the new
+  digests' order); `make smoke` is 29/29 again.
 
 - **The defect lemma's check through frame traces** (2026-10-22; `DESIGN.md` §22).
   The frame-trace plan's last item: `--defect` counts D as the pure-S paper's check
@@ -31,6 +46,10 @@ design lives. Last revised 2026-10-05.
   digest is refused as `jet_collision`. `test_jets` pins both paths without searching
   for a collision.
 
+- **Comments and messages stand alone** (2026-10-11, #46 and #47). No comment or error
+  message cites a `DESIGN.md` section or an `AUDIT.md` item; pointers to other
+  projects' specifications stay. Smoke records the messages.
+
 - **lean-ski at `paper-v8`** (2026-10-20). `tests/pins.sh` moves to `b7fae43`, past
   `paper-v4` by lean-ski #28–#49: the split predicates remade with secret witnesses and
   heights that hold every witness (#34), hiding tables of at least `2^9` rows (#31),
@@ -50,7 +69,8 @@ design lives. Last revised 2026-10-05.
   describes, and one WORKLIST change (#25). Its release script stops unless each of
   Avon's four jetted witness tables is ski-air's, byte for byte (lean-ski #22, #23). No
   Lean source changed since `paper-v2`; the five checks the pin serves pass at both
-  `3e30892` and `5614cb4`. The checks default to `~/Code/ski/lean-ski`.
+  `3e30892` and `5614cb4`. The checks default to a lean-ski checkout at
+  `~/Code/ski/lean-ski`; `LEAN_SKI` names another.
 
 - **lean-ski at `paper-v2`** (2026-10-11; `ZK-JETS.md` §1 and §9). lean-ski's jet table
   no longer licenses a template that compiles to a bare `S`, `K` or `I`. `tests/pins.sh`
@@ -84,7 +104,14 @@ design lives. Last revised 2026-10-05.
   `--fix` holds hundreds, at about `--fix`'s time. Safe cycles parked on their measured
   ceiling (item 4). Integer literals proposed to SKIjack (issue #7).
 
-## Next, in this order (agreed 2026-10-05)
+## Next
+
+1. **SKIjack and SKIlark on Avon** (agreed 2026-10-22, after Avon's release): each to
+   run its programs on Avon as well as on Python and aviary, and its README to name
+   Avon.
+2. **Stage 8's checkers, M5 and M6** (item 3).
+
+## Done: the order agreed 2026-10-05
 
 1. **CI**: done 2026-10-05 (#19). `make check` on Linux for every pull request, and
    macOS too on master. The checks that need lean-ski or skijack checkouts stay manual.
@@ -102,7 +129,7 @@ design lives. Last revised 2026-10-05.
 
 ## In progress
 
-### 0. The papers' measurements (outline: the "Avon paper outlines" page)
+### 0. The papers' measurements
 
 Collected 2026-10-04: proof sizes and verify times (`ZK-JETS.md` §1), Poseidon2 on
 all three vectors, and the interpreter jet's wall clock (`BENCHMARK.md`, "The
@@ -142,7 +169,7 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
 SKIjack-0's front end compiles itself in Avon. What remains runs in Python: cores,
 macros, signatures, quotation, scries, namespace literals and the type checker. Most
 of the work is SKIjack programs in skijack's repository; Avon runs them and checks them
-on the corpus, hash for hash. It is the one unfinished stage. Next in order (step 3).
+on the corpus, hash for hash. It is the one unfinished stage: M1 to M4 are built, M5 and M6 remain (Next, item 2).
 
 Scoped 2026-10-05, against skijack `6a870ac`. The SKIjack-0 front end
 (`selfhost/front0.ascii.ski`) is 406 lines; Python's front end about 7,100. Sizes
@@ -163,8 +190,8 @@ fixed point covers 1,009 names. Of 303 edge programs, aviary's environment decid
 not SKIjack's rules. Those are binders named as defined names or built-ins, a binder
 twice, a recursion's name rebound, and a binder named as a later definition, which
 aviary reads as the definition. front1 takes each binder as a binder; parity there is
-M5's. Left for the audit: front1's term grew from 265,145 nodes to 635,173, so Python
-compiles it in 48 seconds.
+M5's. Open: front1's term grew from 265,145 nodes to 635,173, so Python compiles it in
+48 seconds; the audit did not take it up.
 
 Checking never changes the terms, so M1 to M4 are each checked against
 `skijack.compile(..., check=False)` on the corpus as they land, with `run0.py`'s
@@ -225,7 +252,6 @@ None of these changes a result.
   - `--records` near `SIZE_MAX` wrapped `n + CONF` and confirmed every record;
     fixed (`trace.c`, `confirmed`), with a test of four windows past the horizon.
 - **Noted, left as they are:**
-  - the reservation `assert`s in `jets.h` vanish in release builds;
   - `word_admit`'s 10,000,000-step cap counts a slow operation as refused;
   - SKIjack's inliner falls back silently when it hits its budget or depth.
 

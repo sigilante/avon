@@ -1,7 +1,7 @@
 /**  interp.c
  *
  *  The interpreter jet: a generated interpreter's fuel loop run natively.
- *  It must reproduce is the generator's results (python/skijack/generate.py):
+ *  It must reproduce the generator's results (python/skijack/generate.py):
  *  one loop iteration per fuel unit; each iteration walks the object term's
  *  spine to its head and either contracts an S, K or I redex, or ends---a
  *  combinator short of arguments is the value, another leaf runs its arm.

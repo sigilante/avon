@@ -1,5 +1,7 @@
 # Jets under hiding
 
+The proof system is lean-ski, which is not yet public. The lean-ski revision the checks run against today is pinned in `tests/pins.sh`; the revisions named below are the ones each step was taken at.
+
 > **Status (2026-10-02).** Built: milestones 1–9 of §9 are done, and every proof's hiding randomness now comes from one 128-bit seed, expanded by ChaCha20 (§7, lean-ski `52244a3`).
 > The circuit exists as data in Lean and in Rust, the two agree constraint
 > for constraint, its honest proofs verify under hiding, and its soundness

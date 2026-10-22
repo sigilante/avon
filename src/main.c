@@ -107,7 +107,8 @@
  *  mode: FILE holds lean-ski's Poseidon2 term P, as `lake exe p2run`
  *  prints it; P applied to a state runs natively).  reduce and batch take
  *  --trace-frame[=summary] (copy mode's head run observed for the hider
- *  census) with --passenger=NAME, --records[=CONF] and --frame-dump=SPEC;
+ *  census) with --passenger=NAME, --records[=CONF], --frame-dump=SPEC and
+ *  --defect[=CONF] (the paper's defect count);
  *  options_fit refuses an option the command would ignore.  A term may
  *  also be in the DAG form, `dag <id>=... @<root>`.  docs/RUNTIME.md is
  *  the user's guide.  Each command is a file of src/cli; this one
@@ -133,7 +134,8 @@ int usage(void) {
         "                    [FILE]\n"
         "       (all but witness --statement accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
-        "        --profile=NAMES --templates=DIR --data --fix --memory --no-defer --p2=FILE)\n"
+        "        --interp=FILE --profile=NAMES --templates=DIR --data --fix --memory --no-defer\n"
+        "        --p2=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"
@@ -144,7 +146,8 @@ int usage(void) {
         "       avon poke --pier=DIR [--snapshot] [--entropy=FILE] EVENT...\n"
         "       avon peek --pier=DIR PATH...\n"
         "       avon load --pier=DIR [--subject=FILE] [--snapshot] PILL\n"
-        "       (boot, poke, peek, load accept --strategy=, --fuel=, --budget=)\n"
+        "       (boot, poke, peek, load accept --strategy=, --fuel=, and --budget=,\n"
+        "        which boot --pier takes only with --entropy)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
         "                   [--templates=DIR [--data] [--fix] [--memory] [--no-defer]]\n"
@@ -152,7 +155,8 @@ int usage(void) {
         "       avon enum N [--start=K] [--count=M]      (N from 1 to 20)\n"
         "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"
         "       (reduce and batch accept --trace-frame[=summary] --passenger=NAME\n"
-        "        --records[=CONF] --frame-dump=STEPS|records|census|halt|last-restart)\n"
+        "        --records[=CONF] --frame-dump=STEPS|records|census|halt|last-restart\n"
+        "        --defect[=CONF])\n"
         "       avon --version\n");
     return 2;
 }
