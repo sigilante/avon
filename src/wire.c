@@ -226,7 +226,7 @@ uint32_t av_cue(av_arena *a, const uint8_t *p, size_t n, const char **err) {
         uint32_t *sorted = malloc(natoms * sizeof *sorted);
         if (!sorted) { msg = "out of memory"; goto done; }
         memcpy(sorted, atoms + 1, natoms * sizeof *sorted);
-        qsort(sorted, natoms, sizeof *sorted, cmp_u32);
+        if (natoms) qsort(sorted, natoms, sizeof *sorted, cmp_u32);
         bool dup = false;
         for (uint64_t k = 1; k < natoms && !dup; k++) dup = sorted[k] == sorted[k - 1];
         free(sorted);

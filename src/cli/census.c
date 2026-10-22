@@ -144,7 +144,7 @@ int census_main(int argc, char **argv) {
         }
         fclose(f);
     }
-    qsort(names, nnames, sizeof *names, named_order);
+    if (nnames) qsort(names, nnames, sizeof *names, named_order);
     size_t kept = 0;
     for (size_t i = 0; i < nnames; i++) {
         named *k = kept ? &names[kept - 1] : NULL;

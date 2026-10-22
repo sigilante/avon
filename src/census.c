@@ -285,7 +285,7 @@ void av_census_select(av_census *c, size_t n, size_t min_atoms) {
     for (size_t i = 0; i < c->nrow; i++)
         if (c->row[i].atoms >= min_atoms) c->row[kept++] = c->row[i];
     c->nrow = kept;
-    qsort(c->row, c->nrow, sizeof *c->row, by_calls);
+    if (c->nrow) qsort(c->row, c->nrow, sizeof *c->row, by_calls);
     if (c->nrow > n) c->nrow = n;
     free(c->key);
     free(c->slot);
@@ -366,7 +366,7 @@ static uint64_t *subterms(const av_arena *a, uint32_t t, size_t *n) {
     if (measure_in(&fpm, &atm, a, t, &fp, &atoms) && (out = malloc(fpm.n * sizeof *out))) {
         for (size_t i = 0; i < fpm.cap; i++)
             if (fpm.key[i] != AV_NONE) out[(*n)++] = fpm.val[i];
-        qsort(out, *n, sizeof *out, u64cmp);
+        if (*n) qsort(out, *n, sizeof *out, u64cmp);
     }
     nmap_free(&fpm);
     nmap_free(&atm);
@@ -374,7 +374,7 @@ static uint64_t *subterms(const av_arena *a, uint32_t t, size_t *n) {
 }
 
 size_t av_census_rows(av_census *c, av_census_row **rows) {
-    qsort(c->row, c->nrow, sizeof *c->row, by_saved);
+    if (c->nrow) qsort(c->row, c->nrow, sizeof *c->row, by_saved);
     /* One call reaches a supercombinator's layers in turn: each layer is a
      * subterm of the one before, called as often.  Fold each row into the
      * best-ranked row it shares its calls with and is a subterm of, or

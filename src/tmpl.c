@@ -570,7 +570,7 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
     }
     free(text);
     text = NULL;
-    qsort(refs, nrefs, sizeof *refs, tref_cmp);
+    if (nrefs) qsort(refs, nrefs, sizeof *refs, tref_cmp);
     /* the templates */
     snprintf(path, sizeof path, "%s/templates.tsv", dir);
     if (!(text = slurp_path(path, &len))) { msg = "cannot read templates.tsv"; goto fail; }

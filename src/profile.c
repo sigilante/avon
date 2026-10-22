@@ -198,7 +198,7 @@ void av_profile_report(const av_profile *p, FILE *out, size_t top) {
     if (!ix) return;
     for (size_t i = 0; i < p->nrows; i++) ix[i] = (uint32_t)i;
     sorting = p;
-    qsort(ix, p->nrows, sizeof *ix, by_count);
+    if (p->nrows) qsort(ix, p->nrows, sizeof *ix, by_count);
     fprintf(out, "profile: %llu contractions charged%s\n", (unsigned long long)p->total,
             p->lost ? " (ownership lost to memory: rows undercount)" : "");
     for (size_t k = 0; k < p->nrows && k < top; k++) {

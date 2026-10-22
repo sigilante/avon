@@ -228,7 +228,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
     if (!order) return;
     for (size_t i = 0; i < n; i++) order[i] = i;
     sort_stats = all;
-    qsort(order, n, sizeof *order, by_absorbed);
+    if (n) qsort(order, n, sizeof *order, by_absorbed);
     uint64_t sum_together = 0, sum_alone = 0, sum_alone_together = 0, sum_fires = 0;
     for (size_t i = 0; i < n; i++) {
         char h[AV_HASH_LEN + 1];
@@ -282,7 +282,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
     }
     av_jetstat_pair *pairs;
     size_t np = av_jetstats_pairs(all, &pairs);
-    qsort(pairs, np, sizeof *pairs, by_pair_fires);
+    if (np) qsort(pairs, np, sizeof *pairs, by_pair_fires);
     fprintf(out, "\nnested fires: the inner jet fired from the outer's residual (after it "
            "fired) or term (after it missed)\n");
     for (size_t k = 0; k < np && k < top; k++) {
