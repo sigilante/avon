@@ -102,7 +102,9 @@ A check that needs another repository runs against the commit
 commits since, and whose tracked changes, touch only documentation:
 `*.md`, `*.tex` and `*.txt` files, except lean-ski's statements, witnesses
 and corpora (`*public*.txt`, `*witness*.txt`, `*corpus*.txt`), which the
-checks read.  A rename counts on both sides.  It refuses any other checkout
+checks read.  The repository's own CI workflows (`.github/`) count as
+documentation too, since no check reads them.  A rename counts on both
+sides.  It refuses any other checkout
 unless `AVON_UNPINNED=1`.
 
 To move a pin, run the checks it serves at the new commit, regenerate any

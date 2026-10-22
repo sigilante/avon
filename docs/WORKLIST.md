@@ -6,6 +6,21 @@ design lives. Last revised 2026-10-22.
 
 ## Done since the last revision
 
+- **SKIjack and SKIlark on Avon** (2026-10-22 and 23; SKIjack #20 and #21, SKIlark #1 and
+  #2; skijack 0.2.1 on PyPI). skijack's
+  `fast_reduce`, where every reduction of both runs, sends its runs to Avon's copy mode
+  with `SKIJACK_REDUCER=avon` and `AVON` naming the binary, one `batch --dag` line out
+  and one back, or to both, compared, with `check`. Every one of the 15,976 reductions
+  SKIjack's suite makes outside its front-end tests agrees with aviary, status, count and
+  term; both suites pass under `check` and under `avon`, and each repository's CI runs
+  them on Avon. `python -m skilark --reducer avon` runs a program on it; SKIlark requires
+  skijack 0.2.1, the release that carries the switch. `tests/pins.sh` moves to SKIjack
+  `72fb280` (`v0.2.1`) and SKIlark `bafb6d6`, where `fixtures-check` (193 files),
+  `selfhost-check`, `front0-check` and `front1-check` pass. A pin also accepts a
+  descendant that changes CI workflows (`.github/`), which no check reads, so both
+  masters pass: past the pins they change only READMEs and, in SKIjack #23 and SKIlark
+  #3, the workflow that skips prose-only changes.
+
 - **The DAG form out** (2026-10-22; `RUNTIME.md`, "Reducing"). `reduce --dag` and `batch
   --dag` print the term reached as `dag <id>=<rhs> ... @<root>`, each node once, the
   form every command reads; with `--dag`, `batch` answers every line, a term it cannot
@@ -114,10 +129,7 @@ design lives. Last revised 2026-10-22.
 
 ## Next
 
-1. **SKIjack and SKIlark on Avon** (agreed 2026-10-22, after Avon's release): each to
-   run its programs on Avon as well as on Python and aviary, and its README to name
-   Avon.
-2. **Stage 8's checkers, M5 and M6** (item 3).
+1. **Stage 8's checkers, M5 and M6** (item 3).
 
 ## Done: the order agreed 2026-10-05
 
