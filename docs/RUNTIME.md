@@ -345,7 +345,8 @@ head run on a term of S and one opaque atom, the passenger (`X` unless
 `--passenger=NAME`). Verdicts and certificates stay with the census's
 scripts; `tests/hider/client.py` runs the census through Avon:
 `python3 tests/hider/client.py 16 build/avon 16` is the census of size 16
-(`N AVON NMIN`), about six minutes.
+(`N AVON NMIN`), about six minutes, and `python3 tests/hider/client.py
+defect 16 build/avon 16` the paper's check of its defect lemma at size 16.
 
 ```sh
 echo "S (S S) (S S) S X" | build/avon reduce --trace-frame --fuel=600
@@ -358,7 +359,7 @@ jets; a term with K, I or another atom is refused. Options it would ignore
 are refused: `--strategy=share`, `--jets`, `--ctors`, `--interp`,
 `--jet-floor`, `--jet-check`, `--templates`, `--data`, `--fix`,
 `--memory`, `--no-defer`, `--p2`, `--profile`, `--budget`. So are
-`--passenger`, `--records` and `--frame-dump` without it. Each term gives one block:
+`--passenger`, `--records`, `--frame-dump` and `--defect` without it. Each term gives one block:
 
 ```
 > 1                       the term's input line
@@ -371,6 +372,9 @@ R 3 9 ...                 records (--records), when the run reaches the horizon
 C 3 9 ...                 the confirmed ones: n + CONF <= H (CONF 150)
 K 3 4 2 0                 each confirmed record: n, L, the lowest X-headed position (- none),
                           and 1 if an X-headed item sits at L-1
+D 4 0 0 0 0 0             the defect count (--defect): steps followed, falls of D, y-steps,
+                          steps after the first y-step with D = 0, confirmed records after it,
+                          and those with D >= 1
 d 7=X                     dumped nodes, once each, children first:
 d 9=5.7                   S, X, or <left>.<right>
 f 2 9 10                  a dumped frame: its step, then its items from the x-seat
@@ -390,6 +394,13 @@ $                         the block ends
   L = 3 and position 1.
 - A halt (L < 3) is HALT-X with an X-headed item, HALT-B without.
 - `--trace-frame=summary` omits the per-step lines.
+- `--defect[=CONF]` (CONF 150) counts D as the paper's check of its
+  defect lemma does (`fixed_points_fold.py`, mode `defect`): along the
+  run while there is exactly one X-headed item and it is not at the
+  x-seat. A record there is a step followed whose L is below every later
+  one's; it counts when it comes after the first y-step and CONF more
+  steps followed confirm it. The lemma says the falls are 0 and, along a
+  level, the zeros are 0; `S a X S` (§22) is a run with zeros.
 - `--frame-dump=` takes steps and the keywords `records` (each confirmed
   record n and n+1: a second pass), `census` (only the frames the census
   reads, in its order over the confirmed records: frame n where an
@@ -447,7 +458,7 @@ exporter on a copy of `tests/` and `jets/` and compares the 193 files.
 | `make smoke` | the release binary, asserts compiled out, gives the exit status, stdout and stderr recorded from `build/dbg/avon` for 29 commands: every subcommand but `front0`, each strategy, jets, templates, data jets, `--fix`, `--no-defer`, three piers, six refused options, a bird-named atom and a witness of a term with atoms | |
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (§20.3) | skijack |
 | `make fixtures-check` | every exported fixture is what its exporter writes at the pins | skijack, SKIlark, aviary |
-| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line, and of size <= 10 at horizons 1 to 21; the census through Avon gives its verdicts and trails; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`, in starlings) |
+| `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size <= 12 equals the census's run line for line, and of size <= 10 at horizons 1 to 21; the census through Avon gives its verdicts and trails; every defect count of a term of size <= 11 equals the definitions', and their totals the paper's mode `defect`; the five named cases (§22) | the pure-S paper's scripts (`HIDER_SCRIPTS`, in starlings) |
 | `make front0-check` | the front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | skijack |
 | `make front1-check` | the full language's front end, through M4: its own source and every corpus program to the expander's terms, and 303 edge programs and 400 random ones as the expander does (bar 12 edges aviary's environment decides), in the same four modes | skijack |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (§17) | lean-ski |

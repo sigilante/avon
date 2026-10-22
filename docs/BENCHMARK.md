@@ -843,6 +843,33 @@ horizon 600, confirmation 150, depth 4; user time, one run each.
   term, would be 3.5 and 13 minutes. `avon enum` produces size 15 in
   0.6 s, never holding size 15 itself. These are estimates, not runs.
 
+## The defect lemma's check through frame traces
+
+The pure-S paper checks its defect lemma on every closed term of size
+<= 11 (`fixed_points_fold.py defect 11`): along each level-0 run, followed
+while one X-headed item persists and is not at the x-seat, D never falls,
+and after a y-step it is at least 1 at every step and every confirmed
+record. `python3 tests/hider/client.py defect N build/avon N` makes the
+same count with Avon's `--defect`, horizon 600, confirmation 150. Avon
+`75f352c` and `hider-defect`, an Apple M4 Max, one run each.
+
+| sizes | terms | steps followed | y-steps | confirmed records after one, all with D >= 1 | the check in Python | through Avon |
+|---|---:|---:|---:|---:|---:|---:|
+| 1..11 | 23,714 | 2,955,501 | 8,914 | 6,029 | about 8 min, with the term-by-term parity | -- |
+| 12 | 58,786 | 9,596,434 | 19,587 | 46,327 | -- | 0.6 s |
+| 13 | 208,012 | 38,249,362 | 63,668 | 291,041 | -- | 2.3 s |
+| 14 | 742,900 | 149,242,080 | 213,871 | 1,516,525 | -- | 8.7 s |
+| 15 | 2,674,440 | 574,727,068 | 726,514 | 7,141,048 | -- | 34 s |
+| 16 | 9,694,845 | 2,196,224,781 | 2,515,694 | 31,451,163 | -- | 126 s, 55 MB |
+
+- At every size, no fall of D and no step after a y-step with D = 0; the
+  totals for 1..11 are the paper's, and `make hider-check` checks them
+  against its mode `defect`, run unchanged, and every term's count
+  against the definitions.
+- The Python time for 1..11 is `parity.py defect 11`, which runs mode
+  `defect` and recounts every term from the definitions; mode `defect`
+  is part of it, not timed alone.
+
 ## Data jets on the corpus
 
 Avon `f414272`, the corpus export used for "Templates on

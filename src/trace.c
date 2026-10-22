@@ -14,6 +14,13 @@
  *  the X-headed items among u's head's arguments; the event (o: P at the
  *  x-seat, y: the y-seat, z: the z-seat); and the arity of the front item.
  *
+ *  The defect count (av_trace_defect) follows D along the run while one
+ *  X-headed item persists and P is not at the x-seat, as the paper's check
+ *  of its defect lemma does (fixed_points_fold.py, mode defect): the steps
+ *  followed, the steps where D fell, the y-steps, the steps after the first
+ *  y-step with D = 0, and the records of the steps followed that come after
+ *  the first y-step and are confirmed among them, with those of D >= 1.
+ *
  *  Nothing here decides anything: the trace is an observation, and the
  *  census's verdicts and certificates stay with the paper's scripts.
  *
@@ -55,6 +62,13 @@ struct av_trace {
     uint8_t  *ym1;              /* an X-headed item at L-1, the y-seat    */
     size_t    nlen, lcap;
     int64_t   last_restart;     /* -1: none                               */
+    /* the defect count */
+    bool      defect;
+    size_t    dconf;            /* its confirmation window                */
+    bool      dgone;            /* the steps followed have ended          */
+    uint32_t *dval;             /* D at each step followed                */
+    uint64_t  dn, ddec, dys, dzero;
+    int64_t   dy;               /* the first y-step followed; -1 none     */
     /* dumps */
     uint64_t *dump;             /* sorted steps to dump                   */
     size_t    ndump;
@@ -161,6 +175,7 @@ av_trace *av_trace_new(av_arena *a, const char *passenger, bool steps_out, FILE 
     t->bcap = 1 << 16;
     t->buf = malloc(t->bcap);
     t->last_restart = -1;
+    t->dy = -1;
     if (t->pass == AV_NONE || !t->buf) { av_trace_free(t); return NULL; }
     return t;
 }
@@ -173,6 +188,7 @@ void av_trace_free(av_trace *t) {
     free(t->len);
     free(t->minpos);
     free(t->ym1);
+    free(t->dval);
     free(t->dump);
     free(t->printed);
     free(t->todo);
@@ -186,6 +202,11 @@ static int cmp_u64(const void *x, const void *y) {
 
 void av_trace_dump_halt(av_trace *t, bool on) {
     t->dump_halt = on;
+}
+
+void av_trace_defect(av_trace *t, size_t conf) {
+    t->defect = true;
+    t->dconf = conf;
 }
 
 bool av_trace_dump_at(av_trace *t, const uint64_t *steps, size_t n) {
@@ -380,7 +401,9 @@ bool trace_step(av_trace *t, const av_arena *a, const uint32_t *stk, size_t base
         if (m) t->minpos = m;
         uint8_t *y = realloc(t->ym1, c);
         if (y) t->ym1 = y;
-        if (!q || !m || !y) { t->bad = true; return false; }
+        uint32_t *dv = realloc(t->dval, c * sizeof *dv);
+        if (dv) t->dval = dv;
+        if (!q || !m || !y || !dv) { t->bad = true; return false; }
         t->lcap = c;
     }
     uint32_t np = t->cX[top - 1];
@@ -388,9 +411,25 @@ bool trace_step(av_trace *t, const av_arena *a, const uint32_t *stk, size_t base
     t->minpos[t->nlen] = np ? (uint32_t)(kth(t, top, 1) - base + 1) : 0;
     t->ym1[t->nlen] = L >= 2 && (t->fl[stk[top - 2]] & F_XH);
     t->nlen++;
+    uint32_t D = 0;
     if (np == 1) {
         size_t p = kth(t, top, 1);
         if (L == 3 && p == base) t->last_restart = (int64_t)step;
+        D = (t->c1[top - 1] - t->c1[p]) + (p > base ? t->c2[p - 1] : 0);
+    }
+    if (t->defect && !t->dgone) {
+        /* followed while one X-headed item persists and is not at the x-seat */
+        if (np != 1 || kth(t, top, 1) == top - 1) {
+            t->dgone = true;
+        } else {
+            if (t->dn && D < t->dval[t->dn - 1]) t->ddec++;
+            if (t->dy >= 0 && D < 1) t->dzero++;
+            if (kth(t, top, 1) == top - 2) {
+                t->dys++;
+                if (t->dy < 0) t->dy = (int64_t)t->dn;
+            }
+            t->dval[t->dn++] = D;
+        }
     }
     if (t->steps_out) {
         emit_u64(t, step);
@@ -409,7 +448,6 @@ bool trace_step(av_trace *t, const av_arena *a, const uint32_t *stk, size_t base
         }
         if (np == 1) {
             size_t p = kth(t, top, 1);
-            uint32_t D = (t->c1[top - 1] - t->c1[p]) + (p > base ? t->c2[p - 1] : 0);
             emit(t, " ", 1);
             emit_u64(t, p - base);                 /* d = pos - 1 */
             emit(t, " ", 1);
@@ -438,6 +476,32 @@ bool trace_step(av_trace *t, const av_arena *a, const uint32_t *stk, size_t base
 static bool confirmed(size_t n, size_t conf, size_t H) { return conf <= H && n <= H - conf; }
 
 /*  ------------------------------------------------------------ the end */
+
+/*  The defect count's line: `D steps falls y-steps zeros records
+ *  records-with-D>=1`.  A record is a step followed whose L is below every
+ *  later one's; it counts when it comes after the first y-step and conf
+ *  more steps followed confirm it. */
+static void defect_out(av_trace *t) {
+    uint64_t recs = 0, recs_d = 0;
+    if (t->dy >= 0) {
+        uint32_t minL = UINT32_MAX;
+        for (size_t i = (size_t)t->dn; i-- > (size_t)t->dy + 1;) {
+            if (t->len[i] >= minL) continue;
+            minL = t->len[i];
+            if (confirmed(i, t->dconf, (size_t)t->dn)) {
+                recs++;
+                recs_d += t->dval[i] >= 1;
+            }
+        }
+    }
+    uint64_t f[6] = { t->dn, t->ddec, t->dys, t->dzero, recs, recs_d };
+    emit(t, "D", 1);
+    for (int i = 0; i < 6; i++) {
+        emit(t, " ", 1);
+        emit_u64(t, f[i]);
+    }
+    emit(t, "\n", 1);
+}
 
 /*  The final frame: the arguments of the result's head, x-seat first. */
 static uint32_t *final_frame(const av_arena *a, uint32_t term, size_t *n, uint32_t *head) {
@@ -494,6 +558,7 @@ bool av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t ste
     emit(t, " ", 1);
     emit(t, kind, strlen(kind));
     emit(t, "\n", 1);
+    if (t->defect) defect_out(t);
     /* the final frame: dumped when asked for by its step, or at a halt */
     bool halted = kind[0] == 'H';
     if (fr && ((t->ndump && dumps(t, steps)) || (t->dump_halt && halted)) &&

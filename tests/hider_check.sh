@@ -10,7 +10,10 @@
 #      census's classify(f), verdict, exit and trail;
 #   4. the streaming census (avon enum into avon, as client.py census runs)
 #      gives the same, term by term;
-#   5. the five named cases.
+#   5. the defect count: every closed f of size 1..HIDER_DEFECT_N (default
+#      11, the paper's), avon's count equals the definitions', and the
+#      totals the paper's own check of its defect lemma (mode defect);
+#   6. the five named cases.
 #
 # Run from the repository root after `make`.  HIDER_SCRIPTS names the
 # paper's scripts/ directory, in a starlings checkout at its pin
@@ -27,7 +30,7 @@ fi
 . tests/pins.sh
 # the census and what it imports
 pin_check starlings "$SCRIPTS" "$STARLINGS_PIN" fixed_points.py fixed_points_hider.py \
-    verify_murmuration_i.py ../starling_machines.py
+    fixed_points_fold.py verify_murmuration_i.py ../starling_machines.py
 export HIDER_SCRIPTS="$SCRIPTS"
 P="python3 tests/hider/parity.py"
 $P enum "$N" --avon "$AVON"
@@ -35,5 +38,6 @@ $P trace "$N" --avon "$AVON"
 for H in 1 2 3 4 5 6 7 8 10 13 21; do $P trace 10 "$H" --avon "$AVON"; done
 $P verdict "$N" --avon "$AVON"
 $P stream "$N" --avon "$AVON"
+$P defect "${HIDER_DEFECT_N:-11}" --avon "$AVON"
 $P named --avon "$AVON"
-echo "hider check passed: enumeration, traces, verdicts and the named cases as the census has them"
+echo "hider check passed: enumeration, traces, verdicts, the defect count and the named cases as the census has them"

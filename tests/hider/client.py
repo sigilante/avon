@@ -20,6 +20,8 @@ H, CONF, MAXLEVEL = 600, 150, 4
 
 #: the census options of avon batch
 OPTS = ("--trace-frame=summary", f"--fuel={H}", f"--records={CONF}", "--frame-dump=census,halt")
+#: the defect count's options
+DEFECT_OPTS = ("--trace-frame=summary", f"--fuel={H}", f"--defect={CONF}")
 
 
 def read_block(lines, HD, what=""):
@@ -207,20 +209,13 @@ def finish(av, HD, v, sub):
     return v, v, [v]
 
 
-def verdicts(avon, HD, N, NMIN=1):
-    """(key, exit, trail) for every closed f of size NMIN..N, in the
-    census's order, through avon.
-
-    The level-0 runs depend on nothing, so they stream: avon enum's terms,
-    each with X, go into one avon batch from a thread while this one reads
-    the blocks in order and decides; the descents, each depending on a
-    verdict, go one at a time through a second avon.  A term that is S or
-    S a, whose frame f X is shorter than three, is run by avon too and
-    halts at once with its X-headed item, as the census's first check has
-    it."""
-    lev0 = subprocess.Popen([avon, "batch", *OPTS], stdin=subprocess.PIPE,
+def level0(avon, opts, N, NMIN, failed):
+    """One avon batch with opts, fed f X for every closed f of size
+    NMIN..N, in the census's order, by avon enum from a thread: (the
+    process, the thread).  What goes wrong in the feeding is appended to
+    failed."""
+    lev0 = subprocess.Popen([avon, "batch", *opts], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, text=True, bufsize=1 << 20)
-    failed = []                                 # what went wrong in the feeder
 
     def feed():
         try:
@@ -241,6 +236,22 @@ def verdicts(avon, HD, N, NMIN=1):
                 pass
     feeder = threading.Thread(target=feed, daemon=True)
     feeder.start()
+    return lev0, feeder
+
+
+def verdicts(avon, HD, N, NMIN=1):
+    """(key, exit, trail) for every closed f of size NMIN..N, in the
+    census's order, through avon.
+
+    The level-0 runs depend on nothing, so they stream: avon enum's terms,
+    each with X, go into one avon batch from a thread while this one reads
+    the blocks in order and decides; the descents, each depending on a
+    verdict, go one at a time through a second avon.  A term that is S or
+    S a, whose frame f X is shorter than three, is run by avon too and
+    halts at once with its X-headed item, as the census's first check has
+    it."""
+    failed = []                                 # what went wrong in the feeder
+    lev0, feeder = level0(avon, OPTS, N, NMIN, failed)
     av = Avon(avon, HD)                         # the descents
     lines = iter(lev0.stdout)
     count = 0
@@ -275,6 +286,67 @@ def catalan(n):
     return c
 
 
+#: the fields of avon's D line, as fixed_points_fold.py's mode defect names them
+DEFECT_FIELDS = ("steps", "D decreases", "y-steps", "D = 0 after a y-step",
+                 "confirmed records after the first y-step", "with D >= 1")
+
+
+def defects(avon, N, NMIN=1):
+    """The defect count of every closed f of size NMIN..N, in the census's
+    order: the six fields of avon's D line for f X's level-0 run, followed
+    while one X-headed item persists and is not at the x-seat."""
+    failed = []
+    lev0, feeder = level0(avon, DEFECT_OPTS, N, NMIN, failed)
+    count = 0
+    got = None
+    for raw in lev0.stdout:
+        c = raw[0]
+        if c == ">":
+            got = None
+        elif c == "D":
+            got = tuple(int(x) for x in raw.split()[1:])
+        elif c == "!":
+            failed.append(f"avon gave no trace for term {count + 1}")
+            break
+        elif c == "$":
+            if got is None or len(got) != len(DEFECT_FIELDS):
+                failed.append(f"no D line for term {count + 1}")
+                break
+            count += 1
+            yield got
+    if failed:
+        lev0.kill()                             # unread output would block the feeder
+    feeder.join()
+    if lev0.wait() != 0 and not failed:
+        failed.append(f"avon batch exited {lev0.returncode}")
+    want = sum(catalan(n - 1) for n in range(NMIN, N + 1))
+    if not failed and count != want:
+        failed.append(f"{count} terms counted, {want} expected")
+    if failed:
+        raise RuntimeError("the defect count through avon is incomplete: " + "; ".join(failed))
+
+
+def defect(avon, N, NMIN=1):
+    """The paper's defect check (fixed_points_fold.py, mode defect) through
+    avon, sizes NMIN..N: the totals, in its words, with progress every
+    10**5 terms."""
+    import time
+    t0 = time.time()
+    tot = [0] * len(DEFECT_FIELDS)
+    runs = 0
+    for got in defects(avon, N, NMIN):
+        runs += 1
+        tot = [a + b for a, b in zip(tot, got)]
+        if runs % 100000 == 0:
+            print(f"  {runs} terms, {tot[0]} steps, D decreases {tot[1]} [{time.time() - t0:.0f}s]",
+                  flush=True)
+    steps, dec, ys, zero, recs, recs_d = tot
+    print(f"defect through avon, sizes {NMIN}..{N}: {runs} runs, {steps} steps; D decreases: {dec}; "
+          f"y-steps: {ys}; D = 0 after a y-step: {zero}; confirmed records after the first "
+          f"y-step: {recs}, with D >= 1: {recs_d} ({time.time() - t0:.0f}s)")
+    return runs, tot
+
+
 def census(avon, N, NMIN=1):
     """The census of every closed f of size NMIN..N through avon: the
     verdict counts, with progress every 10**5 terms."""
@@ -298,7 +370,13 @@ def census(avon, N, NMIN=1):
 
 if __name__ == "__main__":
     # client.py N [AVON] [NMIN]: the census of sizes NMIN..N (NMIN 1)
+    # client.py defect N [AVON] [NMIN]: the defect check of sizes NMIN..N
     import sys
-    census(sys.argv[2] if len(sys.argv) > 2 else "build/avon",
-           int(sys.argv[1]) if len(sys.argv) > 1 else 12,
-           int(sys.argv[3]) if len(sys.argv) > 3 else 1)
+    argv = sys.argv[1:]
+    run_ = census
+    if argv and argv[0] == "defect":
+        run_ = defect
+        argv = argv[1:]
+    run_(argv[1] if len(argv) > 1 else "build/avon",
+         int(argv[0]) if argv else 12,
+         int(argv[2]) if len(argv) > 2 else 1)

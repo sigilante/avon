@@ -1018,6 +1018,10 @@ void      av_trace_free(av_trace *t);
 bool      av_trace_check(av_trace *t, const av_arena *a, uint32_t root);
 bool      av_trace_dump_at(av_trace *t, const uint64_t *steps, size_t n);
 void      av_trace_dump_halt(av_trace *t, bool on);
+/*  Count the defect along the run, as the paper's check of its defect
+ *  lemma: av_trace_end then prints `D steps falls y-steps zeros records
+ *  records-with-D>=1`, records confirmed by conf steps followed. */
+void      av_trace_defect(av_trace *t, size_t conf);
 bool      av_trace_end(av_trace *t, const av_arena *a, av_status status, uint64_t steps,
                        uint32_t term, size_t conf, bool want_records, av_trace_summary *sum);
 /*  The confirmed records' steps n and n+1, for a second pass; malloc'd. */
