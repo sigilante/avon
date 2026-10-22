@@ -1,6 +1,22 @@
 # Avon: the native runtime, planned
 
-> **Status (2026-10-05).** Built: stages 0 to 7 and 9 of §11 are done, and stage 8 has the compiler's core, the SKIjack-0 front end, and the full language's front end through M4, every corpus program compiled in Avon to Python's terms; its checkers remain (§11.1, §20.3). Beyond the stages, share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof; jets under hiding are built (`ZK-JETS.md`); frame traces serve the pure-S paper's census (§22). What the proofs do not yet cover is listed in §11.1, "Open". The note was written 2026-09-16, before any of it; the compiler it targets is `python/skijack`, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof. §20 (added 2026-09-27) takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler, and §0's job list grows by two items. §6.5, §7 and §8 (revised 2026-09-27) follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it. §21 compares Vere and NockApp from their sources. §9 and §20.1 (revised 2026-09-27) fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term. This note now lives in the Avon repository as `docs/DESIGN.md`; `skijack/avon/DESIGN.md` links to it, and paths below stay relative to the skijack repository.
+> **Status (2026-10-22).**
+>
+> - **Built:** stages 0 to 7 and 9 of §11. Stage 8 has the compiler's core, the SKIjack-0 front end, and the full language's front end through M4: every corpus program compiles in Avon to Python's terms. Its checkers, M5 (Stage A) and M6 (Stage B), remain (§11.1, §20.3).
+> - **Beyond the stages:** share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof. Jets under hiding are built (`ZK-JETS.md`). Frame traces and the defect count serve the pure-S paper's hider census (§22). The structural hash is `skijack-2`, 128 bits (§5), and a dashboard entry is its term, not its digest (§6.5).
+> - **Open:** what the proofs do not yet cover, and the unbuilt stage work, are listed in §11.1, "Open". `WORKLIST.md` orders what is next.
+>
+> **How to read this note.** It began on 2026-09-16 as the build plan, before any code existed, and grew as the stages were built. §0 to §4 and §10 to §16 are the plan and its decisions; §11.1 is the record of what was built, with figures as measured at the time; §5 to §9 and §17 to §22 are the current design. `RUNTIME.md` is the user's reference, `ARCHITECTURE.md` the map of the source. Where this note and the compiler differ, the compiler (SKIjack's `python/skijack`) and its tests are authoritative. Paths that begin `avon/bench/` are in the [SKIjack repository](https://github.com/sigilante/SKIjack/tree/master/avon/bench), where this note was first written; `RUNTIME-DESIGN.md` and `SPEC.md` are SKIjack's too.
+>
+> **Revisions, 2026-09-27.**
+>
+> - §17 and §18 fit Avon to the proof system in lean-ski: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof.
+> - §20 takes Vere's relation to Nock as the model: Avon's C never compiles, but Avon runs a compiler.
+> - §6.5, §7 and §8 follow Vere's `+mock` jet: the interpreter jet is the level-1 interpreter and serves scry, and residual jets keep fuel exact inside it.
+> - §9 and §20.1 fix the kernel as a door `[battery state]` pulled by axis, and the pill as one term.
+> - §21 compares Vere and NockApp from their sources.
+>
+> **Terms.** A *jet* is native code that stands for a term; its *licence* is the argument that the jet agrees with the term, checked by differential (`--jet-check`) or carried into a proof (§6.4, §18). A *residual jet* leaves every copy-mode count exactly as the unjetted run has it (§6.5). The *dashboard* is the table of known jets. A *door* is a cell `[battery state]`: the battery is its code, arms pulled by axis, and the state its data. A *pill* is a term whose value, applied to a subject, is a *kernel*, a door; a *pier* is the directory that holds a kernel's event log and snapshots (§9). A *scry* is a read-only lookup by path, answered from a fact store (§8). The *reference host* is `aviary_kernel.reduce`, the Python reducer whose counts the papers publish.
 
 *2026-09-16. The build plan for the C runtime named in `RUNTIME-DESIGN.md`
 §3a. Its constraints come from three places: the reference host
@@ -2081,7 +2097,9 @@ none of it at millions.
 ## 11. Stages, with acceptance criteria
 
 Each stage ends with something testable. Rough sizes are C lines, excluding
-tests.
+tests, as planned in 2026-09; the built code differs (about 15,700 lines of
+C today, `main.c` and `reduce.c` since split along their commands and
+machines).
 
 | # | stage | contents | acceptance | ~lines |
 |---|---|---|---|---|
@@ -2112,7 +2130,9 @@ to agree with until stage 3 exists.
 ### 11.1 Status
 
 Measured on an Apple M4 Max, clang 21, against aviary-kernel 0.1.0 and
-skijack `5d335c0`.
+skijack `5d335c0`, unless a stage names another revision. Each stage's
+figures are as measured when it was built; the revisions the checks use
+today are pinned in `tests/pins.sh`.
 
 **Stage 0, done.** `make` builds `build/avon`; `make check` builds every
 `tests/test_*.c` under ASan and UBSan and runs it, and builds
@@ -2332,7 +2352,9 @@ in stage 8"):
   kernel as the snapshot pier does, leak-free.
 
 **Beyond the stages: speed in share mode.** None of it enters copy mode
-or a witness; `avon witness` refuses all three options.
+or a witness; `avon witness` refuses every option below (`--templates`,
+`--data`, `--fix`, `--memory`, `--no-defer`, `--p2`), as it refuses any
+reduction option it would ignore.
 
 - **Supercombinator templates** (§6.9, 2026-09-29): the front end compiles
   itself in 21.2 million steps against SKI's 307.0 million, 4.5 times
@@ -2361,21 +2383,27 @@ or a witness; `avon witness` refuses all three options.
 - **Frame traces** (§22): the pure-S paper's hider census runs through
   Avon, every trace and verdict equal to the census's on the 82,500 terms
   of size 1 to 12, and sizes 13 to 16 (13.3 million terms) in eight
-  minutes.
+  minutes. The paper's check of its defect lemma runs through Avon too:
+  every count of size 1 to 11 equal to the paper's, and sizes 12 to 16
+  (13.4 million terms, 2.97 billion steps) with no counterexample, size
+  16 in 126 s.
 
 **Open.**
 
-- *Stage 8:* the full language's front end.
+- *Stage 8:* the full language's checkers, M5 (Stage A: refusal parity,
+  errors with a class) and M6 (Stage B: Hindley--Milner type checking).
+  The front end through M4 is built.
 - *Proofs* (to lean-ski): witnesses refuse terms with atoms (§17.3); scry
   proves only a resume loop's final run; Fiat-Shamir and ChaCha20's
   pseudorandomness are assumed (one 128-bit prover seed per proof,
   `ZK-JETS.md` §7); data jets
   and the one-step Y have no witness rows, and the Y row's simulation
   theorem (`Tr`) is owed (§6.11, `ZK-JETS.md` §8).
-- *Speed:* a case on a known value joined to its instance, the spine
-  cells instances write (§6.9; `docs/WORKLIST.md`), and the sharing a
-  safe cycle would give Y
-  (§6.11).
+- *Speed:* a case on a known value joined to its instance and the
+  spine cells instances write are built (§6.10, §6.13); the join is not
+  yet retried on top of deferred roots. The sharing a safe cycle would
+  give Y is parked: 12% did not pay for what a safe cycle needs (§6.11,
+  `WORKLIST.md`).
 
 ## 12. What Avon must not do
 
@@ -2464,17 +2492,15 @@ a term. Avon exists to make that answer affordable, not to make it true.
 
 ## 15. Decisions still to take
 
+Struck items are settled; the rest remain open.
+
 - ~~`I` as a third bitstring leaf code versus expansion to `S K K`.~~
   Settled in stage 2 (§4.2): the third code, and atoms after it.
-  Decided: retain `I` as third code.
-- Whether `copy` or `share` is the default strategy for a bare `avon run`.
-  Recommended: `share`, with the strategy printed on every report.
-  Decided: `share` as stated.
+- ~~Whether `copy` or `share` is the default strategy.~~ Settled: `share`.
 - ~~Whether a jetted snapshot records the dashboard version.~~ Settled in
   stage 4: a snapshot holds no jets and no dashboard, so it has no version
   to record; jets are matched again after a load. Jet ids are local to an
   arena and never persisted.
-  Decided: agreed.
 - ~~Whether Avon ever serves `peek` to a *level-0* program.~~ Settled
   (§7): no. The `Scry` leaf exists only in terms the interpreter jet
   builds, as Nock 12 has meaning only under `+mock`.
@@ -2490,18 +2516,19 @@ a term. Avon exists to make that answer affordable, not to make it true.
   instantiation does not give.
 - ~~The pill's contents and layout.~~ Settled (§20.1): a pill is one term
   whose value, applied to the subject, is a kernel door (§9). Still open:
-  whether the standard subject ships compiled, quoted, or both. Needed
-  before stage 7.
-- Whether install is a runtime primitive the kernel invokes or a `UQ`
-  application the runtime jets (§20.2). Recommended: the jet, so the
+  whether the standard subject ships compiled, quoted, or both. Stage 7
+  shipped without it, since SKIjack's standard subject is not yet built;
+  `boot` applies a pill to `I` unless `--subject` names another.
+- ~~Whether install is a runtime primitive the kernel invokes or a `UQ`
+  application the runtime jets (§20.2).~~ Settled: the jet, so the
   calculus alone still defines what install means.
-  Decided: the jet.
 - Whether a witnessed run may include compilation, and so whether the
   compiler jet needs a proof licence (§20.3). Recommended: not before the
   interpreter jet's licence exists.
 - Whether Avon splits into a supervisor process and a worker, as Vere does
-  (§20.4). Needed before stage 7.
-  Decided: yes we will split; consult me for terminology and boundary before coding it.
+  (§20.4). Decided in principle: it will split; the terminology and the
+  boundary are to be fixed before it is built. Stage 7 shipped as one
+  process.
 - Atoms in the circuit. Decided and done in `lean-ski` (§17.3): the
   machine has an inert `atom` cell and the AIR a halting kind for it. What
   remains is carrying atoms through the Plonky3 tables and the checker.
@@ -2510,7 +2537,7 @@ a term. Avon exists to make that answer affordable, not to make it true.
 
 Every count in §1, §2 and §13 was measured on this machine against
 `aviary-kernel` 0.1.0 and `tower_harness.py` from `artifact-metacircular-ski`. The script is
-`avon/bench/strategies.py`, and it reproduces the whole of §1 in about a
+`avon/bench/strategies.py`, in the SKIjack repository, and it reproduces the whole of §1 in about a
 second: the four strategies on the three targets, their node, probe, spine
 depth and result sizes, the cycle check, and the 2,986-term differential.
 Run it before trusting any number here, and again from C when stage 1

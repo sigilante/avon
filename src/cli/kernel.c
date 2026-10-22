@@ -220,7 +220,7 @@ int kernel_main(int argc, char **argv) {
                 fprintf(stderr, "avon: %s: %s\n", files[i], err);
                 rc = 1;
             } else {
-                printf("event %llu: loaded the kernel %s boots to\n",
+                printf("event %llu: loaded the kernel that %s boots to\n",
                        (unsigned long long)k->events, files[i]);
                 if (!report_commit(p)) rc = 1;
             }
