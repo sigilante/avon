@@ -6,6 +6,12 @@ design lives. Last revised 2026-10-22.
 
 ## Done since the last revision
 
+- **CI green on Linux** (2026-10-22, #59). Every run had failed since CI began. glibc
+  hid POSIX under `-std=c11` (the Makefile defines `_DEFAULT_SOURCE`); `qsort` ran on
+  empty, unallocated arrays; four ranking sorts left ties to an unstable `qsort`, so
+  `jetstat` printed tied rows in another order on Linux; and `test_cli` closed stdout,
+  which a process can reopen, where it now opens it read-only.
+
 - **Publication files** (2026-10-22). An MIT licence; the README's quick start, input
   syntax, checks and their outside checkouts; `docs/README.md` as the index, with a
   getting-started tour, a map of the source and a guide to the checks; `DESIGN.md`'s
