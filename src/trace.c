@@ -213,7 +213,7 @@ bool av_trace_dump_at(av_trace *t, const uint64_t *steps, size_t n) {
     uint64_t *d = realloc(t->dump, (n ? n : 1) * sizeof *d);
     if (!d) return false;
     memcpy(d, steps, n * sizeof *d);
-    qsort(d, n, sizeof *d, cmp_u64);
+    if (n) qsort(d, n, sizeof *d, cmp_u64);
     t->dump = d;
     t->ndump = n;
     return true;
@@ -314,7 +314,7 @@ static bool table(av_trace *t, const av_arena *a, const uint32_t *items, size_t 
             }
         }
     }
-    qsort(found, got, sizeof *found, cmp_u32);
+    if (got) qsort(found, got, sizeof *found, cmp_u32);
     for (size_t i = 0; i < got; i++) {
         uint32_t x = found[i];
         emit(t, "d ", 2);

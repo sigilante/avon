@@ -18,7 +18,9 @@
 # removes build/.  Requires GNU Make 3.81+.
 
 CC      := clang
-CSTD    := -std=c11
+# -std=c11 hides POSIX on glibc; _DEFAULT_SOURCE restores POSIX.1-2008 and
+# the BSD calls (flock, mkdtemp) there, and macOS ignores it.
+CSTD    := -std=c11 -D_DEFAULT_SOURCE
 WARN    := -Wall -Wextra -Wpedantic -Werror -Wshadow -Wstrict-prototypes \
            -Wmissing-prototypes -Wconversion -Wno-sign-conversion
 INC     := -Iinclude

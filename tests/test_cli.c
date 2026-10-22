@@ -72,9 +72,12 @@ TEST(a_status_is_the_line_s_and_exits_0) {
 TEST(output_that_cannot_be_written_exits_1) {
     char path[128], cmd[512], out[4096];
     term("id", "I X\n", path, sizeof path);
-    snprintf(cmd, sizeof cmd, AVON " reduce %s >&- 2>/dev/null", path);
+    /* stdout open read-only, so every write fails: a closed stdout would be
+     * reused by the first file the process opens, sanitizer runtimes
+     * included, and the write might land there */
+    snprintf(cmd, sizeof cmd, AVON " reduce %s 1</dev/null 2>/dev/null", path);
     CHECK_EQ(run(cmd, out, sizeof out), 1);
-    snprintf(cmd, sizeof cmd, "printf 'I X\\nK X Foo\\n' | " AVON " batch >&- 2>/dev/null");
+    snprintf(cmd, sizeof cmd, "printf 'I X\\nK X Foo\\n' | " AVON " batch 1</dev/null 2>/dev/null");
     CHECK_EQ(run(cmd, out, sizeof out), 1);
     snprintf(cmd, sizeof cmd, "printf 'I X\\nK X Foo\\n' | " AVON " batch");
     CHECK_EQ(run(cmd, out, sizeof out), 0);
