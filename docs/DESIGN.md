@@ -2394,9 +2394,12 @@ reduction option it would ignore.
   errors with a class) and M6 (Stage B: Hindley--Milner type checking).
   The front end through M4 is built.
 - *Proofs* (to lean-ski): witnesses refuse terms with atoms (§17.3); scry
-  proves only a resume loop's final run; Fiat-Shamir and ChaCha20's
-  pseudorandomness are assumed (one 128-bit prover seed per proof,
-  `ZK-JETS.md` §7); data jets
+  proves only a resume loop's final run; zero knowledge survives
+  Fiat–Shamir in the programmable random-oracle model for the Sudoku,
+  hidden-term and composed circuits, not yet for those with jets or
+  Poseidon2; Fiat–Shamir soundness past the counting step (`logup_fs`)
+  and ChaCha20's pseudorandomness are assumed (one 128-bit prover seed
+  per proof, `ZK-JETS.md` §7); data jets
   and the one-step Y have no witness rows, and the Y row's simulation
   theorem (`Tr`) is owed (§6.11, `ZK-JETS.md` §8).
 - *Speed:* a case on a known value joined to its instance and the
@@ -2636,8 +2639,14 @@ run would publish the run's size.
   verifier check a guessed witness. The verifier checks the statement file
   in Lean first. Other witness shapes need their own witness tables and
   blinding. lean-ski now proves honest-verifier zero knowledge for its
-  hiding circuits, assuming a statistically hiding PCS (`transcript_zk`,
-  `PCSClose`); Fiat–Shamir is assumed, not proved. Jets under hiding are
+  hiding circuits, the quotient, its chunks and FRI's view simulated
+  (`transcript_zkG_fri`, `*_transcriptG_fri`). It assumes that the Merkle
+  commitments hide and that the honest chunks are the quotient (`RecOK`),
+  and takes ζ and α_b of full degree as hypotheses. Zero knowledge
+  survives Fiat–Shamir in the programmable random-oracle model for the
+  Sudoku, hidden-term and composed circuits (`*_fs_open4`), with only the
+  first commitment's hiding derived (`*_fs_open4ROMMC_fri`); not yet for
+  the circuits with jets or Poseidon2. Jets under hiding are
   designed in `ZK-JETS.md`. The prover draws all of a proof's hiding
   randomness from one fresh 128-bit seed, expanded by ChaCha20 with one
   stream each for blinding tuples, leaf salts and masking codewords;
