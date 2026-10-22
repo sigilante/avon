@@ -203,12 +203,18 @@ static int by_absorbed(const void *x, const void *y) {
     av_jetstat_row a, b;
     av_jetstats_row(sort_stats, *(const size_t *)x, h, &ar, &cost, &atoms, &a);
     av_jetstats_row(sort_stats, *(const size_t *)y, h, &ar, &cost, &atoms, &b);
-    return (a.absorbed < b.absorbed) - (a.absorbed > b.absorbed);
+    /* ties in row order: qsort is not stable, and libcs break ties apart */
+    size_t i = *(const size_t *)x, j = *(const size_t *)y;
+    return a.absorbed != b.absorbed ? (a.absorbed < b.absorbed) - (a.absorbed > b.absorbed)
+                                    : (i > j) - (i < j);
 }
 
 static int by_pair_fires(const void *x, const void *y) {
-    uint64_t a = ((const av_jetstat_pair *)x)->fires, b = ((const av_jetstat_pair *)y)->fires;
-    return (a < b) - (a > b);
+    const av_jetstat_pair *p = x, *q = y;
+    if (p->fires != q->fires) return (p->fires < q->fires) - (p->fires > q->fires);
+    if (p->outer != q->outer) return (p->outer > q->outer) - (p->outer < q->outer);
+    if (p->inner != q->inner) return (p->inner > q->inner) - (p->inner < q->inner);
+    return (p->kind > q->kind) - (p->kind < q->kind);
 }
 
 /*  The jets' table, most absorbed first, then the nested fires; with the
@@ -222,7 +228,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
     if (!order) return;
     for (size_t i = 0; i < n; i++) order[i] = i;
     sort_stats = all;
-    qsort(order, n, sizeof *order, by_absorbed);
+    if (n) qsort(order, n, sizeof *order, by_absorbed);
     uint64_t sum_together = 0, sum_alone = 0, sum_alone_together = 0, sum_fires = 0;
     for (size_t i = 0; i < n; i++) {
         char h[AV_HASH_LEN + 1];
@@ -276,7 +282,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
     }
     av_jetstat_pair *pairs;
     size_t np = av_jetstats_pairs(all, &pairs);
-    qsort(pairs, np, sizeof *pairs, by_pair_fires);
+    if (np) qsort(pairs, np, sizeof *pairs, by_pair_fires);
     fprintf(out, "\nnested fires: the inner jet fired from the outer's residual (after it "
            "fired) or term (after it missed)\n");
     for (size_t k = 0; k < np && k < top; k++) {

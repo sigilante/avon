@@ -8,7 +8,7 @@ Avon reduces the pure $SKI$ combinator calculus, and every acceleration it offer
 
 Avon also supports a "solid-state" event loop: a kernel with persistent state, updated by a poke and queried by a peek.
 
-Avon was inspired by [Urbit](https://urbit.org), [NockApp](https://github.com/nockchain/nockchain/tree/master/crates/nockapp), and [PLAN](https://github.com/sol-plunder/reaver).  The underlying $SKI$ work was originally inspired by Stephen Wolfram's [_Combinators:  A Centennial View_](https://writings.stephenwolfram.com/2020/12/combinators-a-centennial-view/).
+Avon was inspired by [Urbit](https://urbit.org), [NockApp](https://github.com/nockchain/nockchain/tree/master/crates/nockapp), and [PLAN](https://github.com/sol-plunder/reaver).  The underlying $SKI$ work was originally inspired by Stephen Wolfram's [_Combinators:  A Centennial View_](https://writings.stephenwolfram.com/2020/12/combinators-a-centennial-view/) and Raymond Smullyan's _To Mock a Mockingbird_.
 
 ## Details
 

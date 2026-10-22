@@ -93,7 +93,7 @@ long av_interps_load(av_arena *a, const char *ipath, const char *dpath,
         }
         rows[n++] = (drow){ p, t2 + 1, (size_t)(nl - t2 - 1) };
     }
-    qsort(rows, n, sizeof *rows, drow_cmp);
+    if (n) qsort(rows, n, sizeof *rows, drow_cmp);
 
     for (char *line = itext, *nl; *line; line = nl + 1) {
         nl = strchr(line, '\n');
