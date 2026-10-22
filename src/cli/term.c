@@ -13,14 +13,14 @@ enum {
     O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES,
     O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_INTERP, O_JET_TABLE, O_PLAN,
     O_STATEMENT, O_JET_FLOOR, O_JET_CHECK, O_FUEL, O_MAX_NODES, O_BUDGET, O_ROWS,
-    O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_DEFECT, O_FILE, O_COUNT
+    O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_DEFECT, O_DAG, O_FILE, O_COUNT
 };
 static const char *const option_name[O_COUNT] = {
     "--strategy", "--whnf", "--allow-bird-atoms", "--jets", "--ctors", "--no-jets",
     "--profile", "--templates", "--data", "--fix", "--memory", "--no-defer", "--p2",
     "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
     "--fuel", "--max-nodes", "--budget", "--rows", "--cells", "--trace-frame",
-    "--passenger", "--records", "--frame-dump", "--defect", "a FILE",
+    "--passenger", "--records", "--frame-dump", "--defect", "--dag", "a FILE",
 };
 #define OPT(o) (1u << (o))
 
@@ -52,6 +52,7 @@ typedef struct {
     bool        fix;              /* --fix: Y unfolded in one step */
     const char *p2;               /* --p2: P's term, a file, or NULL */
     const char *file;
+    bool        dag;              /* --dag: print the term reached in the DAG form */
     /* frame traces */
     int         trace;            /* 0 off, 1 summary, 2 a line per step */
     const char *passenger;
@@ -82,6 +83,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->rows = 1u << 21;          /* bench/plonky3's MAX_LOG_HEIGHT */
     g->cells = 1u << 21;
     g->file = NULL;
+    g->dag = false;
     g->trace = 0;
     g->passenger = "X";
     g->records = 0;
@@ -143,6 +145,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--cells=", 8) == 0 && number(s + 8, &v)
                  && v <= AV_MAX_NODES)
             g->cells = v;
+        else if (strcmp(s, "--dag") == 0)            g->dag = true;
         else if (strcmp(s, "--trace-frame") == 0)    g->trace = 2;
         else if (strcmp(s, "--trace-frame=summary") == 0) g->trace = 1;
         else if (strncmp(s, "--passenger=", 12) == 0 && s[12])
@@ -195,7 +198,8 @@ static bool options_fit(const args *g, const char *cmd) {
     const uint32_t untraced = OPT(O_TEMPLATES) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
                               OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_PROFILE) | OPT(O_JETS) |
                               OPT(O_CTORS) | OPT(O_INTERP) |
-                              OPT(O_JET_FLOOR) | OPT(O_JET_CHECK) | OPT(O_BUDGET);
+                              OPT(O_JET_FLOOR) | OPT(O_JET_CHECK) | OPT(O_BUDGET) |
+                              OPT(O_DAG);
     const uint32_t reducing = (OPT(O_FILE) - 1) & ~(OPT(O_JET_TABLE) | OPT(O_PLAN) |
                               OPT(O_STATEMENT) | OPT(O_ROWS) | OPT(O_CELLS));
     bool reduce = strcmp(cmd, "reduce") == 0, batch = strcmp(cmd, "batch") == 0;
@@ -369,6 +373,10 @@ void report_fix(const av_result *r) {
 
 /*  The input line a term came from: 1 for reduce, counted by batch. */
 static uint64_t term_line = 1;
+
+/*  Whether run_one printed the term's result line: with --dag, batch
+ *  answers every line, a term it could not run with `!`. */
+static bool replied;
 
 /*  One frame-trace run: copy mode, the head run, no collection. */
 static bool trace_pass(const args *g, const char *src, size_t len, bool out,
@@ -557,9 +565,12 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
                 (unsigned long long)r.p2_declines, (unsigned long long)r.p2_unbound);
     }
     av_buf b = { 0 };
-    bool whole = r.term != AV_NONE && av_print(a, r.term, g->budget, &b);
+    bool whole = r.term != AV_NONE &&
+                 (g->dag ? av_print_dag(a, r.term, g->budget, &b) : av_print(a, r.term, g->budget, &b));
+    if (g->dag && !whole) av_buf_free(&b);      /* a DAG prefix reads as nothing */
     printf("%s %" PRIu64 "%c%s%s\n", av_status_name(r.status), r.steps, sep,
-           b.s ? b.s : "", whole ? "" : " ...");
+           b.s ? b.s : "", whole ? "" : g->dag ? "..." : " ...");
+    replied = true;
     av_buf_free(&b);
     av_arena_free(a);
     /* the run's status is the line's, a script's to read: exit 1 is for a
@@ -780,7 +791,9 @@ int term_main(int argc, char **argv) {
         term_line = 0;
         while ((n = getline(&line, &cap, stdin)) > 0) {
             term_line++;
+            replied = false;
             if (run_one(&g, line, (size_t)n, ' ')) rc = 1;
+            if (g.dag && !replied) printf("!\n");
             fflush(stdout);
         }
         free(line);
