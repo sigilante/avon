@@ -3,12 +3,12 @@
 # Every fixture here regenerates byte for byte from them
 # (tests/fixtures_check.sh).  A check accepts a checkout at its pin, or at
 # a descendant of it whose commits and tracked changes touch only
-# documentation (see not_docs); it refuses any other, unless
+# documentation or CI workflows (see not_docs); it refuses any other, unless
 # AVON_UNPINNED=1.  To move a pin, run the checks it serves at the new
 # commit and change it here.
 
-SKIJACK_PIN=72150ea6c44f78d43d54bf344a6168023a296ef0     # sigilante/SKIjack, public
-SKILARK_PIN=8a988a13b73f819b82723162640605c7e195f55b     # sigilante/SKIlark, public
+SKIJACK_PIN=72fb2805a9fbf6384ed02100cfec1315d3fcf5e9     # sigilante/SKIjack, public
+SKILARK_PIN=bafb6d692b460cf5cd134087b51353f71dcfd0d5     # sigilante/SKIlark, public
 AVIARY_PIN=ec4b418c527408c3a513bee2735e6b0f862accda      # sigilante/aviary, public
 LEAN_SKI_PIN=fb65141f7ab4685e1b9cd4d2366048bb9cebcba2    # sigilante/lean-ski, public: paper-v9
 STARLINGS_PIN=0b2779ed732ed37d1eea4751ed897015e12d4cdc   # sigilante/starlings, private
@@ -16,12 +16,13 @@ STARLINGS_PIN=0b2779ed732ed37d1eea4751ed897015e12d4cdc   # sigilante/starlings, 
 # not_docs: the file names on stdin that are not documentation.
 # Documentation is *.md, *.tex and *.txt, but for the .txt names lean-ski
 # gives its statements, witnesses and corpora, which the checks read.
+# A repository's own CI workflows (.github/) count too: no check reads them.
 not_docs() {
     local f
     while IFS= read -r f; do
         case $f in
             *public*.txt|*witness*.txt|*corpus*.txt) echo "$f" ;;
-            *.md|*.tex|*.txt) ;;
+            *.md|*.tex|*.txt|.github/*) ;;
             *) echo "$f" ;;
         esac
     done
