@@ -249,6 +249,12 @@ uint32_t av_parse(av_arena *a, const char *src, size_t len,
  */
 bool av_print(const av_arena *a, uint32_t t, size_t budget, av_buf *b);
 
+/*  Append the DAG form of a term to b, `dag <id>=<rhs> ... @<root>`, as
+ *  av_parse_dag reads it: each node it reaches once, children before
+ *  parents, ids from 0, indirections and jet nodes seen through.  Returns
+ *  false, leaving b holding a prefix, past `budget` distinct nodes. */
+bool av_print_dag(const av_arena *a, uint32_t t, size_t budget, av_buf *b);
+
 /*  ------------------------------------------------------------ hygiene
  *
  *  True if aviary_kernel 0.1.0 would contract an atom of this name: one of

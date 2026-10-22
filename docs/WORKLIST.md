@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-22.
 
 ## Done since the last revision
 
+- **The DAG form out** (2026-10-22; `RUNTIME.md`, "Reducing"). `reduce --dag` and `batch
+  --dag` print the term reached as `dag <id>=<rhs> ... @<root>`, each node once, the
+  form every command reads; with `--dag`, `batch` answers every line, a term it cannot
+  run with `!`. A program keeps one `batch` open and reduces through it with sharing
+  kept both ways: SKIjack's `SKIJACK_REDUCER=avon` does. On 27 fixtures, both strategies,
+  jets on and off, both stopping points and two fuels, the 1,296 terms read back equal
+  the printed ones.
+
 - **CI green on Linux** (2026-10-22, #59). Every run had failed since CI began. glibc
   hid POSIX under `-std=c11` (the Makefile defines `_DEFAULT_SOURCE`); `qsort` ran on
   empty, unallocated arrays; four ranking sorts left ties to an unstable `qsort`, so

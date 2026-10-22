@@ -79,6 +79,24 @@ and its line is ` ...` alone. `batch`
 reduces each line of standard input and prints one `STATUS steps term`
 line per term. Jet and template reports go to standard error.
 
+**The DAG form out** (`--dag`). The term reached prints in the DAG form
+that every command reads, `dag <id>=<rhs> ... @<root>`, each node once, so
+a result whose tree is exponential in its size prints in its size, and
+reading it back rebuilds the same sharing. `--budget` counts distinct
+nodes; past it the term prints as `...`. With `--dag`, `batch` answers
+every line: a term it cannot read or run prints `!`, its reason on
+standard error. A program can so keep one `batch` open and send it terms
+one at a time:
+
+```console
+$ echo 'S I I (S I I)' | build/avon reduce --strategy=copy --fuel=5 --dag
+FUEL 5
+dag 0=S 1=I 2=0.1 3=2.1 4=1.3 5=3.4 @5
+$ printf 'S K K x\nS (K\n' | build/avon batch --dag
+NORMAL 2 dag 0=x @0
+!
+```
+
 **Exit status.** A run's status is its line's, for a script to read: a
 term that runs out of fuel or room still exits 0. Exit 1 is a failure:
 - a `--jet-check` that found a jet disagreeing with its term;
@@ -116,6 +134,7 @@ malformed number or a missing argument prints the usage alone.
 | `--fuel=N` | at most N contractions; a jet fire or template instantiation is charged as §6.5 and §6.9 say |
 | `--max-nodes=N` | live nodes allowed after a collection before `SIZE`; by default physical memory over 64 bytes (between 2^20 and 2^30), so that a run's collections stay within the host's memory |
 | `--budget=N` | nodes read or printed (default 1,000,000) |
+| `--dag` | print the term reached in the DAG form, sharing kept |
 | `--allow-bird-atoms` | accept atoms named like aviary birds |
 
 ## Jets

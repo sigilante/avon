@@ -24,7 +24,8 @@ them.  `DESIGN.md` gives the reasons; this page gives the places.
    (`src/compiler.c`), the unquoter (`src/install.c`) and Poseidon2
    (`src/p2.c`).
 4. **Print.**  `src/print.c` writes the printed form under a node budget,
-   or `src/wire.c` jams the result.
+   or, with `--dag`, the DAG form, each node once; or `src/wire.c` jams the
+   result.
 
 `avon witness` replaces step 3 with `src/witness.c`, lean-ski's heap
 machine run as written, and prints its table.  `--trace-frame` adds an
@@ -63,7 +64,7 @@ sync that must reach the disk goes through `src/durable.c`.
 |---|---|
 | `arena.c` | allocation, leaf interning, caller roots, the default node cap |
 | `read.c` | the printed form and the DAG form, parsed without recursion |
-| `print.c` | the printed form, written without recursion under a node budget |
+| `print.c` | the printed form and the DAG form, written without recursion under a node budget |
 | `wire.c` | terms at rest: the SKIT container, Tromp's bitstring with a third leaf, the atom-name hygiene check |
 | `sha256.c` | SHA-256 (FIPS 180-4), for snapshot checksums and the structural hash |
 | `gc.c` | stop-and-copy collection, Cheney's scan with forwarding in a side array |

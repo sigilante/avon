@@ -2,6 +2,8 @@
  *
  *  The printed form: parse and print round-trip, parenthesization as
  *  aviary_kernel.terms.pretty writes it, atoms, errors, the print budget.
+ *  The DAG form: what av_print_dag writes, av_parse_dag reads back as the
+ *  same term with the same sharing, each node once, under a budget.
  */
 
 #include <string.h>
@@ -110,6 +112,65 @@ TEST(deep_nesting_does_not_recurse) {
     av_arena_free(a);
 }
 
+/*  t printed as a DAG and read back into a fresh arena: the same term, with
+ *  as many distinct nodes as the printout has lines. */
+static int dag_roundtrip(av_arena *a, uint32_t t, size_t nodes) {
+    av_buf b = { 0 };
+    int ok = av_print_dag(a, t, 1u << 20, &b);
+    av_arena *c = av_arena_new(0);
+    const char *msg = NULL;
+    uint32_t u = ok ? av_parse_dag(c, b.s, b.len, &msg) : AV_NONE;
+    av_buf p = { 0 }, q = { 0 };
+    ok = u != AV_NONE && av_print(a, t, 1u << 20, &p) && av_print(c, u, 1u << 20, &q) &&
+         strcmp(p.s, q.s) == 0;
+    size_t defs = 0;
+    for (size_t i = 0; b.s && b.s[i]; i++) defs += b.s[i] == '=';
+    if (nodes && defs != nodes) ok = 0;
+    if (!ok) fprintf(stderr, "  dag: %s -> %s (%zu nodes, %s)\n", p.s ? p.s : "?",
+                     b.s ? b.s : "(none)", defs, msg ? msg : "");
+    av_buf_free(&b); av_buf_free(&p); av_buf_free(&q);
+    av_arena_free(c);
+    return ok;
+}
+
+TEST(the_dag_form_prints_what_it_reads) {
+    av_arena *a = av_arena_new(0);
+    const char *srcs[] = { "S", "x", "S K K", "S (K a) I b", "X1 (A Z) S_",
+                           "S (K (S I I)) (S (S (K S) K) (K (S I I)))" };
+    for (size_t i = 0; i < sizeof srcs / sizeof *srcs; i++) {
+        uint32_t t = av_parse(a, srcs[i], strlen(srcs[i]), NULL);
+        CHECK(t != AV_NONE && dag_roundtrip(a, t, 0));
+    }
+    /* a tower of shared doublings: 2^40 leaves unfolded, 41 nodes shared */
+    uint32_t t = av_leaf(a, "x", 1);
+    for (int k = 0; k < 40; k++) t = av_app(a, t, t);
+    av_buf b = { 0 };
+    CHECK(av_print_dag(a, t, 41, &b));
+    av_buf_free(&b);
+    CHECK(!av_print_dag(a, t, 40, &b));         /* one node past the budget */
+    av_buf_free(&b);
+    av_arena *c = av_arena_new(0);
+    CHECK(av_print_dag(a, t, 41, &b));
+    const char *msg = NULL;
+    uint32_t u = av_parse_dag(c, b.s, b.len, &msg);
+    CHECK(u != AV_NONE);
+    size_t defs = 0;
+    for (size_t i = 0; b.s[i]; i++) defs += b.s[i] == '=';
+    CHECK_EQ(defs, 41);
+    /* read back shared: every level's two halves are one node */
+    int levels = 0;
+    for (uint32_t v = u; av_tag(c, v) == AV_APP && av_left(c, v) == av_right(c, v);
+         v = av_left(c, v))
+        levels++;
+    CHECK_EQ(levels, 40);
+    av_buf_free(&b);
+    av_arena_free(c);
+    /* a shared application: S, K, S K and the whole, four nodes */
+    uint32_t sk = av_parse(a, "S K", 3, NULL);
+    CHECK(dag_roundtrip(a, av_app(a, sk, sk), 4));
+    av_arena_free(a);
+}
+
 TEST_MAIN(
     TEST_CASE(printed_forms_round_trip),
     TEST_CASE(redundant_parentheses_and_space_are_dropped),
@@ -117,4 +178,5 @@ TEST_MAIN(
     TEST_CASE(malformed_input_is_rejected),
     TEST_CASE(the_print_budget_refuses_past_its_limit),
     TEST_CASE(deep_nesting_does_not_recurse),
+    TEST_CASE(the_dag_form_prints_what_it_reads),
 )

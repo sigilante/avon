@@ -93,8 +93,19 @@ TEST(a_term_that_does_not_parse_exits_1) {
     CHECK_EQ(run(cmd, out, sizeof out), 1);
 }
 
+/*  batch --dag answers every line, in order: a term it cannot read is `!`. */
+TEST(batch_dag_answers_every_line) {
+    char cmd[512], out[4096];
+    snprintf(cmd, sizeof cmd, "printf 'S K K x\\nS (K\\nK a b\\n' | " AVON " batch --dag 2>/dev/null");
+    CHECK_EQ(run(cmd, out, sizeof out), 1);
+    CHECK(strcmp(out, "NORMAL 2 dag 0=x @0\n!\nNORMAL 1 dag 0=a @0\n") == 0);
+    if (strcmp(out, "NORMAL 2 dag 0=x @0\n!\nNORMAL 1 dag 0=a @0\n") != 0)
+        fprintf(stderr, "  got: %s", out);
+}
+
 TEST_MAIN(
     TEST_CASE(a_status_is_the_line_s_and_exits_0),
     TEST_CASE(output_that_cannot_be_written_exits_1),
     TEST_CASE(a_term_that_does_not_parse_exits_1),
+    TEST_CASE(batch_dag_answers_every_line),
 )

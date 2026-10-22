@@ -123,7 +123,7 @@
 int usage(void) {
     fprintf(stderr,
         "usage: avon reduce [--strategy=copy|share] [--whnf] [--fuel=N]\n"
-        "                   [--max-nodes=N] [--budget=N] [FILE]\n"
+        "                   [--max-nodes=N] [--budget=N] [--dag] [FILE]\n"
         "       avon batch  [same options]\n"
         "       avon jam    [--budget=N] [FILE]\n"
         "       avon cue    [--budget=N] [FILE]\n"

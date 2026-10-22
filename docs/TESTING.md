@@ -28,16 +28,16 @@ A suite whose fixture is missing fails, not skips (`tests/test.h`).
 ## The smoke test: `make smoke`
 
 ```sh
-make smoke        # about 4 s: smoke: 29/29 commands as recorded
+make smoke        # about 4 s: smoke: 30/30 commands as recorded
 ```
 
-`tests/smoke.tsv` records, for 29 commands, the exit status and the SHA-256
+`tests/smoke.tsv` records, for 30 commands, the exit status and the SHA-256
 of stdout and stderr, taken from `build/dbg/avon` under the sanitizers.
 `make smoke` runs them on the release binary, whose `assert`s are compiled
 out, and compares.  The commands cover every subcommand but `front0`, each
 strategy, jets, templates, data jets, `--fix`, `--no-defer`, three piers,
-six refused options, a bird-named atom, and a witness of a term with atoms,
-which is refused.
+six refused options, a bird-named atom, the DAG form out, and a witness of a
+term with atoms, which is refused.
 
 When a change alters a recorded output on purpose, record it again from the
 sanitized binary, then check that only the rows you meant changed:
