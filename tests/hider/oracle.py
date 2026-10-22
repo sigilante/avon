@@ -32,6 +32,16 @@ def load():
     return HD
 
 
+def load_fold():
+    """The paper's fixed_points_fold.py, whose mode defect checks the
+    defect lemma, or None when the paper's scripts are absent.  It sets
+    up its own path and argument handling on import."""
+    if load() is None:
+        return None
+    import fixed_points_fold as FD
+    return FD
+
+
 def text(t, X):
     """A tuple term printed for avon: S, the passenger X, application left
     to right, an argument that is an application parenthesized."""

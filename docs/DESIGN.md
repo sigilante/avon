@@ -3393,3 +3393,18 @@ its `hist`, the depth, defect, event and front arity against the
 definitions -- and its exit and step; the census through Avon gives the
 census's verdict, exit and trail; and the five named cases hold, through
 both.
+
+**The defect count is the paper's check of its defect lemma, through
+Avon.** The lemma says D never falls along a level, and is at least 1 for
+ever after a y-step; the paper checks it on every closed term of size
+<= 11 (`fixed_points_fold.py`, mode `defect`). `--defect` keeps that
+check's count beside the trace: D along the run while there is exactly one
+X-headed item and it is not at the x-seat, the falls, the y-steps, the
+steps after the first y-step with D = 0, and the confirmed records after
+it, with those of D >= 1. It reads the D the trace already keeps, so it
+costs nothing more than the run. On every closed term of size <= 11 the
+count equals the one the definitions give from the trace lines, term by
+term, and the totals equal mode `defect`'s, run unchanged: 23,714 runs,
+2,955,501 steps, no fall, 8,914 y-steps, 6,029 confirmed records after
+one, every one with D >= 1. `S a X S` keeps D = 0 after its y-step, as
+the lemma's remark has it: the stack item it absorbs is not a mint.

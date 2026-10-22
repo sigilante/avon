@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-05.
 
 ## Done since the last revision
 
+- **The defect lemma's check through frame traces** (2026-10-22; `DESIGN.md` §22).
+  The frame-trace plan's last item: `--defect` counts D as the pure-S paper's check
+  of its defect lemma does, and `client.py defect N` runs it over `avon enum`. On
+  sizes 1 to 11 every term's count equals the definitions' and the totals equal the
+  paper's mode `defect` (`make hider-check`); sizes 12 to 16, 13.4 million terms and
+  2.97 billion steps, show no fall of D and D >= 1 at all 40.4 million confirmed
+  records after a y-step, size 16 in 126 s.
+
 - **skijack-2: 128-bit structural hashes** (2026-10-21; `DESIGN.md` §5, SKIjack #18).
   The §5 hash kept 16 hex digits, 64 bits, within a birthday search's reach of anyone
   choosing both terms. It keeps 32 now, under the version `skijack-2`: `av_digest` is

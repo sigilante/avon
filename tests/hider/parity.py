@@ -20,6 +20,12 @@ order that localizes a mismatch:
                     avon, the descents through another) gives classify(f)
                     for every closed f of size 1..N, term by term.
 
+    defect N        every closed f of size 1..N: avon's defect count of f X
+                    (--defect) equals the count the definitions give from
+                    the trace lines, term by term, and the totals equal
+                    the paper's check of its defect lemma
+                    (fixed_points_fold.py, mode defect), run unchanged.
+
     python3 tests/hider/parity.py trace 12 --avon build/avon
 """
 
@@ -217,9 +223,85 @@ def mode_stream(avon, N):
     return 0 if bad == 0 else 1
 
 
+def defect_counts(obs, conf=client.CONF):
+    """The defect count of one run from its trace lines by the
+    definitions: followed while one X-headed item persists and is not at
+    the x-seat; the steps, the falls of D, the y-steps, the steps after
+    the first y-step with D = 0, and the records of the steps followed
+    after the first y-step, confirmed by conf more, with those of D >= 1."""
+    Ls, Ds = [], []
+    dec = ys = zero = 0
+    ty = None
+    for L, pos, _d, D, ev, _fa in obs:
+        if len(pos) != 1 or ev == "o":
+            break
+        if Ds and D < Ds[-1]:
+            dec += 1
+        if ty is not None and D < 1:
+            zero += 1
+        if ev == "y":
+            ys += 1
+            if ty is None:
+                ty = len(Ds)
+        Ls.append(L)
+        Ds.append(D)
+    recs = recs_d = 0
+    if ty is not None:
+        later = 10 ** 9
+        for i in range(len(Ls) - 1, ty, -1):
+            if Ls[i] < later:
+                later = Ls[i]
+                if i + conf <= len(Ls):
+                    recs += 1
+                    recs_d += Ds[i] >= 1
+    return len(Ds), dec, ys, zero, recs, recs_d
+
+
+def mode_defect(avon, N):
+    HD = oracle.load()
+    FD = oracle.load_fold()
+    if HD is None or FD is None:
+        print("no oracle at", oracle.SCRIPTS); return 2
+    import contextlib
+    import io
+    import re
+    t0 = time.time()
+    terms = [f for n in range(1, N + 1) for f in HD.closed(n)]
+    bad = 0
+    tot = [0] * len(client.DEFECT_FIELDS)
+    got = list(client.defects(avon, N))
+    for f, g in zip(terms, got):
+        tot = [a + b for a, b in zip(tot, g)]
+        want = defect_counts(oracle.lines(HD, HD.spine(f) + [HD.X], client.H)[0])
+        if g != want:
+            bad += 1
+            if bad <= 10:
+                print(f"DIFFER {HD.show(f)}: avon {g}, definitions {want}")
+    if len(got) != len(terms):
+        bad += 1
+        print(f"DIFFER: {len(got)} counts for {len(terms)} terms")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        FD.mode_defect(N)
+    line = buf.getvalue().strip()
+    m = re.fullmatch(r"size <= \d+: (\d+) runs, (\d+) steps; D decreases: (\d+); y-steps: (\d+); "
+                     r"D = 0 after a y-step: (\d+); confirmed records after the first y-step: "
+                     r"(\d+), with D >= 1: (\d+)", line)
+    nums = [int(x) for x in m.groups()] if m else None
+    mine = [len(got)] + tot
+    agree = nums == mine
+    if not agree:
+        bad += 1
+        print(f"DIFFER totals: avon {mine}, mode defect {nums}")
+    print(f"defect parity, sizes 1..{N}: {len(terms) - bad} of {len(terms)} terms agree; "
+          f"totals {'equal' if agree else 'differ from'} mode defect's: {line} "
+          f"({time.time() - t0:.0f}s)")
+    return 0 if bad == 0 else 1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["trace", "verdict", "named", "enum", "stream"])
+    ap.add_argument("mode", choices=["trace", "verdict", "named", "enum", "stream", "defect"])
     ap.add_argument("N", type=int, nargs="?", default=12)
     ap.add_argument("H", type=int, nargs="?", default=600)
     ap.add_argument("--avon", default="build/avon")
@@ -232,6 +314,8 @@ def main():
         return mode_enum(a.avon, a.N)
     if a.mode == "stream":
         return mode_stream(a.avon, a.N)
+    if a.mode == "defect":
+        return mode_defect(a.avon, a.N)
     return mode_trace(a.avon, a.N, a.H)
 
 

@@ -13,6 +13,8 @@
  *  - A dumped frame read back in the DAG form is the frame.
  *  - A term with K or I is refused; a malformed DAG term is refused; a
  *    long run stays linear.
+ *  - The defect count of hand-traced runs, and of longer runs a recount
+ *    from their printed lines.
  */
 
 #include <stdio.h>
@@ -32,6 +34,9 @@ typedef struct {
     size_t    len;
 } traced;
 
+/*  The defect count's window for trace(); 0: no count. */
+static size_t defect_conf = 0;
+
 /*  src traced to the horizon H; dumps at the given steps (and at a halt). */
 static traced trace(const char *src, uint64_t H, size_t conf, const uint64_t *dumps,
                     size_t nd, bool *refused) {
@@ -47,6 +52,7 @@ static traced trace(const char *src, uint64_t H, size_t conf, const uint64_t *du
     if (ok) {
         if (nd) CHECK(av_trace_dump_at(tr, dumps, nd));
         av_trace_dump_halt(tr, true);
+        if (defect_conf) av_trace_defect(tr, defect_conf);
         av_opts o = av_opts_default();
         o.strategy = AV_COPY;
         o.whnf_only = true;
@@ -399,6 +405,104 @@ TEST(a_long_run_stays_linear) {
     free(r.text);
 }
 
+/*  The D line of a trace. */
+static const char *defect_line(const char *text) {
+    const char *d = strstr(text, "\nD ");
+    return d ? d + 1 : NULL;
+}
+
+TEST(hand_traced_runs_give_their_defect_counts) {
+    struct { const char *src, *want; } cases[] = {
+        /* one step, a z-step; then the halt */
+        { "S S S X", "D 1 0 0 0 0 0\n" },
+        /* a z-step, then a y-step with D = 0 */
+        { "S (S S) (S S) X", "D 2 0 1 0 0 0\n" },
+        /* four steps followed; step 4, X at the x-seat, is not */
+        { "S (S S) (S S) S X", "D 4 0 0 0 0 0\n" },
+        /* no X-headed item: nothing followed */
+        { "S S (S X) S", "D 0 0 0 0 0 0\n" },
+    };
+    defect_conf = 150;
+    for (size_t i = 0; i < sizeof cases / sizeof *cases; i++) {
+        traced r = trace(cases[i].src, 600, 0, NULL, 0, NULL);
+        const char *d = defect_line(r.text);
+        size_t n = strlen(cases[i].want);
+        CHECK(d && strncmp(d, cases[i].want, n) == 0);
+        if (!(d && strncmp(d, cases[i].want, n) == 0))
+            fprintf(stderr, "  %s: %.40s\n", cases[i].src, d ? d : "(no D line)");
+        free(r.text);
+    }
+    defect_conf = 0;
+}
+
+/*  The defect count recounted from the printed lines `n L pos d D ev fa`:
+ *  followed while there is one X-headed item and the event is not o. */
+static void defect_recount(const char *text, size_t conf, char *want, size_t cap) {
+    enum { MAXS = 4096 };
+    static unsigned Ls[MAXS], Ds[MAXS];
+    size_t n = 0;
+    unsigned long dec = 0, ys = 0, zero = 0, recs = 0, recs_d = 0;
+    long ty = -1;
+    bool gone = false;
+    for (const char *ln = text; *ln && !gone; ln = strchr(ln, '\n') ? strchr(ln, '\n') + 1 : "") {
+        if (*ln < '0' || *ln > '9') continue;
+        unsigned long step;
+        unsigned L;
+        char pos[64], dd[16], DD[16], ev;
+        if (sscanf(ln, "%lu %u %63s %15s %15s %c", &step, &L, pos, dd, DD, &ev) != 6) continue;
+        if (strchr(pos, ',') || pos[0] == '-' || ev == 'o' || n == MAXS) { gone = true; break; }
+        unsigned D = (unsigned)strtoul(DD, NULL, 10);
+        if (n && D < Ds[n - 1]) dec++;
+        if (ty >= 0 && D < 1) zero++;
+        if (ev == 'y') { ys++; if (ty < 0) ty = (long)n; }
+        Ls[n] = L;
+        Ds[n++] = D;
+    }
+    if (ty >= 0) {
+        unsigned later = UINT32_MAX;
+        for (size_t i = n; i-- > (size_t)ty + 1;)
+            if (Ls[i] < later) {
+                later = Ls[i];
+                if (i + conf <= n) { recs++; recs_d += Ds[i] >= 1; }
+            }
+    }
+    snprintf(want, cap, "D %zu %lu %lu %lu %lu %lu\n", n, dec, ys, zero, recs, recs_d);
+}
+
+TEST(defect_counts_equal_a_recount_from_the_lines) {
+    /* rides, runs with y-steps, and S a X S, whose y-step absorbs a clean
+     * item and keeps D = 0; a short window, so records are confirmed */
+    const char *srcs[] = {
+        R10 " X",
+        "S (S (S (" R10 "))) S X",
+        "S (S (S (S S) (S (" R10 ")))) S X",
+        "S (S (S S) (S (" R10 "))) X S",
+        "S (S S) (S S) (S (S S) (S (S S) (S S))) S X",
+    };
+    const size_t confs[] = { 1, 20, 150 };
+    size_t ys = 0;
+    for (size_t c = 0; c < sizeof confs / sizeof *confs; c++) {
+        defect_conf = confs[c];
+        for (size_t i = 0; i < sizeof srcs / sizeof *srcs; i++) {
+            traced r = trace(srcs[i], 600, 0, NULL, 0, NULL);
+            char want[128];
+            defect_recount(r.text, confs[c], want, sizeof want);
+            const char *d = defect_line(r.text);
+            size_t n = strlen(want);
+            CHECK(d && strncmp(d, want, n) == 0);
+            if (!(d && strncmp(d, want, n) == 0))
+                fprintf(stderr, "  %s, window %zu: avon %.40s, recount %s", srcs[i], confs[c],
+                        d ? d : "(none)\n", want);
+            unsigned long f[6] = { 0 };
+            if (d) sscanf(d, "D %lu %lu %lu %lu %lu %lu", f, f + 1, f + 2, f + 3, f + 4, f + 5);
+            ys += f[2];
+            free(r.text);
+        }
+    }
+    CHECK(ys > 0);                  /* the y-step paths were taken */
+    defect_conf = 0;
+}
+
 TEST_MAIN(
     TEST_CASE(hand_traced_runs_give_their_lines),
     TEST_CASE(an_open_at_the_last_step_is_open),
@@ -409,5 +513,7 @@ TEST_MAIN(
     TEST_CASE(a_dumped_frame_reads_back_in_the_dag_form),
     TEST_CASE(k_and_i_are_refused),
     TEST_CASE(malformed_dag_terms_are_refused),
-    TEST_CASE(a_long_run_stays_linear)
+    TEST_CASE(a_long_run_stays_linear),
+    TEST_CASE(hand_traced_runs_give_their_defect_counts),
+    TEST_CASE(defect_counts_equal_a_recount_from_the_lines)
 )

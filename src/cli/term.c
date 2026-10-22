@@ -13,14 +13,14 @@ enum {
     O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES,
     O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_INTERP, O_JET_TABLE, O_PLAN,
     O_STATEMENT, O_JET_FLOOR, O_JET_CHECK, O_FUEL, O_MAX_NODES, O_BUDGET, O_ROWS,
-    O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_FILE, O_COUNT
+    O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_DEFECT, O_FILE, O_COUNT
 };
 static const char *const option_name[O_COUNT] = {
     "--strategy", "--whnf", "--allow-bird-atoms", "--jets", "--ctors", "--no-jets",
     "--profile", "--templates", "--data", "--fix", "--memory", "--no-defer", "--p2",
     "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
     "--fuel", "--max-nodes", "--budget", "--rows", "--cells", "--trace-frame",
-    "--passenger", "--records", "--frame-dump", "a FILE",
+    "--passenger", "--records", "--frame-dump", "--defect", "a FILE",
 };
 #define OPT(o) (1u << (o))
 
@@ -56,6 +56,7 @@ typedef struct {
     int         trace;            /* 0 off, 1 summary, 2 a line per step */
     const char *passenger;
     size_t      records;          /* the confirmation window; 0: no records */
+    size_t      defect;           /* the defect count's window; 0: no count */
     uint64_t    dump_steps[64];   /* --frame-dump steps */
     size_t      ndump;
     bool        dump_records, dump_halt, dump_restart, dump_census;
@@ -84,6 +85,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->trace = 0;
     g->passenger = "X";
     g->records = 0;
+    g->defect = 0;
     g->ndump = 0;
     g->dump_records = g->dump_halt = g->dump_restart = g->dump_census = false;
     g->given = 0;
@@ -148,6 +150,9 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--records") == 0)        g->records = 150;
         else if (strncmp(s, "--records=", 10) == 0 && number(s + 10, &v) && v)
             g->records = (size_t)v;
+        else if (strcmp(s, "--defect") == 0)         g->defect = 150;
+        else if (strncmp(s, "--defect=", 9) == 0 && number(s + 9, &v) && v)
+            g->defect = (size_t)v;
         else if (strncmp(s, "--frame-dump=", 13) == 0 && s[13]) {
             /* a comma list of steps and the keywords records, halt, last-restart */
             const char *q = s + 13;
@@ -186,7 +191,7 @@ static bool parse_args(int argc, char **argv, args *g) {
  *  witness reads its budgets and lean-ski's files, and with --statement
  *  only the statement, the jet table and a witness. */
 static bool options_fit(const args *g, const char *cmd) {
-    const uint32_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP);
+    const uint32_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP) | OPT(O_DEFECT);
     const uint32_t untraced = OPT(O_TEMPLATES) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
                               OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_PROFILE) | OPT(O_JETS) |
                               OPT(O_CTORS) | OPT(O_INTERP) |
@@ -384,6 +389,7 @@ static bool trace_pass(const args *g, const char *src, size_t len, bool out,
     if (ok && ndumps && !av_trace_dump_at(tr, dumps, ndumps)) ok = false;
     if (ok) {
         av_trace_dump_halt(tr, dump_halt);
+        if (g->defect) av_trace_defect(tr, g->defect);
         av_opts o = g->o;
         o.strategy = AV_COPY;
         o.whnf_only = true;
