@@ -1,9 +1,10 @@
 # The checks against other repositories, weekly, at the revisions
 # tests/pins.sh pins: every fixture regenerates byte for byte from its
 # exporter (make fixtures-check), and the selfhost, SKIjack-0 and
-# full-language front-end checks pass against SKIjack.  lean-ski and the
-# paper's scripts are private repositories; their checks stay manual, and
-# refuse a checkout off their pins.
+# full-language front-end checks pass against SKIjack; and, in a job of
+# their own, the five witness checks pass against lean-ski.  The pure-S
+# paper's scripts are a private repository; hider-check stays manual, and
+# refuses a checkout off its pin.
 name: pinned
 
 on:
@@ -59,3 +60,57 @@ jobs:
         run: tests/front0_check.sh
       - name: full-language front end
         run: tests/front1_check.sh
+
+  # Avon's tables against lean-ski's checkers and prover, at lean-ski's pin:
+  # make witness-check, jet-witness-check, probe-witness-check,
+  # zk-jet-witness-check and p2-witness-check (docs/TESTING.md).
+  lean-ski:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150          # a cold lean-ski build takes about 50 minutes
+    env:
+      CC: clang-18
+      LEAN_SKI: ${{ github.workspace }}/ext/lean-ski
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - name: pins
+        id: pins
+        run: |
+          . tests/pins.sh
+          echo "lean-ski=$LEAN_SKI_PIN" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          repository: sigilante/lean-ski
+          ref: ${{ steps.pins.outputs.lean-ski }}
+          path: ext/lean-ski
+      - name: Install elan
+        run: |
+          curl -sSfL https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          ./elan-init -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      # lean-ski's Ski.ZK.Generic peaks at about 11 GiB, so it builds alone,
+      # with swap as the margin, as lean-ski's own CI builds it.
+      - name: Swap, for lean-ski's Ski.ZK.Generic
+        run: |
+          sudo systemctl stop systemd-oomd || true
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+      - name: lean-ski's Ski.ZK.Generic, alone
+        working-directory: ext/lean-ski
+        run: lake build Ski.ZK.Generic
+      - name: lean-ski's executables the checks run
+        working-directory: ext/lean-ski
+        run: lake build aircheck jets composed skilark circuit p2run
+      - name: build
+        run: make -j4 CC=$CC build/avon
+      - name: witness check
+        run: make CC=$CC witness-check
+      - name: jet witness check
+        run: make CC=$CC jet-witness-check
+      - name: probe witness check
+        run: make CC=$CC probe-witness-check
+      - name: zk jet witness check
+        run: make CC=$CC zk-jet-witness-check
+      - name: p2 witness check
+        run: make CC=$CC p2-witness-check

@@ -57,7 +57,8 @@ to master, and on macOS too for pushes to master.  A change to
 documentation alone (Markdown, `docs/`, `img/`, `LICENSE`) runs nothing.
 `.github/workflows/pinned.yml` runs `fixtures-check`, `selfhost-check`,
 `front0-check` and `front1-check` weekly against the public repositories
-at their pins.  The checks that need lean-ski or the paper's scripts run by
+at their pins, and in a job of its own the five checks that need lean-ski,
+at lean-ski's pin.  `hider-check`, which needs the paper's scripts, runs by
 hand.
 
 ## The checks against other repositories

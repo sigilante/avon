@@ -3,10 +3,10 @@
 # ASan and UBSan, on Linux; pushes to master also run it on macOS.  A push
 # or pull request that changes only documentation (Markdown, docs/, img/,
 # LICENSE) runs nothing: no build or test reads those files.  The
-# checks against SKIjack and SKIlark run weekly at their pins (pinned.yml);
-# those that need lean-ski or the paper's scripts (witness-check,
+# checks against SKIjack, SKIlark and lean-ski (witness-check,
 # jet-witness-check, probe-witness-check, zk-jet-witness-check,
-# p2-witness-check, hider-check) stay manual: see the Makefile's header.
+# p2-witness-check) run weekly at their pins (pinned.yml); hider-check,
+# which needs the paper's scripts, stays manual: see the Makefile's header.
 #
 # Pinned: the images, the compiler (the image's clang-18 on Linux, Xcode
 # 16.4's clang on macOS), and each action by commit.
