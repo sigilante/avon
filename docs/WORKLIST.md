@@ -6,6 +6,16 @@ design lives. Last revised 2026-10-23.
 
 ## Done since the last revision
 
+- **SKIlark's lists** (2026-10-23; SKIlark #8). SKIlark's quotations become Joy's lists:
+  words are symbols, a fourth kind of stack item, and the kernel adds `uncons`, `null`
+  and `small` while `succ`, `pred`, `max`, `min`, `and`, `or` and `not` become derived
+  words. `tests/pins.sh` moves SKIlark to `4bf06ae`; `tests/workloads/skilark/` and
+  `jets/joy.tsv` regenerate from it (`fixtures-check`, 193 files). The workloads take
+  564,740 contractions; `joy.tsv` lists the kernel's 23 Joy words of a 24-way sum (67
+  terms), which `test_workloads` checks Avon reads as constructor jets of 25 arguments at
+  most, under its cap of 32; the census and jetstat smoke rows are re-recorded. DESIGN
+  §6.7 and §6.8 take the new workloads.
+
 - **SKIlark toward Joy in full** (2026-10-23; SKIlark #6 and #7). SKIlark's kernel adds
   Joy's arithmetic on signed integers, truth values, `branch` and `ifte`, and retires its
   own `ifz`. `tests/pins.sh` moves SKIlark to `9d6fb9e`; `tests/workloads/skilark/` and
