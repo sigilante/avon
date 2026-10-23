@@ -739,6 +739,17 @@ corpora, 2,295,172, `B (B S)` leads at 9.9%, then `Cons`/`Push` 8.5%,
 SKIlark's `step` 8.4%, 486 calls at 399 contractions each, `B (B K)`
 8.4% and `pair` 7.3%.
 
+**Rerun, 2026-10-24: SKIlark's combinators, characters and strings.**
+SKIlark's kernel gained the stack as data (`stack`, `unstack`), `Def`
+for a derived word in a quotation, characters and strings (`Glyph`,
+`Text`, `ord`, `chr`), and the reference implementation's comparison
+and truth values; Joy's recursion combinators are derived (SKIlark #9
+and #10). The `word` sum has 31 constructors and `step` 33,231 atoms.
+Its workloads take 742,609 contractions, and over both corpora,
+2,473,041, SKIlark's `step` leads at 13.2%, 502 calls at 648
+contractions each, then `B (B S)` 12.5%, `B (B K)` 8.3%, `Cons`/`Push`
+7.9% and `pair` 6.8%.
+
 **Three kinds of term lead, and the programs' own functions are the
 fewest.**
 
@@ -1026,11 +1037,12 @@ Suc `(1, 1, 2)`.
   S/K, as Rathman's chart expands it and as combinatorylogic.com's
   composites expand; every encoding is checked by reduction against the
   bird's rule. `birds_names.tsv` names each by family.
-- `jets/joy.tsv`: Joy's word list from every SKIlark form, 67 terms
+- `jets/joy.tsv`: Joy's word list from every SKIlark form, 74 terms
   (`jets/joy.py`): the word constructors, phase 1's 12 and the kernel's
-  23 Joy words of a 24-way sum (`Dup` … `Add`, `Sub` … `Ifte`,
-  `Uncons`, `Null`, `Small`), their compiled bodies `wDup` … `wIfte`,
-  the primitives `add`, `mul`, `cat`, `wordOf`, and the
+  30 Joy words of a 31-way sum (`Dup` … `Add`, `Sub` … `Ifte`, `Uncons`
+  … `Unstack`, `Def`, `Glyph`, `Text`, `Ord`, `Chr`), their compiled
+  bodies `wDup` … `wIfte`, the primitives `add`, `mul`, `cat`, `wordOf`,
+  and the
   derived words `over`, `nip`, `tuck`, `rot`, `sip`, `kComb`, `yComb`.
   They are jetted whatever the census says, because eight programs are
   too few to rank them.
@@ -1040,21 +1052,21 @@ and SKIlark's workloads, `copy` mode, every fire checked against the
 unjetted run, gives the manifest's count. The share of contractions the
 fires absorb:
 
-| jets | SKIjack (1,730,432) | SKIlark (564,740) |
+| jets | SKIjack (1,730,432) | SKIlark (742,609) |
 |---|---:|---:|
-| birds | 18.8% | 17.0% |
-| Joy's words | 0.0% | 8.7% |
-| constructors found | 21.5% | 26.5% |
-| constructors and birds | 30.8% | 34.2% |
-| all three | 30.8% | 35.2% |
+| birds | 18.8% | 13.7% |
+| Joy's words | 0.0% | 8.6% |
+| constructors found | 21.5% | 22.7% |
+| constructors and birds | 30.8% | 29.0% |
+| all three | 30.8% | 30.5% |
 
 Constructors and birds overlap -- V, T, K and K I are both -- and
-together absorb about a third of each corpus's work. Joy's words add 1.0
-point on SKIlark's. On Joy's basis SKIlark's workloads were 928,398
+together absorb about a third of each corpus's work. Joy's words add 1.5
+points on SKIlark's. On Joy's basis SKIlark's workloads were 928,398
 contractions on the Scott fuel (24.9, 4.1, 24.6, 36.9, 37.5%) and
 333,013 on Church fuel (22.1, 7.2, 29.7, 39.6, 40.0%); with Joy's
 integers and truth values they were 558,847 (15.7, 9.6, 25.5, 32.4,
-33.9%). The absorption counts contractions a fire replaces; each
+33.9%), and with lists 564,740 (17.0, 8.7, 26.5, 34.2, 35.2%). The absorption counts contractions a fire replaces; each
 fire still builds its residual, so the wall-clock gain is smaller.
 
 ### 6.9 Supercombinator templates: the compiler hands over its functions
@@ -1588,6 +1600,115 @@ retires 3.5 to 10.6% more instructions and runs 15 to 20% fewer
 collections. Peak memory rises on three ports, by 8 to 39 MB, while the
 largest live set is the same within 0.1%. The SKIjack-0 front end still compiles
 its 492 names hash for hash in every mode (`make front0-check`).
+
+### 6.14 Data jets for SKIlark: a plan
+
+*Plan, 2026-10-24. Measured on avon `2040293`, skijack 0.2.1 and SKIlark
+`4f607f5` (stage 5); steps are to weak head normal form unless a table
+says otherwise.*
+
+**SKIlark already gains from templates and constructor dispatch; its
+numbers do not reach the native operations, and its lists have no data
+jet.** Six interpreted programs, the steps of each mode:
+
+| program | copy | share | templates | templates and data |
+|---|---:|---:|---:|---:|
+| `[1 2 3] [dup *] map` | 380,852 | 265,603 | 5,703 | 4,436 |
+| `4 [1] [*] primrec` | 516,796 | 337,272 | 7,619 | 5,917 |
+| `6 fact` | 183,405 | 132,649 | 3,046 | 2,363 |
+| `"abcdef" size` | 147,268 | 111,685 | 2,405 | 1,855 |
+| `[1 2 3 4] size` | 105,349 | 81,850 | 1,757 | 1,361 |
+| `10 [0] [+] primrec` | 1,408,973 | 737,434 | 16,802 | 13,006 |
+
+Templates take 60 to 84 times fewer steps than copy mode, and data jets
+22 to 23% fewer again; no numeral operation fires, since SKIlark's
+arithmetic is its own and not the prelude's.
+Steps are not time, which is the measure (§6.10). The plan has three
+parts, by the kind of data.
+
+**SKIlark's terms: its sums dispatch now, and the cap keeps them doing
+so.** `item` (6 constructors), `word` (31), `prog`, `stack`, `text` and
+`result` are Scott sums, and §6.10's dispatch takes their cases in one
+step. A template past 32 formals dispatches as SKI, since 32 markers
+check it, so `word`, whose one-field constructors take 32 arguments, is
+at the limit both of §6.8's constructor jets and of dispatch. Raising
+`AV_JET_ARITY_MAX` for SKIlark's sets (its PLAN.md §3, stage 5) must
+raise the markers with it, or `step` loses its one-step dispatch. The
+compiled form's `quot` sum has one constructor per static quotation,
+171 when SKIlark's thirty combinator programs compile as one set, so its
+`apply` already dispatches as SKI there.
+
+**Numbers: SKIlark's arithmetic on the prelude's operations, with its
+operands made words first.** SKIlark's `nat` is a `Zero | Suc` numeral,
+so its closed numerals become words (`W n`, 149 of them in the `map`
+run), and its integers and characters ride on them: an integer is a sign
+and a `nat`, a character an integer. Two changes on SKIlark's side make
+the native operations fire:
+
+1. *Build `nat` arithmetic from `natAdd natSub natMul natIfEq natIfLe`*:
+   `add` as `natAdd`, `monus` as `natSub`, `less m n` as `natIfLe (Suc
+   m) n True False`, and the comparison as `natIfEq m n Same (natIfLe m n
+   Less More)`. Avon then admits the five operations.
+2. *Case on an integer before an operation, so its magnitude is a word*:
+   an operation fires only when both operands are words already, and
+   `mul (mag a) (mag b)` hands it two unreduced applications. With the
+   first change alone, `200 200 *` fires no operation.
+
+Run to normal form with templates and data, with the first change and,
+for multiplication, the second (the comparison cases on its integers
+already):
+
+| program | SKIlark's arithmetic | the prelude's, cased first | operations |
+|---|---:|---:|---:|
+| `200 200 *` | 8,360,922 | 160,085 | 1 |
+| `200 200 * 199 <` | 84,354 | 118 | 3 |
+| `200 200 * 7 /` | 8,607,176 | 291,621 | 5,715 |
+
+User time for `200 200 *` fell from 0.25 s to 0.07 s. Division remains a
+loop of native subtractions, since skijack has no `natDiv` or `natRem`;
+adding them to the prelude, with Avon's words, is the third change. Two
+limits stay. A word holds 28 bits, so a SKIlark integer past 2^28 - 1
+computes in SKI, correctly and slowly. And a reader that prints a
+result's normal form builds its unary numeral: `200 200 * 200 *` takes
+1.67 billion steps either way, which a level-1 question (SKIlark's
+`topIs`) or a reader that takes a word as a number avoids. zk's
+verifiers compute in the compiled form's naturals block, whose terms
+lean-ski proves, so that block keeps its own arithmetic until the proofs
+move with it (§18.2).
+
+**Lists: a word for lists, by analogy with the numeral's.** SKIlark's
+quotations (`Done | Then word prog`), stacks (`Empty | Push item
+stack`) and strings (`TNil | TCons int text`) are list-shaped: a nullary
+constructor and a constructor of an element and the rest. Nothing in
+Avon holds them natively, so `cat` copies its left list cell by cell,
+and `size` and `at` walk one. The plan mirrors §6.10's words:
+
+- *A list word.* `L [x0 .. xn-1]` is a jet node over a vector of element
+  nodes, whose term is `Cons x0 (L [x1 ..])`, seen through by `av_view`
+  as a word is, so printing, the hash, `jam` and the witness read the
+  Scott list. It is made where a list is already whole: a closed list at
+  load, and a list operation's result.
+- *Operations on lists in the prelude, pinned by hash*: `listAppend`,
+  `listLength`, `listAt`, `listTake` and `listDrop`, written generically
+  over any list-shaped type as the numeral operations are over any
+  numeral type, each admitted only if its term is skijack's node for
+  node and agrees with the native operation on small cases. An operation
+  fires only on list words already held, and builds lazily otherwise.
+- *SKIlark's side.* The kernel's `cat` and `catT` become `listAppend`.
+  Joy's `size`, `at`, `take` and `drop` are derived words, recursions
+  over `uncons`, which a list word makes a dispatch per element but not
+  one operation; to reach `listLength` and the rest they must become
+  kernel words, and each is a `word` constructor past the cap.
+
+**Order of work.** (1) SKIlark's interpreted kernel and the compiled
+integers on the prelude's operations, cased first: SKIlark alone, its
+counts re-pinned, zk untouched. (2) `natDiv` and `natRem` in skijack's
+prelude and in Avon's `words.c`. (3) The cap: markers and
+`AV_JET_ARITY_MAX` together, or `word` split in two, which SKIlark's sets
+decide. (4) List words: the prelude's list operations, Avon's list jet
+node, and `tests/test_data.c`'s parity at every fuel. (5) The proofs:
+§18.2's word cells, and a list cell beside them, each operation's
+licence a Lean theorem owed.
 
 ## 7. The interpreter jet
 

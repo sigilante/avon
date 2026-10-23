@@ -2,9 +2,19 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-23.
+design lives. Last revised 2026-10-24.
 
 ## Done since the last revision
+
+- **SKIlark's combinators, characters and strings** (2026-10-24; SKIlark #9 and #10).
+  SKIlark's kernel gains `stack`, `unstack`, `Def`, characters and strings, and the
+  reference implementation's comparison and truth values; Joy's recursion combinators
+  are derived. `tests/pins.sh` moves SKIlark to `eb90896`; `tests/workloads/skilark/`
+  and `jets/joy.tsv` regenerate from it (`fixtures-check`, 193 files). The workloads take
+  742,609 contractions; `joy.tsv` lists the kernel's 30 Joy words of a 31-way sum (74
+  terms), which `test_workloads` checks Avon reads as constructor jets of 32 arguments at
+  most, the cap; the census and jetstat smoke rows are re-recorded. DESIGN §6.7 and §6.8
+  take the new workloads, and §6.14 plans SKIlark's data jets.
 
 - **SKIlark's lists** (2026-10-23; SKIlark #8). SKIlark's quotations become Joy's lists:
   words are symbols, a fourth kind of stack item, and the kernel adds `uncons`, `null`
@@ -277,6 +287,15 @@ Parked on that: 12% does not pay for what a safe cycle needs.
 
 If taken up: cycles inside `reduce` and `batch` only, broken at every exit, kernels
 refusing the flag; measure the cost of breaking them before going further.
+
+### 7. SKIlark's data jets: planned 2026-10-24 (`DESIGN.md` §6.14)
+
+SKIlark's sums already dispatch in one step; its numbers miss the native operations and
+its lists have no data jet. In order: SKIlark's arithmetic on the prelude's operations,
+its operands cased into words first (SKIlark alone; `200 200 *` from 8,360,922 steps to
+160,085); `natDiv` and `natRem` in the prelude and in `words.c`; the cap, markers and
+`AV_JET_ARITY_MAX` together, which SKIlark's sets decide; list words with the prelude's
+list operations; and the proofs, §18.2's word cells and a list cell.
 
 ## Handed to lean-ski
 

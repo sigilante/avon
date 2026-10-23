@@ -919,7 +919,8 @@ Recorded in `docs/DESIGN.md` with their dates:
 - the interpreter jet on T2: 504,930 contractions to 342 (§7);
 - the census of both corpora: 1,730,432 and 928,398 contractions (§6.7),
   SKIlark's 333,013 on Church fuel, 558,847 with Joy's integers and
-  truth values, and 564,740 with its lists (2026-10-23);
+  truth values, 564,740 with its lists (2026-10-23), and 742,609 with
+  its combinators, characters and strings (2026-10-24);
 - the compiler core: 87 abstractions of its own compilation in 12,214,849
   contractions, the corpus's 8,636 in 523,815,334 (§20.3);
 - the persistent arena: a 32 MB kernel reopens in 0.3 ms, against 160 ms
