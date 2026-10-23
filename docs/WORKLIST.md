@@ -6,6 +6,15 @@ design lives. Last revised 2026-10-23.
 
 ## Done since the last revision
 
+- **SKIlark toward Joy in full** (2026-10-23; SKIlark #6 and #7). SKIlark's kernel adds
+  Joy's arithmetic on signed integers, truth values, `branch` and `ifte`, and retires its
+  own `ifz`. `tests/pins.sh` moves SKIlark to `9d6fb9e`; `tests/workloads/skilark/` and
+  `jets/joy.tsv` regenerate from it (`fixtures-check`, 193 files). The workloads take
+  558,847 contractions; `joy.tsv` lists the kernel's 27 Joy words of a 28-way sum (78
+  terms), which `test_workloads` checks Avon reads as constructor jets of 29 arguments at
+  most, under its cap of 32; the census and jetstat smoke rows are re-recorded. DESIGN
+  §6.7 and §6.8 take the new workloads.
+
 - **SKIlark on Church fuel** (2026-10-23; SKIlark #4 and #5). SKIlark's kernel bounds a
   run with a Church numeral, the loop's body applied *n* times, in place of a Scott
   numeral computed as it is consumed, so its fuelled runs cost about what its unfuelled

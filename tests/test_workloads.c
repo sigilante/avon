@@ -53,23 +53,25 @@ TEST(constructors_have_their_shapes) {
 }
 
 /*  Joy's word constructors: 12 of them, nullary but Lit and Quote. */
-TEST(joys_words_are_wide_constructors) {
-    av_arena *a = av_arena_new(1u << 16);
-    const char *err = NULL;
-    CHECK_EQ(av_jets_load(a, "jets/joy.tsv", 2, &err), 34);
+/*  Each of FORM's word constructors in jets/joy_names.tsv, its index in
+    WORDS and its one field or none: a constructor jet of a COUNT-way sum.
+    Returns how many it checked. */
+static unsigned check_words(av_arena *a, const char *names_tsv, const char *form,
+                            const char *const *words, unsigned nwords, unsigned count,
+                            const char *const *one_field, unsigned nfield) {
     size_t n = 0;
-    char *names = slurp("jets/joy_names.tsv", &n);
+    char *names = slurp(names_tsv, &n);
     CHECK(names != NULL);
-    static const char *const words[] = { "Dup", "Swap", "Pop", "Qcons", "Cat", "Unit",
-                                         "Dip", "Do", "Ifz", "Lit", "Quote", "Add" };
+    if (!names) return 0;
+    size_t flen = strlen(form);
     unsigned seen = 0;
     for (char *line = names, *nl; line && *line; line = nl) {
         nl = strchr(line, '\n');
         if (nl) *nl++ = '\0';
         char *t1 = strchr(line, '\t'), *t2 = t1 ? strchr(t1 + 1, '\t') : NULL;
-        if (!t2 || strncmp(line, "joy-phase1", 10) != 0) continue;
+        if (!t2 || (size_t)(t1 - line) != flen || strncmp(line, form, flen) != 0) continue;
         *t2 = '\0';
-        for (unsigned w = 0; w < 12; w++) {
+        for (unsigned w = 0; w < nwords; w++) {
             if (strcmp(t1 + 1, words[w]) != 0) continue;
             av_digest d;
             CHECK(av_hash_parse(t2 + 1, &d));
@@ -78,16 +80,36 @@ TEST(joys_words_are_wide_constructors) {
                 if (av_digest_eq(a->jets[j].digest, d)) id = j;
             CHECK(id != AV_NONE);
             if (id == AV_NONE) continue;
-            unsigned fields = (w == 9 || w == 10) ? 1 : 0;   /* Lit, Quote */
-            CHECK_EQ(a->jets[id].ctor.count, 12);
+            unsigned fields = 0;
+            for (unsigned f = 0; f < nfield; f++)
+                if (strcmp(words[w], one_field[f]) == 0) fields = 1;
+            CHECK_EQ(a->jets[id].ctor.count, count);
             CHECK_EQ(a->jets[id].ctor.index, w);
             CHECK_EQ(a->jets[id].ctor.fields, fields);
-            CHECK_EQ(a->jets[id].arity, 12 + fields);
+            CHECK_EQ(a->jets[id].arity, count + fields);
             seen++;
         }
     }
-    CHECK_EQ(seen, 12);
     free(names);
+    return seen;
+}
+
+TEST(joys_words_are_wide_constructors) {
+    av_arena *a = av_arena_new(1u << 16);
+    const char *err = NULL;
+    CHECK_EQ(av_jets_load(a, "jets/joy.tsv", 2, &err), 78);
+    static const char *const one[] = { "Lit", "Quote", "Truth" };
+    /* phase 1, the basis: a 12-way word */
+    static const char *const basis[] = { "Dup", "Swap", "Pop", "Qcons", "Cat", "Unit",
+                                         "Dip", "Do", "Ifz", "Lit", "Quote", "Add" };
+    CHECK_EQ(check_words(a, "jets/joy_names.tsv", "joy-phase1", basis, 12, 12, one, 3), 12);
+    /* the interpreted kernel: Joy's words of a 28-way word, the 28th the
+       internal Choose; Lit, Quote and Truth take 29 arguments, under the cap */
+    static const char *const kernel[] = { "Dup", "Swap", "Pop", "Qcons", "Cat", "Unit",
+                                          "Dip", "Do", "Lit", "Quote", "Add", "Sub", "Mul",
+                                          "Div", "Rem", "Succ", "Pred", "Max", "Min", "Eql",
+                                          "Lt", "Truth", "And", "Or", "Not", "Branch", "Ifte" };
+    CHECK_EQ(check_words(a, "jets/joy_names.tsv", "joy-interpreted", kernel, 27, 28, one, 3), 27);
     av_arena_free(a);
 }
 
@@ -119,7 +141,7 @@ static void run_manifest(const char *manifest, tally *t) {
         if (!bytes) continue;
         av_arena *a = av_arena_new(1u << 16);
         CHECK(av_jets_load(a, "jets/birds.tsv", 2, NULL) == 153);
-        CHECK(av_jets_load(a, "jets/joy.tsv", 2, NULL) == 34);
+        CHECK(av_jets_load(a, "jets/joy.tsv", 2, NULL) == 78);
         uint32_t term = av_cue(a, (const uint8_t *)bytes, blen, NULL);
         free(bytes);
         CHECK(term != AV_NONE);
