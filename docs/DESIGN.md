@@ -708,6 +708,18 @@ The names are from `jets/birds_names.tsv` and both corpora's
 Each row's saving is what that jet would absorb alone; rows overlap and
 do not add. The run takes a quarter of a second per corpus.
 
+**Rerun, 2026-10-23: SKIlark on Church fuel.** SKIlark's kernel now
+bounds a run with a Church numeral, the loop's body applied *n* times,
+in place of a Scott numeral computed as it is consumed (SKIlark's
+`PLAN.md` §3). Its workloads fall from 928,398 contractions to 333,013;
+SKIjack's corpus is unchanged. Over both, 2,063,445 contractions, the
+constructors lead: `Cons`/`Push` 188,005 (9.1%), `B (B K)` 167,890,
+`pair` 161,770, `B (B S)` 139,050, then `step` with its wrapper at
+121,923 (5.9%), called 589 times as before. What fell was the fuel's
+arithmetic: `B (B K)` loses 9,695 fires, `T` 18,867, and SKIlark's
+`Suc` 9,737 of its 10,153. The analysis and the bird table below read
+the 2026-09-28 run.
+
 **Three kinds of term lead, and the programs' own functions are the
 fewest.**
 
@@ -995,9 +1007,9 @@ Suc `(1, 1, 2)`.
   S/K, as Rathman's chart expands it and as combinatorylogic.com's
   composites expand; every encoding is checked by reduction against the
   bird's rule. `birds_names.tsv` names each by family.
-- `jets/joy.tsv`: Joy's word list from every SKIlark form, 35 terms
+- `jets/joy.tsv`: Joy's word list from every SKIlark form, 34 terms
   (`jets/joy.py`): the 12 word constructors, their compiled bodies
-  `wDup` … `wAdd`, the primitives `add`, `mul`, `cat`, `wordOf`, and the
+  `wDup` … `wAdd`, the primitives `add`, `cat`, `wordOf`, and the
   derived words `over`, `nip`, `tuck`, `rot`, `sip`, `kComb`, `yComb`.
   They are jetted whatever the census says, because eight programs are
   too few to rank them.
@@ -1007,17 +1019,18 @@ and SKIlark's workloads, `copy` mode, every fire checked against the
 unjetted run, gives the manifest's count. The share of contractions the
 fires absorb:
 
-| jets | SKIjack (1,730,432) | SKIlark (928,398) |
+| jets | SKIjack (1,730,432) | SKIlark (333,013) |
 |---|---:|---:|
-| birds | 18.8% | 24.9% |
-| Joy's words | 0.0% | 4.1% |
-| constructors found | 21.5% | 24.6% |
-| constructors and birds | 30.8% | 36.9% |
-| all three | 30.8% | 37.5% |
+| birds | 18.8% | 22.1% |
+| Joy's words | 0.0% | 7.2% |
+| constructors found | 21.5% | 29.7% |
+| constructors and birds | 30.8% | 39.6% |
+| all three | 30.8% | 40.0% |
 
 Constructors and birds overlap -- V, T, K and K I are both -- and
-together absorb about a third of the work. Joy's words add 0.6 points on
-this corpus. The absorption counts contractions a fire replaces; each
+together absorb a third of SKIjack's work and two fifths of SKIlark's.
+Joy's words add 0.4 points on this corpus. On the Scott fuel SKIlark's
+928,398 gave 24.9, 4.1, 24.6, 36.9 and 37.5%. The absorption counts contractions a fire replaces; each
 fire still builds its residual, so the wall-clock gain is smaller.
 
 ### 6.9 Supercombinator templates: the compiler hands over its functions

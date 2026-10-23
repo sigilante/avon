@@ -56,7 +56,7 @@ TEST(constructors_have_their_shapes) {
 TEST(joys_words_are_wide_constructors) {
     av_arena *a = av_arena_new(1u << 16);
     const char *err = NULL;
-    CHECK_EQ(av_jets_load(a, "jets/joy.tsv", 2, &err), 35);
+    CHECK_EQ(av_jets_load(a, "jets/joy.tsv", 2, &err), 34);
     size_t n = 0;
     char *names = slurp("jets/joy_names.tsv", &n);
     CHECK(names != NULL);
@@ -119,7 +119,7 @@ static void run_manifest(const char *manifest, tally *t) {
         if (!bytes) continue;
         av_arena *a = av_arena_new(1u << 16);
         CHECK(av_jets_load(a, "jets/birds.tsv", 2, NULL) == 153);
-        CHECK(av_jets_load(a, "jets/joy.tsv", 2, NULL) == 35);
+        CHECK(av_jets_load(a, "jets/joy.tsv", 2, NULL) == 34);
         uint32_t term = av_cue(a, (const uint8_t *)bytes, blen, NULL);
         free(bytes);
         CHECK(term != AV_NONE);

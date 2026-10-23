@@ -6,6 +6,16 @@ design lives. Last revised 2026-10-23.
 
 ## Done since the last revision
 
+- **SKIlark on Church fuel** (2026-10-23; SKIlark #4 and #5). SKIlark's kernel bounds a
+  run with a Church numeral, the loop's body applied *n* times, in place of a Scott
+  numeral computed as it is consumed, so its fuelled runs cost about what its unfuelled
+  ones do. `tests/pins.sh` moves SKIlark to `6900741`; `tests/workloads/skilark/` and
+  `jets/joy.tsv` regenerate from it (`fixtures-check`, 193 files). The workloads fall from
+  928,398 contractions to 333,013, every count `test_workloads` checks; `joy.tsv` loses
+  `mul`, which the kernel no longer has (34 terms); the census and jetstat smoke rows are
+  re-recorded. DESIGN §6.7 adds the rerun and §6.8's jetstat table takes the new
+  workloads: all three dictionaries absorb 40.0% of SKIlark's, up from 37.5%.
+
 - **lean-ski at `paper-v9`, now public** (2026-10-23). `tests/pins.sh` moves to `fb65141`:
   lean-ski's public release, past `paper-v8` by its satisfiability witnesses for the
   hidden-term and composed Merkle-committed bounds and its CI. The five checks the pin

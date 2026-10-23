@@ -10,7 +10,7 @@ of:
 
   the word constructors  Dup Swap Pop Qcons Cat Unit Dip Do Ifz Lit Quote Add
   their compiled bodies  wDup wSwap ... wAdd (the compiled form's words)
-  the primitives         add mul cat wordOf
+  the primitives         add cat wordOf
   the derived words      over nip tuck rot sip kComb yComb
 
 Writes jets/joy.tsv (a dictionary export) and jets/joy_names.tsv (form,
@@ -32,7 +32,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 CTORS = ["Dup", "Swap", "Pop", "Qcons", "Cat", "Unit", "Dip", "Do", "Ifz",
          "Lit", "Quote", "Add"]
 WORDS = (CTORS + ["w" + c for c in CTORS]
-         + ["add", "mul", "cat", "wordOf"]
+         + ["add", "cat", "wordOf"]
          + ["over", "nip", "tuck", "rot", "sip", "kComb", "yComb"])
 
 
