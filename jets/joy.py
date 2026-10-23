@@ -9,8 +9,9 @@ kernel, the interpreted and the compiled front ends) this takes the terms
 of:
 
   the word constructors  Dup Swap Pop Qcons Cat Unit Dip Do Lit Quote, the
-                         basis's Ifz, and Joy's arithmetic, comparison and
-                         truth words, Add Sub Mul ... Branch Ifte
+                         basis's Ifz, Joy's arithmetic, comparison and
+                         truth words, Add Sub Mul ... Branch Ifte, and its
+                         list words, Uncons Null Small
   their compiled bodies  wDup wSwap ... wIfte (the compiled form's words)
   the primitives         add mul cat wordOf
   the derived words      over nip tuck rot sip kComb yComb
@@ -32,12 +33,12 @@ from skilark.export import runs
 HERE = pathlib.Path(__file__).resolve().parent
 
 CTORS = ["Dup", "Swap", "Pop", "Qcons", "Cat", "Unit", "Dip", "Do", "Ifz",
-         "Lit", "Quote", "Add", "Sub", "Mul", "Div", "Rem", "Succ", "Pred",
-         "Max", "Min", "Eql", "Lt", "Truth", "And", "Or", "Not", "Branch",
-         "Ifte"]
-# the compiled form keeps wIfz only for programs on naturals, none of them
-# exported
-WORDS = (CTORS + ["w" + c for c in CTORS if c != "Ifz"]
+         "Lit", "Quote", "Add", "Sub", "Mul", "Div", "Rem", "Eql", "Lt",
+         "Truth", "Branch", "Ifte", "Uncons", "Null", "Small"]
+# the compiled form keeps wIfz only for programs on naturals, and its list
+# words only for programs on lists; none of them is exported
+LISTS = {"Uncons", "Null", "Small"}
+WORDS = (CTORS + ["w" + c for c in CTORS if c != "Ifz" and c not in LISTS]
          + ["add", "mul", "cat", "wordOf"]
          + ["over", "nip", "tuck", "rot", "sip", "kComb", "yComb"])
 
