@@ -48,8 +48,10 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
           python-version: "3.12"
-      - name: aviary-kernel at its pin
-        run: pip install ./ext/aviary
+      # run0 and run1 draw their random programs from SKIjack's test_spec0,
+      # which imports pytest
+      - name: aviary-kernel at its pin, and pytest
+        run: pip install ./ext/aviary "pytest>=7"
       - name: release build
         run: make -j4 CC=$CC build/avon
       - name: fixtures regenerate
