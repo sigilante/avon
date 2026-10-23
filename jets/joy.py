@@ -8,9 +8,11 @@ not these programs lean on them.  From every SKIlark form (phase 1's
 kernel, the interpreted and the compiled front ends) this takes the terms
 of:
 
-  the word constructors  Dup Swap Pop Qcons Cat Unit Dip Do Ifz Lit Quote Add
-  their compiled bodies  wDup wSwap ... wAdd (the compiled form's words)
-  the primitives         add cat wordOf
+  the word constructors  Dup Swap Pop Qcons Cat Unit Dip Do Lit Quote, the
+                         basis's Ifz, and Joy's arithmetic, comparison and
+                         truth words, Add Sub Mul ... Branch Ifte
+  their compiled bodies  wDup wSwap ... wIfte (the compiled form's words)
+  the primitives         add mul cat wordOf
   the derived words      over nip tuck rot sip kComb yComb
 
 Writes jets/joy.tsv (a dictionary export) and jets/joy_names.tsv (form,
@@ -30,9 +32,13 @@ from skilark.export import runs
 HERE = pathlib.Path(__file__).resolve().parent
 
 CTORS = ["Dup", "Swap", "Pop", "Qcons", "Cat", "Unit", "Dip", "Do", "Ifz",
-         "Lit", "Quote", "Add"]
-WORDS = (CTORS + ["w" + c for c in CTORS]
-         + ["add", "cat", "wordOf"]
+         "Lit", "Quote", "Add", "Sub", "Mul", "Div", "Rem", "Succ", "Pred",
+         "Max", "Min", "Eql", "Lt", "Truth", "And", "Or", "Not", "Branch",
+         "Ifte"]
+# the compiled form keeps wIfz only for programs on naturals, none of them
+# exported
+WORDS = (CTORS + ["w" + c for c in CTORS if c != "Ifz"]
+         + ["add", "mul", "cat", "wordOf"]
          + ["over", "nip", "tuck", "rot", "sip", "kComb", "yComb"])
 
 
