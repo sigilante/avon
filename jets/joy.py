@@ -10,8 +10,10 @@ of:
 
   the word constructors  Dup Swap Pop Qcons Cat Unit Dip Do Lit Quote, the
                          basis's Ifz, Joy's arithmetic, comparison and
-                         truth words, Add Sub Mul ... Branch Ifte, and its
-                         list words, Uncons Null Small
+                         truth words, Add Sub Mul ... Branch Ifte, its list
+                         words, Uncons Null Small Stack Unstack, the
+                         derived word in a quotation, Def, and its text
+                         words, Glyph Text Ord Chr
   their compiled bodies  wDup wSwap ... wIfte (the compiled form's words)
   the primitives         add mul cat wordOf
   the derived words      over nip tuck rot sip kComb yComb
@@ -34,11 +36,14 @@ HERE = pathlib.Path(__file__).resolve().parent
 
 CTORS = ["Dup", "Swap", "Pop", "Qcons", "Cat", "Unit", "Dip", "Do", "Ifz",
          "Lit", "Quote", "Add", "Sub", "Mul", "Div", "Rem", "Eql", "Lt",
-         "Truth", "Branch", "Ifte", "Uncons", "Null", "Small"]
-# the compiled form keeps wIfz only for programs on naturals, and its list
-# words only for programs on lists; none of them is exported
-LISTS = {"Uncons", "Null", "Small"}
-WORDS = (CTORS + ["w" + c for c in CTORS if c != "Ifz" and c not in LISTS]
+         "Truth", "Branch", "Ifte", "Uncons", "Null", "Small", "Stack",
+         "Unstack", "Def", "Glyph", "Text", "Ord", "Chr"]
+# the compiled form keeps wIfz only for programs on naturals, its list words
+# only for programs on lists and its text words only for programs with
+# characters; none of them is exported, and a Def compiles to its body
+NOT_COMPILED = {"Ifz", "Uncons", "Null", "Small", "Stack", "Unstack", "Def",
+                "Glyph", "Text", "Ord", "Chr"}
+WORDS = (CTORS + ["w" + c for c in CTORS if c not in NOT_COMPILED]
          + ["add", "mul", "cat", "wordOf"]
          + ["over", "nip", "tuck", "rot", "sip", "kComb", "yComb"])
 
