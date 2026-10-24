@@ -773,6 +773,11 @@ operations as their terms: the interpreted runs 696,878, the compiled
 8.5%, `Cons`/`Push` 7.7% and `pair` 6.5%. SKIlark then divided with
 skijack 0.2.2's `natDiv` and `natRem` (#19): `step` is 57,570 atoms, and
 the workloads, none of which divides, take the same contractions.
+SKIlark's stage 8 (#21) gave `word` a thirtieth constructor, `Ext ext`,
+which holds its further words, `size` and `at` so far, in a sum of their
+own: `word`'s one-field constructors take 31 arguments, under the cap.
+The workloads use neither word, so they pay only the wider `word`: 959,160
+contractions, from 941,408, and `step` 614 calls at 632 each, from 607.
 
 **Three kinds of term lead, and the programs' own functions are the
 fewest.**
@@ -1063,7 +1068,7 @@ Suc `(1, 1, 2)`.
   bird's rule. `birds_names.tsv` names each by family.
 - `jets/joy.tsv`: Joy's word list from every SKIlark form, 74 terms
   (`jets/joy.py`): the word constructors, phase 1's 12 and the kernel's
-  28 Joy words of a 29-way sum (`Dup` … `Do`, `Lit` of an item, `Add` …
+  28 Joy words of a 30-way sum (`Dup` … `Do`, `Lit` of an item, `Add` …
   `Ifte`, `Uncons` … `Unstack`, `Def`, `Ord`, `Chr`, `Typeof`, `Not`),
   their compiled bodies `wDup` … `wIfte` and `wTypeof`, the primitives
   `add`, `mul`, `cat`, `wordOf`,
@@ -1666,7 +1671,9 @@ raise the markers with it, or `step` loses its one-step dispatch.
 §3, stage 6). Its literals merged into `Lit item`, and `typeof`, sets
 and a kernel `not` came in under the cap: `word` has 29 constructors,
 `item` 7, and the one-field words take 30 arguments, so `step` keeps
-its one-step dispatch and the cap stays at 32. The
+its one-step dispatch and the cap stays at 32. SKIlark's stage 8 keeps
+it there: its further kernel words go in `ext`, a sum of their own under
+`word`'s thirtieth constructor `Ext`, and the one-field words take 31. The
 compiled form's `quot` sum has one constructor per static quotation,
 171 when SKIlark's thirty combinator programs compile as one set, so its
 `apply` already dispatches as SKI there.

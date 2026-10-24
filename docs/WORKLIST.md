@@ -6,6 +6,15 @@ design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
 
+- **SKIlark's `ext`: `size` and `at` in the kernel** (2026-10-25; SKIlark #21). `word`
+  gains `Ext ext`, its thirtieth constructor, and `ext` holds the kernel's further
+  words in a sum of their own, the first `size` and `at`, which the interpreted form no
+  longer derives: `[1 2 3] size` takes 1,895 contractions, from 82,459. Its one-field
+  constructors take 31 arguments, under the cap of 32, which `test_workloads` checks.
+  `tests/pins.sh` moves SKIlark to `9fa703d`; the workloads, which use neither word,
+  take 959,160 contractions, from 941,408; the census and jetstat smoke rows are
+  re-recorded.
+
 - **SKIlark divides natively** (2026-10-25; SKIlark #19; skijack 0.2.2). SKIlark's
   `divN` and `remN` call skijack's `natDiv` and `natRem`, which this runtime runs
   natively: `200 200 * 7 rem` takes 138 contractions, from 108,716. `tests/pins.sh`

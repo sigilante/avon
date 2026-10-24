@@ -103,16 +103,17 @@ TEST(joys_words_are_wide_constructors) {
     static const char *const basis[] = { "Dup", "Swap", "Pop", "Qcons", "Cat", "Unit",
                                          "Dip", "Do", "Ifz", "Lit", "Quote", "Add" };
     CHECK_EQ(check_words(a, "jets/joy_names.tsv", "joy-phase1", basis, 12, 12, one, 2), 12);
-    /* the interpreted kernel: Joy's words of a 29-way word, the 29th the
-       internal Choose; the one-field words, Lit of an item and Def, take
-       30 arguments, under the cap of 32 */
+    /* the interpreted kernel: Joy's words of a 30-way word, the 29th the
+       internal Choose and the 30th Ext, the kernel's further words in a
+       sum of their own; the one-field words, Lit of an item and Def, take
+       31 arguments, under the cap of 32 */
     static const char *const kernel[] = { "Dup", "Swap", "Pop", "Qcons", "Cat", "Unit",
                                           "Dip", "Do", "Lit", "Add", "Sub", "Mul", "Div",
                                           "Rem", "Eql", "Lt", "Branch", "Ifte", "Uncons",
                                           "Null", "Small", "Stack", "Unstack", "Def", "Ord",
                                           "Chr", "Typeof", "Not" };
     static const char *const kone[] = { "Lit", "Def" };
-    CHECK_EQ(check_words(a, "jets/joy_names.tsv", "joy-interpreted", kernel, 28, 29, kone, 2), 28);
+    CHECK_EQ(check_words(a, "jets/joy_names.tsv", "joy-interpreted", kernel, 28, 30, kone, 2), 28);
     av_arena_free(a);
 }
 
