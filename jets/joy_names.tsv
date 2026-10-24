@@ -65,8 +65,8 @@ joy-compiled	wQuote	skijack-2:02664e5eeb660705026824b6c786be58
 joy-compiled	wAdd	skijack-2:e5192cc3b573f2108d79a1a405a285ee
 joy-compiled	wSub	skijack-2:09e46dd2dd7c23bf150c99144b4b82e7
 joy-compiled	wMul	skijack-2:1de7e59cacd592b48ae27b000d70ba84
-joy-compiled	wDiv	skijack-2:cd4874c02fbbbdf51f24a6411acbdad4
-joy-compiled	wRem	skijack-2:397ff13cdd9f5483b0dd5a7412b5a1ee
+joy-compiled	wDiv	skijack-2:c72107ef0aa657ec63d68877c07688e9
+joy-compiled	wRem	skijack-2:0214cffc3f0b340a4ace99f7341f54a5
 joy-compiled	wEql	skijack-2:bd00051bdba3144b32575b9f26385e3f
 joy-compiled	wLt	skijack-2:4993c3e2db802ce53a4ee4b6a576fd24
 joy-compiled	wTruth	skijack-2:3612bf08980b323e9a124303978d7be6

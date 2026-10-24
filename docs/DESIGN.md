@@ -770,7 +770,9 @@ workloads take 941,408 contractions in copy mode, which runs the
 operations as their terms: the interpreted runs 696,878, the compiled
 154,844. Over both corpora, 2,671,840, SKIlark's `step` leads at 14.0%,
 614 calls at 607 contractions each, then `B (B S)` 13.4%, `B (B K)`
-8.5%, `Cons`/`Push` 7.7% and `pair` 6.5%.
+8.5%, `Cons`/`Push` 7.7% and `pair` 6.5%. SKIlark then divided with
+skijack 0.2.2's `natDiv` and `natRem` (#19): `step` is 57,570 atoms, and
+the workloads, none of which divides, take the same contractions.
 
 **Three kinds of term lead, and the programs' own functions are the
 fewest.**
