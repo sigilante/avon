@@ -6,6 +6,13 @@ design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
 
+- **SKIlark divides natively** (2026-10-25; SKIlark #19; skijack 0.2.2). SKIlark's
+  `divN` and `remN` call skijack's `natDiv` and `natRem`, which this runtime runs
+  natively: `200 200 * 7 rem` takes 138 contractions, from 108,716. `tests/pins.sh`
+  moves SKIjack to the 0.2.2 release (`0537d69`) and SKIlark to `0a2e6ea`; the
+  interpreted workloads regenerate 136 bytes smaller, at the same 941,408
+  contractions, and the census smoke row is re-recorded for `step`'s 57,570 atoms.
+
 - **SKIlark's library words and numbers** (2026-10-25; SKIlark #17 and #18; skijack #25,
   avon #70). SKIlark derives the reference's library words and computes its naturals with
   skijack's operations, which this runtime runs natively on words; skijack gains `natDiv`
