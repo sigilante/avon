@@ -632,7 +632,7 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
                 if (q) *q++ = '\0';
             }
             if (k < 4) { if (*line) { msg = "malformed words.tsv line"; goto fail; } continue; }
-            static const char *const opname[] = { "", "add", "sub", "mul", "ifeq", "ifle" };
+            static const char *const opname[] = { "", "add", "sub", "mul", "ifeq", "ifle", "div", "rem" };
             unsigned op = 0;
             for (unsigned i = 1; i < sizeof opname / sizeof *opname; i++)
                 if (strcmp(fld[1], opname[i]) == 0) op = i;

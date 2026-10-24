@@ -393,6 +393,9 @@ static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
     uint64_t v = 0, need = 0;
     if (op == AV_WOP_ADD) { v = (uint64_t)m + n; need = 2 * (uint64_t)n; }
     if (op == AV_WOP_MUL) { v = (uint64_t)m * n; need = 2 * v; }
+    /* by zero, the quotient is 0 and the remainder m, as skijack's are */
+    if (op == AV_WOP_DIV) { v = n ? m / n : 0; need = 2 * v; }
+    if (op == AV_WOP_REM) { v = n ? m % n : m; need = 2 * v; }
     if (v > AV_WORD_MAX || need > WORD_BUILD_MAX) return 0;
     if (need && !hensure(r, (size_t)need, curp)) return -1;
     uint32_t x = av_res(a, sarg(r, r->top - 1));                 /* m: reread */
@@ -404,6 +407,8 @@ static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
         for (uint32_t i = 0; i < n && x != AV_NODE_K; i++) x = word_pred(a, x);
         break;
     case AV_WOP_MUL:
+    case AV_WOP_DIV:
+    case AV_WOP_REM:
         x = AV_NODE_K;
         for (uint64_t i = 0; i < v; i++) x = word_succ(a, x);
         break;
@@ -826,7 +831,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
             if (o->data && a->jets[id].word_op) {
                 /* a numeral operation: natively on words; else its
                  * term, the node kept for the next call */
-                unsigned op = a->jets[id].word_op, k = op >= AV_WOP_IFEQ ? 4u : 2u;
+                unsigned op = a->jets[id].word_op, k = av_wop_operands(op);
                 if (r->top - bottom >= k) {
                     if (!sprepare(r, D, r->top - k, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     int wf = word_fire(r, op, k, &cur);

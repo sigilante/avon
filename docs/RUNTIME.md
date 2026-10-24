@@ -193,7 +193,9 @@ data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dis
   words, numbers whose term is still the numeral; a word meeting its two
   continuations dispatches without allocating.
 - skijack's numeral operations (`natAdd`, `natSub`, `natMul`, `natIfEq`,
-  `natIfLe`), listed in `words.tsv` by the §5 hash of their terms, run
+  `natIfLe`, `natDiv`, `natRem`; by zero the quotient is 0 and the
+  remainder its dividend, as skijack's terms give), listed in `words.tsv`
+  by the §5 hash of their terms, run
   natively when both operands are words already, and otherwise run as
   their terms. Each is `admitted` only after its term, run on the numerals
   0 to 5, agrees with the native operation; one that does not is

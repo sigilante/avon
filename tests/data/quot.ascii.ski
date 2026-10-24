@@ -1,0 +1,18 @@
+-- Data jets on numerals (docs/DESIGN.md §6.10): the prelude's quotient and
+-- remainder, by zero as well, which installs the subtraction and the test
+-- they step by.
+bool === False | True
+nat  === Zero | Suc nat
+
+n2  = Suc (Suc Zero)
+n5  = Suc (Suc (Suc (Suc (Suc Zero))))
+n10 = natAdd n5 n5
+n7  = natAdd n5 n2
+n14 = natAdd n7 n7
+sq n = natMul n n
+
+-- 100 / 7 = 14 and 100 % 7 = 2; by zero, 0 and 100
+main = natIfEq (natDiv (sq n10) n7) n14 (natIfEq (natRem (sq n10) n7) n2 (natIfEq (natDiv (sq n10) Zero) Zero (natIfEq (natRem (sq n10) Zero) (sq n10) True False) False) False) False
+
+-- a numeral's normal form, for comparing printed normal forms: 50 % 7 * (100 / 7)
+out = natMul (natRem (natMul n10 n5) n7) (natDiv (sq n10) n7)
