@@ -2,9 +2,16 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-24.
+design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
+
+- **SKIlark's library words and numbers** (2026-10-25; SKIlark #17 and #18; skijack #25,
+  avon #70). SKIlark derives the reference's library words and computes its naturals with
+  skijack's operations, which this runtime runs natively on words; skijack gains `natDiv`
+  and `natRem`, and Avon runs them. `tests/pins.sh` moves SKIlark to `e3f29f5`; the
+  workloads take 941,408 contractions and `joy.tsv` lists 74 terms; the census and
+  jetstat smoke rows are re-recorded. DESIGN §6.7, §6.8 and §6.14 take them.
 
 - **SKIlark's sidestep: type tests and sets under the cap** (2026-10-24; SKIlark #11 to
   #13). SKIlark merges its five literal constructors into `Lit item` and gains Joy's
