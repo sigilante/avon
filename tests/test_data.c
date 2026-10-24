@@ -123,8 +123,9 @@ static char *fixture(const char *prog, const char *name) {
 }
 
 TEST(every_mode_gives_the_same_answer) {
-    const char *progs[3][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" } };
-    for (int i = 0; i < 3; i++) {
+    const char *progs[4][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+                                { "quot", "main" } };
+    for (int i = 0; i < 4; i++) {
         char dir[64];
         snprintf(dir, sizeof dir, "tests/data/%s", progs[i][0]);
         char *src = fixture(progs[i][0], progs[i][1]);
@@ -148,13 +149,19 @@ TEST(every_mode_gives_the_same_answer) {
             CHECK(dt.words > 0);
             CHECK(dt.word_ops > 0);
         }
+        if (strcmp(progs[i][0], "quot") == 0) {     /* the quotient and remainder too */
+            CHECK_EQ(dt.admitted, 7);
+            CHECK_EQ(dt.refused, 0);
+            CHECK(dt.words > 0);
+            CHECK(dt.word_ops > 0);
+        }
         free(src);
     }
 }
 
 TEST(normal_forms_are_the_unjetted_ones) {
-    const char *progs[2] = { "lists", "nats" };
-    for (int i = 0; i < 2; i++) {
+    const char *progs[3] = { "lists", "nats", "quot" };
+    for (int i = 0; i < 3; i++) {
         char dir[64];
         snprintf(dir, sizeof dir, "tests/data/%s", progs[i]);
         char *src = fixture(progs[i], "out");
@@ -249,9 +256,9 @@ TEST(a_word_dispatches_in_one_step_and_copy_mode_runs_its_term) {
     }
 }
 
-/*  The words.tsv line for op: its term, printed. */
+/*  The words.tsv line for op: its term, printed; quot's lists all seven. */
 static char *op_term(const char *op) {
-    char *text = slurp("tests/data/nats/words.tsv");
+    char *text = slurp("tests/data/quot/words.tsv");
     CHECK(text != NULL);
     if (!text) return NULL;
     for (char *line = strtok(text, "\n"); line; line = strtok(NULL, "\n")) {
@@ -270,22 +277,22 @@ static char *op_term(const char *op) {
 }
 
 TEST(every_numeral_operation_agrees_with_its_term) {
-    const char *ops[5] = { "add", "sub", "mul", "ifeq", "ifle" };
+    const char *ops[7] = { "add", "sub", "mul", "ifeq", "ifle", "div", "rem" };
     static char src[1 << 16], x[4096], y[4096];
-    for (int k = 0; k < 5; k++) {
+    for (int k = 0; k < 7; k++) {
         char *term = op_term(ops[k]);
         CHECK(term != NULL);
         if (!term) continue;
-        bool test = k >= 3;
+        bool test = k == 3 || k == 4;
         for (unsigned m = 0; m < 8; m++) {
             for (unsigned n = 0; n < 8; n++) {
                 numeral(x, sizeof x, m);
                 numeral(y, sizeof y, n);
                 snprintf(src, sizeof src, "(%s) (%s) (%s)%s", term, x, y, test ? " yes no" : "");
-                outcome ski = run(src, "tests/data/nats", SKI, AV_SHARE, test, 10000000, 1u << 12);
+                outcome ski = run(src, "tests/data/quot", SKI, AV_SHARE, test, 10000000, 1u << 12);
                 static char want[1 << 17];
                 strcpy(want, ski.nf);
-                outcome dt = run(src, "tests/data/nats", DATA, AV_SHARE, test, 10000000, 1u << 12);
+                outcome dt = run(src, "tests/data/quot", DATA, AV_SHARE, test, 10000000, 1u << 12);
                 CHECK_EQ(dt.word_ops, 1);
                 CHECK(strcmp(dt.nf, want) == 0);
                 if (test)

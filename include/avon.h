@@ -834,8 +834,13 @@ typedef struct av_jet {
                                    comparing a jet node's term with it    */
 } av_jet;
 
-/*  The numeral operations, skijack's natAdd .. natIfLe. */
-enum { AV_WOP_ADD = 1, AV_WOP_SUB, AV_WOP_MUL, AV_WOP_IFEQ, AV_WOP_IFLE };
+/*  The numeral operations, skijack's natAdd .. natIfLe, natDiv and natRem:
+ *  the two tests take their numerals and two continuations, the rest two
+ *  numerals. */
+enum { AV_WOP_ADD = 1, AV_WOP_SUB, AV_WOP_MUL, AV_WOP_IFEQ, AV_WOP_IFLE, AV_WOP_DIV, AV_WOP_REM };
+static inline unsigned av_wop_operands(unsigned op) {
+    return op == AV_WOP_IFEQ || op == AV_WOP_IFLE ? 4u : 2u;
+}
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
  *  no arity up to AV_JET_ARITY_MAX at which an atom reaches the head within max_steps, or

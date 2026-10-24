@@ -1,0 +1,28 @@
+skijack-2:7174a8ba6bfde4d180876944778d3d79	prelude	pair	3	0,1,2	``v2 v0 v1
+skijack-2:d443db4c9ec0d6dfa4ed1da3c4e62e75	prelude	hd	1	0	`v0 K
+skijack-2:f12540b2d66076c3bad9065c297df2e3	prelude	tl	1	0	`v0 `K I
+skijack-2:86be9a55762d316a3026c2836d044f5f	prelude	nil	2	0,1	v0
+skijack-2:49fa03c83288919037dbe8488907a98b	prelude	cons	4	0,1,2,3	``v3 v0 v1
+skijack-2:86be9a55762d316a3026c2836d044f5f	prelude	zero	2	0,1	v0
+skijack-2:cf4585eaeabf748125651cf8ceb08899	prelude	suc	3	0,1,2	`v2 v0
+skijack-2:5f67b64d71691ebbf966ec2b5e1302a4	prelude	natAdd	3	0,1,2	``v2 v1 ``#c5eb2d26cac0a83da1abf0f37801f603 v0 v1
+skijack-2:c5eb2d26cac0a83da1abf0f37801f603	prelude	natAdd	3	0,1,2	`#cf4585eaeabf748125651cf8ceb08899 ``v0 v1 v2
+skijack-2:7a37dced7139f7586c9f026016b7e10d	prelude	natSub	3	0,1,2	``v2 v1 ``#fcf21be563453973e945ccab41c8e157 v0 v1
+skijack-2:fcf21be563453973e945ccab41c8e157	prelude	natSub	3	0,1,2	``v0 ``v1 #86be9a55762d316a3026c2836d044f5f I v2
+skijack-2:0c8620dae121b33150e2ff2052a021c4	prelude	natMul	3	0,1,2	``v2 #86be9a55762d316a3026c2836d044f5f ``#9e3d771fecf5ecdbeee5805efbe1f9e8 v0 v1
+skijack-2:9e3d771fecf5ecdbeee5805efbe1f9e8	prelude	natMul	3	0,1,2	``#0af93ffd308641cb195679a7459efac7 v1 ``v0 v1 v2
+skijack-2:e51af60df30afab9c1b8302e6aa445ed	prelude	natIfEq	5	0,1,2,3,4	``v1 ``v2 v3 `K v4 ````#84e4a1b5a17d5c43dbc49b8526adb699 v0 v2 v3 v4
+skijack-2:84e4a1b5a17d5c43dbc49b8526adb699	prelude	natIfEq	5	0,1,2,3,4	``v1 v3 ````#9f810d2a28f6b626770f503e03ce580e v0 v2 v3 v4
+skijack-2:9f810d2a28f6b626770f503e03ce580e	prelude	natIfEq	5	0,1,2,3,4	````v0 v3 v4 v1 v2
+skijack-2:673d5fe41528028444e92af451f6e6dc	prelude	natDiv	3	0,1,2	``v2 #86be9a55762d316a3026c2836d044f5f ```#ee9629e8f9a7f5e05f7b12b967fe445c v0 v1 v2
+skijack-2:ee9629e8f9a7f5e05f7b12b967fe445c	prelude	natDiv	4	0,1,2,3	````#3d27b39f726a4ea0fddb2bea2f89d654 v2 v1 `#cf4585eaeabf748125651cf8ceb08899 ``v0 ``#82b3c12cab2425e67f8151e8c1bdc883 v1 v2 v2 #86be9a55762d316a3026c2836d044f5f
+skijack-2:7349a10b02fe730f520d84a91f7c1ab3	prelude	natRem	3	0,1,2	``v2 v1 ```#d59cc5c712c77d225bbd7a7014283cea v0 v1 v2
+skijack-2:d59cc5c712c77d225bbd7a7014283cea	prelude	natRem	4	0,1,2,3	````#3d27b39f726a4ea0fddb2bea2f89d654 v2 v1 ``v0 ``#82b3c12cab2425e67f8151e8c1bdc883 v1 v2 v2 v1
+skijack-2:760b344951f52188e83eb6f53fa78355	prelude	natIfLe	5	0,1,2,3,4	``v1 v3 ````#84e4a1b5a17d5c43dbc49b8526adb699 v0 v2 v3 v4
+skijack-2:84e4a1b5a17d5c43dbc49b8526adb699	prelude	natIfLe	5	0,1,2,3,4	``v1 v3 ````#9f810d2a28f6b626770f503e03ce580e v0 v2 v3 v4
+skijack-2:9f810d2a28f6b626770f503e03ce580e	prelude	natIfLe	5	0,1,2,3,4	````v0 v3 v4 v1 v2
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	False	2	0,1	v0
+skijack-2:d5c8fefc7e2835061b54a24c6d9489d7	ctor	True	2	0,1	v1
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	Zero	2	0,1	v0
+skijack-2:cf4585eaeabf748125651cf8ceb08899	ctor	Suc	3	0,1,2	`v2 v0
+skijack-2:d7bddcd405158491f1cbdaca54fff6d0	eq	sq	1	0	``#15d2f6f46d4a6d43bdce1f0d5f73678b v0 v0

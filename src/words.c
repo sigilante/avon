@@ -189,10 +189,10 @@ static uint32_t plain_numeral(av_arena *a, uint32_t n) {
 }
 
 /*  The numeral operations' terms, skijack's (expand.py's natAdd .. natIfLe,
- *  over its prelude's suc and zero), pinned: a words.tsv row is admitted
- *  only if its term is this one, node for node, so a row cannot bring an
- *  operation of its own; word_admit's test on small numerals runs as well.
- *  Index AV_WOP_ADD .. AV_WOP_IFLE. */
+ *  natDiv and natRem, over its prelude's suc and zero), pinned: a words.tsv
+ *  row is admitted only if its term is this one, node for node, so a row
+ *  cannot bring an operation of its own; word_admit's test on small
+ *  numerals runs as well.  Index AV_WOP_ADD .. AV_WOP_REM. */
 static const char *const PINNED[] = {
     NULL,
     /* add */
@@ -224,6 +224,33 @@ static const char *const PINNED[] = {
         "(K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S (K S))) (S (K (S (K"
         " (S (K S))))) (S (S (K S) (S (K K) (S (K S) (S (K S))))) (K (S (K K)"
         " K)))))))) (K (K (S (K K) K))))))))",
+    /* div */
+        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (K (S (S I (K K))"
+        ")))) (S (K (S (K (S (K K))))) (S (S (K S) (S (K (S (K S))) (S (K (S "
+        "(S (K S) (S (K (S (S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K ("
+        "S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K K)))))))) (S (K "
+        "K) (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K K)))))"
+        "))) (S (K K) (S (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S "
+        "(K S))) (S (K (S (K (S (K S))))) (S (S (K S) (S (K K) (S (K S) (S (K"
+        " S))))) (K (S (K K) K)))))))) (K (K (S (K K) K))))))))))) K)))) (S ("
+        "K (S (K (S (K (S (K K) (S (K (S I)) K))))))) (S (S (K S) (S (K (S (K"
+        " S))) (S (S (K S) (S (K K) (S (K S) K))) (K (S (K (S I I)) (S (S (K "
+        "S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S I)) K)))) (S (K (S (K "
+        "K))) (S (S (K S) K) (K (S (S I (K K)) (K I))))))))))) (K (K I)))))))"
+        " (K (K (K K))))))",
+    /* rem */
+        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S"
+        " I)) K)))) (S (K (S (K (S (K K))))) (S (S (K S) (S (K (S (K S))) (S "
+        "(K (S (S (K S) (S (K (S (S (K (S I I)) (S (S (K S) K) (K (S I I))) ("
+        "S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K K)))))))) "
+        "(S (K K) (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K "
+        "K)))))))) (S (K K) (S (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S "
+        "(K (S (K S))) (S (K (S (K (S (K S))))) (S (S (K S) (S (K K) (S (K S)"
+        " (S (K S))))) (K (S (K K) K)))))))) (K (K (S (K K) K))))))))))) K)))"
+        ") (S (S (K S) (S (K (S (K S))) (S (S (K S) (S (K K) (S (K S) K))) (K"
+        " (S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K "
+        "(S I)) K)))) (S (K (S (K K))) (S (S (K S) K) (K (S (S I (K K)) (K I)"
+        ")))))))))) (K (K I)))))) (K K))))",
 };
 
 const char *av_word_pinned(unsigned op) {
@@ -259,7 +286,9 @@ bool word_admit(av_arena *a, uint32_t term, unsigned op) {
             }
             uint32_t want = op == AV_WOP_ADD ? x + y
                           : op == AV_WOP_SUB ? (x > y ? x - y : 0)
-                          : op == AV_WOP_MUL ? x * y : UINT32_MAX;
+                          : op == AV_WOP_MUL ? x * y
+                          : op == AV_WOP_DIV ? (y ? x / y : 0)
+                          : op == AV_WOP_REM ? (y ? x % y : x) : UINT32_MAX;
             if (want == UINT32_MAX) return false;
             uint32_t e = plain_numeral(a, want);
             if (e == AV_NONE) return false;

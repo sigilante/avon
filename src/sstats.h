@@ -94,7 +94,7 @@ static inline unsigned sstats_arity(const av_arena *a, uint32_t h) {
     if (a->nodes[h].l & AV_JET_WORD) return 2;
     const struct av_jet *j = &a->jets[AV_JET_ID(av_left(a, h))];
     if (j->fix) return 1;
-    if (j->word_op) return j->word_op >= AV_WOP_IFEQ ? 4 : 2;
+    if (j->word_op) return av_wop_operands(j->word_op);
     if (j->tmpl) return a->tmpls[j->tmpl - 1].k;
     return j->arity;
 }

@@ -1721,6 +1721,15 @@ and `size` and `at` walk one. The plan mirrors §6.10's words:
   kernel words, and each is a `word` constructor: two fit under the cap
   since the sidestep, and more need the cap raised or `word` split.
 
+*Progress, 2026-10-25.* Step (1) is SKIlark #18: its naturals are the
+prelude's operations, each casing its numerals first so a computed one is
+a word, and `200 200 * 199 200 * -` takes 962 steps, from 16,520,814.
+Step (2) is skijack #25 and this runtime's `div` and `rem`: `natDiv` and
+`natRem`, total (by zero, 0 and the dividend), pinned by term and run
+natively; `100 7 /` on a SKIlark kernel whose division is `natDiv` takes
+148 steps and one operation. SKIlark takes them up once skijack is
+released with them.
+
 **Order of work.** (1) SKIlark's interpreted kernel and the compiled
 integers on the prelude's operations, cased first: SKIlark alone, its
 counts re-pinned, zk untouched. (2) `natDiv` and `natRem` in skijack's
