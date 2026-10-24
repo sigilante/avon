@@ -6,6 +6,18 @@ design lives. Last revised 2026-10-24.
 
 ## Done since the last revision
 
+- **SKIlark's sidestep: type tests and sets under the cap** (2026-10-24; SKIlark #11 to
+  #13). SKIlark merges its five literal constructors into `Lit item` and gains Joy's
+  `typeof`, the type tests, sets of 0 to 63 and a kernel `not`, the complement, with
+  no change to Avon: `word` has 29 constructors, so its one-field constructors take 30
+  arguments, under the cap of 32. `tests/pins.sh` moves SKIlark to `a53dc73`;
+  `tests/workloads/skilark/` and `jets/joy.tsv` regenerate from it (`fixtures-check`,
+  193 files). The workloads take 882,928 contractions, from 742,609; `joy.tsv` lists the
+  kernel's 28 Joy words of a 29-way sum (73 terms), which `test_workloads` checks Avon
+  reads as constructor jets of 30 arguments at most; the census and jetstat smoke rows
+  are re-recorded. DESIGN §6.7 and §6.8 take the new workloads, and §6.14 records the
+  cap's decision.
+
 - **SKIlark's combinators, characters and strings** (2026-10-24; SKIlark #9 and #10).
   SKIlark's kernel gains `stack`, `unstack`, `Def`, characters and strings, and the
   reference implementation's comparison and truth values; Joy's recursion combinators
@@ -293,9 +305,11 @@ refusing the flag; measure the cost of breaking them before going further.
 SKIlark's sums already dispatch in one step; its numbers miss the native operations and
 its lists have no data jet. In order: SKIlark's arithmetic on the prelude's operations,
 its operands cased into words first (SKIlark alone; `200 200 *` from 8,360,922 steps to
-160,085); `natDiv` and `natRem` in the prelude and in `words.c`; the cap, markers and
-`AV_JET_ARITY_MAX` together, which SKIlark's sets decide; list words with the prelude's
-list operations; and the proofs, §18.2's word cells and a list cell.
+160,085); `natDiv` and `natRem` in the prelude and in `words.c`; list words with the
+prelude's list operations; and the proofs, §18.2's word cells and a list cell. The cap
+stays at 32: SKIlark's sets came in under it (the sidestep, 2026-10-24), and two `word`
+slots remain for list kernel words before markers and `AV_JET_ARITY_MAX` must rise
+together or `word` split.
 
 ## Handed to lean-ski
 

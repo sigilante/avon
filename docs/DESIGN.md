@@ -750,6 +750,18 @@ Its workloads take 742,609 contractions, and over both corpora,
 contractions each, then `B (B S)` 12.5%, `B (B K)` 8.3%, `Cons`/`Push`
 7.9% and `pair` 6.8%.
 
+**Rerun, 2026-10-24: SKIlark's sidestep.** SKIlark's five literal
+constructors became one, `Lit item`; its kernel gained Joy's `typeof`,
+from which the type tests derive, sets of 0 to 63, and Joy's `not`, a
+set's complement (SKIlark #11 to #13). The `word` sum has 29
+constructors, under the cap, and `step` 45,016 atoms. Its workloads take
+882,928 contractions, the interpreted runs 660,290 from 551,541 and the
+compiled 132,952 from 101,382: `succ` and `pred` now tell a truth value
+from an integer, and `sumto` counts down with `pred`. Over both corpora,
+2,613,360,
+SKIlark's `step` leads at 14.3%, 614 calls at 607 contractions each,
+then `B (B S)` 13.4%, `B (B K)` 8.5%, `Cons`/`Push` 7.8% and `pair` 6.7%.
+
 **Three kinds of term lead, and the programs' own functions are the
 fewest.**
 
@@ -1037,11 +1049,12 @@ Suc `(1, 1, 2)`.
   S/K, as Rathman's chart expands it and as combinatorylogic.com's
   composites expand; every encoding is checked by reduction against the
   bird's rule. `birds_names.tsv` names each by family.
-- `jets/joy.tsv`: Joy's word list from every SKIlark form, 74 terms
+- `jets/joy.tsv`: Joy's word list from every SKIlark form, 73 terms
   (`jets/joy.py`): the word constructors, phase 1's 12 and the kernel's
-  30 Joy words of a 31-way sum (`Dup` … `Add`, `Sub` … `Ifte`, `Uncons`
-  … `Unstack`, `Def`, `Glyph`, `Text`, `Ord`, `Chr`), their compiled
-  bodies `wDup` … `wIfte`, the primitives `add`, `mul`, `cat`, `wordOf`,
+  28 Joy words of a 29-way sum (`Dup` … `Do`, `Lit` of an item, `Add` …
+  `Ifte`, `Uncons` … `Unstack`, `Def`, `Ord`, `Chr`, `Typeof`, `Not`),
+  their compiled bodies `wDup` … `wIfte` and `wTypeof`, the primitives
+  `add`, `mul`, `cat`, `wordOf`,
   and the
   derived words `over`, `nip`, `tuck`, `rot`, `sip`, `kComb`, `yComb`.
   They are jetted whatever the census says, because eight programs are
@@ -1052,21 +1065,23 @@ and SKIlark's workloads, `copy` mode, every fire checked against the
 unjetted run, gives the manifest's count. The share of contractions the
 fires absorb:
 
-| jets | SKIjack (1,730,432) | SKIlark (742,609) |
+| jets | SKIjack (1,730,432) | SKIlark (882,928) |
 |---|---:|---:|
-| birds | 18.8% | 13.7% |
-| Joy's words | 0.0% | 8.6% |
-| constructors found | 21.5% | 22.7% |
-| constructors and birds | 30.8% | 29.0% |
-| all three | 30.8% | 30.5% |
+| birds | 18.8% | 13.9% |
+| Joy's words | 0.0% | 8.2% |
+| constructors found | 21.5% | 23.2% |
+| constructors and birds | 30.8% | 29.5% |
+| all three | 30.8% | 30.9% |
 
 Constructors and birds overlap -- V, T, K and K I are both -- and
-together absorb about a third of each corpus's work. Joy's words add 1.5
+together absorb about a third of each corpus's work. Joy's words add 1.4
 points on SKIlark's. On Joy's basis SKIlark's workloads were 928,398
 contractions on the Scott fuel (24.9, 4.1, 24.6, 36.9, 37.5%) and
 333,013 on Church fuel (22.1, 7.2, 29.7, 39.6, 40.0%); with Joy's
 integers and truth values they were 558,847 (15.7, 9.6, 25.5, 32.4,
-33.9%), and with lists 564,740 (17.0, 8.7, 26.5, 34.2, 35.2%). The absorption counts contractions a fire replaces; each
+33.9%), with lists 564,740 (17.0, 8.7, 26.5, 34.2, 35.2%), and with
+its combinators, characters and strings 742,609 (13.7, 8.6, 22.7, 29.0,
+30.5%). The absorption counts contractions a fire replaces; each
 fire still builds its residual, so the wall-clock gain is smaller.
 
 ### 6.9 Supercombinator templates: the compiler hands over its functions
@@ -1633,7 +1648,12 @@ step. A template past 32 formals dispatches as SKI, since 32 markers
 check it, so `word`, whose one-field constructors take 32 arguments, is
 at the limit both of §6.8's constructor jets and of dispatch. Raising
 `AV_JET_ARITY_MAX` for SKIlark's sets (its PLAN.md §3, stage 5) must
-raise the markers with it, or `step` loses its one-step dispatch. The
+raise the markers with it, or `step` loses its one-step dispatch.
+*Decided, 2026-10-24:* SKIlark took the sidestep instead (its PLAN.md
+§3, stage 6). Its literals merged into `Lit item`, and `typeof`, sets
+and a kernel `not` came in under the cap: `word` has 29 constructors,
+`item` 7, and the one-field words take 30 arguments, so `step` keeps
+its one-step dispatch and the cap stays at 32. The
 compiled form's `quot` sum has one constructor per static quotation,
 171 when SKIlark's thirty combinator programs compile as one set, so its
 `apply` already dispatches as SKI there.
@@ -1698,14 +1718,16 @@ and `size` and `at` walk one. The plan mirrors §6.10's words:
   Joy's `size`, `at`, `take` and `drop` are derived words, recursions
   over `uncons`, which a list word makes a dispatch per element but not
   one operation; to reach `listLength` and the rest they must become
-  kernel words, and each is a `word` constructor past the cap.
+  kernel words, and each is a `word` constructor: two fit under the cap
+  since the sidestep, and more need the cap raised or `word` split.
 
 **Order of work.** (1) SKIlark's interpreted kernel and the compiled
 integers on the prelude's operations, cased first: SKIlark alone, its
 counts re-pinned, zk untouched. (2) `natDiv` and `natRem` in skijack's
 prelude and in Avon's `words.c`. (3) The cap: markers and
-`AV_JET_ARITY_MAX` together, or `word` split in two, which SKIlark's sets
-decide. (4) List words: the prelude's list operations, Avon's list jet
+`AV_JET_ARITY_MAX` together, or `word` split in two: SKIlark's sets
+needed neither (the sidestep, 2026-10-24), and list kernel words past
+two would. (4) List words: the prelude's list operations, Avon's list jet
 node, and `tests/test_data.c`'s parity at every fuel. (5) The proofs:
 §18.2's word cells, and a list cell beside them, each operation's
 licence a Lean theorem owed.
