@@ -8,12 +8,14 @@ not these programs lean on them.  From every SKIlark form (phase 1's
 kernel, the interpreted and the compiled front ends) this takes the terms
 of:
 
-  the word constructors  Dup Swap Pop Qcons Cat Unit Dip Do Lit Quote, the
-                         basis's Ifz, Joy's arithmetic, comparison and
-                         truth words, Add Sub Mul ... Branch Ifte, its list
-                         words, Uncons Null Small Stack Unstack, the
-                         derived word in a quotation, Def, and its text
-                         words, Glyph Text Ord Chr
+  the word constructors  Dup Swap Pop Qcons Cat Unit Dip Do Lit, the
+                         basis's Quote and Ifz, Joy's arithmetic,
+                         comparison and truth words, Add Sub Mul ... Branch
+                         Ifte, its list words, Uncons Null Small Stack
+                         Unstack, the derived word in a quotation, Def, its
+                         text words, Ord Chr, and Typeof and Not; the
+                         kernel's literals are one, Lit, of an item, where
+                         stage 5's Quote Truth Glyph Text were four more
   their compiled bodies  wDup wSwap ... wIfte (the compiled form's words)
   the primitives         add mul cat wordOf
   the derived words      over nip tuck rot sip kComb yComb
@@ -37,12 +39,13 @@ HERE = pathlib.Path(__file__).resolve().parent
 CTORS = ["Dup", "Swap", "Pop", "Qcons", "Cat", "Unit", "Dip", "Do", "Ifz",
          "Lit", "Quote", "Add", "Sub", "Mul", "Div", "Rem", "Eql", "Lt",
          "Truth", "Branch", "Ifte", "Uncons", "Null", "Small", "Stack",
-         "Unstack", "Def", "Glyph", "Text", "Ord", "Chr"]
+         "Unstack", "Def", "Glyph", "Text", "Ord", "Chr", "Typeof", "Not"]
 # the compiled form keeps wIfz only for programs on naturals, its list words
-# only for programs on lists and its text words only for programs with
-# characters; none of them is exported, and a Def compiles to its body
+# only for programs on lists, its text words only for programs with
+# characters and wNot only for programs with not; none of them is exported,
+# and a Def compiles to its body
 NOT_COMPILED = {"Ifz", "Uncons", "Null", "Small", "Stack", "Unstack", "Def",
-                "Glyph", "Text", "Ord", "Chr"}
+                "Glyph", "Text", "Ord", "Chr", "Not"}
 WORDS = (CTORS + ["w" + c for c in CTORS if c not in NOT_COMPILED]
          + ["add", "mul", "cat", "wordOf"]
          + ["over", "nip", "tuck", "rot", "sip", "kComb", "yComb"])
