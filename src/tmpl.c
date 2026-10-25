@@ -632,7 +632,8 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
                 if (q) *q++ = '\0';
             }
             if (k < 4) { if (*line) { msg = "malformed words.tsv line"; goto fail; } continue; }
-            static const char *const opname[] = { "", "add", "sub", "mul", "ifeq", "ifle", "div", "rem" };
+            static const char *const opname[] = { "", "add", "sub", "mul", "ifeq", "ifle", "div", "rem",
+                                                  "len", "at", "app", "take", "drop" };
             unsigned op = 0;
             for (unsigned i = 1; i < sizeof opname / sizeof *opname; i++)
                 if (strcmp(fld[1], opname[i]) == 0) op = i;
@@ -725,6 +726,7 @@ bool av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t) {
         if (nmap_get(&seen, x, &v)) continue;
         if (!(ok = nmap_put(&seen, x, 1))) break;
         if (av_is_word(a, x)) continue;
+        if (av_is_list(a, x)) x = av_res(a, av_right(a, x));   /* a list word: its cells */
         if (av_tag(a, x) == AV_JET) {
             uint32_t id = AV_JET_ID(av_left(a, x));
             uint32_t inner = av_right(a, x);

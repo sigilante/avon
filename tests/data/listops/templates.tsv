@@ -1,0 +1,29 @@
+skijack-2:7174a8ba6bfde4d180876944778d3d79	prelude	pair	3	0,1,2	``v2 v0 v1
+skijack-2:d443db4c9ec0d6dfa4ed1da3c4e62e75	prelude	hd	1	0	`v0 K
+skijack-2:f12540b2d66076c3bad9065c297df2e3	prelude	tl	1	0	`v0 `K I
+skijack-2:86be9a55762d316a3026c2836d044f5f	prelude	nil	2	0,1	v0
+skijack-2:49fa03c83288919037dbe8488907a98b	prelude	cons	4	0,1,2,3	``v3 v0 v1
+skijack-2:86be9a55762d316a3026c2836d044f5f	prelude	zero	2	0,1	v0
+skijack-2:cf4585eaeabf748125651cf8ceb08899	prelude	suc	3	0,1,2	`v2 v0
+skijack-2:e51af60df30afab9c1b8302e6aa445ed	prelude	natIfEq	5	0,1,2,3,4	``v1 ``v2 v3 `K v4 ````#84e4a1b5a17d5c43dbc49b8526adb699 v0 v2 v3 v4
+skijack-2:84e4a1b5a17d5c43dbc49b8526adb699	prelude	natIfEq	5	0,1,2,3,4	``v1 v3 ````#9f810d2a28f6b626770f503e03ce580e v0 v2 v3 v4
+skijack-2:9f810d2a28f6b626770f503e03ce580e	prelude	natIfEq	5	0,1,2,3,4	````v0 v3 v4 v1 v2
+skijack-2:e6fe36f9bd7d4c3c343b985a404c1dc5	prelude	listLength	2	0,1	``v1 #86be9a55762d316a3026c2836d044f5f `#1079abafec661edb7acb04299a3efae6 v0
+skijack-2:1079abafec661edb7acb04299a3efae6	prelude	listLength	3	0,1,2	`#cf4585eaeabf748125651cf8ceb08899 `v0 v2
+skijack-2:f20cf3e10381c939f233d97738e1ee5a	prelude	listAt	4	0,1,2,3	``v1 v3 ```#eb87dbcc35a5ad942dec60e036f58e9d v0 v2 v3
+skijack-2:eb87dbcc35a5ad942dec60e036f58e9d	prelude	listAt	5	0,1,2,3,4	``v1 v3 ```#fdefa9e8a6aa2cff23edd4cc06dcaf88 v0 v4 v2
+skijack-2:fdefa9e8a6aa2cff23edd4cc06dcaf88	prelude	listAt	4	0,1,2,3	```v0 v1 v3 v2
+skijack-2:c34a835c93d98063ef163d0993392967	prelude	listAppend	3	0,1,2	``v1 v2 ``#436cd55e0ef487ddcacfab5df83e7fee v0 v2
+skijack-2:436cd55e0ef487ddcacfab5df83e7fee	prelude	listAppend	4	0,1,2,3	``#49fa03c83288919037dbe8488907a98b v2 ``v0 v3 v1
+skijack-2:9dfa1bccc54d4ef01777357d4b95aca5	prelude	listTake	3	0,1,2	``v2 #86be9a55762d316a3026c2836d044f5f ``#bff167d0475985208e611363ca01fbe4 v0 v1
+skijack-2:bff167d0475985208e611363ca01fbe4	prelude	listTake	3	0,1,2	``v1 #86be9a55762d316a3026c2836d044f5f ``#436cd55e0ef487ddcacfab5df83e7fee v0 v2
+skijack-2:436cd55e0ef487ddcacfab5df83e7fee	prelude	listTake	4	0,1,2,3	``#49fa03c83288919037dbe8488907a98b v2 ``v0 v3 v1
+skijack-2:11599805de88942ef36eab5bd1b053c3	prelude	listDrop	3	0,1,2	``v2 v1 ``#70d5f449b7bd8f7944ab52a914a4b798 v0 v1
+skijack-2:70d5f449b7bd8f7944ab52a914a4b798	prelude	listDrop	3	0,1,2	``v1 #86be9a55762d316a3026c2836d044f5f ``#2bc282d9d762098fb5e9f16196edbef2 v0 v2
+skijack-2:2bc282d9d762098fb5e9f16196edbef2	prelude	listDrop	4	0,1,2,3	``v0 v3 v1
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	False	2	0,1	v0
+skijack-2:d5c8fefc7e2835061b54a24c6d9489d7	ctor	True	2	0,1	v1
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	Zero	2	0,1	v0
+skijack-2:cf4585eaeabf748125651cf8ceb08899	ctor	Suc	3	0,1,2	`v2 v0
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	Nil	2	0,1	v0
+skijack-2:49fa03c83288919037dbe8488907a98b	ctor	Cons	4	0,1,2,3	``v3 v0 v1

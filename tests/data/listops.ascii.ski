@@ -1,0 +1,15 @@
+-- Data jets on lists (docs/DESIGN.md §6.14): the prelude's list operations
+-- on a closed list, which the scan holds as list words, and on their own
+-- results; past the end too.
+bool === False | True
+nat  === Zero | Suc nat
+lst  === Nil | Cons nat lst
+
+l3 = Cons 1 (Cons 2 (Cons 3 Nil))
+
+-- |l3 ++ l3| = 6, l3 @ 1 = 2, |take l3 2| = 2, drop l3 2 @ 0 = 3, l3 @ 5 = the default 7,
+-- |drop l3 9| = 0, |take l3 9| = 3
+main = natIfEq (listLength (listAppend l3 l3)) 6 (natIfEq (listAt l3 1 Zero) 2 (natIfEq (listLength (listTake l3 2)) 2 (natIfEq (listAt (listDrop l3 2) 0 Zero) 3 (natIfEq (listAt l3 5 7) 7 (natIfEq (listLength (listDrop l3 9)) 0 (natIfEq (listLength (listTake l3 9)) 3 True False) False) False) False) False) False) False
+
+-- a list's normal form, for comparing printed normal forms: take l3 2 ++ drop l3 1
+out = listAppend (listTake l3 2) (listDrop l3 1)

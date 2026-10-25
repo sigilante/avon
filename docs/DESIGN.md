@@ -1750,6 +1750,26 @@ natively; `100 7 /` on a SKIlark kernel whose division is `natDiv` takes
 148 steps and one operation. SKIlark takes them up once skijack is
 released with them.
 
+*Progress, 2026-10-25, step (4).* skijack #27 and #28 add the prelude's
+`listLength`, `listAt`, `listAppend`, `listTake` and `listDrop` on any
+list type, total (`listAt l k d` is `d` past the end), listed in
+`words.tsv`. This runtime holds a list as a chain of list words, the
+numeral words' shape: `L n` is a word flagged `AV_JET_LIST` whose id
+field is its length and whose term is `CONS x (L (n-1))`, so no side
+storage is needed and every reader sees the cells. The scan makes them
+from closed lists; a list word meeting its continuations dispatches as a
+constructor of two fields, fused as a constructor's is, so a program of
+lists dispatches as before (`tests/data/lists`: 331 steps, 83 fused,
+either way). The operations fire on list words and words: `len` builds
+its numeral, `at` and `drop` walk to their cell, `take` and `app` build
+their cells, and each runs as its term on anything else. Each is pinned
+by term and admitted on lists of up to three numerals. `test_data`
+checks each against its term on lists of 0 to 3 elements and indices 0 to
+4, and joins and deferral at every fuel to 400 on `tests/data/listops`,
+whose `out` takes 124 steps to its normal form, from 522 as SKI. Numeral
+words now hold up to 2^27 - 1, the 28th bit flagging lists. SKIlark's
+`size` and `at` take them up next.
+
 **Order of work.** (1) SKIlark's interpreted kernel and the compiled
 integers on the prelude's operations, cased first: SKIlark alone, its
 counts re-pinned, zk untouched. (2) `natDiv` and `natRem` in skijack's

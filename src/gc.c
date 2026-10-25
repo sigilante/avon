@@ -73,6 +73,7 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
     for (uint32_t k = 0; k < 2 * a->nnats; k++)          /* known numerals */
         a->nats[k] = av_gc_evac(&g, a->nats[k]);
     if (a->word_suc) a->word_suc = av_gc_evac(&g, a->word_suc);    /* words' SUC */
+    if (a->word_cons) a->word_cons = av_gc_evac(&g, a->word_cons); /* list words' CONS */
     if (a->compiler[0])                                 /* the compiler jet's terms */
         for (uint32_t k = 0; k < 9; k++) a->compiler[k] = av_gc_evac(&g, a->compiler[k]);
     for (uint32_t k = 0; k < a->ninterps; k++) {        /* interpreter specs */
