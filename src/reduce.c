@@ -382,10 +382,41 @@ static av_status dispatch(R *r, av_ctor sh, unsigned k, uint32_t *curp) {
     return AV_WHNF;
 }
 
+/*  A list word at the head with its two continuations: CONS x rest z c is
+ *  c x rest, a constructor's dispatch (fields x and rest, index 1 of 2),
+ *  fused as one when c is a case branch's template.  The redex root at
+ *  stk[top-2], prepared. */
+static const av_ctor LIST_CTOR = { 2, 1, 2 };
+
+static void list_read(const R *r, uint32_t w, disp *d) {
+    const av_arena *a = r->a;
+    d->field[0] = av_res(a, list_head(a, w));
+    d->field[1] = av_res(a, list_rest(a, w));
+    d->cont = av_res(a, sarg(r, r->top - 2));
+    dispatch_fuse(a, LIST_CTOR, d);
+}
+
+static av_status list_dispatch(R *r, uint32_t *curp) {
+    av_arena *a = r->a;
+    disp d;
+    list_read(r, *curp, &d);
+    size_t need = d.U ? d.U->nops + d.U->nsuc : 1;
+    uint64_t gcs = a->collections;
+    if (!hensure(r, need, curp)) return AV_SIZE;
+    if (a->collections != gcs) list_read(r, *curp, &d);      /* the collection moved them */
+    if (!dispatch_put(r, LIST_CTOR, &d, r->top - 2, curp)) return AV_SIZE;
+    r->steps++;
+    r->dispatches++;
+    return AV_WHNF;
+}
+
 /*  A numeral operation at the head with its k operands, the two
  *  numerals first: 1 fired, both being held already (K or words), the
  *  redex root now its result; 0 declined, to run its term; -1 SIZE. */
+static int list_fire(R *r, unsigned op, unsigned k, uint32_t *curp);
+
 static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
+    if (av_wop_list(op)) return list_fire(r, op, k, curp);
     av_arena *a = r->a;
     uint32_t m, n;
     if (!av_numeral(a, sarg(r, r->top - 1), &m) || !av_numeral(a, sarg(r, r->top - 2), &n))
@@ -426,6 +457,82 @@ static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
     root_set(r, r->top - k, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 }, curp);
     r->steps++;
     r->word_ops++;
+    return 1;
+}
+
+/*  The first m cells of the list word src, rebuilt as list words before
+ *  tail, a list held of len tail_n: 3 m reserved nodes, built front to
+ *  back, each cell's rest written once the next exists. */
+static uint32_t list_prefix(av_arena *a, uint32_t src, uint32_t m, uint32_t tail, uint32_t tail_n) {
+    uint32_t first = tail, prev_t = AV_NONE, prev_c = AV_NONE;
+    for (uint32_t j = 0; j < m; j++) {
+        uint32_t c = arena_app_reserved(a, a->word_cons, list_head(a, src));
+        uint32_t t = arena_app_reserved(a, c, AV_NODE_K);
+        uint32_t w = arena_app_reserved(a, t, t);
+        if (w == AV_NONE) return AV_NONE;
+        arena_set(a, w, (av_node){ (AV_JET << AV_TAG_SHIFT) | AV_JET_WORD | AV_JET_LIST |
+                                   (m - j + tail_n), t });
+        if (prev_t == AV_NONE) first = w;
+        else arena_set(a, prev_t, (av_node){ prev_c, w });
+        prev_t = t;
+        prev_c = c;
+        src = av_res(a, list_rest(a, src));
+    }
+    if (prev_t != AV_NONE) arena_set(a, prev_t, (av_node){ prev_c, tail });
+    return first;
+}
+
+/*  A list operation at the head with its k operands, the list first: 1
+ *  fired, the operands being held already (lists K or list words, an
+ *  index K or a word), the redex root now its result; 0 declined, to run
+ *  its term; -1 SIZE.  length builds its numeral, take and append their
+ *  cells; at and drop walk to theirs. */
+static int list_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
+    av_arena *a = r->a;
+    uint32_t n, i = 0, n2 = 0;
+    if (!av_list(a, sarg(r, r->top - 1), &n)) return 0;
+    if (op == AV_WOP_AT || op == AV_WOP_TAKE || op == AV_WOP_DROP) {
+        if (!av_numeral(a, sarg(r, r->top - 2), &i)) return 0;
+    } else if (op == AV_WOP_APP) {
+        if (!av_list(a, sarg(r, r->top - 2), &n2)) return 0;
+    } else if (op != AV_WOP_LEN) {
+        return 0;
+    }
+    uint32_t m = i < n ? i : n;
+    uint64_t need = op == AV_WOP_LEN ? 2 * (uint64_t)n
+                  : op == AV_WOP_TAKE && m < n ? 3 * (uint64_t)m
+                  : op == AV_WOP_APP && n && n2 ? 3 * (uint64_t)n : 0;
+    if (op == AV_WOP_APP && (uint64_t)n + n2 > AV_WORD_MAX) return 0;
+    if (need > WORD_BUILD_MAX) return 0;
+    if (need && !hensure(r, (size_t)need, curp)) return -1;
+    uint32_t l = av_res(a, sarg(r, r->top - 1)), x = l;              /* reread */
+    switch (op) {
+    case AV_WOP_LEN:
+        x = AV_NODE_K;
+        for (uint32_t j = 0; j < n; j++) x = word_succ(a, x);
+        break;
+    case AV_WOP_AT:
+    case AV_WOP_DROP:
+        for (uint32_t j = 0; j < m; j++) x = av_res(a, list_rest(a, x));
+        if (op == AV_WOP_AT)
+            x = i < n ? av_res(a, list_head(a, x)) : av_res(a, sarg(r, r->top - 3));
+        break;
+    case AV_WOP_TAKE:
+        x = m == n ? l : list_prefix(a, l, m, AV_NODE_K, 0);
+        break;
+    case AV_WOP_APP: {
+        uint32_t r2 = av_res(a, sarg(r, r->top - 2));
+        x = n == 0 ? r2 : n2 == 0 ? l : list_prefix(a, l, n, r2, n2);
+        break;
+    }
+    default:
+        return 0;
+    }
+    AV_ALWAYS(x != AV_NONE, "allocation past what ensure() reserved");
+    if (x == AV_NONE) return -1;
+    root_set(r, r->top - k, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 }, curp);
+    r->steps++;
+    r->list_ops++;
     return 1;
 }
 
@@ -559,7 +666,7 @@ static int p2_fire(R *r, uint32_t id, uint32_t *curp) {
  *  counted as before.  False, nothing written, when h is no such value or
  *  the free nodes do not cover both writes without a collection; the caller
  *  then instantiates as before. */
-enum { CJ_NONE, CJ_CTOR, CJ_WORD, CJ_ZERO };
+enum { CJ_NONE, CJ_CTOR, CJ_WORD, CJ_ZERO, CJ_LIST };
 
 /*  Both writes of a join from the free nodes: the instance's T->nops +
  *  T->nsuc at most, the dispatch's a fused template's (at most twice the
@@ -583,7 +690,8 @@ unsigned case_kind(const av_arena *a, const av_tmpl *T, const uint32_t *args) {
     }
     uint32_t l = a->nodes[h].l;
     if (l >> AV_TAG_SHIFT == AV_JET) {
-        if (l & AV_JET_WORD) return m == 0 && p == 2 ? CJ_WORD : CJ_NONE;
+        if (l & AV_JET_WORD)
+            return m == 0 && p == 2 ? (l & AV_JET_LIST ? CJ_LIST : CJ_WORD) : CJ_NONE;
         uint32_t t = a->jets[AV_JET_ID(l)].tmpl;
         if (!t) return CJ_NONE;
         av_ctor sh = a->tmpls[t - 1].ctor;
@@ -634,6 +742,14 @@ static int case_join(R *r, const av_tmpl *T, const uint32_t *args, size_t at, un
         root_set(r, at, (av_node){ (AV_IND << AV_TAG_SHIFT) | c[0], 0 }, curp);
     } else if (kind == CJ_WORD) {               /* W n z s -> s (W (n-1)) */
         root_set(r, at, (av_node){ c[1], word_pred(a, h) }, curp);
+        r->dispatches++;
+    } else if (kind == CJ_LIST) {               /* L n z c -> c x (L (n-1)), fused or not */
+        disp d;
+        d.field[0] = av_res(a, list_head(a, h));
+        d.field[1] = av_res(a, list_rest(a, h));
+        d.cont = c[1];
+        dispatch_fuse(a, LIST_CTOR, &d);
+        if (!dispatch_put(r, LIST_CTOR, &d, at, curp)) return -1;     /* SIZE */
         r->dispatches++;
     } else {
         disp d;
@@ -694,6 +810,28 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
         }
         if (interrupted(r)) return stop(r, bottom, cur, AV_INTERRUPTED);
         if (r->steps >= o->max_steps) return stop(r, bottom, cur, AV_FUEL);
+        if (av_tag(a, cur) == AV_JET && (av_left(a, cur) & AV_JET_LIST)) {
+            /* a list word: with its two continuations, L n z c is c x
+             * (L (n-1)), over the redex root, x its head; short of them,
+             * a value---but, making the normal form, its term CONS x
+             * (L (n-1)), fresh so the word's own stays whole */
+            if (r->top - bottom < 2) {
+                if (!r->normal) break;
+                r->jnode = cur;
+                if (!ensure(r, 2 + r->nvirt)) return stop(r, bottom, r->jnode, AV_SIZE);
+                cur = r->jnode;
+                r->jnode = AV_NONE;
+                uint32_t t = reserved_app(a, reserved_app(a, a->word_cons, list_head(a, cur)),
+                                          list_rest(a, cur));
+                arena_set(a, cur, (av_node){ (AV_IND << AV_TAG_SHIFT) | t, 0 });
+                cur = t;
+                continue;
+            }
+            if (!sprepare(r, D, r->top - 2, &cur)) return stop(r, bottom, cur, AV_SIZE);
+            av_status ls = list_dispatch(r, &cur);
+            if (ls != AV_WHNF) return stop(r, bottom, cur, ls);
+            continue;
+        }
         if (av_tag(a, cur) == AV_JET && (av_left(a, cur) & AV_JET_WORD)) {
             /* a word: with its two continuations, W n z s is s (W (n-1)),
              * written over the redex root; short of them, a value---but,
@@ -1098,8 +1236,9 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.fr);
     free(r.work);
     free(r.marks);
-    return (av_result){ term, r.steps, s, r.jet_calls, r.interp_calls,
-                        r.jet_steps, r.jet_fault, r.tmpl_calls,
-                        r.dispatches, r.fused, r.word_ops, r.fix_calls, r.joins,
-                        r.p2_calls, r.p2_declines, r.p2_unbound, r.deferred };
+    av_result res = { term, r.steps, s, r.jet_calls, r.interp_calls,
+                      r.jet_steps, r.jet_fault, r.tmpl_calls,
+                      r.dispatches, r.fused, r.word_ops, r.fix_calls, r.joins,
+                      r.p2_calls, r.p2_declines, r.p2_unbound, r.deferred, r.list_ops };
+    return res;
 }

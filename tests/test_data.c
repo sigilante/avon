@@ -1,9 +1,9 @@
 /**  test_data.c
  *
- *  Data jets, on skijack's own output: tests/data/ holds two programs and
+ *  Data jets, on skijack's own output: tests/data/ holds four programs and
  *  what tests/data/export.py writes for each, its templates, its numeral
- *  operations (words.tsv), and its names main, lazy and out printed.  main
- *  and lazy check themselves and are True, Ff.
+ *  and list operations (words.tsv), and its names main, lazy and out
+ *  printed.  main and lazy check themselves and are True, Ff.
  *
  *  - Every mode gives the same answer, and data jets dispatch constructors,
  *    fused into the branch's template, and run numeral operations on words.
@@ -13,7 +13,11 @@
  *  - Every numeral operation agrees with its term on operands 0 .. 7; one
  *    whose operands are not words yet runs its term; a divergent operand is
  *    never forced; a term that is not the operation it claims is refused.
- *  - Collections keep words; fuel stops a run.
+ *  - A list word prints, hashes and jams as its list, and dispatches in one
+ *    step; every list operation agrees with its term on lists of 0 .. 3
+ *    numerals and indices 0 .. 4; one whose list is not a list word yet
+ *    runs its term.
+ *  - Collections keep words and list words; fuel stops a run.
  *  - A case joined to its instance is the instance and the dispatch after
  *    it: every count and state the same with joins and without.
  *  - An instance whose root is deferred leaves only nodes unwritten:
@@ -49,7 +53,7 @@ typedef enum { SKI, TEMPLATES, DATA } mode;
 
 typedef struct {
     av_status status;
-    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, collections, joins, deferred;
+    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, list_ops, collections, joins, deferred;
     long      admitted, refused, words;
     char      nf[1 << 17];
 } outcome;
@@ -77,7 +81,7 @@ static outcome run(const char *src, const char *dir, mode md, av_strategy st, bo
             CHECK(av_templates_bind(a, ts, t));
             if (md == DATA) {
                 av_templates_word_counts(ts, &out.admitted, &out.refused);
-                out.words = av_words_scan(a, t);
+                out.words = av_words_scan(a, t, NULL);
                 CHECK(out.words >= 0);
                 CHECK(av_words_mark(a));
             }
@@ -102,6 +106,7 @@ static outcome run(const char *src, const char *dir, mode md, av_strategy st, bo
     out.dispatches = r.dispatches;
     out.fused = r.fused;
     out.word_ops = r.word_ops;
+    out.list_ops = r.list_ops;
     out.joins = r.joins;
     out.deferred = r.deferred;
     out.collections = a->collections;
@@ -123,9 +128,9 @@ static char *fixture(const char *prog, const char *name) {
 }
 
 TEST(every_mode_gives_the_same_answer) {
-    const char *progs[4][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
-                                { "quot", "main" } };
-    for (int i = 0; i < 4; i++) {
+    const char *progs[5][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+                                { "quot", "main" }, { "listops", "main" } };
+    for (int i = 0; i < 5; i++) {
         char dir[64];
         snprintf(dir, sizeof dir, "tests/data/%s", progs[i][0]);
         char *src = fixture(progs[i][0], progs[i][1]);
@@ -155,13 +160,19 @@ TEST(every_mode_gives_the_same_answer) {
             CHECK(dt.words > 0);
             CHECK(dt.word_ops > 0);
         }
+        if (strcmp(progs[i][0], "listops") == 0) {  /* the five list operations, and ifeq */
+            CHECK_EQ(dt.admitted, 6);
+            CHECK_EQ(dt.refused, 0);
+            CHECK(dt.words > 0);
+            CHECK(dt.list_ops > 0);
+        }
         free(src);
     }
 }
 
 TEST(normal_forms_are_the_unjetted_ones) {
-    const char *progs[3] = { "lists", "nats", "quot" };
-    for (int i = 0; i < 3; i++) {
+    const char *progs[4] = { "lists", "nats", "quot", "listops" };
+    for (int i = 0; i < 4; i++) {
         char dir[64];
         snprintf(dir, sizeof dir, "tests/data/%s", progs[i]);
         char *src = fixture(progs[i], "out");
@@ -194,7 +205,7 @@ TEST(a_word_prints_hashes_and_jams_as_its_numeral) {
     uint32_t plain = av_parse(a, src, strlen(src), NULL);
     uint32_t t = av_parse(a, src, strlen(src), NULL);
     CHECK(av_words_on(a));
-    CHECK_EQ(av_words_scan(a, t), 3);
+    CHECK_EQ(av_words_scan(a, t, NULL), 3);
     CHECK(av_is_word(a, t));
     CHECK_EQ(av_word_value(a, t), 3);
     CHECK(!av_is_word(a, plain));
@@ -230,7 +241,7 @@ TEST(a_word_dispatches_in_one_step_and_copy_mode_runs_its_term) {
         uint32_t t = av_parse(a, src, strlen(src), NULL);
         uint32_t w = av_left(a, av_left(a, t));
         CHECK(av_words_on(a));
-        CHECK_EQ(av_words_scan(a, t), 3);
+        CHECK_EQ(av_words_scan(a, t, NULL), 3);
         CHECK(av_is_word(a, w));
         o.data = true;
         av_result r = av_reduce(a, t, &o);
@@ -256,9 +267,12 @@ TEST(a_word_dispatches_in_one_step_and_copy_mode_runs_its_term) {
     }
 }
 
-/*  The words.tsv line for op: its term, printed; quot's lists all seven. */
-static char *op_term(const char *op) {
-    char *text = slurp("tests/data/quot/words.tsv");
+/*  The words.tsv line for op in prog's: its term, printed; quot's lists
+ *  all seven numeral operations, listops the five list operations. */
+static char *prog_op_term(const char *prog, const char *op) {
+    char path[128];
+    snprintf(path, sizeof path, "tests/data/%s/words.tsv", prog);
+    char *text = slurp(path);
     CHECK(text != NULL);
     if (!text) return NULL;
     for (char *line = strtok(text, "\n"); line; line = strtok(NULL, "\n")) {
@@ -275,6 +289,8 @@ static char *op_term(const char *op) {
     free(text);
     return NULL;
 }
+
+static char *op_term(const char *op) { return prog_op_term("quot", op); }
 
 TEST(every_numeral_operation_agrees_with_its_term) {
     const char *ops[7] = { "add", "sub", "mul", "ifeq", "ifle", "div", "rem" };
@@ -454,14 +470,14 @@ TEST(collections_keep_words_and_fuel_stops) {
 static bool same(const outcome *x, const outcome *y) {
     return x->status == y->status && x->steps == y->steps && x->tmpl_calls == y->tmpl_calls &&
            x->dispatches == y->dispatches && x->fused == y->fused &&
-           x->word_ops == y->word_ops && strcmp(x->nf, y->nf) == 0;
+           x->word_ops == y->word_ops && x->list_ops == y->list_ops && strcmp(x->nf, y->nf) == 0;
 }
 
 TEST(a_joined_case_is_its_instance_and_dispatch) {
-    const char *progs[4][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
-                                { "lists", "out" } };
+    const char *progs[6][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+                                { "lists", "out" }, { "listops", "main" }, { "listops", "out" } };
     uint64_t collected = 0;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 6; i++) {
         char dir[64];
         snprintf(dir, sizeof dir, "tests/data/%s", progs[i][0]);
         char *src = fixture(progs[i][0], progs[i][1]);
@@ -497,10 +513,10 @@ TEST(a_joined_case_is_its_instance_and_dispatch) {
  *  joins too, with deferral at work; again in a small arena, collecting;
  *  and at every fuel to 400, where the state reported is the stopped one. */
 static void deferral_changes_nothing(mode md) {
-    const char *progs[4][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
-                                { "lists", "out" } };
+    const char *progs[6][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+                                { "lists", "out" }, { "listops", "main" }, { "listops", "out" } };
     uint64_t collected = 0, deferred = 0;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 6; i++) {
         char dir[64];
         snprintf(dir, sizeof dir, "tests/data/%s", progs[i][0]);
         char *src = fixture(progs[i][0], progs[i][1]);
@@ -561,6 +577,170 @@ TEST(a_deferred_node_keeps_nothing_alive) {
     free(src);
 }
 
+/*  The list of the numerals xs[0 .. n-1], printed as av_print prints it:
+ *  CONS x applied to the rest, K the empty list. */
+#define CONS "S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))"
+static void plain_list(char *out, size_t cap, const unsigned *xs, unsigned n) {
+    size_t at = 0;
+    for (unsigned i = 0; i < n; i++) {
+        char x[512];
+        numeral(x, sizeof x, xs[i]);
+        at += (size_t)snprintf(out + at, cap - at, xs[i] ? CONS " (%s) " : CONS " %s ", x);
+        if (i + 1 < n) at += (size_t)snprintf(out + at, cap - at, "(");
+    }
+    at += (size_t)snprintf(out + at, cap - at, "K");
+    for (unsigned i = 0; i + 1 < n; i++) at += (size_t)snprintf(out + at, cap - at, ")");
+}
+
+TEST(a_list_word_prints_hashes_and_jams_as_its_list) {
+    static const unsigned xs[3] = { 2, 0, 1 };
+    char src[4096];
+    plain_list(src, sizeof src, xs, 3);
+    av_arena *a = av_arena_new(1u << 10);
+    uint32_t plain = av_parse(a, src, strlen(src), NULL);
+    uint32_t t = av_parse(a, src, strlen(src), NULL);
+    CHECK(av_words_on(a));
+    long lists = -1;
+    CHECK_EQ(av_words_scan(a, t, &lists), 6);       /* three cells, and numerals 2 and 1 */
+    CHECK_EQ(lists, 3);
+    uint32_t n = 0;
+    CHECK(av_is_list(a, t) && !av_is_word(a, t));
+    CHECK(av_list(a, t, &n) && n == 3);
+    CHECK(!av_is_list(a, plain));
+    av_buf b = { 0 };
+    CHECK(av_print(a, t, 10000, &b) && strcmp(b.s, src) == 0);
+    av_buf_free(&b);
+    char h1[AV_HASH_LEN + 1], h2[AV_HASH_LEN + 1];
+    CHECK(av_structural_hash(a, t, h1) && av_structural_hash(a, plain, h2));
+    CHECK(strcmp(h1, h2) == 0);
+    av_buf j1 = { 0 }, j2 = { 0 };
+    CHECK(av_jam(a, t, 10000, &j1, NULL) && av_jam(a, plain, 10000, &j2, NULL));
+    CHECK(j1.len == j2.len && memcmp(j1.s, j2.s, j1.len) == 0);
+    av_buf_free(&j1);
+    av_buf_free(&j2);
+    CHECK_EQ(av_equal(a, t, plain, 1000), 1);
+    av_arena_free(a);
+}
+
+TEST(a_collection_keeps_list_words) {
+    static const unsigned xs[3] = { 2, 0, 1 };
+    char src[4096];
+    plain_list(src, sizeof src, xs, 3);
+    av_arena *a = av_arena_new(1u << 10);
+    uint32_t t = av_parse(a, src, strlen(src), NULL);
+    CHECK(av_words_on(a));
+    CHECK_EQ(av_words_scan(a, t, NULL), 6);
+    av_root_push(a, &t);
+    CHECK(av_collect(a, 0, NULL, NULL, NULL));
+    av_root_pop(a);
+    CHECK(a->collections > 0);
+    uint32_t n = 0, m = 0;
+    CHECK(av_list(a, t, &n) && n == 3);
+    CHECK(av_list(a, av_right(a, av_right(a, t)), &m) && m == 2);   /* its rest */
+    av_buf b = { 0 };
+    CHECK(av_print(a, t, 10000, &b) && strcmp(b.s, src) == 0);
+    av_buf_free(&b);
+    av_arena_free(a);
+}
+
+TEST(a_list_word_dispatches_in_one_step_and_copy_mode_runs_its_term) {
+    static const unsigned xs[2] = { 0, 0 };
+    char lst[2048], src[2100];
+    plain_list(lst, sizeof lst, xs, 2);
+    snprintf(src, sizeof src, "(%s) n c", lst);
+    for (int copy = 0; copy < 2; copy++) {
+        av_arena *p = av_arena_new(1u << 10);
+        av_opts o = av_opts_default();
+        o.strategy = copy ? AV_COPY : AV_SHARE;
+        o.whnf_only = true;
+        av_result pr = av_reduce(p, av_parse(p, src, strlen(src), NULL), &o);
+        av_buf pb = { 0 };
+        CHECK(av_print(p, pr.term, 10000, &pb));
+        av_arena *a = av_arena_new(1u << 10);
+        uint32_t t = av_parse(a, src, strlen(src), NULL);
+        CHECK(av_words_on(a));
+        long lists = 0;
+        CHECK_EQ(av_words_scan(a, t, &lists), 2);
+        CHECK_EQ(lists, 2);
+        CHECK(av_is_list(a, av_left(a, av_left(a, t))));
+        o.data = true;
+        av_result r = av_reduce(a, t, &o);
+        CHECK_EQ(r.status, AV_WHNF);
+        av_buf b = { 0 };
+        CHECK(av_print(a, r.term, 10000, &b));
+        if (copy) {
+            CHECK_EQ(r.dispatches, 0);
+            CHECK_EQ(r.steps, pr.steps);
+            CHECK(strcmp(b.s, pb.s) == 0);
+        } else {                    /* L 2 n c is c K (L 1): one step */
+            static const unsigned one[1] = { 0 };
+            char rest[1024], want[1100];
+            plain_list(rest, sizeof rest, one, 1);
+            snprintf(want, sizeof want, "c K (%s)", rest);
+            CHECK_EQ(r.dispatches, 1);
+            CHECK_EQ(r.steps, 1);
+            CHECK(strcmp(b.s, want) == 0);
+        }
+        av_buf_free(&b);
+        av_buf_free(&pb);
+        av_arena_free(a);
+        av_arena_free(p);
+    }
+}
+
+TEST(every_list_operation_agrees_with_its_term) {
+    static const unsigned lists[4][3] = { { 0 }, { 3 }, { 1, 0 }, { 2, 4, 0 } };
+    static const unsigned lens[4] = { 0, 1, 2, 3 };
+    const char *ops[5] = { "len", "at", "app", "take", "drop" };
+    static char src[1 << 16], l[4096], r2[4096], k[512], d[512];
+    for (int o = 0; o < 5; o++) {
+        char *term = prog_op_term("listops", ops[o]);
+        CHECK(term != NULL);
+        if (!term) continue;
+        for (unsigned i = 0; i < 4; i++) {
+            plain_list(l, sizeof l, lists[i], lens[i]);
+            unsigned js = o == 0 ? 1 : o == 2 ? 4 : 5;
+            for (unsigned j = 0; j < js; j++) {
+                numeral(k, sizeof k, j);
+                numeral(d, sizeof d, 6);
+                if (o == 0) snprintf(src, sizeof src, "(%s) (%s)", term, l);
+                else if (o == 1) snprintf(src, sizeof src, "(%s) (%s) (%s) (%s)", term, l, k, d);
+                else if (o == 2) {
+                    plain_list(r2, sizeof r2, lists[j], lens[j]);
+                    snprintf(src, sizeof src, "(%s) (%s) (%s)", term, l, r2);
+                } else snprintf(src, sizeof src, "(%s) (%s) (%s)", term, l, k);
+                outcome ski = run(src, "tests/data/listops", SKI, AV_SHARE, false, 10000000, 1u << 12);
+                static char want[1 << 17];
+                strcpy(want, ski.nf);
+                CHECK_EQ(ski.status, AV_NORMAL);
+                outcome dt = run(src, "tests/data/listops", DATA, AV_SHARE, false, 10000000, 1u << 12);
+                CHECK_EQ(dt.status, AV_NORMAL);
+                CHECK_EQ(dt.list_ops, 1);
+                CHECK(strcmp(dt.nf, want) == 0);
+                if (strcmp(dt.nf, want) != 0) fprintf(stderr, "  %s on list %u, %u\n", ops[o], i, j);
+            }
+        }
+        free(term);
+    }
+}
+
+TEST(a_list_operand_not_yet_a_list_word_runs_the_term) {
+    char *term = prog_op_term("listops", "len");
+    static char src[1 << 16], l[4096];
+    static const unsigned xs[2] = { 1, 2 };
+    if (!term) return;
+    plain_list(l, sizeof l, xs, 2);
+    snprintf(src, sizeof src, "(%s) (I (%s))", term, l);            /* I l: a thunk */
+    outcome ski = run(src, "tests/data/listops", SKI, AV_SHARE, false, 10000000, 1u << 12);
+    static char want[1 << 17];
+    strcpy(want, ski.nf);
+    outcome dt = run(src, "tests/data/listops", DATA, AV_SHARE, false, 10000000, 1u << 12);
+    CHECK_EQ(dt.list_ops, 0);
+    CHECK_EQ(dt.status, AV_NORMAL);
+    CHECK(strcmp(dt.nf, want) == 0);
+    free(term);
+}
+
 TEST_MAIN(
     TEST_CASE(every_mode_gives_the_same_answer),
     TEST_CASE(a_joined_case_is_its_instance_and_dispatch),
@@ -575,5 +755,10 @@ TEST_MAIN(
     TEST_CASE(a_divergent_operand_is_never_forced),
     TEST_CASE(a_term_that_is_not_its_operation_is_refused),
     TEST_CASE(only_skijacks_operations_are_admitted),
-    TEST_CASE(collections_keep_words_and_fuel_stops)
+    TEST_CASE(collections_keep_words_and_fuel_stops),
+    TEST_CASE(a_list_word_prints_hashes_and_jams_as_its_list),
+    TEST_CASE(a_collection_keeps_list_words),
+    TEST_CASE(a_list_word_dispatches_in_one_step_and_copy_mode_runs_its_term),
+    TEST_CASE(every_list_operation_agrees_with_its_term),
+    TEST_CASE(a_list_operand_not_yet_a_list_word_runs_the_term)
 )

@@ -89,7 +89,7 @@ static outcome run(const char *src, const char *dir, bool fix, av_strategy st,
             out.registered = av_templates_fix(ts);
             t = av_jets_match(a, t);
             CHECK(av_templates_bind(a, ts, t));
-            CHECK(av_words_scan(a, t) >= 0);
+            CHECK(av_words_scan(a, t, NULL) >= 0);
             CHECK(av_words_mark(a));
             av_templates_free(ts);
         }

@@ -191,7 +191,11 @@ data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dis
   instantiated in the same step, `fused`.
 - Closed numerals (`Suc (Suc Zero)`, whatever the type is called) become
   words, numbers whose term is still the numeral; a word meeting its two
-  continuations dispatches without allocating.
+  continuations dispatches without allocating. Closed lists (`Cons x
+  (Cons y Nil)`, of any list type) become list words the same way, each
+  cell its length and its term still the cell; a list word meeting its
+  two continuations dispatches as a constructor of two fields, fused into
+  a case branch's template as a constructor's dispatch is.
 - skijack's numeral operations (`natAdd`, `natSub`, `natMul`, `natIfEq`,
   `natIfLe`, `natDiv`, `natRem`; by zero the quotient is 0 and the
   remainder its dividend, as skijack's terms give), listed in `words.tsv`
@@ -200,6 +204,13 @@ data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dis
   their terms. Each is `admitted` only after its term, run on the numerals
   0 to 5, agrees with the native operation; one that does not is
   `refused` and runs as its term.
+- skijack's list operations (`listLength`, `listAt`, `listAppend`,
+  `listTake`, `listDrop`), listed in `words.tsv` the same way, run natively
+  when their lists are list words already and their indices words, and
+  are admitted after running on lists of up to three numerals and indices
+  0 to 4. The line then reads `… numerals and N lists made words; …
+  numeral operations and M list operations among the contractions`, each
+  part only when it is not 0.
 
 Normal forms are the unjetted ones, byte for byte; a WHNF state is
 templates' (which may differ from SKI's in form, not value).

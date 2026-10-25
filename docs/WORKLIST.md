@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
 
+- **List words** (2026-10-25; skijack #27, #28). Data jets hold closed Scott lists as
+  chains of list words, the numeral words' shape (`AV_JET_LIST`, its length in the id
+  field, its term the cell), dispatching as a two-field constructor, fused as one; and
+  run skijack's `listLength`, `listAt`, `listAppend`, `listTake` and `listDrop`
+  natively on them, each pinned by term and admitted on small lists.
+  `tests/data/listops` and `test_data` check them against their terms; `tests/pins.sh`
+  moves SKIjack to `0640fb4`. DESIGN §6.14 records it.
+
 - **SKIlark's `ext`: `size` and `at` in the kernel** (2026-10-25; SKIlark #21). `word`
   gains `Ext ext`, its thirtieth constructor, and `ext` holds the kernel's further
   words in a sum of their own, the first `size` and `at`, which the interpreted form no

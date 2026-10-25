@@ -86,7 +86,7 @@ int front0_main(int argc, char **argv) {
         }
     }
     av_root_pop(a);
-    long tc[4] = { 0, 0, 0, 0 }, wc[3] = { 0, 0, 0 };
+    long tc[4] = { 0, 0, 0, 0 }, wc[4] = { 0, 0, 0, 0 };
     if (jets_ok && templates) {
         jets_ok = use_templates(a, templates, &t, tc, data, wc, fix);
         o.jets = true;

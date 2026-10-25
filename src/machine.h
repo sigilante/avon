@@ -53,7 +53,7 @@ typedef struct {
 
     uint64_t       jet_calls, jet_steps;
     uint64_t       tmpl_calls;
-    uint64_t       dispatches, fused, word_ops, fix_calls, joins;
+    uint64_t       dispatches, fused, word_ops, list_ops, fix_calls, joins;
     uint64_t       p2_calls, p2_declines, p2_unbound, deferred;
     uint32_t      *p2c;         /* share: a chain of P calls, its call and
                                    jet node at each level, outermost first */

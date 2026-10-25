@@ -40,7 +40,12 @@ typedef struct { uint32_t l, r; } av_node;
 //  node's id holds the jet id.
 #define AV_JET_WORD   (1u << 28)
 #define AV_JET_ID(l)  ((l) & (AV_JET_WORD - 1))
-#define AV_WORD_MAX   (AV_JET_WORD - 1u)
+//  A list word is a word flagged AV_JET_LIST too: L n, a Scott list of
+//  n >= 1 cells held whole, its term CONS x (L (n-1)), L 0 being K, so its
+//  head is its term's left child's right child and its rest the term's
+//  right child.  Its id field holds n.
+#define AV_JET_LIST   (1u << 27)
+#define AV_WORD_MAX   (AV_JET_LIST - 1u)
 
 //  The most arguments a residual jet takes.  SKIlark's words are constructors
 //  of a 12-way sum; Lit and Quote carry a field, so take 13.
@@ -120,6 +125,8 @@ typedef struct {
                                    abs, TS TK TI TV TA, Ap, Zero Suc; 0 none */
     uint32_t   word_suc;        /* words' successor term, a root;
                                    0 while words are off                  */
+    uint32_t   word_cons;       /* list words' cell constructor, a root;
+                                   0 while words are off                  */
     bool       fix_on;          /* Y unfolds in one step: the next
                                    template load registers it             */
     struct av_pma *pma;         /* the persistent image, or NULL  */
@@ -166,7 +173,17 @@ static inline uint32_t av_res(const av_arena *a, uint32_t i) {
 
 /*  A word, and its value; a numeral held natively: K is 0. */
 static inline bool av_is_word(const av_arena *a, uint32_t i) {
-    return av_tag(a, i) == AV_JET && (a->nodes[i].l & AV_JET_WORD);
+    return av_tag(a, i) == AV_JET && (a->nodes[i].l & (AV_JET_WORD | AV_JET_LIST)) == AV_JET_WORD;
+}
+/*  A list word, and its length; a list held whole: K is the empty one. */
+static inline bool av_is_list(const av_arena *a, uint32_t i) {
+    return av_tag(a, i) == AV_JET && (a->nodes[i].l & (AV_JET_WORD | AV_JET_LIST)) == (AV_JET_WORD | AV_JET_LIST);
+}
+static inline bool av_list(const av_arena *a, uint32_t i, uint32_t *n) {
+    i = av_res(a, i);
+    if (i == AV_NODE_K) { *n = 0; return true; }
+    if (av_is_list(a, i)) { *n = a->nodes[i].l & AV_WORD_MAX; return true; }
+    return false;
 }
 static inline uint32_t av_word_value(const av_arena *a, uint32_t i) {
     return a->nodes[i].l & AV_WORD_MAX;
@@ -408,6 +425,8 @@ typedef struct {
     uint64_t  deferred;     /* instances whose root and spine were left in
                                the stack, among tmpl_calls and
                                fused                                      */
+    uint64_t  list_ops;     /* list operations run on list words, one
+                               step each, among steps                     */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -836,10 +855,18 @@ typedef struct av_jet {
 
 /*  The numeral operations, skijack's natAdd .. natIfLe, natDiv and natRem:
  *  the two tests take their numerals and two continuations, the rest two
- *  numerals. */
-enum { AV_WOP_ADD = 1, AV_WOP_SUB, AV_WOP_MUL, AV_WOP_IFEQ, AV_WOP_IFLE, AV_WOP_DIV, AV_WOP_REM };
+ *  numerals.  Then the list operations, skijack's listLength .. listDrop:
+ *  length a list, at a list, an index and a default, append two lists,
+ *  take and drop a list and a numeral. */
+enum { AV_WOP_ADD = 1, AV_WOP_SUB, AV_WOP_MUL, AV_WOP_IFEQ, AV_WOP_IFLE, AV_WOP_DIV, AV_WOP_REM,
+       AV_WOP_LEN, AV_WOP_AT, AV_WOP_APP, AV_WOP_TAKE, AV_WOP_DROP };
+#define AV_WOP_COUNT (AV_WOP_DROP + 1)
+static inline bool av_wop_list(unsigned op) {
+    return op >= AV_WOP_LEN && op <= AV_WOP_DROP;
+}
 static inline unsigned av_wop_operands(unsigned op) {
-    return op == AV_WOP_IFEQ || op == AV_WOP_IFLE ? 4u : 2u;
+    return op == AV_WOP_IFEQ || op == AV_WOP_IFLE ? 4u
+         : op == AV_WOP_LEN ? 1u : op == AV_WOP_AT ? 3u : 2u;
 }
 
 /*  Register the term t as a jet unless it has fewer than min_atoms leaves,
@@ -1048,7 +1075,8 @@ void      av_trace_flush(av_trace *t);
  *  head with an argument, to g (Y g), a fresh Y g: convertible, acyclic,
  *  one step. */
 void av_fix_on(av_arena *a);
-long av_words_scan(av_arena *a, uint32_t t);    /* words made, or -1 */
+/*  Words made, numerals and lists, or -1; *lists, if given, the lists. */
+long av_words_scan(av_arena *a, uint32_t t, long *lists);
 bool av_words_mark(av_arena *a);
 
 /*  ------------------------------------------------------------ jet stats

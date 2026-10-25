@@ -300,7 +300,7 @@ av_profile *profile_load(const char *path, const av_arena *a, uint32_t t) {
  *  then *t matched and the templates bound to it.  counts: accepted,
  *  refused, skipped, unbound.  False, with a message, on failure. */
 bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
-                          bool data, long wc[3], bool fix) {
+                          bool data, long wc[4], bool fix) {
     const char *err = NULL;
     if (fix) av_fix_on(a);
     if (data && !av_words_on(a)) {
@@ -323,7 +323,7 @@ bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
     else fprintf(stderr, "avon: could not bind the templates\n");
     if (ok && data) {           /* data jets: the numerals, as words */
         av_templates_word_counts(ts, &wc[0], &wc[1]);
-        wc[2] = av_words_scan(a, *t);
+        wc[2] = av_words_scan(a, *t, &wc[3]);
         ok = wc[2] >= 0 && av_words_mark(a);
         if (!ok) fprintf(stderr, "avon: out of memory\n");
     }
@@ -356,13 +356,17 @@ static uint32_t use_p2(av_arena *a, const char *path) {
 }
 
 /*  The data jets' report line. */
-void report_data(const long wc[3], const av_result *r) {
-    fprintf(stderr, "data: %ld numeral operations admitted, %ld refused; %ld numerals "
-            "made words; %llu dispatches (%llu fused), %llu numeral operations "
+void report_data(const long wc[4], const av_result *r) {
+    char lists[48] = "", lops[48] = "";
+    if (wc[3]) snprintf(lists, sizeof lists, " and %ld lists", wc[3]);
+    if (r->list_ops) snprintf(lops, sizeof lops, " and %llu list operations",
+                              (unsigned long long)r->list_ops);
+    fprintf(stderr, "data: %ld numeral operations admitted, %ld refused; %ld numerals%s "
+            "made words; %llu dispatches (%llu fused), %llu numeral operations%s "
             "among the contractions; %llu cases joined to their instances\n",
-            wc[0], wc[1], wc[2],
+            wc[0], wc[1], wc[2] - wc[3], lists,
             (unsigned long long)r->dispatches, (unsigned long long)r->fused,
-            (unsigned long long)r->word_ops, (unsigned long long)r->joins);
+            (unsigned long long)r->word_ops, lops, (unsigned long long)r->joins);
 }
 
 /*  The unfolding's report line. */
@@ -476,7 +480,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_root_pop(a);
         if (ctors < 0) t = AV_NONE;
     }
-    long tc[4] = { 0, 0, 0, 0 }, wc[3] = { 0, 0, 0 };
+    long tc[4] = { 0, 0, 0, 0 }, wc[4] = { 0, 0, 0, 0 };
     if (g->templates && g->o.strategy != AV_SHARE) {
         fprintf(stderr, "avon: --templates runs in share mode only; copy mode keeps its counts\n");
         av_arena_free(a);

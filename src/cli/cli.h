@@ -33,8 +33,8 @@ uint32_t  load(av_arena *a, const char *src, size_t len);
 /*  term.c: the reduction's options that front0 shares */
 av_profile *profile_load(const char *path, const av_arena *a, uint32_t t);
 bool      use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
-                        bool data, long wc[3], bool fix);
-void      report_data(const long wc[3], const av_result *r);
+                        bool data, long wc[4], bool fix);
+void      report_data(const long wc[4], const av_result *r);
 void      report_fix(const av_result *r);
 
 /*  jetstat.c: a dictionary's rows and a names file's names, and the jet

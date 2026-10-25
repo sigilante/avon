@@ -71,6 +71,16 @@ uint32_t word_succ(av_arena *a, uint32_t pred);
 static inline uint32_t word_pred(const av_arena *a, uint32_t w) {
     return av_right(a, av_right(a, w));
 }
+/*  List words (words.c): L (n+1), the cell of x before rest, a list held
+ *  (K or a list word), in three reserved nodes, or AV_NONE if rest is not
+ *  one; a list word's head and rest. */
+uint32_t list_cell(av_arena *a, uint32_t x, uint32_t rest);
+static inline uint32_t list_head(const av_arena *a, uint32_t w) {
+    return av_right(a, av_left(a, av_right(a, w)));
+}
+static inline uint32_t list_rest(const av_arena *a, uint32_t w) {
+    return av_right(a, av_right(a, w));
+}
 bool     word_admit(av_arena *a, uint32_t term, unsigned op);
 const char *av_word_pinned(unsigned op);
 
