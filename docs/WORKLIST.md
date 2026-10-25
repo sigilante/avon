@@ -6,6 +6,15 @@ design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
 
+- **SKIlark's stages 9 to 11** (2026-10-26; SKIlark #24 to #26). SKIlark gains the
+  reference's remaining pure words: `div pick condlinrec condnestrec casting` derived, and
+  `compare name body intern strtol format` as `ext` words, `name`'s, `intern`'s and the
+  number-text words' code coming only with programs that use them. `tests/pins.sh` moves
+  SKIjack to its 0.2.3 release (`c57bb81`) and SKIlark to `ec28dce`; the workloads,
+  which use none of them, take the same 959,160 contractions, `step` 632 a call and
+  75,673 atoms in the census, whose smoke row is re-recorded; `jets/joy.tsv` keeps 74
+  terms.
+
 - **List words** (2026-10-25; skijack #27, #28). Data jets hold closed Scott lists as
   chains of list words, the numeral words' shape (`AV_JET_LIST`, its length in the id
   field, its term the cell), dispatching as a two-field constructor, fused as one; and
