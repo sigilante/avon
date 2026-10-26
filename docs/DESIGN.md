@@ -2261,6 +2261,160 @@ discloses the first. About 1,900 CPU rows and 13,600 memory cells, half a
 second. The proof does not show that the bits came from a pier: a prover
 chooses them, as the pier's operator does.
 
+### 9.2 Drivers: effects every front end shares
+
+*Written and decided 2026-10-26. SKIjack's side is
+`RUNTIME-DESIGN.md` §3e, SKIlark's is its `PLAN.md` stage 15. Nothing here
+is built.*
+
+**A program does I/O through effects in one shape, and the pier performs
+them.** SKIlark's I/O words (stage 14) end a run with `RIO n s q`, and
+SKIlark's own Python host answers them. Avon cannot answer that shape
+without learning Joy: how a Joy value prints, how a factor reads, which
+number is `put`. A front end that targets Avon would each need such a host.
+Vere and Arvo split the work the other way. Gall's agents emit cards, Vere's
+drivers perform them, and neither knows the other's language. Avon already
+has one such driver: entropy (§9.1). This section adds the others a
+command-line program needs: writing bytes, reading bytes, the environment,
+a clock and an exit. SKIlark would be their first user; any front end that
+emits SKIjack's kernel shape, a Jock or a Hoon front end among them, could
+emit the same cards.
+
+**The shapes are §9.1's, generalized.**
+
+- **A program is a kernel** (§9): a door whose `poke` returns
+  `[effects kernel']`.
+- **Effects are a list** (`nil`, `cons`) **of cards `[tag data]`**, `tag`
+  a Scott numeral.
+- **Events are cells `[tag data]`**, and tag 0 belongs to the pier. A reply
+  is the event `[0 [id answer]]`, `id` the numeral the kernel put in its
+  request. The pier still accepts an outside event only when a probe shows
+  a successor tag, so no driver can forge a reply.
+- **Bytes** are Scott lists of numerals from 0 to 255. Share mode's list and
+  numeral words hold them natively (§6.10); copy and witness modes carry
+  them as plain SKI.
+
+**The cards.** The tag picks the driver. Entropy keeps tag 0.
+
+| tag | card | the pier | reply |
+|---|---|---|---|
+| 0 | `[0 id]` | draws 128 bits (§9.1) | `[0 [id bits]]` |
+| 1 | `[1 [fd bytes]]` | writes `bytes` to `fd`, 1 or 2 | none |
+| 2 | `[2 [id [fd max]]]` | reads at most `max` bytes from `fd` 0 | `[0 [id bytes]]`, `nil` at end of input |
+| 3 | `[3 [id name]]` | looks up the variable `name` | `[0 [id v]]`, `v` a list: `nil` when unset, `cons value nil` when set |
+| 4 | `[4 id]` | counts the run's steps so far (below) | `[0 [id steps]]` |
+| 5 | `[5 code]` | stops the run after the cards before this one | none; `code` from 0 to 255 is the exit status |
+
+Reading is `read(2)`'s, not a line's or a token's. The kernel buffers what
+it has not yet consumed, so the driver knows no syntax: Joy's `get` asks
+for bytes until it holds a whole factor. A variable's value is a list of
+zero or one strings, so unset and empty differ, and the shape needs no
+option type beyond the prelude's lists.
+
+**A run starts with its arguments.** Boot under `--drivers` answers a
+request of its own, as boot under `--entropy` does. The first event is
+`[0 [0 [argv bits]]]`: `argv` the program's arguments as a list of byte
+strings, its name first, and `bits` the 128 bits under `--entropy`, or
+`nil` without it. The first poke therefore starts the program, with
+`main`'s arguments and no extra request. A pier booted with `--entropy`
+alone keeps §9.1's boot reply unchanged.
+
+**The walk is §9.1's, extended to every card.** The pier walks a poke's
+effects in list order once the event is logged. It performs a write when
+the walk reaches it, answers a request with a reply event poked then and
+there, and queues the reply's own cards behind the ones not yet walked.
+So a kernel that writes a prompt and then asks to read has the prompt on
+the terminal before the read blocks. A card the pier does not know, or one
+whose fields do not probe to the shape above, passes through untouched, as
+§9.1's do. An exit card ends the walk; the cards after it are not
+performed.
+
+**Bounds change for programs.** §9.1's 16 replies and 10,000,000 probe
+steps for one outside event bound a kernel that serves events. A program
+is one chain of replies from its first event, so under `--drivers` the
+pier follows replies until the queue empties or an exit card ends it.
+`--fuel` still bounds each poke. A run whose queue empties without an exit
+ends with status 0.
+
+**Every answer is logged before it is applied**, as an `eny` record is:
+the bytes read, the variable's value, the step count and the arguments.
+Replay answers nothing; it applies the logged replies, so a reopened pier
+reaches the state it left. Writes are not performed again on replay: an
+effect is released only after its event commits, as Vere's are (§21.1),
+and Avon's replay already discards every poke's effects. A pier reopened
+after a crash therefore continues without printing twice.
+
+**The clock counts steps, not time, until binary numerals land.** Card 4
+answers the contractions the run's pokes have taken, through the poke that
+emitted the card, in the pier's strategy. Copy mode's count is the
+reference host's, so copy mode answers as the oracle does; share mode
+counts its own steps, which differ for the same program. Time would cost twice
+over: a CPU clock measured from the process's start runs backward across a
+restart, and wall time since the epoch, near 2^41 ms, is no unary
+numeral. A step count has neither problem. Replay runs the same pokes and
+recounts the same steps, so the count never decreases across a restart,
+and the logged answers agree with it. Wall time and CPU time come with
+binary numerals, with `time` and `rand`.
+
+**The count is a Scott numeral, unary like every numeral here.** In share
+mode with `--data` the pier builds the reply as a word (§6.10): one node
+holding the number, its arithmetic native. In copy mode the reply is the
+plain term, n successors deep: a run of 10^6 contractions is answered by
+a term of 10^6 successors, and arithmetic on it is unary. That is what any
+SKIlark integer of that size costs. Bytes stay small, at most 255
+successors.
+
+**Most programs are not kernels, so the kernel is the opt-in.** A door is
+a cell `[battery state]`, and no shape tells it from any other value, so
+the command line says which it has:
+
+- **`avon run PROG`** reduces a plain program and prints its normal form,
+  as `avon reduce` does. It performs no cards.
+- **`avon run --kernel PILL ARG…`** boots the pill as a kernel with the
+  drivers on: a pier with no directory, its log in memory, exiting with
+  the program's status.
+- **`avon boot --drivers DIR`** is the durable form of the kernel run. It
+  survives a crash mid-run and can be proved event by event.
+
+**Proofs keep their shape.** A poke whose event is a reply is a statement
+over that reply's answer, as an entropy reply is (§9.1, "Proved"). The
+answer is public or private by the statement's choice. A write is part of
+`effects`, which a probe segment can bind as output (§17.4). Nothing here
+is proved, and no circuit changes: a driver acts between pokes, outside
+any proof.
+
+**What it costs Avon:**
+
+- **The C:** a probe of each card's tag and fields and a read of its bytes
+  (`av_read_nat` for each byte, or one native read of a list word in share
+  mode). Then a system call per card, and a log record per answer.
+- **The pier:** the queue and the log record types beyond `eny`.
+- **The front end:** printing and parsing values in its own terms. Avon
+  never learns a language.
+
+**What it costs a front end.** The work Avon does not do, the front end
+does in SKI. SKIlark must print a Joy value for `put` and read a factor
+for `get` inside its kernel. These are contractions that the stage-14
+Python host spends outside the run today. Jets can win them back later,
+licensed as any jet is (§6).
+
+**Decisions, taken 2026-10-26:**
+
+1. **Flat numeral tags,** with the registry in SKIjack's SPEC §4.1. NockApp
+   nests `[driver [verb data]]` so that several drivers can watch one
+   effect; here each card has one driver, and one probe of a numeral picks
+   it.
+2. **Boot's reply under both opt-ins is the pair** `[argv bits]`, so a
+   kernel asks for nothing at the start.
+3. **`clock` answers the run's step count,** as above, in place of Joy's
+   CPU time. Time waits for binary numerals, with `time` and `rand`.
+4. **Descriptors 0, 1 and 2 only.** Files by path are a later driver,
+   SKIlark's stage B.
+5. **No bound under `--drivers` beyond `--fuel`.**
+
+**Out of scope:** files by path, timers, the network and `system`. Each
+would be a further tag in the same shape.
+
 ## 10. The conformance harness
 
 ### 10.1 What Python must export
