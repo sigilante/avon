@@ -71,7 +71,7 @@ hand.
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (`DESIGN.md` §20.3) | SKIjack | |
 | `make front0-check` | the SKIjack-0 front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | SKIjack | 27 min |
 | `make front1-check` | the full language's front end, through M4: its own source and every corpus program to the expander's terms, and 303 edge programs and 400 random ones as the expander does (bar 12 edges aviary's environment decides), in the same four modes | SKIjack | 106 min |
-| `make fixtures-check` | every one of the 193 exported fixtures is what its exporter writes at the pins | SKIjack, SKIlark, aviary | 1 min |
+| `make fixtures-check` | every one of the 236 exported fixtures is what its exporter writes at the pins | SKIjack, SKIlark, aviary | 1 min |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (`DESIGN.md` §17) | lean-ski | |
 | `make jet-witness-check` | the same, jetted (`DESIGN.md` §18) | lean-ski | |
 | `make probe-witness-check` | the same, with probe segments | lean-ski | |
