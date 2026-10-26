@@ -2263,7 +2263,7 @@ chooses them, as the pier's operator does.
 
 ### 9.2 Drivers: effects every front end shares
 
-*Written 2026-10-26; proposed, not decided. SKIjack's side is
+*Written and decided 2026-10-26, the clock's restart rule under review. SKIjack's side is
 `RUNTIME-DESIGN.md` §3e, SKIlark's is its `PLAN.md` stage 15. Nothing here
 is built.*
 
@@ -2302,7 +2302,7 @@ emit the same cards.
 | 1 | `[1 [fd bytes]]` | writes `bytes` to `fd`, 1 or 2 | none |
 | 2 | `[2 [id [fd max]]]` | reads at most `max` bytes from `fd` 0 | `[0 [id bytes]]`, `nil` at end of input |
 | 3 | `[3 [id name]]` | looks up the variable `name` | `[0 [id v]]`, `v` a list: `nil` when unset, `cons value nil` when set |
-| 4 | `[4 id]` | reads CPU time since the run began | `[0 [id ms]]` |
+| 4 | `[4 id]` | reads the run's CPU time (below) | `[0 [id ms]]` |
 | 5 | `[5 code]` | stops the run after the cards before this one | none; `code` from 0 to 255 is the exit status |
 
 Reading is `read(2)`'s, not a line's or a token's. The kernel buffers what
@@ -2344,6 +2344,17 @@ effect is released only after its event commits, as Vere's are (§21.1),
 and Avon's replay already discards every poke's effects. A pier reopened
 after a crash therefore continues without printing twice.
 
+**The clock survives a restart.** Measured from the process's start, a
+pier reopened after a crash would answer less than its log already holds,
+and a kernel that subtracts a start time it saved would see time run
+backward. So the clock counts the run's CPU across lives. The pier keeps
+the last value it answered, saved in each snapshot's sidecar and brought
+up to date by the replies replayed after it. It answers that value plus
+the CPU this process has spent since replay ended. Answers never decrease.
+A restart forfeits the CPU spent between the last answer and the crash,
+and replay's own CPU is not counted. `avon run` keeps no log and never
+restarts, so its clock is the process's CPU.
+
 **`avon run PILL ARG…` is the everyday form**: a driver pier with no
 directory, its log in memory, exiting with the program's status. A pier
 on disk (`avon boot --drivers DIR`) is the durable form of the same run.
@@ -2371,24 +2382,21 @@ for `get` inside its kernel. These are contractions that the stage-14
 Python host spends outside the run today. Jets can win them back later,
 licensed as any jet is (§6).
 
-**Decisions to take:**
+**Decisions, taken 2026-10-26:**
 
-1. **Flat numeral tags or a two-level shape:** flat numerals, as above, or
-   `[driver [verb data]]`, as NockApp's drivers nest their effects.
-   *Recommended:* flat, with the registry in SKIjack's SPEC §4.1, since
-   one probe of a numeral picks the driver.
-2. **Boot's reply under both opt-ins:** the pair `[argv bits]` above, or two
-   replies with distinct ids. *Recommended:* the pair, so a kernel asks
-   for nothing at the start.
-3. **What `clock` measures:** CPU milliseconds since the run began, which
-   is Joy's `clock`, or wall milliseconds. Wall time since the epoch is
-   near 2^41, and a unary numeral cannot hold it. It waits for binary
-   numerals, with `time` and `rand`.
-4. **Which descriptors:** 0, 1 and 2 only, as above, or any `fd` the
-   process holds. Files (open, read and write by path) are a later
-   driver, SKIlark's stage B.
-5. **The bound under `--drivers`:** none beyond `--fuel`, as above, or a cap
-   on replies per run.
+1. **Flat numeral tags,** with the registry in SKIjack's SPEC §4.1. NockApp
+   nests `[driver [verb data]]` so that several drivers can watch one
+   effect; here each card has one driver, and one probe of a numeral picks
+   it.
+2. **Boot's reply under both opt-ins is the pair** `[argv bits]`, so a
+   kernel asks for nothing at the start.
+3. **`clock` is the run's CPU milliseconds,** which is Joy's `clock`,
+   counted across restarts as above. Wall time since the epoch is near
+   2^41, and a unary numeral cannot hold it. It waits for binary numerals,
+   with `time` and `rand`. The restart rule is still under review.
+4. **Descriptors 0, 1 and 2 only.** Files by path are a later driver,
+   SKIlark's stage B.
+5. **No bound under `--drivers` beyond `--fuel`.**
 
 **Out of scope:** files by path, timers, the network and `system`. Each
 would be a further tag in the same shape.

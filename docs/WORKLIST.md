@@ -227,10 +227,10 @@ design lives. Last revised 2026-10-25.
 ## Next
 
 1. **Stage 8's checkers, M5 and M6** (item 3).
-2. **Drivers: effects every front end shares** (`DESIGN.md` §9.2; proposed 2026-10-26,
-   not decided). Standard cards for writing, reading, the environment, a clock and an
-   exit, beside entropy's, performed by the pier, so that no front end needs a host of
-   its own. Five decisions are open there. Once they are taken, the order is SKIjack's
+2. **Drivers: effects every front end shares** (`DESIGN.md` §9.2; decided 2026-10-26,
+   the clock's restart rule under review). Standard cards for writing, reading, the
+   environment, a clock and an exit, beside entropy's, performed by the pier, so that no
+   front end needs a host of its own. The order is SKIjack's
    SPEC and reference host first (`RUNTIME-DESIGN.md` §3e), then Avon's drivers and
    `avon run`, then SKIlark's door (its stage 15).
 
