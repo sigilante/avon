@@ -15,8 +15,11 @@ make check        # about 7.5 min on an Apple M4 Max
 `make check` builds `build/dbg/avon` and each of the 27 suites
 `tests/test_*.c` with AddressSanitizer and UndefinedBehaviorSanitizer, and
 runs them.  Each suite prints `tests/test_NAME.c: N/N passed`; some print a
-line of figures too.  The target exits 0 only if every suite passes; it
-prints no summary.
+line of figures too.  Then `tests/drivers_check.sh` runs `build/dbg/avon run
+--kernel` on the worlds of `tests/drivers/expected.tsv` and compares each
+run's output, error and status with the reference host's, printing
+`drivers: N of N runs agree with the reference host`.  The target exits 0
+only if every suite and every run passes; it prints no summary.
 
 One line in its output looks like a failure and is not: `avon: internal
 invariant broken at ... jets.h: allocation past what was reserved`, printed

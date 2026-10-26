@@ -376,6 +376,44 @@ build/avon poke --pier=/tmp/epier tests/kernel/entropy.ask5.skit
   1,000,000 contractions it prints `(no normal form within 1,000,000)` and
   the effects as they stand.
 
+## Programs: `run`
+
+`run` runs a program. Most programs are plain terms, and `avon run FILE`
+is `avon reduce FILE`, with the same options. A kernel runs as a program
+only when asked for, with `--kernel`, since nothing in a kernel's shape
+tells it from another value (§9.2):
+
+```sh
+build/avon run --kernel -- tests/drivers/echo.skit < tests/drivers/echo.in
+build/avon run --kernel -- tests/drivers/show.skit arg1; echo $?
+build/avon run --kernel --entropy=tests/drivers/bits.eny -- tests/drivers/bits.skit
+```
+
+- FILE holds the kernel itself, in any form `reduce` reads, not a pill:
+  it is adopted as it stands, and its first poke reduces it.
+- The first event is `[0 [0 [argv bits]]]`. `argv` is FILE as given, then
+  the arguments after it. `bits` is boot's 128 under `--entropy`, and
+  `nil` otherwise.
+- The kernel's cards then read standard input, write standard output and
+  error, look up environment variables, count steps and exit, as the
+  table in §9.2 and `include/avon.h` give them. A read answers `max`
+  bytes, fewer only at the end of input, and 1 MiB at most.
+- The exit card's code is `avon`'s status. A run whose cards run out
+  exits 0. A poke that does not reach weak head normal form, or a world
+  that fails (a write refused, an entropy file run out), prints why on
+  standard error and exits 1.
+- A card no driver knows, or one whose fields do not probe to a driver's
+  shape within 1,000,000 contractions, passes through untouched.
+- `--strategy=` and `--fuel=` are as for the kernel commands: share mode
+  and 100,000,000 contractions a poke by default. Nothing else bounds the
+  run. The step count is the strategy's own; copy mode's is the reference
+  host's.
+- `--entropy` answers requests for bits from `getentropy`, and
+  `--entropy=FILE` from FILE, 16 bytes a draw from its start, boot's
+  first.
+- The log is in memory, so nothing survives the run. A durable form,
+  `boot --drivers`, is not built yet.
+
 ## Scry: `scry`
 
 `scry NAMESPACES` runs the resume loop (§8) over a `namespaces.tsv`

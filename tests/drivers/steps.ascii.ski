@@ -1,0 +1,8 @@
+-- A kernel run with drivers (DESIGN.md section 9.2): tests/drivers_check.sh.
+-- Asks for the step count (id 1) and exits with it as its status.
+peek k p = 3@k
+load k old = [(2@k) old]
+
+answer id a = id (cons [4 1] nil) (K (cons [5 a] nil))
+poke k ev = [(answer (6@ev) (7@ev)) [(2@k) (3@k)]]
+kernel := [[poke [peek load]] 0]

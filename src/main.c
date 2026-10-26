@@ -146,6 +146,9 @@ int usage(void) {
         "       avon poke --pier=DIR [--snapshot] [--entropy=FILE] EVENT...\n"
         "       avon peek --pier=DIR PATH...\n"
         "       avon load --pier=DIR [--subject=FILE] [--snapshot] PILL\n"
+        "       avon run [reduce's options] FILE      (avon reduce FILE)\n"
+        "       avon run --kernel [--strategy=copy|share] [--fuel=N] [--entropy[=FILE]]\n"
+        "                FILE [ARG...]                (FILE a kernel, run with drivers)\n"
         "       (boot, poke, peek, load accept --strategy=, --fuel=, and --budget=,\n"
         "        which boot --pier takes only with --entropy)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
@@ -190,6 +193,7 @@ static int run_main(int argc, char **argv) {
     if (strcmp(argv[1], "selfhost") == 0) return selfhost_main(argc, argv);
     if (strcmp(argv[1], "front0") == 0) return front0_main(argc, argv);
     if (strcmp(argv[1], "enum") == 0) return enum_main(argc, argv);
+    if (strcmp(argv[1], "run") == 0) return program_main(argc, argv);
     if (strcmp(argv[1], "boot") == 0 || strcmp(argv[1], "poke") == 0 ||
         strcmp(argv[1], "peek") == 0 || strcmp(argv[1], "load") == 0)
         return kernel_main(argc, argv);
