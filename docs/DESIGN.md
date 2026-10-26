@@ -2263,7 +2263,7 @@ chooses them, as the pier's operator does.
 
 ### 9.2 Drivers: effects every front end shares
 
-*Written and decided 2026-10-26, the clock's restart rule under review. SKIjack's side is
+*Written and decided 2026-10-26. SKIjack's side is
 `RUNTIME-DESIGN.md` §3e, SKIlark's is its `PLAN.md` stage 15. Nothing here
 is built.*
 
@@ -2302,7 +2302,7 @@ emit the same cards.
 | 1 | `[1 [fd bytes]]` | writes `bytes` to `fd`, 1 or 2 | none |
 | 2 | `[2 [id [fd max]]]` | reads at most `max` bytes from `fd` 0 | `[0 [id bytes]]`, `nil` at end of input |
 | 3 | `[3 [id name]]` | looks up the variable `name` | `[0 [id v]]`, `v` a list: `nil` when unset, `cons value nil` when set |
-| 4 | `[4 id]` | reads the run's CPU time (below) | `[0 [id ms]]` |
+| 4 | `[4 id]` | counts the run's steps so far (below) | `[0 [id steps]]` |
 | 5 | `[5 code]` | stops the run after the cards before this one | none; `code` from 0 to 255 is the exit status |
 
 Reading is `read(2)`'s, not a line's or a token's. The kernel buffers what
@@ -2337,31 +2337,32 @@ pier follows replies until the queue empties or an exit card ends it.
 ends with status 0.
 
 **Every answer is logged before it is applied**, as an `eny` record is:
-the bytes read, the variable's value, the milliseconds and the arguments.
+the bytes read, the variable's value, the step count and the arguments.
 Replay answers nothing; it applies the logged replies, so a reopened pier
 reaches the state it left. Writes are not performed again on replay: an
 effect is released only after its event commits, as Vere's are (§21.1),
 and Avon's replay already discards every poke's effects. A pier reopened
 after a crash therefore continues without printing twice.
 
-**The clock survives a restart.** Measured from the process's start, a
-pier reopened after a crash would answer less than its log already holds,
-and a kernel that subtracts a start time it saved would see time run
-backward. So the clock counts the run's CPU across lives. The pier keeps
-the last value it answered, saved in each snapshot's sidecar and brought
-up to date by the replies replayed after it. It answers that value plus
-the CPU this process has spent since replay ended. Answers never decrease.
-A restart forfeits the CPU spent between the last answer and the crash,
-and replay's own CPU is not counted. `avon run --kernel` keeps no log
-and never restarts, so its clock is the process's CPU.
+**The clock counts steps, not time, until binary numerals land.** Card 4
+answers the contractions the run's pokes have taken, through the poke that
+emitted the card, in the pier's strategy. Copy mode's count is the
+reference host's, so copy mode answers as the oracle does; share mode
+counts its own steps, which differ for the same program. Time would cost twice
+over: a CPU clock measured from the process's start runs backward across a
+restart, and wall time since the epoch, near 2^41 ms, is no unary
+numeral. A step count has neither problem. Replay runs the same pokes and
+recounts the same steps, so the count never decreases across a restart,
+and the logged answers agree with it. Wall time and CPU time come with
+binary numerals, with `time` and `rand`.
 
-**The milliseconds are a Scott numeral, unary like every numeral here.**
-In share mode with `--data` the pier builds the reply as a word (§6.10):
-one node holding the number, its arithmetic native. In copy mode the reply
-is the plain term, n successors deep, so an hour of CPU is 3,600,000
-successors and arithmetic on it is unary. That is what any SKIlark integer
-of that size costs. Bytes stay small, at most 255 successors. The clock
-moves to binary numerals when they land, with `time` and `rand`.
+**The count is a Scott numeral, unary like every numeral here.** In share
+mode with `--data` the pier builds the reply as a word (§6.10): one node
+holding the number, its arithmetic native. In copy mode the reply is the
+plain term, n successors deep: a run of 10^6 contractions is answered by
+a term of 10^6 successors, and arithmetic on it is unary. That is what any
+SKIlark integer of that size costs. Bytes stay small, at most 255
+successors.
 
 **Most programs are not kernels, so the kernel is the opt-in.** A door is
 a cell `[battery state]`, and no shape tells it from any other value, so
@@ -2405,10 +2406,8 @@ licensed as any jet is (§6).
    it.
 2. **Boot's reply under both opt-ins is the pair** `[argv bits]`, so a
    kernel asks for nothing at the start.
-3. **`clock` is the run's CPU milliseconds,** which is Joy's `clock`,
-   counted across restarts as above. Wall time since the epoch is near
-   2^41, and a unary numeral cannot hold it. It waits for binary numerals,
-   with `time` and `rand`. The restart rule is still under review.
+3. **`clock` answers the run's step count,** as above, in place of Joy's
+   CPU time. Time waits for binary numerals, with `time` and `rand`.
 4. **Descriptors 0, 1 and 2 only.** Files by path are a later driver,
    SKIlark's stage B.
 5. **No bound under `--drivers` beyond `--fuel`.**
