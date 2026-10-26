@@ -196,16 +196,15 @@ A kernel can also run as a program, with no pier.  `run --kernel` takes
 the kernel itself, not a pill, and performs the cards it emits: writes,
 reads of standard input, environment variables, step counts and an exit.
 `tests/drivers/echo.skit` greets and copies its input; `show.skit` writes
-its name and `$HOME`, then exits 7:
+its name and `$HOME`, with no newline after it, then exits 7:
 
 ```console
 $ printf 'hello, world\n' | build/avon run --kernel -- tests/drivers/echo.skit
 hi
 hello, world
-$ build/avon run --kernel -- tests/drivers/show.skit; echo "status $?"
+$ build/avon run --kernel -- tests/drivers/show.skit; echo " status $?"
 tests/drivers/show.skit
-/Users/you
-status 7
+/Users/you status 7
 ```
 
 Plain `run FILE`, without `--kernel`, is `reduce FILE` (`RUNTIME.md`,
