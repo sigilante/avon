@@ -232,7 +232,7 @@ design lives. Last revised 2026-10-25.
    environment, a clock and an exit, beside entropy's, performed by the pier, so that no
    front end needs a host of its own. The order is SKIjack's
    SPEC and reference host first (`RUNTIME-DESIGN.md` §3e), then Avon's drivers and
-   `avon run`, then SKIlark's door (its stage 15).
+   `avon run --kernel`, then SKIlark's door (its stage 15).
 
 ## Done: the order agreed 2026-10-05
 

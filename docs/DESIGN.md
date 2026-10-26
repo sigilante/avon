@@ -2352,13 +2352,28 @@ the last value it answered, saved in each snapshot's sidecar and brought
 up to date by the replies replayed after it. It answers that value plus
 the CPU this process has spent since replay ended. Answers never decrease.
 A restart forfeits the CPU spent between the last answer and the crash,
-and replay's own CPU is not counted. `avon run` keeps no log and never
-restarts, so its clock is the process's CPU.
+and replay's own CPU is not counted. `avon run --kernel` keeps no log
+and never restarts, so its clock is the process's CPU.
 
-**`avon run PILL ARG…` is the everyday form**: a driver pier with no
-directory, its log in memory, exiting with the program's status. A pier
-on disk (`avon boot --drivers DIR`) is the durable form of the same run.
-It survives a crash mid-run and can be proved event by event.
+**The milliseconds are a Scott numeral, unary like every numeral here.**
+In share mode with `--data` the pier builds the reply as a word (§6.10):
+one node holding the number, its arithmetic native. In copy mode the reply
+is the plain term, n successors deep, so an hour of CPU is 3,600,000
+successors and arithmetic on it is unary. That is what any SKIlark integer
+of that size costs. Bytes stay small, at most 255 successors. The clock
+moves to binary numerals when they land, with `time` and `rand`.
+
+**Most programs are not kernels, so the kernel is the opt-in.** A door is
+a cell `[battery state]`, and no shape tells it from any other value, so
+the command line says which it has:
+
+- **`avon run PROG`** reduces a plain program and prints its normal form,
+  as `avon reduce` does. It performs no cards.
+- **`avon run --kernel PILL ARG…`** boots the pill as a kernel with the
+  drivers on: a pier with no directory, its log in memory, exiting with
+  the program's status.
+- **`avon boot --drivers DIR`** is the durable form of the kernel run. It
+  survives a crash mid-run and can be proved event by event.
 
 **Proofs keep their shape.** A poke whose event is a reply is a statement
 over that reply's answer, as an entropy reply is (§9.1, "Proved"). The
