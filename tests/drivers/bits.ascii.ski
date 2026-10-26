@@ -1,0 +1,14 @@
+-- A kernel run with drivers (DESIGN.md section 9.2): tests/drivers_check.sh.
+-- Asks for 128 bits (id 1), writes a "1" for each bit set, and exits
+-- 0.  Without entropy the request is no driver's card.
+peek k p = 3@k
+load k old = [(2@k) old]
+
+one = cons 49 nil
+count bs = bs nil countc
+countc b t = b (cons [1 [1 one]] (count t)) (count t)
+onBoot a = cons [0 1] nil
+onBits bs = listAppend (count bs) (cons [5 0] nil)
+answer id a = id (onBoot a) (K (onBits a))
+poke k ev = [(answer (6@ev) (7@ev)) [(2@k) (3@k)]]
+kernel := [[poke [peek load]] 0]

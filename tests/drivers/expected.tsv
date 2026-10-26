@@ -1,0 +1,9 @@
+echo	echo	copy,share	0	-	-
+echo-bytes	echo	copy,share	0	-	-
+echo-empty	echo	copy,share	0	-	-
+show	show	copy,share	7	61726731	484f4d453d2f686f6d652f6b
+show-unset	show	copy,share	7	-	-
+show-empty	show	copy,share	7	-	484f4d453d
+bits	bits	copy,share	0	-	-
+bits-none	bits	copy,share	0	-	-
+steps	steps	copy	52	-	-

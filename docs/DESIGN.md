@@ -2264,8 +2264,11 @@ chooses them, as the pier's operator does.
 ### 9.2 Drivers: effects every front end shares
 
 *Written and decided 2026-10-26. SKIjack's side is
-`RUNTIME-DESIGN.md` §3e, SKIlark's is its `PLAN.md` stage 15. Nothing here
-is built.*
+`RUNTIME-DESIGN.md` §3e and `SPEC.md` §4.1, SKIlark's is its `PLAN.md`
+stage 15. Built in memory: `avon run --kernel` (`src/drivers.c`), which
+agrees with SKIjack's reference drivers on 17 runs
+(`tests/drivers_check.sh`, in `make check`). The durable form, `boot
+--drivers`, is not built.*
 
 **A program does I/O through effects in one shape, and the pier performs
 them.** SKIlark's I/O words (stage 14) end a run with `RIO n s q`, and
@@ -2305,7 +2308,9 @@ emit the same cards.
 | 4 | `[4 id]` | counts the run's steps so far (below) | `[0 [id steps]]` |
 | 5 | `[5 code]` | stops the run after the cards before this one | none; `code` from 0 to 255 is the exit status |
 
-Reading is `read(2)`'s, not a line's or a token's. The kernel buffers what
+Reading takes bytes, not a line or a token: `max` of them, fewer only at
+the end of input, so a pipe's short reads change no answer. The kernel
+buffers what
 it has not yet consumed, so the driver knows no syntax: Joy's `get` asks
 for bytes until it holds a whole factor. A variable's value is a list of
 zero or one strings, so unset and empty differ, and the shape needs no
@@ -2345,8 +2350,8 @@ and Avon's replay already discards every poke's effects. A pier reopened
 after a crash therefore continues without printing twice.
 
 **The clock counts steps, not time, until binary numerals land.** Card 4
-answers the contractions the run's pokes have taken, through the poke that
-emitted the card, in the pier's strategy. Copy mode's count is the
+answers the contractions the run's pokes have taken when the walk reaches
+the card, in the pier's strategy. Copy mode's count is the
 reference host's, so copy mode answers as the oracle does; share mode
 counts its own steps, which differ for the same program. Time would cost twice
 over: a CPU clock measured from the process's start runs backward across a
@@ -2357,8 +2362,8 @@ and the logged answers agree with it. Wall time and CPU time come with
 binary numerals, with `time` and `rand`.
 
 **The count is a Scott numeral, unary like every numeral here.** In share
-mode with `--data` the pier builds the reply as a word (§6.10): one node
-holding the number, its arithmetic native. In copy mode the reply is the
+mode with `--data` the pier builds the reply as a word (§6.10): its
+arithmetic native, though its predecessors are built too, two nodes each. In copy mode the reply is the
 plain term, n successors deep: a run of 10^6 contractions is answered by
 a term of 10^6 successors, and arithmetic on it is unary. That is what any
 SKIlark integer of that size costs. Bytes stay small, at most 255
@@ -2370,9 +2375,11 @@ the command line says which it has:
 
 - **`avon run PROG`** reduces a plain program and prints its normal form,
   as `avon reduce` does. It performs no cards.
-- **`avon run --kernel PILL ARG…`** boots the pill as a kernel with the
-  drivers on: a pier with no directory, its log in memory, exiting with
-  the program's status.
+- **`avon run --kernel FILE ARG…`** runs the kernel FILE holds with the
+  drivers on, its log in memory, exiting with the program's status. FILE
+  is the kernel itself, as SKIjack's reference host takes it, not a pill,
+  and it is adopted unreduced: its first poke reduces it, and the step
+  count includes that.
 - **`avon boot --drivers DIR`** is the durable form of the kernel run. It
   survives a crash mid-run and can be proved event by event.
 
@@ -2385,9 +2392,9 @@ any proof.
 
 **What it costs Avon:**
 
-- **The C:** a probe of each card's tag and fields and a read of its bytes
-  (`av_read_nat` for each byte, or one native read of a list word in share
-  mode). Then a system call per card, and a log record per answer.
+- **The C:** a probe of each card's tag and fields and a read of its bytes,
+  a probe per successor, or at once for a word. Then a system call per
+  card, and, in the durable form, a log record per answer.
 - **The pier:** the queue and the log record types beyond `eny`.
 - **The front end:** printing and parsing values in its own terms. Avon
   never learns a language.

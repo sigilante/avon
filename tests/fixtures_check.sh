@@ -7,6 +7,7 @@
 #   tests/fixtures/       export.py: the paper's targets and the corpus
 #   tests/data/           export.py: data jets' templates and words
 #   tests/kernel/         export.py and entropy_export.py: kernels, pills
+#   tests/drivers/        export.py: kernels, worlds and the reference's runs
 #   tests/selfhost/       export.py: the compiler core's terms and calls
 #   tests/conformance/    skijack.export: the conformance corpus
 #   tests/workloads/skilark/   skilark.export: SKIlark's workloads
@@ -42,6 +43,7 @@ echo "--- exporting"
 (cd "$T" && PYTHONPATH="$SJ" python3 tests/data/export.py > /dev/null)
 (cd "$T" && PYTHONPATH="$SJ" python3 tests/kernel/export.py > /dev/null)
 (cd "$T" && PYTHONPATH="$SJ" python3 tests/kernel/entropy_export.py > /dev/null)
+(cd "$T" && PYTHONPATH="$SJ" python3 tests/drivers/export.py > /dev/null)
 (cd "$T" && PYTHONPATH="$SJ" python3 tests/selfhost/export.py "$T/out/selfhost" > /dev/null)
 (cd "$SJ" && python3 -m skijack.export "$T/out/conformance" > /dev/null)
 (cd "$SKILARK" && PYTHONPATH="$SJ:." python3 -m skilark.export "$T/out/skilark" > /dev/null)
@@ -61,7 +63,7 @@ same() {
         fi
     done
 }
-for d in tests/fixtures tests/data tests/kernel; do same "$d" "$T/$d"; done
+for d in tests/fixtures tests/data tests/kernel tests/drivers; do same "$d" "$T/$d"; done
 same jets "$T/jets"
 same tests/selfhost "$T/out/selfhost"
 same tests/conformance "$T/out/conformance"

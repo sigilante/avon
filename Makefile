@@ -1,6 +1,6 @@
 # Avon.  `make` builds the release binary, `make check` runs the unit tests
 # under ASan and UBSan and builds build/dbg/avon, a sanitized binary for
-# tests/diff_aviary.py, `make smoke` runs tests/smoke.tsv's commands on the
+# tests/diff_aviary.py, which runs tests/drivers_check.sh too, `make smoke` runs tests/smoke.tsv's commands on the
 # release binary (tests/smoke.sh), `make witness-check` runs tests/witness_check.sh,
 # `make jet-witness-check` runs tests/jet_witness_check.sh,
 # `make probe-witness-check` runs tests/probe_witness_check.sh,
@@ -80,7 +80,8 @@ $(BUILD)/dbg/test_%: tests/test_%.c $(DBG_OBJ) $(HDRS)
 	$(CC) $(CSTD) $(WARN) $(INC) -Itests $(DEBUG) -o $@ $< $(DBG_OBJ)
 
 check: $(TEST_BIN) $(BUILD)/dbg/avon
-	@status=0; for t in $(TEST_BIN); do $$t || status=1; done; exit $$status
+	@status=0; for t in $(TEST_BIN); do $$t || status=1; done; \
+	tests/drivers_check.sh $(BUILD)/dbg/avon || status=1; exit $$status
 
 # The release binary, asserts compiled out, against the outputs recorded from
 # build/dbg/avon under ASan and UBSan.

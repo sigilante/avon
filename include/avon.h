@@ -1409,6 +1409,44 @@ av_status av_kernel_peek(av_kernel *k, uint32_t path, uint32_t *answer, av_resul
  *  state (NockApp's rule). */
 bool av_kernel_load(av_kernel *k, uint32_t new_kernel);
 
+/*  ---------------------------------------------------------------- drivers
+ *
+ *  A kernel run as a program (DESIGN.md §9.2, SKIjack SPEC.md §4.1).  Its
+ *  first event is [0 [0 [argv bits]]], bits 128 under entropy and nil
+ *  without; after that it emits cards [tag data] and the run performs
+ *  them, first in, first out:
+ *
+ *      0  [0 id]               128 bits, under entropy only   [0 [id bits]]
+ *      1  [1 [fd bytes]]       write to fd 1 or 2              none
+ *      2  [2 [id [fd max]]]    at most max bytes of fd 0       [0 [id bytes]]
+ *      3  [3 [id name]]        an environment variable         [0 [id v]]
+ *      4  [4 id]               the pokes' contractions so far  [0 [id steps]]
+ *      5  [5 code]             end the run with status code    none
+ *
+ *  Bytes are lists of numerals below 256; v is nil when the variable is
+ *  unset and cons value nil when set.  A card of no driver's shape passes
+ *  through, counted.  The kernel's options bound each poke; nothing else
+ *  bounds the run.  Under words (share mode's --data) a reply's numerals
+ *  are words.
+ */
+typedef struct {
+    int          fd[3];             /* standard input, output and error   */
+    int          argc;
+    char *const *argv;              /* the program's name first           */
+    bool         entropy;           /* answer card 0, and boot's bits      */
+    const char  *entropy_file;      /* bits from it, 16 bytes a draw from the
+                                       start; NULL: getentropy            */
+    /* the run's */
+    int          status;            /* the exit card's code, or 0         */
+    uint64_t     steps, pokes, passed, draws;
+} av_run;
+
+/*  Run k with drivers until an exit card or until no card is left: AV_WHNF
+ *  and d->status.  Otherwise a poke's status, or AV_SIZE for the world's
+ *  failure or for memory, with *err; *r is the last poke's reduction.
+ */
+av_status av_run_kernel(av_kernel *k, av_run *d, av_result *r, const char **err);
+
 /*  3@k. */
 uint32_t av_kernel_state(av_kernel *k);
 

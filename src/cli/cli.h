@@ -52,6 +52,7 @@ void      print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size
 /*  The commands */
 int       term_main(int argc, char **argv);        /* reduce batch jam cue prefix witness */
 int       kernel_main(int argc, char **argv);      /* boot poke peek load */
+int       program_main(int argc, char **argv);     /* run, plain or --kernel */
 int       selfhost_main(int argc, char **argv);
 int       scry_main(int argc, char **argv);
 int       census_main(int argc, char **argv);

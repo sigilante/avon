@@ -1,0 +1,25 @@
+-- A kernel run with drivers (DESIGN.md section 9.2): tests/drivers_check.sh.
+-- Writes its name, asks for HOME (id 2) and writes it, or "?" to
+-- standard error if unset, asks for the step count (id 3) and keeps it
+-- as its state, then exits 7.  The write after the exit card is never
+-- performed, and [9 0] is no driver's card, so it passes through.
+peek k p = 3@k
+load k old = [(2@k) old]
+
+hi = cons 104 (cons 105 (cons 10 nil))
+nl = cons 10 nil
+home = cons 72 (cons 79 (cons 77 (cons 69 nil)))
+unset = cons 63 (cons 10 nil)
+first h t = h
+onBoot a = cons [1 [1 ((2@a) nil first)]] (cons [1 [1 nl]] (cons [9 0] (cons [3 [2 home]] nil)))
+shown h t = cons [1 [1 h]] (cons [4 3] nil)
+onEnv v = v (cons [1 [2 unset]] (cons [4 3] nil)) shown
+onSteps n = cons [5 7] (cons [1 [1 hi]] nil)
+p2 a q = q (onEnv a) (K (onSteps a))
+p1 a p = p nil (p2 a)
+pick id a = id (onBoot a) (p1 a)
+s2 a s q = q s (K a)
+s1 a s p = p s (s2 a s)
+st id a s = id s (s1 a s)
+poke k ev = [(pick (6@ev) (7@ev)) [(2@k) (st (6@ev) (7@ev) (3@k))]]
+kernel := [[poke [peek load]] 0]

@@ -15,8 +15,11 @@ make check        # about 7.5 min on an Apple M4 Max
 `make check` builds `build/dbg/avon` and each of the 27 suites
 `tests/test_*.c` with AddressSanitizer and UndefinedBehaviorSanitizer, and
 runs them.  Each suite prints `tests/test_NAME.c: N/N passed`; some print a
-line of figures too.  The target exits 0 only if every suite passes; it
-prints no summary.
+line of figures too.  Then `tests/drivers_check.sh` runs `build/dbg/avon run
+--kernel` on the worlds of `tests/drivers/expected.tsv` and compares each
+run's output, error and status with the reference host's, printing
+`drivers: N of N runs agree with the reference host`.  The target exits 0
+only if every suite and every run passes; it prints no summary.
 
 One line in its output looks like a failure and is not: `avon: internal
 invariant broken at ... jets.h: allocation past what was reserved`, printed
@@ -68,7 +71,7 @@ hand.
 | `make selfhost-check` | the compiler core gives Python's result, hash for hash, for every abstraction of its own compilation and the corpus's, as a term and through its jet (`DESIGN.md` §20.3) | SKIjack | |
 | `make front0-check` | the SKIjack-0 front end compiles its own source to Python's terms, and 67 edge programs and 1,000 random ones as spec0 does: as SKI, with templates, with data jets, and with Y unfolded | SKIjack | 27 min |
 | `make front1-check` | the full language's front end, through M4: its own source and every corpus program to the expander's terms, and 303 edge programs and 400 random ones as the expander does (bar 12 edges aviary's environment decides), in the same four modes | SKIjack | 106 min |
-| `make fixtures-check` | every one of the 193 exported fixtures is what its exporter writes at the pins | SKIjack, SKIlark, aviary | 1 min |
+| `make fixtures-check` | every one of the 236 exported fixtures is what its exporter writes at the pins | SKIjack, SKIlark, aviary | 1 min |
 | `make witness-check` | the corpus's witnesses check and prove in lean-ski (`DESIGN.md` §17) | lean-ski | |
 | `make jet-witness-check` | the same, jetted (`DESIGN.md` §18) | lean-ski | |
 | `make probe-witness-check` | the same, with probe segments | lean-ski | |

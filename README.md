@@ -6,7 +6,7 @@ Avon is a solid-state $SKI$ interpreter runtime with accelerated supercombinator
 
 Avon reduces the pure $SKI$ combinator calculus, and every acceleration it offers carries a licence: an argument that the fast path agrees with the term it replaces.  One term can therefore run fast, run conformant to the published contraction counts, or run as a zero-knowledge proof, and the three agree.
 
-Avon also supports a "solid-state" event loop: a kernel with persistent state, updated by a poke and queried by a peek.
+Avon also supports a "solid-state" event loop: a kernel with persistent state, updated by a poke and queried by a peek.  A kernel can also run as a program: `avon run --kernel FILE ARG…` performs the cards it emits, reading standard input, writing standard output and error, reading the environment and exiting with a status, as SKIjack's reference drivers do.
 
 Avon was inspired by [Urbit](https://urbit.org), [NockApp](https://github.com/nockchain/nockchain/tree/master/crates/nockapp), and [PLAN](https://github.com/sol-plunder/reaver).  The underlying $SKI$ work was originally inspired by Stephen Wolfram's [_Combinators:  A Centennial View_](https://writings.stephenwolfram.com/2020/12/combinators-a-centennial-view/) and Raymond Smullyan's _To Mock a Mockingbird_.
 
@@ -22,7 +22,8 @@ Around those it supports:
 - supercombinator templates;
 - data jets;
 - a bound scry namespace that running code reads from; and
-- a kernel loop with a persistent arena.
+- a kernel loop with a persistent arena; and
+- drivers, which run a kernel as a program (`avon run --kernel`).
 
 ## Building
 
@@ -112,7 +113,7 @@ Start at [`docs/README.md`](docs/README.md), the index.  In brief:
 
 ## Status
 
-Avon is a research proof of concept.  Built: the three strategies, jets, templates, data jets, scry, kernels on a durable pier, the persistent arena, and the SKIjack front end through its fourth milestone, which compiles every corpus program to Python's terms.  Open: the front end's checkers (Stage A and Stage B), and the proof-side items in `docs/DESIGN.md` §11.1.  The structural hash keeps 128 bits of SHA-256.  A jet fires only where its own term stands, so a collision cannot merge two jets.
+Avon is a research proof of concept.  Built: the three strategies, jets, templates, data jets, scry, kernels on a durable pier, the persistent arena, drivers in memory (`avon run --kernel`), and the SKIjack front end through its fourth milestone, which compiles every corpus program to Python's terms.  Open: the front end's checkers (Stage A and Stage B), and the proof-side items in `docs/DESIGN.md` §11.1.  The structural hash keeps 128 bits of SHA-256.  A jet fires only where its own term stands, so a collision cannot merge two jets.
 
 ## References
 

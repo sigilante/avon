@@ -1,0 +1,14 @@
+-- A kernel run with drivers (DESIGN.md section 9.2): tests/drivers_check.sh.
+-- Greets, then copies standard input to standard output 64 bytes a
+-- read, and exits 0 at its end.  Every event is a reply [0 [id answer]]:
+-- id 0 is boot's, whose answer is [argv bits], and id 1 a read's.
+peek k p = 3@k
+load k old = [(2@k) old]
+
+hi = cons 104 (cons 105 (cons 10 nil))
+more = cons [2 [1 [0 64]]] nil
+echo bs h t = cons [1 [1 bs]] more
+onRead bs = bs (cons [5 0] nil) (echo bs)
+answer id a = id (cons [1 [1 hi]] more) (K (onRead a))
+poke k ev = [(answer (6@ev) (7@ev)) [(2@k) (3@k)]]
+kernel := [[poke [peek load]] 0]
