@@ -48,6 +48,10 @@ synced before an event applies, snapshots (`src/snap.c`) with checksum
 sidecars, a lock, and the entropy replies.  `boot --pma` keeps the arena
 itself in a mapped file with a redo journal instead (`src/pma.c`).  Every
 sync that must reach the disk goes through `src/durable.c`.
+`src/drivers.c` runs a kernel as a program: it walks the cards each poke
+emits, first in, first out, performs writes, answers reads, variables,
+step counts and entropy with reply events, and stops at an exit card
+(DESIGN.md §9.2).  Its log is in memory; `avon run --kernel` calls it.
 
 ## The files
 
@@ -83,6 +87,7 @@ sync that must reach the disk goes through `src/durable.c`.
 | `scry.c` | the fact store, its resolver, and the resume loop |
 | `kernel.c` | the kernel door: boot, poke, peek, load |
 | `pier.c` | a kernel's durable home: event log, snapshots, lock, entropy |
+| `drivers.c` | a kernel run as a program: its cards performed, first in, first out |
 | `snap.c` | arena snapshots, with checksum sidecars |
 | `pma.c` | the persistent arena: a mapped node image and a redo journal |
 | `durable.c`, `durable.h` | syncs that reach the disk (`F_FULLFSYNC` on macOS) |
@@ -102,6 +107,7 @@ sync that must reach the disk goes through `src/durable.c`.
 | `common.c` | number parsing, reading a file, loading a term in any form |
 | `term.c` | `reduce`, `batch`, `jam`, `cue`, `prefix`, `witness`, and `options_fit`, which refuses an option the command would ignore |
 | `kernel.c` | `boot`, `poke`, `peek`, `load` |
+| `run.c` | `run`: a plain program as `reduce`, or with `--kernel` a kernel with drivers |
 | `scry.c`, `census.c`, `jetstat.c`, `selfhost.c`, `front0.c`, `enum.c` | the command each is named for |
 
 Outside `src/`
