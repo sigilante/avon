@@ -6,6 +6,16 @@ design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
 
+- **SKIlark's I/O words and SKIjack 0.2.4** (2026-10-26; SKIlark #27 to #29, SKIjack
+  #30, #31). SKIlark gains `put putch putchars get argc argv getenv clock abort quit`:
+  an I/O word ends a run with `RIO`, the word, the stack and the rest of the program, and
+  a host answers it. `result` gains that constructor, so the workloads' manifest reads
+  `RIO/3` beside `RVal/1 RErr/0 RTime/0`. SKIjack 0.2.4 adds `SKIJACK_AVON_STRATEGY=share`.
+  `tests/pins.sh` moves SKIjack to `c319619` and SKIlark to `7376632`; the fixtures
+  regenerate from them (fixtures-check, 203 files). The workloads use no I/O word and take
+  the same 959,160 contractions; `step` is 76,646 atoms in the census, from 75,673, whose
+  smoke row is re-recorded; `jets/joy.tsv` keeps 74 terms.
+
 - **SKIlark's stages 9 to 11** (2026-10-26; SKIlark #24 to #26). SKIlark gains the
   reference's remaining pure words: `div pick condlinrec condnestrec casting` derived, and
   `compare name body intern strtol format` as `ext` words, `name`'s, `intern`'s and the
