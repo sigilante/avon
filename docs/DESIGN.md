@@ -3686,8 +3686,44 @@ seconds to compile it, against 9.
   - Its term grew from 117,273 distinct nodes to 131,354; Python takes 63
     seconds to compile it with checking, against 48.
   - It does not yet install `natDiv`, `natRem` or the list operations,
-    which the expander's prelude gained after M4. M6, Stage B, still runs
-    in Python.
+    which the expander's prelude gained after M4.
+
+- **M6, built 2026-10-28: Stage B** (`typecheck.py`), over the generated
+  program with its bodies macro-expanded, after Stage A and before
+  front1's own expansion, as Python orders them; any problem is class 7,
+  TypeMismatchError.
+  - Python's Stage B mutates objects in place: variables bind, and an
+    arrow's elimination, nominal type, datum, checked and numeral marks
+    change during unification. front1 keeps every type node in a store
+    keyed by number, each node the next, so the variables keep Python's
+    order, which generalization sorts by. Unification is oriented and
+    equirecursive, its seen pairs threaded as Python's set is shared down
+    one call. Every problem is the same class, so the first ends the pass.
+  - Its reference is Stage A, generation, Stage B, then the expander.
+    front1 agrees only where both can witness: a refusal Python gives
+    because inference outran its recursion limit is not compared, and
+    front1 may accept that program. None occurred in the runs below.
+  - It agrees on all 22 corpus programs, all 472 edge programs (43 of
+    them M6's), 1,300 random programs of the two generators and 500
+    programs typed as they are written, 429 of them accepted, hash for
+    hash.
+  - Its fixed point: all 1,520 of its names, in 619,922,690 contractions
+    with templates and data jets, 2.46 GB at peak. Without templates
+    Stage B's run passes 12 GB, so the fixed point runs with them.
+  - Two changes outside it made that affordable. skijack's expander
+    abstracts formals with references as atoms and expands them after,
+    the same terms, so front1 compiles with checking in 12 seconds where
+    aviary's order passed an hour (skijack #36). skijack writes template
+    terms in the DAG form, which Avon's loader reads (avon #82, skijack
+    #37): 122 MB where the printed trees were 410 MB and took 7.8 GB to
+    load.
+  - Stage B in SKI doubles front1's work on front0's source, from
+    415,021,159 contractions to 835,862,139. The candidates for
+    supercombinator and data jets, from a profile of that run: the
+    store's tries keyed by numbers (`ndGet`, `ndPut` and their kin, 10%
+    of contractions), name and bit comparisons (`cmpCode`, `eqB`,
+    `cmpBit`, `cmpName`, 9%), a scheme's instantiation (`bInst`), and
+    the continuations built at run time (33%).
 
 ### 20.4 What else the analogy imports
 
