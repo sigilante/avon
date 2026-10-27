@@ -166,14 +166,15 @@ bool av_jetstats_begin(av_jetstats *s, const av_arena *a, uint32_t t) {
     s->row_of_id = calloc(s->nids ? s->nids : 1, sizeof *s->row_of_id);
     if (!s->row_of_id) return false;
     for (uint32_t id = 0; id < a->njets; id++) {
-        if (!a->jets[id].residual_ok) continue;
+        /* residual jets, and templates: their fires and dispatches */
+        if (!a->jets[id].residual_ok && !a->jets[id].tmpl) continue;
         uint32_t r = row_for(s, &a->jets[id]);
         if (r == AV_NONE) return false;
         s->row_of_id[id] = r + 1;
     }
     if (!walk(s, a, t, TOPMARK)) return false;
     for (uint32_t id = 0; id < a->njets; id++) {
-        if (!s->row_of_id[id]) continue;
+        if (!s->row_of_id[id] || !a->jets[id].residual_ok) continue;
         uint64_t r = s->row_of_id[id] - 1;
         if (!walk(s, a, a->jets[id].residual, r << 1 | AV_FROM_RESIDUAL) ||
             !walk(s, a, a->jets[id].fallback, r << 1 | AV_FROM_TERM))
