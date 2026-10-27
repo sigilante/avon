@@ -211,6 +211,14 @@ data: 5 numeral operations admitted, 0 refused; 95 numerals made words; 1750 dis
   0 to 4. The line then reads `… numerals and N lists made words; …
   numeral operations and M list operations among the contractions`, each
   part only when it is not 0.
+- Three functions of skijack's own front end on bit strings, `Bn | Bz b |
+  Bo b`, run natively where a program's function is the same term, node
+  for node: equality (`eqB`), a lookup in a trie the bits key (`rvGet`
+  and its kin), and equality of two names `IdRaw n | Id b` (`eqId`), each
+  admitted after running on bit strings of up to three bits. An operation
+  reads only operands that are values already, and otherwise runs its
+  term. Their fires are `… and K bit-string operations among the
+  contractions`.
 
 Normal forms are the unjetted ones, byte for byte; a WHNF state is
 templates' (which may differ from SKI's in form, not value).
@@ -244,7 +252,7 @@ build/avon reduce --p2=/tmp/p2/P.dag /tmp/p2/p2.dag   # NORMAL 1, then p2.expect
 | `reduce --profile=NAMES` | which named code each contraction runs (§6.7) | `share` only; NAMES is `kind TAB name TAB hash` lines; report on stderr |
 | `census MANIFEST...` | which terms the manifests' runs call, ranked by what a jet on each would absorb (§6.7) | `copy`, never collects |
 | `jetstat MANIFEST...` | per jet: fires, absorbed contractions, misses, demotions, each fire's origin | `copy` unless `--share` |
-| `front0 --jet-stats[=N]` | the same, on the front end's run | |
+| `front0 --jet-stats[=N]` | the same, on the front end's run; with `--templates`, each template's fires too, and with `--data` each constructor's dispatches | |
 
 `census` options: `--select=N` (prefixes captured, default 400),
 `--top=N` (rows shown, default 40), `--min-atoms=N` (default 5), `--all`
