@@ -116,7 +116,7 @@ TEST(the_compiler_term_reproduces_its_own_compilation) {
     printf("  the term: %llu of %llu abstractions of its own compilation are Python's, "
            "%llu contractions\n", (unsigned long long)t.same, (unsigned long long)t.calls,
            (unsigned long long)t.steps);
-    CHECK_EQ(t.calls, 87);
+    CHECK_EQ(t.calls, 81);
     CHECK_EQ(t.same, t.calls);
 }
 
@@ -196,7 +196,7 @@ TEST(the_compiler_in_a_pill_answers_pokes) {
         free(text);
         printf("  the pill%s: %d of %d pokes answered with Python's abstraction\n",
                jet ? ", jetted" : "", same, n);
-        CHECK_EQ(n, 87);
+        CHECK_EQ(n, 81);
         CHECK_EQ(same, n);
         av_root_pop(a);
         av_kernel_free(&k);

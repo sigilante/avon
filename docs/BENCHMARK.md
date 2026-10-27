@@ -923,7 +923,8 @@ Recorded in `docs/DESIGN.md` with their dates:
   combinators, characters and strings, 882,928 with its type tests
   and sets (2026-10-24), and 941,408 with its library words and its
   naturals on skijack's operations (2026-10-25);
-- the compiler core: 87 abstractions of its own compilation in 12,214,849
-  contractions, the corpus's 8,636 in 523,815,334 (§20.3);
+- the compiler core: 81 abstractions of its own compilation in 687,177
+  contractions, the corpus's 8,554 in 476,833,099, over bodies whose
+  references are atoms since skijack #36 (§20.3);
 - the persistent arena: a 32 MB kernel reopens in 0.3 ms, against 160 ms
   from a snapshot (§19.1).

@@ -2714,9 +2714,9 @@ in stage 8"):
 
 - **The compiler term compiles its own source to the terms Python
   produced**, for the part of compilation that is bracket abstraction:
-  all 87 distinct abstractions of compiling `abstract.ascii.ski`.
+  all 81 distinct abstractions of compiling `abstract.ascii.ski`.
 - **The corpus compiles in Avon to Python's terms, hash for hash**, again
-  for abstraction: all 8,636 distinct abstractions of the 17 compilable
+  for abstraction: all 8,554 distinct abstractions of the 18 compilable
   corpus programs, by the term (`make selfhost-check`).
 - **The compiler jet, licensed by differential**, agrees on every one,
   every fire checked; a term that does not abstract as aviary does is
@@ -3563,13 +3563,17 @@ one recursive equation, because skijack refused mutual recursion when it
 was written.
 
 - **The fixed point.** skijack compiling `abstract.ascii.ski` performs
-  123 outermost abstractions, 87 distinct once variables are renamed;
+  123 outermost abstractions, 81 distinct once variables are renamed;
   the term, run in Avon, gives every one of them, text and hash, in
-  12,214,849 contractions.
-- **The corpus.** Compiling the 17 corpus programs that compile performs
-  19,301 abstractions, 8,636 distinct; the term gives every one, hash for
-  hash, in 523,815,334 contractions, ten seconds. Each definition's term
-  is the last abstraction of its chain, so every one is Python's.
+  687,177 contractions.
+- **The corpus.** Compiling the 18 corpus programs that compile performs
+  19,358 abstractions, 8,554 distinct; the term gives every one, hash for
+  hash, in 476,833,099 contractions. Since skijack #36 each abstracts a
+  formal over a body whose references are still atoms, and a
+  definition's term is the last abstraction of its chain with each
+  reference replaced by its own term, a substitution; before, the bodies
+  held the references' terms, and the counts were 87 and 8,636 distinct,
+  in 12,214,849 and 523,815,334 contractions. The terms are the same.
 - **The compiler jet** answers `abs x t` natively (`av_abstract`), its
   datum decoded by probing and its result encoded with the program's own
   constructors.
@@ -3578,7 +3582,7 @@ was written.
     `AUDIT.md` item 8).
   - The term must also agree with the native abstraction on sample terms.
   - With `--jet-check=1` every fire is compared with the term's
-    reduction: 8,636 of 8,636 and 87 of 87 agree.
+    reduction: 8,554 of 8,554 and 81 of 81 agree.
 - **The compiler in a pill.** The same source declares a kernel whose
   event `Abs x t` has the effect `Out ([vx] t)`; booted from its pill and
   poked with every call of its own compilation, it answers each with
