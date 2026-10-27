@@ -411,8 +411,31 @@ build/avon run --kernel --entropy=tests/drivers/bits.eny -- tests/drivers/bits.s
 - `--entropy` answers requests for bits from `getentropy`, and
   `--entropy=FILE` from FILE, 16 bytes a draw from its start, boot's
   first.
-- The log is in memory, so nothing survives the run. A durable form,
-  `boot --drivers`, is not built yet.
+- The log is in memory, so nothing survives the run.
+
+`boot --drivers` is the same run in a pier, durably (§9.2):
+
+```sh
+build/avon boot --drivers --pier=run1 -- tests/drivers/echo.skit < tests/drivers/echo.in
+build/avon boot --drivers --pier=run1 < /dev/null     # reopened: the run again, performing nothing
+```
+
+- It takes `run --kernel`'s options and its FILE and arguments, and makes
+  the pier as `boot --pier` does: a fresh directory, mode 0700, locked
+  while in use.
+- Each answer is logged and synced before its reply is applied: the bytes
+  read, a variable's value, the step count, the bits, and boot's
+  arguments, which are logged when the pier is made.
+- Without FILE, `boot --drivers --pier=DIR` reopens the run. It replays
+  from snapshot 0, the pier's only one, each request taking the log's next
+  answer, writing nothing; at the first request the log does not answer
+  it is live again. A finished run reopened ends with its status and
+  performs nothing. A write the walk had not reached when a crash came is
+  lost, never repeated.
+- The strategy is the pier's: `--strategy=` must agree with it or be left
+  out. `--entropy=FILE` must be given again on a pier that draws from a
+  file; replayed pokes run without `--fuel`'s bound, as logged events do.
+- `poke`, `load` and `--snapshot` refuse a drivers pier.
 
 ## Scry: `scry`
 

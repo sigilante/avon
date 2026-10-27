@@ -64,6 +64,14 @@
  *                                     pier answers a kernel's requests for
  *                                     entropy, and boot's own; =FILE draws
  *                                     the bits from FILE, not getentropy
+ *      avon boot --drivers --pier=DIR [--strategy=copy|share] [--fuel=N]
+ *                [--entropy[=FILE]] [--] FILE [ARG...]
+ *      avon boot --drivers --pier=DIR [--fuel=N] [--entropy=FILE]
+ *                                     run --kernel, durably: the kernel
+ *                                     FILE run in a new pier, each answer
+ *                                     logged before it is applied; without
+ *                                     FILE, the pier's run reopened, its
+ *                                     log replayed and the run continued
  *      avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS
  *                                     the compiler's core as a term: every
  *                                     call of a calls file, through
@@ -149,6 +157,8 @@ int usage(void) {
         "       avon run [reduce's options] FILE      (avon reduce FILE)\n"
         "       avon run --kernel [--strategy=copy|share] [--fuel=N] [--entropy[=FILE]]\n"
         "                FILE [ARG...]                (FILE a kernel, run with drivers)\n"
+        "       avon boot --drivers --pier=DIR [run --kernel's options] [FILE [ARG...]]\n"
+        "                                             (durably; without FILE, resumed)\n"
         "       (boot, poke, peek, load accept --strategy=, --fuel=, and --budget=,\n"
         "        which boot --pier takes only with --entropy)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
@@ -194,6 +204,9 @@ static int run_main(int argc, char **argv) {
     if (strcmp(argv[1], "front0") == 0) return front0_main(argc, argv);
     if (strcmp(argv[1], "enum") == 0) return enum_main(argc, argv);
     if (strcmp(argv[1], "run") == 0) return program_main(argc, argv);
+    if (strcmp(argv[1], "boot") == 0)          /* --drivers among the options: a run */
+        for (int i = 2; i < argc && argv[i][0] == '-' && strcmp(argv[i], "--") != 0; i++)
+            if (strcmp(argv[i], "--drivers") == 0) return boot_drivers_main(argc, argv);
     if (strcmp(argv[1], "boot") == 0 || strcmp(argv[1], "poke") == 0 ||
         strcmp(argv[1], "peek") == 0 || strcmp(argv[1], "load") == 0)
         return kernel_main(argc, argv);

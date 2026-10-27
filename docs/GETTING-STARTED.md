@@ -207,6 +207,10 @@ tests/drivers/show.skit
 /Users/you status 7
 ```
 
+`boot --drivers --pier=DIR` runs it in a pier instead, each answer
+logged before it is applied; `boot --drivers --pier=DIR` without the file
+reopens the run, replaying it, after a crash or after it ended.
+
 Plain `run FILE`, without `--kernel`, is `reduce FILE` (`RUNTIME.md`,
 "Programs").
 
