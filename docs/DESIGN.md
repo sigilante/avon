@@ -1308,6 +1308,56 @@ writes without a collection; otherwise the instance runs as before.
 count and state, at every fuel from 0 to 400 and through collections.
 The results are in `docs/BENCHMARK.md`, "A case joined to its instance".
 
+**Bit strings, 2026-10-28** (`src/words.c`, "Bit strings"; `bits_fire` in
+`src/reduce.c`). skijack's own front end names everything by bit strings,
+`Bn | Bz b | Bo b`, and keeps its stores in tries keyed by them. With
+templates and data jets, front1 on front0's source took 50,728,634
+contractions, and `--jet-stats`, now counting each template's fires and
+each constructor's dispatches, put a third of them in that traffic: the
+`Bz` and `Bo` dispatches 16%, `eqB` 6%, `idBits` 6%, the lookup shared by
+`rvGet`, `cmGet`, `sHasB` and `ndGet` 4%, `eqId` 3%.
+
+Three of those functions now run natively, as the numeral operations do.
+- *Pinned.* A program's function is the operation only if its term is
+  front1's, node for node: `eqB`, the lookup, and `eqId`, which compares two
+  names `IdRaw n | Id b` by their bits, an IdRaw's being `Bn`. A term is
+  found only where the template set holds it already, so a program without
+  these functions loads as before. A function with formals, as `eqId` is,
+  is a template, and the operation sits on the template's own jet.
+- *Admitted by running.* The term runs first on every pair of bit strings
+  of up to three bits, names with an IdRaw among them, and every such key
+  in five tries; one whose normal form differs anywhere is refused.
+- *Reading only values.* An operand is read only where it is a value
+  already: a constructor template's node applied to exactly its fields,
+  or `K` and `K I`. The walk takes the term's cases in its order. Where it
+  meets a field not yet a value, the operation applied to what it has
+  reached is a weak reduct of the redex, and the fire leaves that, headed
+  by the redex's own jet node. An operand not yet a value at the top
+  declines the fire; the term runs, a template instantiating, and forces
+  it. So an operation forces nothing its term would not. `eqId` fires
+  only where it can decide.
+
+Its first version fired on 81,393 calls of about 1.4 million and saved
+5%: `eqId` passes `eqB` the thunks `idBits x` and `idBits y`, so `eqB`'s own
+fires came only from callers holding evaluated bits. Jetting `eqId`, whose
+names are evaluated once and shared, made 1,213,753 fires. The output is
+the same, every name's hash:
+
+| front1 with templates and data jets | contractions | dispatches | bit-string operations |
+|---|---:|---:|---:|
+| on front0's source | 50,728,634 | 25,593,119 | -- |
+| with the bit-string operations | 33,814,092 | 15,288,253 | 1,213,753 |
+| its fixed point, 1,529 names | 633,573,940 | | -- |
+| with the bit-string operations | 411,048,920 | | |
+
+The fixed point fell from 53 s to 47 s, the template load among them:
+loading front1's templates is 4.3 s of front0's source's 5.5 (§20.3).
+Each operation is native code the runtime trusts, as a numeral
+operation is, and a proof would owe a theorem for each. `tests/test_data.c`
+runs every pair and key above, each in one native step to the term's
+normal form, operands not yet values, and collections mid-run, on
+`tests/data/bits`, a program defining the three functions as front1 does.
+
 **What is left.** The profile of Milestone 0 (Queens2, templates) put
 `whnf_share` at 47% of samples, `av_app` 23%, `tmpl_instance` 21%,
 `try_interp` 5% and the collector 3%. The two levers it named are pulled
@@ -3728,6 +3778,13 @@ seconds to compile it, against 9.
     of contractions), name and bit comparisons (`cmpCode`, `eqB`,
     `cmpBit`, `cmpName`, 9%), a scheme's instantiation (`bInst`), and
     the continuations built at run time (33%).
+  - With templates and data jets, the run's own profile (2026-10-28)
+    puts a third of it in bit strings, and three bit-string operations
+    run natively (§6.10, "Bit strings"): front1's fixed point from
+    633,573,940 contractions to 411,048,920. The rest of a run's time is
+    mostly the template load, 4.3 s of 5.5 on front0's source, in SHA-256
+    and hash-consing: a lever for a cache of verified templates, not a
+    jet.
 
 ### 20.4 What else the analogy imports
 
