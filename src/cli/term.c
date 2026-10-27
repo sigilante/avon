@@ -357,10 +357,13 @@ static uint32_t use_p2(av_arena *a, const char *path) {
 
 /*  The data jets' report line. */
 void report_data(const long wc[4], const av_result *r) {
-    char lists[48] = "", lops[48] = "";
+    char lists[48] = "", lops[96] = "";
     if (wc[3]) snprintf(lists, sizeof lists, " and %ld lists", wc[3]);
-    if (r->list_ops) snprintf(lops, sizeof lops, " and %llu list operations",
-                              (unsigned long long)r->list_ops);
+    int n = r->list_ops ? snprintf(lops, sizeof lops, " and %llu list operations",
+                                   (unsigned long long)r->list_ops) : 0;
+    if (r->bit_ops && n >= 0)
+        snprintf(lops + n, sizeof lops - (size_t)n, " and %llu bit-string operations",
+                 (unsigned long long)r->bit_ops);
     fprintf(stderr, "data: %ld numeral operations admitted, %ld refused; %ld numerals%s "
             "made words; %llu dispatches (%llu fused), %llu numeral operations%s "
             "among the contractions; %llu cases joined to their instances\n",

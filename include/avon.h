@@ -410,6 +410,8 @@ typedef struct {
                                template in the same step, among them      */
     uint64_t  word_ops;     /* numeral operations run on words, one step
                                each, among steps                          */
+    uint64_t  bit_ops;      /* bit-string operations run natively, one
+                               step each, among steps                     */
     uint64_t  fix_calls;    /* Y unfolded, one step each, among
                                steps                                      */
     uint64_t  joins;        /* cases joined to their instances:
@@ -857,10 +859,17 @@ typedef struct av_jet {
  *  the two tests take their numerals and two continuations, the rest two
  *  numerals.  Then the list operations, skijack's listLength .. listDrop:
  *  length a list, at a list, an index and a default, append two lists,
- *  take and drop a list and a numeral. */
+ *  take and drop a list and a numeral.  Then three operations on bit
+ *  strings, `Bn | Bz b | Bo b` (words.c, "Bit strings"), each two
+ *  operands: equality, a lookup in a trie the bits key, and equality of
+ *  two names `IdRaw n | Id b` by their bits. */
 enum { AV_WOP_ADD = 1, AV_WOP_SUB, AV_WOP_MUL, AV_WOP_IFEQ, AV_WOP_IFLE, AV_WOP_DIV, AV_WOP_REM,
-       AV_WOP_LEN, AV_WOP_AT, AV_WOP_APP, AV_WOP_TAKE, AV_WOP_DROP };
-#define AV_WOP_COUNT (AV_WOP_DROP + 1)
+       AV_WOP_LEN, AV_WOP_AT, AV_WOP_APP, AV_WOP_TAKE, AV_WOP_DROP, AV_WOP_BEQ, AV_WOP_BGET,
+       AV_WOP_IDEQ };
+#define AV_WOP_COUNT (AV_WOP_IDEQ + 1)
+static inline bool av_wop_bits(unsigned op) {
+    return op >= AV_WOP_BEQ && op <= AV_WOP_IDEQ;
+}
 static inline bool av_wop_list(unsigned op) {
     return op >= AV_WOP_LEN && op <= AV_WOP_DROP;
 }
@@ -1018,6 +1027,8 @@ void        av_templates_free(av_tmplset *ts);
 /*  Numeral operations the templates' DIR/words.tsv offered: those
  *  admitted, and those whose terms failed their probes. */
 void        av_templates_word_counts(const av_tmplset *ts, long *admitted, long *refused);
+/*  The bit-string operations admitted and refused (words.c). */
+void        av_templates_bit_counts(const av_tmplset *ts, long *admitted, long *refused);
 /*  Whether the load registered Y: av_fix_on was called first. */
 bool        av_templates_fix(const av_tmplset *ts);
 

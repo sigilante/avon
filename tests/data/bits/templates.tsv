@@ -1,0 +1,76 @@
+skijack-2:7174a8ba6bfde4d180876944778d3d79	prelude	pair	3	0,1,2	``v2 v0 v1
+skijack-2:d443db4c9ec0d6dfa4ed1da3c4e62e75	prelude	hd	1	0	`v0 K
+skijack-2:f12540b2d66076c3bad9065c297df2e3	prelude	tl	1	0	`v0 `K I
+skijack-2:86be9a55762d316a3026c2836d044f5f	prelude	nil	2	0,1	v0
+skijack-2:49fa03c83288919037dbe8488907a98b	prelude	cons	4	0,1,2,3	``v3 v0 v1
+skijack-2:86be9a55762d316a3026c2836d044f5f	prelude	zero	2	0,1	v0
+skijack-2:cf4585eaeabf748125651cf8ceb08899	prelude	suc	3	0,1,2	`v2 v0
+skijack-2:e51af60df30afab9c1b8302e6aa445ed	prelude	natIfEq	5	0,1,2,3,4	``v1 ``v2 v3 `K v4 ````#84e4a1b5a17d5c43dbc49b8526adb699 v0 v2 v3 v4
+skijack-2:84e4a1b5a17d5c43dbc49b8526adb699	prelude	natIfEq	5	0,1,2,3,4	``v1 v3 ````#9f810d2a28f6b626770f503e03ce580e v0 v2 v3 v4
+skijack-2:9f810d2a28f6b626770f503e03ce580e	prelude	natIfEq	5	0,1,2,3,4	````v0 v3 v4 v1 v2
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	False	2	0,1	v0
+skijack-2:d5c8fefc7e2835061b54a24c6d9489d7	ctor	True	2	0,1	v1
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	Zero	2	0,1	v0
+skijack-2:cf4585eaeabf748125651cf8ceb08899	ctor	Suc	3	0,1,2	`v2 v0
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	Yes	2	0,1	v0
+skijack-2:d5c8fefc7e2835061b54a24c6d9489d7	ctor	No	2	0,1	v1
+skijack-2:345fa23eeb0116fe3ff9e8fa97d90e1d	ctor	Bn	3	0,1,2	v0
+skijack-2:f938b38d5bdba086fdc52c1fceede6eb	ctor	Bz	4	0,1,2,3	`v2 v0
+skijack-2:5164f14fb049d081f877c0b09917ce3a	ctor	Bo	4	0,1,2,3	`v3 v0
+skijack-2:804e2b8c7760f3a37bcbc780d9d53c76	ctor	Some	3	0,1,2	`v1 v0
+skijack-2:d5c8fefc7e2835061b54a24c6d9489d7	ctor	None	2	0,1	v1
+skijack-2:86be9a55762d316a3026c2836d044f5f	ctor	Tr0	2	0,1	v0
+skijack-2:cf4585eaeabf748125651cf8ceb08899	ctor	TrT	3	0,1,2	`v2 v0
+skijack-2:139ee089149bf096dcba2213575a397f	ctor	TrB	4	0,1,2,3	```v3 v0 v1 v2
+skijack-2:804e2b8c7760f3a37bcbc780d9d53c76	ctor	IdRaw	3	0,1,2	`v1 v0
+skijack-2:cf4585eaeabf748125651cf8ceb08899	ctor	Id	3	0,1,2	`v2 v0
+skijack-2:1239c190d8fee2bff75904962d7bd620	lift	eqB	1	0	#d5c8fefc7e2835061b54a24c6d9489d7
+skijack-2:1239c190d8fee2bff75904962d7bd620	lift	eqB	1	0	#d5c8fefc7e2835061b54a24c6d9489d7
+skijack-2:a83dd0ccbffe39d071cc317ddf6e97f5	lift	eqB	3	0,1,2	``v0 v1 v2
+skijack-2:1239c190d8fee2bff75904962d7bd620	lift	eqB	1	0	#d5c8fefc7e2835061b54a24c6d9489d7
+skijack-2:84d501f04c1919f37a2fc5f06835e2f8	lift	eqB	3	0,1,2	```v1 #d5c8fefc7e2835061b54a24c6d9489d7 ``#a83dd0ccbffe39d071cc317ddf6e97f5 v0 v2 #1239c190d8fee2bff75904962d7bd620
+skijack-2:1239c190d8fee2bff75904962d7bd620	lift	eqB	1	0	#d5c8fefc7e2835061b54a24c6d9489d7
+skijack-2:a83dd0ccbffe39d071cc317ddf6e97f5	lift	eqB	3	0,1,2	``v0 v1 v2
+skijack-2:89ee46cbb31a33120fdb6a11c76bf433	lift	eqB	3	0,1,2	```v1 #d5c8fefc7e2835061b54a24c6d9489d7 #1239c190d8fee2bff75904962d7bd620 ``#a83dd0ccbffe39d071cc317ddf6e97f5 v0 v2
+skijack-2:e08fe6ccf048f12d001ed5d30ecb2ef2	rec	eqB	3	0,1,2	```v1 ```v2 #86be9a55762d316a3026c2836d044f5f #1239c190d8fee2bff75904962d7bd620 #1239c190d8fee2bff75904962d7bd620 ``#84d501f04c1919f37a2fc5f06835e2f8 v0 v2 ``#89ee46cbb31a33120fdb6a11c76bf433 v0 v2
+skijack-2:7d1b42c68806ed81b32273152925757d	lift	eqC	1	0	#86be9a55762d316a3026c2836d044f5f
+skijack-2:7d1b42c68806ed81b32273152925757d	lift	eqC	1	0	#86be9a55762d316a3026c2836d044f5f
+skijack-2:a83dd0ccbffe39d071cc317ddf6e97f5	lift	eqC	3	0,1,2	``v0 v1 v2
+skijack-2:7d1b42c68806ed81b32273152925757d	lift	eqC	1	0	#86be9a55762d316a3026c2836d044f5f
+skijack-2:6fe2c8aa101d64ec8ac6c9ac28d73701	lift	eqC	3	0,1,2	```v1 #86be9a55762d316a3026c2836d044f5f ``#a83dd0ccbffe39d071cc317ddf6e97f5 v0 v2 #7d1b42c68806ed81b32273152925757d
+skijack-2:7d1b42c68806ed81b32273152925757d	lift	eqC	1	0	#86be9a55762d316a3026c2836d044f5f
+skijack-2:a83dd0ccbffe39d071cc317ddf6e97f5	lift	eqC	3	0,1,2	``v0 v1 v2
+skijack-2:a9f3a6859073ce18a18a2bfc5109bc26	lift	eqC	3	0,1,2	```v1 #86be9a55762d316a3026c2836d044f5f #7d1b42c68806ed81b32273152925757d ``#a83dd0ccbffe39d071cc317ddf6e97f5 v0 v2
+skijack-2:0cd67525fd9f6b9928f6b3db687e4cc2	rec	eqC	3	0,1,2	```v1 ```v2 #d5c8fefc7e2835061b54a24c6d9489d7 #7d1b42c68806ed81b32273152925757d #7d1b42c68806ed81b32273152925757d ``#6fe2c8aa101d64ec8ac6c9ac28d73701 v0 v2 ``#a9f3a6859073ce18a18a2bfc5109bc26 v0 v2
+skijack-2:b54487983d3e7384745bbed130dcf8fb	lift	idBits	1	0	#345fa23eeb0116fe3ff9e8fa97d90e1d
+skijack-2:a83dd0ccbffe39d071cc317ddf6e97f5	lift	idBits	1	0	v0
+skijack-2:122735eb8ed85b6fefe11689d75ee5b7	eq	idBits	1	0	``v0 #b54487983d3e7384745bbed130dcf8fb #a83dd0ccbffe39d071cc317ddf6e97f5
+skijack-2:7718f921831d23b5300522fa38683da5	eq	eqId	2	0,1	``#fe95c8982ab7d99cf187a6d821582723 `#122735eb8ed85b6fefe11689d75ee5b7 v0 `#122735eb8ed85b6fefe11689d75ee5b7 v1
+skijack-2:ae6fc5c1f9e60664798b7abd2eaedb57	lift	trGet	3	0,1,2	``v0 v2 v1
+skijack-2:ae6fc5c1f9e60664798b7abd2eaedb57	lift	trGet	3	0,1,2	``v0 v2 v1
+skijack-2:6a7ca55b5515820d2095ea61a12ae976	lift	trGet	5	0,1,2,3,4	```v1 v2 ``#ae6fc5c1f9e60664798b7abd2eaedb57 v0 v3 ``#ae6fc5c1f9e60664798b7abd2eaedb57 v0 v4
+skijack-2:5d69e9c84db9378fe42058d6b7b88646	lift	trGet	3	0,1,2	`v2 ``#6a7ca55b5515820d2095ea61a12ae976 v0 v1
+skijack-2:8a157fe988fc60d92a066f67dfa731d1	rec	trGet	3	0,1,2	``v2 #d5c8fefc7e2835061b54a24c6d9489d7 ``#5d69e9c84db9378fe42058d6b7b88646 v0 v1
+skijack-2:3e644753ceccb74f83bdbcc214a08f96	lift	trPut	6	0,1,2,3,4,5	`#cf4585eaeabf748125651cf8ceb08899 ```#139ee089149bf096dcba2213575a397f v2 ```v0 v5 v1 v3 v4
+skijack-2:d61b5499b401ae38e9bbd48b00d07446	lift	trPut	6	0,1,2,3,4,5	`#cf4585eaeabf748125651cf8ceb08899 ```#139ee089149bf096dcba2213575a397f v2 v3 ```v0 v5 v1 v4
+skijack-2:64a12d057901329fb3160e8ba7d71316	lift	trPut	6	0,1,2,3,4,5	```v1 `#cf4585eaeabf748125651cf8ceb08899 ```#139ee089149bf096dcba2213575a397f v2 v4 v5 `````#3e644753ceccb74f83bdbcc214a08f96 v0 v2 v3 v4 v5 `````#d61b5499b401ae38e9bbd48b00d07446 v0 v2 v3 v4 v5
+skijack-2:4ebc48b2e3faeaf8632610d1e18940ea	lift	trPut	4	0,1,2,3	`v3 ```#64a12d057901329fb3160e8ba7d71316 v0 v1 v2
+skijack-2:605f7c70f840fa786e03329b43feaef2	rec	trPut	4	0,1,2,3	``v3 ```v0 v1 v2 `#cf4585eaeabf748125651cf8ceb08899 ```#139ee089149bf096dcba2213575a397f #d5c8fefc7e2835061b54a24c6d9489d7 #86be9a55762d316a3026c2836d044f5f #86be9a55762d316a3026c2836d044f5f ```#4ebc48b2e3faeaf8632610d1e18940ea v0 v1 v2
+skijack-2:d443db4c9ec0d6dfa4ed1da3c4e62e75	eq	and	2	0,1	``v0 #86be9a55762d316a3026c2836d044f5f v1
+skijack-2:ac9c261af20bbf2d6a1f08ca1f5a64cd	eq	yes	1	0	``v0 #d5c8fefc7e2835061b54a24c6d9489d7 #86be9a55762d316a3026c2836d044f5f
+skijack-2:004988859e03920ea1970ac296f54370	eq	no	1	0	``v0 #86be9a55762d316a3026c2836d044f5f #d5c8fefc7e2835061b54a24c6d9489d7
+skijack-2:95f03ffabe90a91a2c8b828c097cb048	lift	isSome	2	0,1	````#76243a34ace02ba9e87e4ef2294372ee v1 v0 #d5c8fefc7e2835061b54a24c6d9489d7 #86be9a55762d316a3026c2836d044f5f
+skijack-2:4a522fa1521fdf52311101a4b74a9540	eq	isSome	2	0,1	``v0 `#95f03ffabe90a91a2c8b828c097cb048 v1 #86be9a55762d316a3026c2836d044f5f
+skijack-2:7d1b42c68806ed81b32273152925757d	lift	isNone	1	0	#86be9a55762d316a3026c2836d044f5f
+skijack-2:9f40d9f432cf3d52e567312d558d919c	eq	isNone	1	0	``v0 #7d1b42c68806ed81b32273152925757d #d5c8fefc7e2835061b54a24c6d9489d7
+skijack-2:c85c8026bdbb2f78af2ae3d7dee828e3	eq	same	2	0,1	`#ac9c261af20bbf2d6a1f08ca1f5a64cd ``#fe95c8982ab7d99cf187a6d821582723 v0 v1
+skijack-2:4a9384dc1d94d3a139af9e9b0a3829ca	eq	differ	2	0,1	`#004988859e03920ea1970ac296f54370 ``#fe95c8982ab7d99cf187a6d821582723 v0 v1
+skijack-2:0e9fca176318e7ab4fcf0ec069dabcbf	eq	other	2	0,1	`#ac9c261af20bbf2d6a1f08ca1f5a64cd ``#ae9600bacbfadb296fa0e64c29d4bf45 v0 v1
+skijack-2:2cfcf29a48060c7357f409ef451aafb2	eq	has	3	0,1,2	``#4a522fa1521fdf52311101a4b74a9540 ``#a7adf420012f74f5231e5777fb4f902b v0 v1 v2
+skijack-2:0c1ae72badc8043528be3d1a05f66ec2	eq	lacks	2	0,1	`#9f40d9f432cf3d52e567312d558d919c ``#a7adf420012f74f5231e5777fb4f902b v0 v1
+skijack-2:343372f72d25e2b0c7fccf6d6c10a926	eq	sameId	2	0,1	`#ac9c261af20bbf2d6a1f08ca1f5a64cd ``#7718f921831d23b5300522fa38683da5 v0 v1
+skijack-2:d2046d0349e5dedbceec296b49ccee12	eq	otherId	2	0,1	`#004988859e03920ea1970ac296f54370 ``#7718f921831d23b5300522fa38683da5 v0 v1
+skijack-2:2247139be46c3878f43bbcc815696844	eq	t8	1	0	```#3149bc40954de8c0911b442c02e81988 #dc6d2df86ff2ed1bf7e81693ba1d679d `#804e2b8c7760f3a37bcbc780d9d53c76 v0 ```#3149bc40954de8c0911b442c02e81988 #2fca9062a46bc8a9c8b9c2077c832baa `#804e2b8c7760f3a37bcbc780d9d53c76 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ```#3149bc40954de8c0911b442c02e81988 #1633f0d9de2b227bbc40f09328e01058 `#804e2b8c7760f3a37bcbc780d9d53c76 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ```#3149bc40954de8c0911b442c02e81988 #abdd8f68664313ee55c0f80ec4c05693 `#804e2b8c7760f3a37bcbc780d9d53c76 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ```#3149bc40954de8c0911b442c02e81988 #7963c3e8f9023cb9136a6fbec5878f03 `#804e2b8c7760f3a37bcbc780d9d53c76 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ```#3149bc40954de8c0911b442c02e81988 #e6dee09238cfa5c8362ed6607c7979ae `#804e2b8c7760f3a37bcbc780d9d53c76 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ```#3149bc40954de8c0911b442c02e81988 #462c586e53063fd0aa9f7643f1df3b09 `#804e2b8c7760f3a37bcbc780d9d53c76 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ```#3149bc40954de8c0911b442c02e81988 #345fa23eeb0116fe3ff9e8fa97d90e1d `#804e2b8c7760f3a37bcbc780d9d53c76 ```S `K K ``S `K `S I K K #86be9a55762d316a3026c2836d044f5f
+skijack-2:9fdb6af807d72b267e641d489aa9cc33	eq	eight	2	0,1	``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ```#2cfcf29a48060c7357f409ef451aafb2 #345fa23eeb0116fe3ff9e8fa97d90e1d v0 ```S `K K ``S `K `S I K K ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ```#2cfcf29a48060c7357f409ef451aafb2 #462c586e53063fd0aa9f7643f1df3b09 v0 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ```#2cfcf29a48060c7357f409ef451aafb2 #e6dee09238cfa5c8362ed6607c7979ae v0 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ```#2cfcf29a48060c7357f409ef451aafb2 #7963c3e8f9023cb9136a6fbec5878f03 v0 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ```#2cfcf29a48060c7357f409ef451aafb2 #abdd8f68664313ee55c0f80ec4c05693 v0 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ```#2cfcf29a48060c7357f409ef451aafb2 #1633f0d9de2b227bbc40f09328e01058 v0 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ```#2cfcf29a48060c7357f409ef451aafb2 #2fca9062a46bc8a9c8b9c2077c832baa v0 ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K ```S `K K ``S `K `S I K K ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ```#2cfcf29a48060c7357f409ef451aafb2 #dc6d2df86ff2ed1bf7e81693ba1d679d v0 v1 ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ``#4a9384dc1d94d3a139af9e9b0a3829ca #345fa23eeb0116fe3ff9e8fa97d90e1d #462c586e53063fd0aa9f7643f1df3b09 ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ``#4a9384dc1d94d3a139af9e9b0a3829ca #462c586e53063fd0aa9f7643f1df3b09 #e6dee09238cfa5c8362ed6607c7979ae ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ``#4a9384dc1d94d3a139af9e9b0a3829ca #e6dee09238cfa5c8362ed6607c7979ae #7963c3e8f9023cb9136a6fbec5878f03 ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ``#4a9384dc1d94d3a139af9e9b0a3829ca #7963c3e8f9023cb9136a6fbec5878f03 #abdd8f68664313ee55c0f80ec4c05693 ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ``#4a9384dc1d94d3a139af9e9b0a3829ca #abdd8f68664313ee55c0f80ec4c05693 #1633f0d9de2b227bbc40f09328e01058 ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ``#4a9384dc1d94d3a139af9e9b0a3829ca #1633f0d9de2b227bbc40f09328e01058 #2fca9062a46bc8a9c8b9c2077c832baa ``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ``#4a9384dc1d94d3a139af9e9b0a3829ca #2fca9062a46bc8a9c8b9c2077c832baa #dc6d2df86ff2ed1bf7e81693ba1d679d ``#c85c8026bdbb2f78af2ae3d7dee828e3 #dc6d2df86ff2ed1bf7e81693ba1d679d #dc6d2df86ff2ed1bf7e81693ba1d679d
+skijack-2:4052ba4d036568344bd7e2f609fbe540	lift	rounds	3	0,1,2	``#d443db4c9ec0d6dfa4ed1da3c4e62e75 ``#9fdb6af807d72b267e641d489aa9cc33 `#2247139be46c3878f43bbcc815696844 v1 v1 `v0 v2
+skijack-2:7a10dc155e743059c3c75e4eefd3bdf7	rec	rounds	2	0,1	``v1 #d5c8fefc7e2835061b54a24c6d9489d7 ``#4052ba4d036568344bd7e2f609fbe540 v0 v1
