@@ -3645,14 +3645,12 @@ off, which gives the same terms as with checking on.
   with templates and data jets.
 - **The corpus:** it agrees on all 21 programs, the 17 the expander accepts
   and the 4 it refuses.
-- **Edge programs:** 303 in all, run0's and each milestone's. It agrees on
-  291. aviary's environment decides the other 12, not SKIjack's rules, and
-  they are M5's:
-  - aviary refuses a binder named as a defined name or a built-in;
-  - it refuses a binder twice, and a recursion's name rebound;
-  - it reads a binder named as a later definition as that definition, so
-    a definition that shares a generated binder's name, such as `r`,
-    changes the generated equations' terms.
+- **Edge programs:** it agrees on all of them, run0's and each
+  milestone's. Twelve once differed where aviary's environment decided,
+  not SKIjack's rules: a binder named as a defined name, a binder twice, a
+  recursion's name rebound, a binder named as a later definition. skijack
+  fixed the reference (2026-10-21, a binder is a binder whatever name it
+  spells), and front1 had been right on all twelve.
 - **Random programs:** it agrees on 200 random SKIjack-0 programs, and on
   every random program of the full language the expander accepts. Those
   programs have macros, cores, object types, interpreter cores, datums and
@@ -3662,8 +3660,34 @@ off, which gives the same terms as with checking on.
   example is a level-0 name that names a level-1 run.
 
 Its term is 635,173 nodes inlined, against 265,145 at M1. Python takes 48
-seconds to compile it, against 9. The checkers, M5 and M6, still run in
-Python.
+seconds to compile it, against 9.
+
+- **M5, built 2026-10-27: Stage A** (`check.py`), over the parsed program
+  before macros and generation, as Python checks before it expands. A
+  refusal carries its class, a numeral `avon front0` prints as `RErr n`:
+  Stage A's first problem's, ScopeError to SymbolTableError, or 0 where
+  the parser or the expander refuses. The first class needs no reordering
+  of the walk: every duplicate is a ScopeError and comes first, then the
+  object and path types' shapes, then a binder named S, K or I, then each
+  declaration in source order. Its reference is Stage A over Python's
+  parse, then the expander with checking off.
+  - It agrees on all 22 corpus programs, the 4 refused each a ScopeError,
+    and on all 432 edge programs, 97 of them M5's: each of Stage A's
+    checks passed and failed, and the order of the first problem.
+  - It agrees on 991 of 1,000 random programs of the full language, on
+    100 of a second seed and on 200 of SKIjack-0. The other 9 pass 2×10⁸
+    contractions or 2×10⁷ nodes and are not compared; the three measured
+    against front1 before M5 cost it the same there.
+  - Its fixed point: all 1,116 of its names, in 95,944,164 contractions
+    with templates and data jets.
+  - Two readings of the parser it needed: a qualified name, `a.b`, is
+    one name no table holds; pass one refuses a constructor declared
+    twice.
+  - Its term grew from 117,273 distinct nodes to 131,354; Python takes 63
+    seconds to compile it with checking, against 48.
+  - It does not yet install `natDiv`, `natRem` or the list operations,
+    which the expander's prelude gained after M4. M6, Stage B, still runs
+    in Python.
 
 ### 20.4 What else the analogy imports
 
