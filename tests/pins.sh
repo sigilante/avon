@@ -8,7 +8,7 @@
 # commit and change it here.
 
 SKIJACK_PIN=fa73141e0cd115a37ba091eded507f61bd458d6d
-SKILARK_PIN=7376632ff2239fbf6e675c73ac5e41ed2013dd0a     # sigilante/SKIlark, public
+SKILARK_PIN=1025e3646a1fefd5b5cca7f38a3694f8e28feeb6     # sigilante/SKIlark, public
 AVIARY_PIN=ec4b418c527408c3a513bee2735e6b0f862accda      # sigilante/aviary, public
 LEAN_SKI_PIN=fb65141f7ab4685e1b9cd4d2366048bb9cebcba2    # sigilante/lean-ski, public: paper-v9
 STARLINGS_PIN=0b2779ed732ed37d1eea4751ed897015e12d4cdc   # sigilante/starlings, private
