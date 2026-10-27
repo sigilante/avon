@@ -443,3 +443,135 @@ bool word_admit(av_arena *a, uint32_t term, unsigned op) {
     }
     return true;
 }
+
+/*  ----------------------------------------------------------- Bit strings
+ *
+ *  A bit string is a value of a type `Bn | Bz b | Bo b`, its constructors
+ *  Scott's: Bn n z o = n, Bz r n z o = z r, Bo r n z o = o r.  skijack's
+ *  own front end keys its names and its stores by them, and two of its
+ *  functions are most of its time: equality, and a lookup in a trie the
+ *  bits key (`Nd0 | NdT t`, t `NdB v z o`, the answer `K I` at a key the
+ *  trie does not hold), and equality of two names `IdRaw n | Id b` by
+ *  their bits, an IdRaw's being Bn.  Their terms are pinned here, as the
+ *  numeral operations' are: a program whose function is this term, node
+ *  for node, has it run natively; bits_admit runs the term on small bit
+ *  strings, tries and names first.  The pins are skijack front1's `eqB`,
+ *  `rvGet` (its `cmGet`, `sHasB` and `ndGet` the same term) and `eqId`. */
+static const char BEQ_TEXT[] =
+    "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (S (K S) (S (K (S (K S))) (S (K (S (S (K S)"
+    " (S (S (K S) K) (K (S (S (S I (K K)) (K (K (K I)))) (K (K (K I))))))))) (S (K K) (S (S"
+    " (K S) (S (K (S (K S))) (S (K (S (S (K S) (S (K K) (S I (K (K I))))))) (S (K K) I))))"
+    " (K (K (K (K (K I)))))))))) (S (K K) (S (K (S (S (K S) (S (K K) (S (S I (K (K I))) (K"
+    " (K (K I)))))))) (S (K K) I))))";
+static const char BGET_TEXT[] =
+    "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (K (S (S I (K (K I))))))) (S (K (S (K"
+    " K))) (S (K (S (K (S I)))) (S (K (S (K K))) (S (S (K S) (S (K (S (K S))) (S (K (S (K (S"
+    " (K S))))) (S (K (S (K (S (K (S (K S))))))) (S (K (S (K (S (K (S (K K))))))) (S (K (S (S"
+    " (K S) (S (K (S (K S))) (S (K K)))))) (S (K K) (S (K K) (S (S (K S) (S (K K) S)) (K"
+    " K)))))))))) (S (K K) (S (K K) (S (K K) (S (S (K S) (S (K K) S)) (K K))))))))))";
+
+static const char IDEQ_TEXT[] =
+    "S (S (K S) (S (K K) (S (K (S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (S (K S) (S (K (S"
+    " (K S))) (S (K (S (S (K S) (S (S (K S) K) (K (S (S (S I (K K)) (K (K (K I)))) (K (K (K"
+    " I))))))))) (S (K K) (S (S (K S) (S (K (S (K S))) (S (K (S (S (K S) (S (K K) (S I (K (K"
+    " I))))))) (S (K K) I)))) (K (K (K (K (K I)))))))))) (S (K K) (S (K (S (S (K S) (S (K K)"
+    " (S (S I (K (K I))) (K (K (K I)))))))) (S (K K) I)))))) (S (S I (K (K (S (K K) K)))) (K"
+    " I))))) (K (S (S I (K (K (S (K K) K)))) (K I)))";
+
+const char *av_bits_pinned(unsigned op) {
+    return op == AV_WOP_BEQ ? BEQ_TEXT : op == AV_WOP_BGET ? BGET_TEXT
+         : op == AV_WOP_IDEQ ? IDEQ_TEXT : NULL;
+}
+
+/*  The constructors' terms, plain. */
+static const char BN_TEXT[] = "S (K K) K";
+static const char BZ_TEXT[] = "S (K K) (S (K (S (K K))) (S (K (S I)) K))";
+static const char BO_TEXT[] = "S (K K) (S (K K) (S (K (S I)) K))";
+static const char NDT_TEXT[] = "S (K K) (S (K (S I)) K)";
+static const char IDRAW_TEXT[] = "S (K (S (K K))) (S (K (S I)) K)";
+static const char ID_TEXT[] = "S (K K) (S (K (S I)) K)";
+static const char NDB_TEXT[] =
+    "S (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S (K S))) (S (S (K S) (S (K K) (S (K"
+    " S) (S (K (S I)) K)))) (K K)))))) (K (K K))";
+
+static uint32_t parse_text(av_arena *a, const char *s) {
+    av_parse_error pe;
+    return av_parse(a, s, strlen(s), &pe);
+}
+
+/*  The bit string of the low `len` bits of v, least significant first (1
+ *  Bo, 0 Bz), as a plain term. */
+static uint32_t plain_bits(av_arena *a, unsigned v, unsigned len) {
+    uint32_t t = parse_text(a, BN_TEXT);
+    for (unsigned i = len; t != AV_NONE && i-- > 0;) {
+        uint32_t c = parse_text(a, v >> i & 1u ? BO_TEXT : BZ_TEXT);
+        t = c == AV_NONE ? AV_NONE : av_app(a, c, t);
+    }
+    return t;
+}
+
+/*  A sample name: IdRaw 0 for len 4, else Id of the bits. */
+static uint32_t plain_name(av_arena *a, unsigned v, unsigned len) {
+    uint32_t c = parse_text(a, len == 4 ? IDRAW_TEXT : ID_TEXT);
+    uint32_t x = len == 4 ? AV_NODE_K : plain_bits(a, v, len);
+    return c == AV_NONE || x == AV_NONE ? AV_NONE : av_app(a, c, x);
+}
+
+/*  A sample trie: node n's value, if it has one, is the numeral n + 1,
+ *  its children 2n + 1 (Bz) and 2n + 2 (Bo); `held` says which nodes
+ *  exist, node 0 the root.  A missing node is Nd0, K. */
+static uint32_t plain_trie(av_arena *a, unsigned held, unsigned n) {
+    if (n >= 15 || !(held >> n & 1u)) return AV_NODE_K;
+    uint32_t v = plain_numeral(a, n + 1), z = plain_trie(a, held, 2 * n + 1),
+             o = plain_trie(a, held, 2 * n + 2), b = parse_text(a, NDB_TEXT),
+             t = parse_text(a, NDT_TEXT);
+    if (v == AV_NONE || z == AV_NONE || o == AV_NONE || b == AV_NONE || t == AV_NONE) return AV_NONE;
+    uint32_t x = av_app(a, b, v);
+    x = x == AV_NONE ? x : av_app(a, x, z);
+    x = x == AV_NONE ? x : av_app(a, x, o);
+    return x == AV_NONE ? x : av_app(a, t, x);
+}
+
+bool bits_admit(av_arena *a, uint32_t term, unsigned op) {
+    av_opts o = av_opts_default();
+    o.no_collect = true;                    /* the caller's indices hold */
+    o.jets = false;
+    o.max_steps = 10000000;
+    uint32_t ki = av_app(a, AV_NODE_K, AV_NODE_I);
+    if (ki == AV_NONE || !a->word_suc) return false;
+    /* every bit string of up to 3 bits: (len, v); for names, len 4 is an
+     * IdRaw, whose bits are Bn's */
+    static const unsigned held[] = { 0x0, 0x1, 0x7, 0x1b, 0x7fff };
+    bool eq = op != AV_WOP_BGET, names = op == AV_WOP_IDEQ;
+    for (unsigned la = 0; la <= (names ? 4u : 3u); la++) {
+        for (unsigned va = 0; va < (la == 4 ? 1u : 1u << la); va++) {
+            unsigned n2 = eq ? (names ? 5 : 4) : sizeof held / sizeof *held;
+            for (unsigned lb = 0; lb < n2; lb++) {
+                for (unsigned vb = 0; vb < (!eq || lb == 4 ? 1u : 1u << lb); vb++) {
+                    uint32_t f = copy_tree(a, term), y, want;
+                    uint32_t x = names ? plain_name(a, va, la) : plain_bits(a, va, la);
+                    if (eq) {
+                        y = names ? plain_name(a, vb, lb) : plain_bits(a, vb, lb);
+                        unsigned ka = la == 4 ? 0 : la, kb = lb == 4 ? 0 : lb;
+                        want = ka == kb && va == vb ? AV_NODE_K : ki;
+                    } else {
+                        y = plain_trie(a, held[lb], 0);
+                        /* the node the bits reach, least significant first */
+                        unsigned n = 0;
+                        for (unsigned i = 0; i < la; i++) n = 2 * n + (va >> i & 1u ? 2 : 1);
+                        bool has = true;
+                        for (unsigned m = n;; m = (m - 1) / 2) {
+                            if (m >= 15 || !(held[lb] >> m & 1u)) has = false;
+                            if (!m) break;
+                        }
+                        want = has ? plain_numeral(a, n + 1) : ki;
+                    }
+                    uint32_t t = f == AV_NONE || x == AV_NONE || y == AV_NONE ? AV_NONE : av_app(a, f, x);
+                    t = t == AV_NONE ? t : av_app(a, t, y);
+                    if (!same_normal(a, t, want, &o)) return false;
+                }
+            }
+        }
+    }
+    return true;
+}

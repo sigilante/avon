@@ -879,6 +879,26 @@ normal form, fuel ten times the manifest's. With templates they take
 fused. Every weak head normal form is templates', and every normal form
 is SKI's.
 
+## Bit-string operations on front1
+
+2026-10-28, avon `stageb-jets` against master (`f95bc72`), skijack front1 with
+the prelude's later operations (skijack #39): `avon front0 --templates --data`,
+wall clock of one run each, the template load included (DESIGN §6.10, "Bit
+strings"). Every name's hash is the same both ways.
+
+| run | master | bit-string operations | of them native |
+|---|---:|---:|---:|
+| front0's source: contractions | 50,728,634 | 33,814,092 | 1,213,753 |
+| front0's source: dispatches | 25,593,119 | 15,288,253 | |
+| front0's source: wall clock | 5.5 s | 5.1 s | |
+| front1's fixed point, 1,529 names: contractions | 633,573,940 | 411,048,920 | |
+| front1's fixed point: wall clock | 53 s | 47 s | |
+| front1's fixed point: peak | 2.24 GB | 2.12 GB | |
+
+Loading front1's templates alone, on a one-line source, takes 4.3 s; the
+sampled profile of front0's source is mostly that load, SHA-256 and
+hash-consing.
+
 ## The interpreter jet's wall clock
 
 **The tower collapses in time as well as in steps, by 4.8 times on T2.**

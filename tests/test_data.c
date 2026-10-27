@@ -53,8 +53,9 @@ typedef enum { SKI, TEMPLATES, DATA } mode;
 
 typedef struct {
     av_status status;
-    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, list_ops, collections, joins, deferred;
-    long      admitted, refused, words;
+    uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, list_ops, bit_ops, collections, joins,
+              deferred;
+    long      admitted, refused, words, bits_admitted, bits_refused;
     char      nf[1 << 17];
 } outcome;
 
@@ -81,6 +82,7 @@ static outcome run(const char *src, const char *dir, mode md, av_strategy st, bo
             CHECK(av_templates_bind(a, ts, t));
             if (md == DATA) {
                 av_templates_word_counts(ts, &out.admitted, &out.refused);
+                av_templates_bit_counts(ts, &out.bits_admitted, &out.bits_refused);
                 out.words = av_words_scan(a, t, NULL);
                 CHECK(out.words >= 0);
                 CHECK(av_words_mark(a));
@@ -107,6 +109,7 @@ static outcome run(const char *src, const char *dir, mode md, av_strategy st, bo
     out.fused = r.fused;
     out.word_ops = r.word_ops;
     out.list_ops = r.list_ops;
+    out.bit_ops = r.bit_ops;
     out.joins = r.joins;
     out.deferred = r.deferred;
     out.collections = a->collections;
@@ -128,9 +131,10 @@ static char *fixture(const char *prog, const char *name) {
 }
 
 TEST(every_mode_gives_the_same_answer) {
-    const char *progs[5][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
-                                { "quot", "main" }, { "listops", "main" } };
-    for (int i = 0; i < 5; i++) {
+    const char *progs[7][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+                                { "quot", "main" }, { "listops", "main" }, { "bits", "main" },
+                                { "bits", "lazy" } };
+    for (int i = 0; i < 7; i++) {
         char dir[64];
         snprintf(dir, sizeof dir, "tests/data/%s", progs[i][0]);
         char *src = fixture(progs[i][0], progs[i][1]);
@@ -166,13 +170,21 @@ TEST(every_mode_gives_the_same_answer) {
             CHECK(dt.words > 0);
             CHECK(dt.list_ops > 0);
         }
+        if (strcmp(progs[i][0], "bits") == 0) {     /* eqB, trGet, eqId; eqC is no operation */
+            CHECK_EQ(dt.bits_admitted, 3);
+            CHECK_EQ(dt.bits_refused, 0);
+            CHECK(dt.bit_ops > 0);
+        } else {
+            CHECK_EQ(dt.bits_admitted, 0);
+            CHECK_EQ(dt.bit_ops, 0);
+        }
         free(src);
     }
 }
 
 TEST(normal_forms_are_the_unjetted_ones) {
-    const char *progs[4] = { "lists", "nats", "quot", "listops" };
-    for (int i = 0; i < 4; i++) {
+    const char *progs[5] = { "lists", "nats", "quot", "listops", "bits" };
+    for (int i = 0; i < 5; i++) {
         char dir[64];
         snprintf(dir, sizeof dir, "tests/data/%s", progs[i]);
         char *src = fixture(progs[i], "out");
@@ -474,7 +486,7 @@ static bool same(const outcome *x, const outcome *y) {
 }
 
 TEST(a_joined_case_is_its_instance_and_dispatch) {
-    const char *progs[6][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+    const char *progs[7][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
                                 { "lists", "out" }, { "listops", "main" }, { "listops", "out" } };
     uint64_t collected = 0;
     for (int i = 0; i < 6; i++) {
@@ -513,7 +525,7 @@ TEST(a_joined_case_is_its_instance_and_dispatch) {
  *  joins too, with deferral at work; again in a small arena, collecting;
  *  and at every fuel to 400, where the state reported is the stopped one. */
 static void deferral_changes_nothing(mode md) {
-    const char *progs[6][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
+    const char *progs[7][2] = { { "lists", "main" }, { "nats", "main" }, { "nats", "lazy" },
                                 { "lists", "out" }, { "listops", "main" }, { "listops", "out" } };
     uint64_t collected = 0, deferred = 0;
     for (int i = 0; i < 6; i++) {
@@ -741,8 +753,211 @@ TEST(a_list_operand_not_yet_a_list_word_runs_the_term) {
     free(term);
 }
 
+/*  Bit strings (words.c, "Bit strings"): the constructors' terms, plain,
+ *  as tests/data/bits compiles them. */
+#define BN "S (K K) K"
+#define BZ "S (K K) (S (K (S (K K))) (S (K (S I)) K))"
+#define BO "S (K K) (S (K K) (S (K (S I)) K))"
+#define TRT "S (K K) (S (K (S I)) K)"
+#define TRB "S (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S (K S))) (S (S (K S) (S (K K) " \
+            "(S (K S) (S (K (S I)) K)))) (K K)))))) (K (K K))"
+
+/*  The low len bits of v, least significant outermost; a thunk, I x, for
+ *  the field at depth `lazy` (0: none). */
+static void bits_text(char *out, size_t cap, unsigned v, unsigned len, unsigned lazy) {
+    size_t at = 0;
+    for (unsigned i = 0; i < len; i++)
+        at += (size_t)snprintf(out + at, cap - at, "(%s) (%s", v >> i & 1u ? BO : BZ,
+                               i + 1 == lazy ? "I (" : "");
+    at += (size_t)snprintf(out + at, cap - at, "%s", BN);
+    for (unsigned i = 0; i < len; i++)
+        at += (size_t)snprintf(out + at, cap - at, "%s)", i + 1 == lazy ? ")" : "");
+}
+
+/*  A name: IdRaw 0 for len 4, else Id of the bits. */
+#define IDRAW "S (K (S (K K))) (S (K (S I)) K)"
+#define IDC "S (K K) (S (K (S I)) K)"
+static void name_text(char *out, size_t cap, unsigned v, unsigned len) {
+    if (len == 4) { snprintf(out, cap, "(%s) K", IDRAW); return; }
+    char b[4096];
+    bits_text(b, sizeof b, v, len, 0);
+    snprintf(out, cap, "(%s) (%s)", IDC, b);
+}
+
+/*  The sample trie of words.c's bits_admit: node n, if held, holds the
+ *  numeral n + 1, its children 2n + 1 (Bz) and 2n + 2 (Bo). */
+static size_t trie_text(char *out, size_t cap, unsigned held, unsigned n) {
+    if (n >= 15 || !(held >> n & 1u)) return (size_t)snprintf(out, cap, "K");
+    char v[512];
+    numeral(v, sizeof v, n + 1);
+    size_t at = (size_t)snprintf(out, cap, "(%s) ((%s) (%s) (", TRT, TRB, v);
+    at += trie_text(out + at, cap - at, held, 2 * n + 1);
+    at += (size_t)snprintf(out + at, cap - at, ") (");
+    at += trie_text(out + at, cap - at, held, 2 * n + 2);
+    return at + (size_t)snprintf(out + at, cap - at, "))");
+}
+
+/*  eqB on every pair of bit strings of up to 3 bits, trGet on every key of
+ *  up to 3 bits and five tries, eqId on every pair of names of up to 3
+ *  bits and an IdRaw: the term's normal form, in one native step, operands
+ *  being values already. */
+TEST(every_bit_string_operation_agrees_with_its_term) {
+    char *beq = fixture("bits", "eqB"), *bget = fixture("bits", "trGet"),
+         *ideq = fixture("bits", "eqId");
+    REQUIRE(beq && bget && ideq);
+    static const unsigned held[5] = { 0x0, 0x1, 0x7, 0x1b, 0x7fff };
+    static char src[1 << 16], x[4096], y[8192], want[1 << 17];
+    unsigned fired = 0, runs = 0;
+    for (unsigned la = 0; la <= 3; la++)
+        for (unsigned va = 0; va < 1u << la; va++) {
+            bits_text(x, sizeof x, va, la, 0);
+            for (unsigned op = 0; op < 2; op++)
+                for (unsigned lb = 0; lb < (op ? 5u : 4u); lb++)
+                    for (unsigned vb = 0; vb < (op ? 1u : 1u << lb); vb++) {
+                        if (op) trie_text(y, sizeof y, held[lb], 0);
+                        else bits_text(y, sizeof y, vb, lb, 0);
+                        snprintf(src, sizeof src, "(%s) (%s) (%s)", op ? bget : beq, x, y);
+                        outcome ski = run(src, "tests/data/bits", SKI, AV_SHARE, false, 10000000, 1u << 12);
+                        strcpy(want, ski.nf);
+                        CHECK_EQ(ski.status, AV_NORMAL);
+                        outcome dt = run(src, "tests/data/bits", DATA, AV_SHARE, false, 10000000, 1u << 12);
+                        CHECK_EQ(dt.status, AV_NORMAL);
+                        CHECK(strcmp(dt.nf, want) == 0);
+                        runs++;
+                        fired += dt.bit_ops == 1;
+                    }
+        }
+    for (unsigned la = 0; la <= 4; la++)
+        for (unsigned va = 0; va < (la == 4 ? 1u : 1u << la); va++)
+            for (unsigned lb = 0; lb <= 4; lb++)
+                for (unsigned vb = 0; vb < (lb == 4 ? 1u : 1u << lb); vb++) {
+                    name_text(x, sizeof x, va, la);
+                    name_text(y, sizeof y, vb, lb);
+                    snprintf(src, sizeof src, "(%s) (%s) (%s)", ideq, x, y);
+                    outcome ski = run(src, "tests/data/bits", SKI, AV_SHARE, false, 10000000, 1u << 12);
+                    strcpy(want, ski.nf);
+                    CHECK_EQ(ski.status, AV_NORMAL);
+                    outcome dt = run(src, "tests/data/bits", DATA, AV_SHARE, false, 10000000, 1u << 12);
+                    CHECK_EQ(dt.status, AV_NORMAL);
+                    CHECK(strcmp(dt.nf, want) == 0);
+                    runs++;
+                    fired += dt.bit_ops == 1;
+                }
+    CHECK_EQ(fired, runs);
+    CHECK_EQ(runs, 15 * (15 + 5) + 16 * 16);
+    free(beq);
+    free(bget);
+    free(ideq);
+}
+
+/*  An operand not yet a value: at the first level the term runs, forcing
+ *  it; deeper, the operation one level on is left for the term to force. */
+TEST(a_bit_string_not_yet_a_value_runs_the_term) {
+    char *beq = fixture("bits", "eqB"), *bget = fixture("bits", "trGet");
+    REQUIRE(beq && bget);
+    static char src[1 << 16], x[4096], y[8192], want[1 << 17];
+    for (unsigned lazy = 0; lazy <= 3; lazy++) {
+        for (unsigned op = 0; op < 2; op++) {
+            bits_text(x, sizeof x, 5, 3, lazy);
+            if (op) trie_text(y, sizeof y, 0x7fff, 0);
+            else bits_text(y, sizeof y, 5, 3, 0);
+            if (lazy == 0) snprintf(src, sizeof src, "(%s) (I (%s)) (%s)", op ? bget : beq, x, y);
+            else snprintf(src, sizeof src, "(%s) (%s) (%s)", op ? bget : beq, x, y);
+            outcome ski = run(src, "tests/data/bits", SKI, AV_SHARE, false, 10000000, 1u << 12);
+            strcpy(want, ski.nf);
+            outcome dt = run(src, "tests/data/bits", DATA, AV_SHARE, false, 10000000, 1u << 12);
+            CHECK_EQ(dt.status, AV_NORMAL);
+            CHECK(strcmp(dt.nf, want) == 0);
+            /* a thunk at the top: no fire at first; one deeper: a fire
+             * that leaves the rest, and the recursion's own calls */
+            if (lazy == 0) CHECK(dt.bit_ops == 0);
+            else CHECK(dt.bit_ops >= 1);
+        }
+    }
+    free(beq);
+    free(bget);
+}
+
+/*  Collections while the operations fire: under the smallest node cap
+ *  the run fits within, a power of two. */
+TEST(a_collection_keeps_bit_string_operations) {
+    char *src = fixture("bits", "long");
+    REQUIRE(src != NULL);
+    outcome dt = { 0 };
+    for (max_nodes = 1u << 10; max_nodes <= 1u << 20; max_nodes *= 2) {
+        dt = run(src, "tests/data/bits", DATA, AV_SHARE, true, 10000000, 1u << 8);
+        if (dt.status == AV_WHNF) break;
+    }
+    max_nodes = 0;
+    CHECK(dt.status == AV_WHNF && strcmp(dt.nf, "Ff") == 0);
+    CHECK(dt.bit_ops > 0);
+    CHECK(dt.collections > 0);
+    free(src);
+}
+
+/*  n bits from k, a thunk I x at every other field when lazy. */
+static size_t lazy_bits(char *out, size_t cap, unsigned n, bool lazy, unsigned k) {
+    size_t at = 0;
+    for (unsigned i = 0; i < n; i++)
+        at += (size_t)snprintf(out + at, cap - at, "(%s) (%s", (i + k) % 3 ? BO : BZ,
+                               lazy && i % 2 ? "I (" : "");
+    at += (size_t)snprintf(out + at, cap - at, "%s", BN);
+    for (unsigned i = 0; i < n; i++)
+        at += (size_t)snprintf(out + at, cap - at, "%s)", lazy && i % 2 ? ")" : "");
+    return at;
+}
+
+/*  Collections landing on fires that leave the operation on: 500 eqB
+ *  calls chained, their operands thunks every other bit, under node caps
+ *  across the octave below the first that fits; every run that finishes
+ *  is SKI's, and some collect. */
+TEST(a_collection_mid_fire_keeps_the_operation_on) {
+    char *beq = fixture("bits", "eqB");
+    REQUIRE(beq != NULL);
+    enum { LINKS = 500 };
+    size_t cap = (size_t)LINKS * (strlen(beq) + 4096) + 64;
+    char *src = malloc(cap);
+    REQUIRE(src != NULL);
+    size_t at = 0;
+    for (unsigned k = 0; k < LINKS; k++) {
+        at += (size_t)snprintf(src + at, cap - at, "(%s) (", beq);
+        at += lazy_bits(src + at, cap - at, 6, k % 2 == 0, k);
+        at += (size_t)snprintf(src + at, cap - at, ") (");
+        at += lazy_bits(src + at, cap - at, 6, k % 2 == 1, k);
+        at += (size_t)snprintf(src + at, cap - at, ") (");
+    }
+    at += (size_t)snprintf(src + at, cap - at, "Tt");
+    for (unsigned k = 0; k < LINKS; k++) at += (size_t)snprintf(src + at, cap - at, ") Ff");
+    outcome ski = run(src, "tests/data/bits", SKI, AV_SHARE, true, 100000000, 1u << 12);
+    CHECK(ski.status == AV_WHNF && strcmp(ski.nf, "Tt") == 0);
+    uint32_t fits = 1u << 12;
+    while (fits < 1u << 22) {
+        max_nodes = fits;
+        if (run(src, "tests/data/bits", DATA, AV_SHARE, true, 100000000, 1u << 8).status == AV_WHNF) break;
+        fits *= 2;
+    }
+    unsigned both = 0, done = 0;
+    for (max_nodes = fits / 2; max_nodes <= fits; max_nodes += fits / 64) {
+        outcome dt = run(src, "tests/data/bits", DATA, AV_SHARE, true, 100000000, 1u << 8);
+        if (dt.status != AV_WHNF) continue;     /* past the cap */
+        done++;
+        CHECK(strcmp(dt.nf, "Tt") == 0);
+        CHECK(dt.bit_ops >= LINKS);
+        both += dt.collections > 0;
+    }
+    max_nodes = 0;
+    CHECK(done > 0);
+    CHECK(both > 0);
+    free(src);
+    free(beq);
+}
+
 TEST_MAIN(
     TEST_CASE(every_mode_gives_the_same_answer),
+    TEST_CASE(every_bit_string_operation_agrees_with_its_term),
+    TEST_CASE(a_bit_string_not_yet_a_value_runs_the_term),
+    TEST_CASE(a_collection_keeps_bit_string_operations),
+    TEST_CASE(a_collection_mid_fire_keeps_the_operation_on),
     TEST_CASE(a_joined_case_is_its_instance_and_dispatch),
     TEST_CASE(a_deferred_root_changes_no_count_or_state_with_templates),
     TEST_CASE(a_deferred_root_changes_no_count_or_state_with_data_jets),

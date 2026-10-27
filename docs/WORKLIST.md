@@ -20,6 +20,15 @@ design lives. Last revised 2026-10-25.
   echo mid-run and resumes it (53 runs); `tests/test_drivers.c` stops runs at every
   request and resumes them.
 
+- **Data jets for Stage B's hot spots: bit strings** (2026-10-28; DESIGN §6.10, "Bit
+  strings"). With templates and data jets a third of front1's run is bit strings, its
+  names and its stores' keys. Equality, the lookup in a trie the bits key, and names'
+  equality run natively where a program's function is front1's term, pinned and
+  admitted by running, reading only operands that are values already. front1's fixed
+  point: 633,573,940 contractions to 411,048,920, 53 s to 47 s, every hash the same.
+  `--jet-stats` counts each template's fires and each constructor's dispatches. Open:
+  the template load, 4.3 s of a 5.5 s run on front0's source.
+
 - **Drivers, and SKIlark's I/O through them** (2026-10-27; avon #78, SKIjack #33 and
   #34, SKIlark #30 and #31). `avon run --kernel` runs a kernel as a program, performing
   the standard cards (DESIGN §9.2); SKIjack's reference drivers are the oracle, released

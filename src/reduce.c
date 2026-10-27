@@ -415,7 +415,145 @@ static av_status list_dispatch(R *r, uint32_t *curp) {
  *  redex root now its result; 0 declined, to run its term; -1 SIZE. */
 static int list_fire(R *r, unsigned op, unsigned k, uint32_t *curp);
 
-static int word_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
+/*  ---------------------------------------------- bit-string operations
+ *
+ *  words.c, "Bit strings".  An operand is read only where it is a value
+ *  already: a constructor template's node applied to exactly its fields,
+ *  or K and K I, the nullary constructors of two.  The walk follows the
+ *  term's own order of cases, so where it meets an operand not yet a
+ *  value, the same operation applied to what it has reached is a weak
+ *  reduct of the redex, and is what the fire leaves; at the first level
+ *  the fire declines, and the term runs, forcing the operand. */
+
+/*  x's constructor index if x is a value of a type of `count`
+ *  constructors with `fields` fields, its fields into field; else -1. */
+static int ctor_at(const av_arena *a, uint32_t x, unsigned count, unsigned fields,
+                   uint32_t *field) {
+    uint32_t cap[3];
+    unsigned j = 0;
+    x = av_res(a, x);
+    while (av_tag(a, x) == AV_APP) {
+        if (j == 3) return -1;
+        cap[j++] = av_right(a, x);
+        x = av_res(a, av_left(a, x));
+    }
+    int index = -1;
+    if (x == AV_NODE_K) {                       /* K, and K I */
+        if (count == 2 && fields == 0 && j == 0) index = 0;
+        else if (count == 2 && fields == 0 && j == 1 && av_res(a, cap[0]) == AV_NODE_I) return 1;
+        return index;
+    }
+    if (av_tag(a, x) != AV_JET || (av_left(a, x) & AV_JET_WORD)) return -1;
+    uint32_t t = a->jets[AV_JET_ID(av_left(a, x))].tmpl;
+    if (!t) return -1;
+    av_ctor sh = a->tmpls[t - 1].ctor;
+    if (!av_ctor_is(sh) || sh.count != count || sh.fields != j || j != fields) return -1;
+    for (unsigned i = 0; i < j; i++) field[i] = cap[j - 1 - i];      /* in order */
+    return (int)sh.index;
+}
+
+/*  A bit string's constructor: Bn (0, no field), Bz (1) or Bo (2), one
+ *  field each; else -1. */
+static int bit_at(const av_arena *a, uint32_t x, uint32_t *rest) {
+    uint32_t f[1];
+    int i = ctor_at(a, x, 3, 0, f);
+    if (i == 0) return 0;
+    if (i >= 0) return -1;                      /* a nullary constructor not Bn's */
+    i = ctor_at(a, x, 3, 1, f);
+    if (i != 1 && i != 2) return -1;
+    *rest = f[0];
+    return i;
+}
+
+enum { BITS_DECLINE, BITS_TO, BITS_KI, BITS_AGAIN };
+/*  Levels one fire walks at most, so that a step of fuel bounds its time:
+ *  past them it leaves the operation on (the lookup and equality) or
+ *  declines (names'). */
+#define BITS_LEVELS 4096u
+
+/*  The fire's outcome, allocating nothing: BITS_TO *x (the answer
+ *  node), BITS_KI, BITS_AGAIN on (*x, *y), or BITS_DECLINE. */
+static int bits_walk(const av_arena *a, unsigned op, uint32_t *x, uint32_t *y) {
+    uint32_t p = *x, q = *y;
+    for (unsigned level = 0;; level++) {
+        if (level == BITS_LEVELS) { *x = p; *y = q; return BITS_AGAIN; }
+        if (op == AV_WOP_IDEQ) {                /* x's bits, then y's: decided here or not at all */
+            uint32_t f[1], g[1];
+            int ix = ctor_at(a, p, 2, 1, f), iy = ix < 0 ? -1 : ctor_at(a, q, 2, 1, g);
+            if (iy < 0) return BITS_DECLINE;
+            uint32_t bx = ix ? f[0] : AV_NONE, by = iy ? g[0] : AV_NONE;   /* AV_NONE: Bn */
+            for (unsigned l = 0; l < BITS_LEVELS; l++) {
+                uint32_t rx = AV_NONE, ry = AV_NONE;
+                int ia = bx == AV_NONE ? 0 : bit_at(a, bx, &rx);
+                int ib = ia < 0 ? -1 : by == AV_NONE ? 0 : bit_at(a, by, &ry);
+                if (ib < 0) return BITS_DECLINE;
+                if (ia != ib) return BITS_KI;
+                if (ia == 0) { *x = AV_NODE_K; return BITS_TO; }
+                bx = rx;
+                by = ry;
+            }
+            return BITS_DECLINE;
+        }
+        if (op == AV_WOP_BEQ) {                 /* a, then b */
+            uint32_t pr = AV_NONE, qr = AV_NONE;
+            int ia = bit_at(a, p, &pr), ib = ia < 0 ? -1 : bit_at(a, q, &qr);
+            if (ib < 0) { *x = p; *y = q; return level ? BITS_AGAIN : BITS_DECLINE; }
+            if (ia != ib) return BITS_KI;       /* No */
+            if (ia == 0) { *x = AV_NODE_K; return BITS_TO; }     /* Yes */
+            p = pr;
+            q = qr;
+            continue;
+        }
+        /* the key p, the trie q: the trie, then its node, then the key */
+        uint32_t t[1], nd[3], r = AV_NONE;
+        int im = ctor_at(a, q, 2, 0, t);
+        if (im == 0) return BITS_KI;            /* Nd0: none */
+        if (im > 0) im = -1;                    /* a nullary second constructor: no trie */
+        else im = ctor_at(a, q, 2, 1, t) == 1 ? 1 : -1;
+        int in = im < 0 ? -1 : ctor_at(a, t[0], 1, 3, nd);
+        int ib = in < 0 ? -1 : bit_at(a, p, &r);
+        if (ib < 0) { *x = p; *y = q; return level ? BITS_AGAIN : BITS_DECLINE; }
+        if (ib == 0) { *x = av_res(a, nd[0]); return BITS_TO; }  /* the value */
+        p = r;
+        q = ib == 1 ? nd[1] : nd[2];
+    }
+}
+
+/*  A bit-string operation, jet id, at the head with its two operands: 1
+ *  fired, the redex root now the answer or the operation one level on; 0
+ *  declined, to run its term; -1 SIZE. */
+static int bits_fire(R *r, uint32_t id, unsigned op, uint32_t *curp) {
+    av_arena *a = r->a;
+    uint32_t x = sarg(r, r->top - 1), y = sarg(r, r->top - 2);
+    int out = bits_walk(a, op, &x, &y);
+    if (out == BITS_DECLINE) return 0;
+    if (out == BITS_AGAIN) {
+        /* the operation one level on, its head the redex's own jet node,
+         * *curp: a fresh node over the jet's term would let the run
+         * write inside the term */
+        uint64_t gcs = a->collections;
+        if (!hensure(r, 1, curp)) return -1;
+        if (a->collections != gcs) {            /* the collection moved them: again */
+            x = sarg(r, r->top - 1);
+            y = sarg(r, r->top - 2);
+            if (bits_walk(a, op, &x, &y) != BITS_AGAIN) return 0;   /* never, but safe */
+        }
+        AV_ALWAYS(av_tag(a, *curp) == AV_JET && AV_JET_ID(av_left(a, *curp)) == id,
+                  "a bit-string operation's head not its jet node");
+        uint32_t f = arena_app_reserved(a, *curp, x);
+        root_set(r, r->top - 2, (av_node){ f, y }, curp);
+    } else if (out == BITS_KI) {
+        root_set(r, r->top - 2, (av_node){ AV_NODE_K, AV_NODE_I }, curp);
+    } else {
+        root_set(r, r->top - 2, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 }, curp);
+    }
+    r->steps++;
+    r->bit_ops++;
+    return 1;
+}
+
+static int word_fire(R *r, uint32_t id, unsigned op, unsigned k, uint32_t *curp) {
+    if (av_wop_bits(op)) return bits_fire(r, id, op, curp);
     if (av_wop_list(op)) return list_fire(r, op, k, curp);
     av_arena *a = r->a;
     uint32_t m, n;
@@ -972,11 +1110,13 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 unsigned op = a->jets[id].word_op, k = av_wop_operands(op);
                 if (r->top - bottom >= k) {
                     if (!sprepare(r, D, r->top - k, &cur)) return stop(r, bottom, cur, AV_SIZE);
-                    int wf = word_fire(r, op, k, &cur);
+                    int wf = word_fire(r, id, op, k, &cur);
                     if (wf < 0) return stop(r, bottom, cur, AV_SIZE);
                     if (wf > 0) continue;
                 }
-                if (!(av_left(a, cur) & AV_JET_SHARED)) {
+                if (a->jets[id].tmpl && o->templates) {
+                    /* a template's own jet: declined, it instantiates */
+                } else if (!(av_left(a, cur) & AV_JET_SHARED)) {
                     cur = av_right(a, cur);
                     continue;
                 }
@@ -988,6 +1128,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 const av_tmpl *T = &a->tmpls[a->jets[id].tmpl - 1];
                 if (o->data && av_ctor_is(T->ctor) && r->top - bottom >= T->k) {
                     /* a constructor with every argument */
+                    if (o->jetstats) jetstats_fire(o->jetstats, cur, id);
                     if (!sprepare(r, D, r->top - T->k, &cur)) return stop(r, bottom, cur, AV_SIZE);
                     av_status ds = dispatch(r, T->ctor, T->k, &cur);
                     if (ds != AV_WHNF) return stop(r, bottom, cur, ds);
@@ -1238,7 +1379,7 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     free(r.marks);
     av_result res = { term, r.steps, s, r.jet_calls, r.interp_calls,
                       r.jet_steps, r.jet_fault, r.tmpl_calls,
-                      r.dispatches, r.fused, r.word_ops, r.fix_calls, r.joins,
+                      r.dispatches, r.fused, r.word_ops, r.bit_ops, r.fix_calls, r.joins,
                       r.p2_calls, r.p2_declines, r.p2_unbound, r.deferred, r.list_ops };
     return res;
 }
