@@ -39,7 +39,21 @@ struct av_pier {
     const char *commit_err;     /* why the last event's image did not commit */
     av_pier_event_fn event_fn;
     void      *event_ctx;
+    /* a drivers pier's: its logged answers, replayed by av_pier_drive */
+    bool       drivers;
+    bool       driven;          /* av_pier_drive ran: once per open */
+    av_strategy strategy;       /* the run's, from the log */
+    struct rep *reps;
+    size_t     nreps, repcap, rep_next;
+    off_t      rep_last;        /* where the answer last kept starts */
+    uint8_t   *boot_pay;        /* a new pier's boot answer, logged, unapplied */
+    size_t     boot_n;
+    av_run_log runlog;
 };
+
+/*  An answer in a drivers pier's log: the request's tag and id, jammed,
+ *  and the payload. */
+struct rep { uint8_t tag; uint8_t *id, *pay; size_t nid, npay; };
 
 static char *path_in(const char *dir, const char *name) {
     size_t n = strlen(dir) + strlen(name) + 2;
@@ -161,7 +175,10 @@ static bool snapshot(av_pier *p, const char **err) {
     return ok;
 }
 
-bool av_pier_snapshot(av_pier *p, const char **err) { return snapshot(p, err); }
+bool av_pier_snapshot(av_pier *p, const char **err) {
+    if (p->drivers) { *err = "a drivers pier keeps only snapshot 0: its run replays from boot"; return false; }
+    return snapshot(p, err);
+}
 
 av_kernel *av_pier_kernel(av_pier *p) { return &p->k; }
 
@@ -170,6 +187,9 @@ void av_pier_free(av_pier *p) {
     if (p->a) av_kernel_free(&p->k);
     if (p->log >= 0) close(p->log);
     av_arena_free(p->a);
+    for (size_t i = 0; i < p->nreps; i++) { free(p->reps[i].id); free(p->reps[i].pay); }
+    free(p->reps);
+    free(p->boot_pay);
     free(p->eny_file);
     free(p->dir);
     free(p);
@@ -290,6 +310,79 @@ av_pier *av_pier_new_pma(const char *dir, const uint8_t *pill, size_t npill,
                          const uint8_t *subject, size_t nsubject, const av_opts *o,
                          const char **err) {
     return pier_new(dir, pill, npill, subject, nsubject, o, true, false, false, err);
+}
+
+/*  An answer's record: `rep N <tag, id jammed> <payload>`. */
+static bool log_answer(av_pier *p, av_arena *a, unsigned tag, uint32_t id, const uint8_t *pay,
+                       size_t n, const char **err) {
+    av_buf b = { 0 };
+    const char *jerr = NULL;
+    if (!av_jam(a, id, 1u << 16, &b, &jerr)) {
+        av_buf_free(&b);
+        *err = "a request's id is too large to log";
+        return false;
+    }
+    size_t na1 = 1 + b.len;
+    uint8_t *a1 = malloc(na1);
+    if (!a1) { av_buf_free(&b); *err = "out of memory"; return false; }
+    a1[0] = (uint8_t)tag;
+    memcpy(a1 + 1, b.s, b.len);
+    av_buf_free(&b);
+    static const uint8_t none = 0;              /* an empty payload is still a field */
+    bool ok = log_record(p->log, "rep", p->k.events + 1, a1, na1, n ? pay : &none, n,
+                         &p->rep_last);
+    free(a1);
+    if (!ok) *err = "the event log cannot be written";
+    return ok;
+}
+
+av_pier *av_pier_new_drivers(const char *dir, const uint8_t *kernel, size_t n, const av_opts *o,
+                             unsigned flags, av_run *d, const char **err) {
+    bool eny = flags & (AV_PIER_ENTROPY | AV_PIER_ENTROPY_FILE), eny_file = flags & AV_PIER_ENTROPY_FILE;
+    if (eny_file && !d->entropy_file) { *err = "the pier draws its bits from a file: give --entropy=FILE"; return NULL; }
+    char *logp = path_in(dir, "events.log");
+    if (!logp) { *err = "out of memory"; return NULL; }
+    if (access(logp, F_OK) == 0) { free(logp); *err = "a pier is already there"; return NULL; }
+    if (!pier_dir(dir, err)) { free(logp); return NULL; }
+    av_pier *p = pier_alloc(dir, o);
+    if (!p || !(p->a = av_arena_new(1u << 16))) { free(logp); av_pier_free(p); *err = "out of memory"; return NULL; }
+    p->log = open_log(logp, true, NULL, err);   /* the pier this process's, as pier_new's */
+    free(logp);
+    if (p->log < 0) { av_pier_free(p); return NULL; }
+    uint32_t k = av_cue(p->a, kernel, n, err);
+    if (k == AV_NONE) { av_pier_free(p); return NULL; }
+    av_opts po = p->o;                          /* the shape's probe, not the run's fuel */
+    po.max_steps = 1000000;
+    if (!av_is_kernel(p->a, k, &po)) { av_pier_free(p); *err = "not a kernel [[poke [peek load]] state]"; return NULL; }
+    av_kernel_adopt(&p->k, p->a, k, &p->o);     /* unreduced: its first poke reduces it */
+    p->drivers = true;
+    p->strategy = p->o.strategy;
+    p->eny = eny;
+    p->eny_from_file = eny_file;
+    /* the opt-in and boot's answer before the image: a crash between
+     * them leaves a log and no image, a pier that will not open */
+    uint8_t fl = (uint8_t)((eny ? AV_PIER_ENTROPY : 0u) | (eny_file ? AV_PIER_ENTROPY_FILE : 0u) |
+                           (p->strategy == AV_COPY ? AV_PIER_COPY : 0u));
+    if (!log_record(p->log, "drivers", 0, &fl, 1, NULL, 0, NULL)) {
+        av_pier_free(p);
+        *err = "the event log cannot be written";
+        return NULL;
+    }
+    d->entropy = eny;
+    uint8_t *pay = NULL;
+    size_t np = 0;
+    bool ok = av_run_boot_payload(d, &pay, &np, err) &&
+              log_answer(p, p->a, AV_RUN_BOOT, AV_NODE_K, pay, np, err);
+    if (!ok) { free(pay); av_pier_free(p); return NULL; }
+    p->boot_pay = pay;                          /* av_pier_drive's first answer, live */
+    p->boot_n = np;
+    if (!snapshot(p, err)) { av_pier_free(p); return NULL; }
+    if (!av_sync_dir(dir) || !av_sync_parent(dir)) {
+        *err = "cannot sync the pier's directory";
+        av_pier_free(p);
+        return NULL;
+    }
+    return p;
 }
 
 av_pier *av_pier_new_ex(const char *dir, const uint8_t *pill, size_t npill, const uint8_t *subject,
@@ -560,6 +653,38 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
             p->eny_from_file = strcmp(line + used, "01") == 0;
             continue;
         }
+        if (strcmp(kind, "drivers") == 0 && n == 0 && !p->drivers && p->k.events == 0) {
+            size_t lf;
+            uint8_t *fl = unhex(line + used, strlen(line + used), &lf);
+            if (!fl || lf != 1) { free(fl); msg = "a malformed log record"; break; }
+            p->drivers = true;
+            p->eny = fl[0] & (AV_PIER_ENTROPY | AV_PIER_ENTROPY_FILE);
+            p->eny_from_file = fl[0] & AV_PIER_ENTROPY_FILE;
+            p->strategy = fl[0] & AV_PIER_COPY ? AV_COPY : AV_SHARE;
+            free(fl);
+            continue;
+        }
+        if (p->drivers) {                       /* its answers, for av_pier_drive */
+            char *f1 = line + used, *sp = strchr(f1, ' ');
+            size_t l1, l2 = 0;
+            uint8_t *b1 = sp ? unhex(f1, (size_t)(sp - f1), &l1) : NULL;
+            uint8_t *b2 = sp ? unhex(sp + 1, strlen(sp + 1), &l2) : NULL;
+            if (strcmp(kind, "rep") != 0 || !b1 || !b2 || l1 < 2) msg = "a malformed log record";
+            else if (n != p->nreps + 1) msg = "the log skips an event";
+            else if (p->nreps == p->repcap) {
+                size_t c = p->repcap ? 2 * p->repcap : 64;
+                struct rep *v = realloc(p->reps, c * sizeof *v);
+                if (!v) msg = "out of memory";
+                else p->reps = v, p->repcap = c;
+            }
+            if (msg) { free(b1); free(b2); break; }
+            uint8_t *id = malloc(l1 - 1);
+            if (!id) { free(b1); free(b2); msg = "out of memory"; break; }
+            memcpy(id, b1 + 1, l1 - 1);
+            p->reps[p->nreps++] = (struct rep){ b1[0], id, b2, l1 - 1, l2 };
+            free(b1);
+            continue;
+        }
         if (strcmp(kind, "eny") == 0) p->eny_n++;  /* every kept draw counts toward FILE's offset */
         if (n <= at) continue;                  /* in the snapshot already */
         if (n != p->k.events + 1) { msg = "the log skips an event"; break; }
@@ -592,6 +717,9 @@ av_pier *av_pier_open(const char *dir, const av_opts *o, const char **err) {
     free(line);
     fclose(in);
     p->k.o = live;
+    if (!msg && p->drivers && (p->pma || at != 0)) msg = "a drivers pier has no image but snapshot 0";
+    if (!msg && p->drivers && p->nreps == 0) msg = "a drivers pier's log holds no boot answer";
+    if (p->drivers) p->o.strategy = p->k.o.strategy = p->strategy;
     if (msg) { free(logp); *err = msg; av_pier_free(p); return NULL; }
     free(logp);
     off_t end = lseek(p->log, 0, SEEK_END);
@@ -679,6 +807,7 @@ av_status av_pier_poke(av_pier *p, const uint8_t *event, size_t n, uint32_t *eff
     p->eny_err = NULL;
     p->commit_err = NULL;
     p->probe_from = p->a->probe_steps;
+    if (p->drivers) { *err = "a drivers pier is run, not poked"; r->status = AV_SIZE; return AV_SIZE; }
     uint32_t ev = av_cue(p->a, event, n, err);  /* a term, or nothing is logged */
     if (ev == AV_NONE) { r->status = AV_SIZE; return AV_SIZE; }
     if (p->eny && p->eny_from_file && !p->eny_file) {
@@ -731,6 +860,7 @@ static bool boot_reply(av_pier *p, const char **err) {
 }
 
 bool av_pier_entropy(av_pier *p, const char *file, const char **err) {
+    if (p->drivers) { *err = "a drivers pier's entropy comes with its run"; return false; }
     if (!p->eny) { *err = "the pier was not booted with --entropy"; return false; }
     if (!file != !p->eny_from_file) {
         /* a test pier's bits never mix with the system's, nor the reverse */
@@ -765,6 +895,7 @@ uint64_t av_pier_replies(const av_pier *p, uint64_t *unanswered) {
 bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *subject,
                   size_t nsubject, const char **err) {
     p->commit_err = NULL;
+    if (p->drivers) { *err = "a drivers pier is run, not loaded"; return false; }
     uint32_t nk = boot_term(p->a, pill, npill, subject, nsubject, &p->o, err);
     if (nk == AV_NONE) return false;
     av_root_push(p->a, &nk);
@@ -781,4 +912,66 @@ bool av_pier_load(av_pier *p, const uint8_t *pill, size_t npill, const uint8_t *
     if (p->pma && !av_pma_commit(p->a, p->k.k, p->k.events, &cerr))
         p->commit_err = cerr ? cerr : "the image did not commit";
     return true;
+}
+
+/*  ------------------------------------------------------------ drivers */
+
+static bool rep_replay(void *ctx, av_arena *a, unsigned tag, uint32_t id, uint8_t **pay,
+                       size_t *n, const char **err) {
+    av_pier *p = ctx;
+    if (p->rep_next == p->nreps) return false;
+    const struct rep *e = &p->reps[p->rep_next];
+    const char *cerr = NULL;
+    uint32_t lid = e->tag == tag ? av_cue(a, e->id, e->nid, &cerr) : AV_NONE;
+    if (lid == AV_NONE || av_equal(a, lid, id, 1u << 20) != 1) {
+        *err = "the log's next answer is to another request than the run's";
+        return false;
+    }
+    if (!(*pay = malloc(e->npay + 1))) { *err = "out of memory"; return false; }
+    memcpy(*pay, e->pay, e->npay);
+    *n = e->npay;
+    p->rep_next++;
+    return true;
+}
+
+static bool rep_keep(void *ctx, av_arena *a, unsigned tag, uint32_t id, const uint8_t *pay,
+                     size_t n, const char **err) {
+    return log_answer(ctx, a, tag, id, pay, n, err);
+}
+
+static bool rep_cut(void *ctx) {
+    av_pier *p = ctx;
+    return log_cut(p->log, p->rep_last);
+}
+
+bool av_pier_is_drivers(const av_pier *p) { return p->drivers; }
+
+av_strategy av_pier_strategy(const av_pier *p) { return p->drivers ? p->strategy : p->o.strategy; }
+
+av_status av_pier_drive(av_pier *p, av_run *d, av_result *r, const char **err) {
+    r->status = AV_SIZE;
+    r->steps = 0;
+    *err = NULL;
+    if (!p->drivers) { *err = "the pier was not booted with --drivers"; return AV_SIZE; }
+    if (p->driven) { *err = "the pier's run was driven once already since it opened"; return AV_SIZE; }
+    if (!p->eny && d->entropy_file) { *err = "the pier was not booted with --entropy"; return AV_SIZE; }
+    if (p->eny && p->eny_from_file != (d->entropy_file != NULL)) {
+        /* a test pier's bits never mix with the system's, nor the reverse */
+        *err = p->eny_from_file ? "the pier draws its bits from a file: give --entropy=FILE"
+                                : "the pier draws its bits from getentropy, not a file";
+        return AV_SIZE;
+    }
+    p->driven = true;
+    d->entropy = p->eny;
+    p->runlog = (av_run_log){ p, rep_replay, rep_keep, rep_cut };
+    d->log = &p->runlog;
+    p->rep_next = 0;
+    d->boot_pay = p->boot_pay;
+    d->boot_n = p->boot_n;
+    av_status st = av_run_kernel(&p->k, d, r, err);
+    d->log = NULL;
+    d->boot_pay = NULL;
+    if (st == AV_WHNF && !d->stopped && p->rep_next != p->nreps)
+        st = AV_SIZE, *err = "the run ended with answers in the log it did not reach";
+    return st;
 }

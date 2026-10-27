@@ -1428,7 +1428,30 @@ bool av_kernel_load(av_kernel *k, uint32_t new_kernel);
  *  through, counted.  The kernel's options bound each poke; nothing else
  *  bounds the run.  Under words (share mode's --data) a reply's numerals
  *  are words.
+ *
+ *  An answer is kept as its payload, what the world said: the 16 bytes
+ *  drawn; the bytes read; nothing for an unset variable, or 1 and its
+ *  value; the step count, 8 bytes, least significant first; and for boot
+ *  (AV_RUN_BOOT, id 0), 1 and its 16 bytes under entropy or 0 without,
+ *  then each argument as a 4-byte length, least significant first, and
+ *  its bytes.  The reply is built from the payload, so a logged answer
+ *  replays as the term it was.
  */
+#define AV_RUN_BOOT 255u
+typedef struct {
+    void *ctx;
+    /* The logged answer to request tag with id, into *pay (malloc'd) and
+     * *n: true; false when the log holds no more, or, with *err, when its
+     * next answer is not this request's. */
+    bool (*replay)(void *ctx, av_arena *a, unsigned tag, uint32_t id, uint8_t **pay,
+                   size_t *n, const char **err);
+    /* Log a live answer, synced, before it is applied. */
+    bool (*keep)(void *ctx, av_arena *a, unsigned tag, uint32_t id, const uint8_t *pay,
+                 size_t n, const char **err);
+    /* The answer just kept did not apply: take it out of the log. */
+    bool (*cut)(void *ctx);
+} av_run_log;
+
 typedef struct {
     int          fd[3];             /* standard input, output and error   */
     int          argc;
@@ -1436,16 +1459,36 @@ typedef struct {
     bool         entropy;           /* answer card 0, and boot's bits      */
     const char  *entropy_file;      /* bits from it, 16 bytes a draw from the
                                        start; NULL: getentropy            */
+    const av_run_log *log;          /* NULL: the run is in memory          */
+    const uint8_t *boot_pay;        /* boot's answer, kept already: a new
+                                       pier's; NULL: the world's or the log's */
+    size_t       boot_n;
+    uint64_t     max_pokes;         /* stop where the next request would be
+                                       answered live once this many pokes
+                                       are applied; 0: never              */
     /* the run's */
     int          status;            /* the exit card's code, or 0         */
+    bool         stopped;           /* max_pokes stopped it               */
+    bool         replaying;         /* the log still answers              */
     uint64_t     steps, pokes, passed, draws;
 } av_run;
 
 /*  Run k with drivers until an exit card or until no card is left: AV_WHNF
  *  and d->status.  Otherwise a poke's status, or AV_SIZE for the world's
  *  failure or for memory, with *err; *r is the last poke's reduction.
+ *
+ *  With d->log the run starts by replaying: each request takes its answer
+ *  from the log, writes are not performed, and pokes run without the fuel
+ *  bound, since the kernel took them once.  At the first request the log
+ *  does not answer the run goes live: writes are performed, and each
+ *  answer is kept before its reply is poked.  A write the walk passes
+ *  while replaying is one an earlier run reached, or would have reached
+ *  but for a crash: at most once, never twice.
  */
 av_status av_run_kernel(av_kernel *k, av_run *d, av_result *r, const char **err);
+
+/*  Boot's answer for d, drawn from the world now: its payload, malloc'd. */
+bool av_run_boot_payload(av_run *d, uint8_t **pay, size_t *n, const char **err);
 
 /*  3@k. */
 uint32_t av_kernel_state(av_kernel *k);
@@ -1535,6 +1578,26 @@ void     av_pier_on_event(av_pier *p, av_pier_event_fn fn, void *ctx);
 /*  The replies the last poke (or boot) drew, and the requests it left
  *  unanswered at the cap. */
 uint64_t av_pier_replies(const av_pier *p, uint64_t *unanswered);
+
+/*  Drivers (DESIGN.md §9.2), durably: `avon boot --drivers`.  A drivers
+ *  pier holds a kernel run as a program, made by av_pier_new_drivers from
+ *  the kernel itself (SKIT), adopted unreduced, with d's arguments and
+ *  entropy.  Its log opens with `drivers 0 <flags>` (AV_PIER_ENTROPY,
+ *  AV_PIER_ENTROPY_FILE, AV_PIER_COPY) and boot's answer, both before the
+ *  image, snapshot 0, which is the pier's only one; each answer after is
+ *  `rep N <tag, then the id SKIT> <payload>`, logged before its reply is
+ *  applied, N the reply's event.  av_pier_drive runs it with d's
+ *  descriptors and fuel: from boot, replaying the log's answers, then live
+ *  (av_run_kernel), so a pier reopened after a crash continues the run
+ *  where its log ends, and a finished one ends again, performing nothing.
+ *  The run's strategy is the pier's; once per open.  av_pier_poke, load,
+ *  entropy and snapshot refuse a drivers pier, and av_pier_drive any other. */
+#define AV_PIER_COPY 8u
+av_pier *av_pier_new_drivers(const char *dir, const uint8_t *kernel, size_t n, const av_opts *o,
+                             unsigned flags, av_run *d, const char **err);
+bool     av_pier_is_drivers(const av_pier *p);
+av_strategy av_pier_strategy(const av_pier *p);
+av_status av_pier_drive(av_pier *p, av_run *d, av_result *r, const char **err);
 
 /*  ---------------------------------------------------------- the compiler
  *
