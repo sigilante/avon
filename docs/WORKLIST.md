@@ -244,7 +244,7 @@ design lives. Last revised 2026-10-25.
 
 ## Next
 
-1. **Stage 8's checkers, M5 and M6** (item 3).
+1. **Stage 8's last checker, M6: Stage B** (item 3).
 2. **Drivers: effects every front end shares** (`DESIGN.md` §9.2; decided 2026-10-26).
    Standard cards for writing, reading, the environment, a step count and an exit, beside entropy's, performed by the pier, so that no
    front end needs a host of its own. Built: SKIjack's SPEC and reference drivers
@@ -310,7 +310,7 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
 SKIjack-0's front end compiles itself in Avon. What remains runs in Python: cores,
 macros, signatures, quotation, scries, namespace literals and the type checker. Most
 of the work is SKIjack programs in skijack's repository; Avon runs them and checks them
-on the corpus, hash for hash. It is the one unfinished stage: M1 to M4 are built, M5 and M6 remain (Next, item 2).
+on the corpus, hash for hash. It is the one unfinished stage: M1 to M5 are built, M6 remains (Next, item 1).
 
 Scoped 2026-10-05, against skijack `6a870ac`. The SKIjack-0 front end
 (`selfhost/front0.ascii.ski`) is 406 lines; Python's front end about 7,100. Sizes
@@ -327,12 +327,37 @@ are estimates, in lines of SKIjack:
 
 **M1 to M4, built 2026-10-05** (skijack `front1.ascii.ski`, `run1.py`; `make
 front1-check`; `DESIGN.md` §20.3). Every corpus program agrees, hash for hash, and the
-fixed point covers 1,009 names. Of 303 edge programs, aviary's environment decides 12,
-not SKIjack's rules. Those are binders named as defined names or built-ins, a binder
-twice, a recursion's name rebound, and a binder named as a later definition, which
-aviary reads as the definition. front1 takes each binder as a binder; parity there is
-M5's. Open: front1's term grew from 265,145 nodes to 635,173, so Python compiles it in
-48 seconds; the audit did not take it up.
+fixed point covers 1,009 names. Twelve edge programs aviary's environment once decided
+(binders named as defined names, a binder twice, a recursion's name rebound, a binder
+named as a later definition) agree since skijack fixed the reference on 2026-10-21: a
+binder is a binder, whatever name it spells. Open: front1's term grew from 265,145 nodes
+to 635,173, so Python compiles it in 48 seconds; the audit did not take it up.
+
+**M5, built 2026-10-27** (skijack `front1.ascii.ski` and `run1.py`; avon `front0.c`;
+`DESIGN.md` §20.3). Stage A runs over the parsed program, as Python checks before it
+expands: 166 lines of front1, comments and generated names included, against the 250 to
+400 scoped. Each refusal carries its class, `RErr n`. Its reference is Stage A over
+Python's parse, then the expander with checking off. Every corpus program, all 432 edge
+programs (97 of them M5's, each check passed and failed, and the order of the first
+problem), 991 of 1,000 random programs of the full language, 100 of a second seed and
+200 of SKIjack-0 agree; the other 9 are too heavy for front1 to finish, and the three
+measured were as heavy for front1 before M5. Open: front1 does not install `natDiv`,
+`natRem` or the list operations, which the expander's prelude gained after M4.
+
+**M6, planned 2026-10-27: Stage B** (`typecheck.py`, 947 lines). Its reference adds
+Stage B after Stage A and generation, class 7, TypeMismatchError. front1 must agree only
+where both can witness: a refusal Python gives because inference outran its recursion
+limit (`_UNSETTLED`) is not compared, and front1 may accept that program, as programs too
+heavy for front1 are not compared. Stage B mutates in place: variables bind, and an
+arrow's `elim`, `nominal`, `datum`, `checked` and `numeral` change during unification,
+`checked` undone when it fails. front1 keeps every type node in an explicit store keyed
+by number and threads it, a failure returning the store as Python leaves it; the
+equirecursive `seen` sets are pairs of node numbers. In steps, each checked on the corpus,
+the edges, new edges of its own and random programs before the next: the store,
+unification and inference over names, applications and lambdas with the builtins; cases,
+cells, picks and Scott schemes; `EQ`'s data constraint, the numeral and list constraints,
+and literals settled and defaulted; signatures, which front1's parser now drops and must
+keep, cores and level-1 runs.
 
 Checking never changes the terms, so M1 to M4 are each checked against
 `skijack.compile(..., check=False)` on the corpus as they land, with `run0.py`'s

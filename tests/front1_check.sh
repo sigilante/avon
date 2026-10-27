@@ -5,7 +5,8 @@
 #   1. compiles the corpus programs of every milestone through MILESTONE to
 #      the expander's terms, hash for hash;
 #   2. accepts or refuses every edge program, run0's and each milestone's,
-#      as the expander does;
+#      as Stage A and then the expander do, each refusal with Stage A's
+#      class (M5);
 #   3. compiles RANDOM random SKIjack-0 programs and RANDOM random programs
 #      of the full language as the expander does;
 #   4. compiles its own source to Python's terms: the fixed point;
