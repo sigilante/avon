@@ -1,0 +1,66 @@
+-- Data jets on bit strings (docs/DESIGN.md §6.10, "Bit strings"): equality,
+-- and a lookup in a trie the bits key, written as skijack's front end
+-- writes them (eqB, rvGet, eqId), so their terms are the ones Avon pins;
+-- and a function of another term, eqC, which runs as its term.
+bool === False | True
+nat  === Zero | Suc nat
+yn   === Yes | No
+bits === Bn | Bz bits | Bo bits
+opt  === Some nat | None
+tr   === Tr0 | TrT trn
+trn  === TrB opt tr tr
+ident === IdRaw nat | Id bits
+
+eqB a b = a |> { Bn (b |> { Bn Yes ; Bz y No ; Bo y No }) ; Bz x (b |> { Bn No ; Bz y (eqB x y) ; Bo y No }) ; Bo x (b |> { Bn No ; Bz y No ; Bo y (eqB x y) }) }
+eqC a b = a |> { Bn (b |> { Bn No ; Bz y Yes ; Bo y Yes }) ; Bz x (b |> { Bn Yes ; Bz y (eqC x y) ; Bo y Yes }) ; Bo x (b |> { Bn Yes ; Bz y Yes ; Bo y (eqC x y) }) }
+idBits x = x |> { IdRaw n Bn ; Id b b }
+eqId x y = eqB (idBits x) (idBits y)
+trGet b m = m |> { Tr0 None ; TrT t (t |> { TrB v z o (b |> { Bn v ; Bz r (trGet r z) ; Bo r (trGet r o) }) }) }
+trPut b x m = m |> { Tr0 (trPut b x (TrT (TrB None Tr0 Tr0))) ; TrT t (t |> { TrB v z o (b |> { Bn (TrT (TrB x z o)) ; Bz r (TrT (TrB v (trPut r x z) o)) ; Bo r (TrT (TrB v z (trPut r x o))) }) }) }
+
+and b c = b |> { False False ; True c }
+yes y = y |> { Yes True ; No False }
+no y = y |> { Yes False ; No True }
+isSome o n = o |> { Some m (natIfEq m n True False) ; None False }
+isNone o = o |> { Some m False ; None True }
+
+k1 = Bz (Bo Bn)
+k2 = Bo (Bo Bn)
+k3 = Bz (Bz (Bz Bn))
+t1 = trPut k1 (Some 1) (trPut k2 (Some 2) (trPut Bn (Some 3) Tr0))
+
+-- the operations called from functions, as the front end calls them: a
+-- template holds each operation's term, which is how Avon finds it
+same a b = yes (eqB a b)
+differ a b = no (eqB a b)
+other a b = yes (eqC a b)
+has k t n = isSome (trGet k t) n
+lacks k t = isNone (trGet k t)
+get k t = trGet k t
+sameId x y = yes (eqId x y)
+otherId x y = no (eqId x y)
+
+-- k1 = k1, k1 /= k2, Bn /= k3; eqC is not equality; t1 holds k1, k2 and
+-- Bn, and not k3 or Bz Bn; names compare by their bits, an IdRaw's Bn
+main = and (same k1 k1) (and (differ k1 k2) (and (differ Bn k3) (and (other k1 k2) (and (has k1 t1 1) (and (has k2 t1 2) (and (has Bn t1 3) (and (lacks k3 t1) (and (lacks (Bz Bn) t1) (and (sameId (Id k1) (Id k1)) (and (otherId (Id k1) (Id k2)) (and (sameId (IdRaw 1) (Id Bn)) (otherId (IdRaw 2) (Id k3)))))))))))))
+
+-- a lookup's normal form, for comparing printed normal forms
+out = get k2 t1
+
+-- eight keys put and each got back, and each compared with the next,
+-- 400 times over, a fresh trie each time: a run long enough to collect
+b1 = Bn
+b2 = Bz Bn
+b3 = Bo Bn
+b4 = Bz (Bz Bn)
+b5 = Bo (Bz Bn)
+b6 = Bz (Bo Bn)
+b7 = Bo (Bo Bn)
+b8 = Bz (Bz (Bz Bn))
+t8 n = trPut b8 (Some n) (trPut b7 (Some 7) (trPut b6 (Some 6) (trPut b5 (Some 5) (trPut b4 (Some 4) (trPut b3 (Some 3) (trPut b2 (Some 2) (trPut b1 (Some 1) Tr0)))))))
+eight t n = and (has b1 t 1) (and (has b2 t 2) (and (has b3 t 3) (and (has b4 t 4) (and (has b5 t 5) (and (has b6 t 6) (and (has b7 t 7) (and (has b8 t n) (and (differ b1 b2) (and (differ b2 b3) (and (differ b3 b4) (and (differ b4 b5) (and (differ b5 b6) (and (differ b6 b7) (and (differ b7 b8) (same b8 b8)))))))))))))))
+rounds n = n |> { Zero True ; Suc k (and (eight (t8 n) n) (rounds k)) }
+lazy = rounds 400
+-- the same, 4000 times: past what a template load leaves free, so the arena
+-- collects
+long = rounds 4000

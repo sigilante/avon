@@ -111,6 +111,22 @@ static uint32_t hc_app(av_arena *a, hcons *h, uint32_t l, uint32_t r) {
     return n;
 }
 
+/*  The canonical node of the tree t if the table holds it already, else
+ *  AV_NONE: nothing is added.  For a small tree, a pinned term. */
+static uint32_t hc_find(const av_arena *a, const hcons *h, uint32_t t, unsigned depth) {
+    uint32_t x = av_view(a, t);
+    av_digest d;
+    if (av_tag(a, x) == AV_LEAF) return dmap_get(&h->digest, x, &d) ? x : AV_NONE;
+    if (av_tag(a, x) != AV_APP || depth > 256 || !h->cap) return AV_NONE;
+    uint32_t l = hc_find(a, h, av_left(a, x), depth + 1);
+    uint32_t r = l == AV_NONE ? AV_NONE : hc_find(a, h, av_right(a, x), depth + 1);
+    if (r == AV_NONE) return AV_NONE;
+    uint64_t k = ((uint64_t)l << 32 | r) + 1;
+    for (size_t s = hc_slot(k, h->cap); h->key[s]; s = (s + 1) & (h->cap - 1))
+        if (h->key[s] == k) return h->node[s];
+    return AV_NONE;
+}
+
 /*  Any term's canonical node, looking through jet nodes and indirections;
  *  memoized by node, so a DAG costs its size. */
 static uint32_t hc_canon(av_arena *a, hcons *h, uint32_t t) {
@@ -258,6 +274,7 @@ struct av_tmplset {
                                    ids hold only until the next one */
     long     accepted, refused, eta, open, duplicate, wide, unbound;
     long     words, words_refused;      /* numeral operations */
+    long     bits, bits_refused;        /* bit-string operations */
     bool     fix;                       /* Y registered */
 };
 
@@ -670,6 +687,39 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
             ts->words++;
         }
     }
+    /* the bit-string operations, with words, where the program holds their
+     * terms: pinned (words.c), run on small bit strings before they are
+     * keyed, as the numeral operations are */
+    for (unsigned op = AV_WOP_BEQ; a->word_suc && op <= AV_WOP_IDEQ; op++) {
+        const char *pin = av_bits_pinned(op);
+        av_parse_error pe;
+        uint32_t pt = av_parse(a, pin, strlen(pin), &pe);
+        if (pt == AV_NONE) { msg = "a pinned bit-string operation does not parse"; goto fail; }
+        uint32_t c = hc_find(a, &ts->h, pt, 0);
+        av_digest d;
+        uint64_t have;
+        if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) continue;   /* not the program's */
+        if (nmap_get(&ts->key_jet, c, &have)) {
+            /* a template's key, as a function with formals is: the
+             * operation on the template's own jet, which instantiates when
+             * the operation declines */
+            uint32_t tid = (uint32_t)have - 1;
+            if (!a->jets[tid].tmpl || a->jets[tid].word_op || a->jets[tid].fix) continue;
+            if (!bits_admit(a, c, op)) { ts->bits_refused++; continue; }
+            a->jets[tid].word_op = (uint8_t)op;
+            ts->bits++;
+            continue;
+        }
+        if (!bits_admit(a, c, op)) { ts->bits_refused++; continue; }
+        const char *refusal = NULL;
+        uint32_t id = jet_entry_for(a, d, c, &refusal);
+        if (id == AV_NONE && refusal == jet_collision) { ts->bits_refused++; continue; }
+        if (id == AV_NONE) goto fail;
+        if (a->jets[id].tmpl || a->jets[id].word_op) { ts->bits_refused++; continue; }
+        if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
+        a->jets[id].word_op = (uint8_t)op;
+        ts->bits++;
+    }
     /* Curry's Y, when asked for: keyed like a numeral operation, so
      * its occurrences in the term and in the globals are wrapped */
     if (a->fix_on) {
@@ -783,6 +833,11 @@ bool av_templates_fix(const av_tmplset *ts) {
 void av_templates_word_counts(const av_tmplset *ts, long *admitted, long *refused) {
     *admitted = ts->words;
     *refused = ts->words_refused;
+}
+
+void av_templates_bit_counts(const av_tmplset *ts, long *admitted, long *refused) {
+    *admitted = ts->bits;
+    *refused = ts->bits_refused;
 }
 
 void av_templates_counts(const av_tmplset *ts, long *accepted, long *refused,

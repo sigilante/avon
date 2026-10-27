@@ -4,10 +4,11 @@
 
 For each program here, NAME.ascii.ski, writes NAME/: its templates
 (templates.tsv, template_terms.tsv), its numeral operations (words.tsv,
-when it names any), and each of its names main, lazy and out that it
-defines as NAME.txt, printed: main and lazy applied to the atoms Tt Ff
-(each checks itself and is True, Ff, the second of `False | True`), out
-bare, for its normal form.
+when it names any), and each of its names main, lazy, long, out, eqB,
+trGet and eqId that it defines as NAME.txt, printed: main, lazy and long
+applied to the atoms Tt Ff (each checks itself and is True, Ff, the second
+of `False | True`), the rest bare: out for its normal form, eqB, trGet and
+eqId for the bit-string operations' terms.
 """
 
 from __future__ import annotations
@@ -32,9 +33,9 @@ def main() -> int:
         exp = skijack.compile(src.read_text(), lexicon="ascii")
         write(templates(exp), out / "templates.tsv", out / "template_terms.tsv")
         write_words(exp, out / "words.tsv")
-        for nm in ("main", "lazy", "out"):
+        for nm in ("main", "lazy", "long", "out", "eqB", "trGet", "eqId"):
             if nm in exp.terms:
-                tail = "" if nm == "out" else " Tt Ff"
+                tail = " Tt Ff" if nm in ("main", "lazy", "long") else ""
                 (out / f"{nm}.txt").write_text(pretty(exp.terms[nm]) + tail + "\n")
         print(name, sorted(p.name for p in out.iterdir()))
     return 0

@@ -83,6 +83,11 @@ static inline uint32_t list_rest(const av_arena *a, uint32_t w) {
 }
 bool     word_admit(av_arena *a, uint32_t term, unsigned op);
 const char *av_word_pinned(unsigned op);
+/*  The bit-string operations (words.c, "Bit strings"): op's pinned term,
+ *  and whether term, that one, agrees with the native operation on small
+ *  bit strings and tries. */
+const char *av_bits_pinned(unsigned op);
+bool     bits_admit(av_arena *a, uint32_t term, unsigned op);
 
 /*  The jet stats' hooks (jetstats.c): a fire of jet id at jet node `node`;
  *  a miss; a share-mode demotion, copied or not; a jet node made fresh
