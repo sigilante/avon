@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
 
+- **Drivers, durably: `avon boot --drivers`** (2026-10-28; DESIGN §9.2). A kernel run
+  in a pier, each answer logged as its payload before its reply is applied; reopened,
+  the run replays from snapshot 0 through the walk, writing nothing again, and goes
+  live at the first request the log does not answer. `tests/drivers_check.sh` runs
+  its 17 worlds in a pier as well as in memory, reopens each finished pier, and kills
+  echo mid-run and resumes it (53 runs); `tests/test_drivers.c` stops runs at every
+  request and resumes them.
+
 - **Drivers, and SKIlark's I/O through them** (2026-10-27; avon #78, SKIjack #33 and
   #34, SKIlark #30 and #31). `avon run --kernel` runs a kernel as a program, performing
   the standard cards (DESIGN §9.2); SKIjack's reference drivers are the oracle, released
@@ -246,12 +254,6 @@ design lives. Last revised 2026-10-25.
 
 1. **Stage 8's prelude gap** (item 3): front1 installs `natDiv`, `natRem` and the list
    operations, as the expander's prelude does.
-2. **Drivers: effects every front end shares** (`DESIGN.md` §9.2; decided 2026-10-26).
-   Standard cards for writing, reading, the environment, a step count and an exit, beside entropy's, performed by the pier, so that no
-   front end needs a host of its own. Built: SKIjack's SPEC and reference drivers
-   (`RUNTIME-DESIGN.md` §3e, SKIjack #33, released in 0.2.5), Avon's drivers and
-   `avon run --kernel` (#78), and SKIlark's door (its stage 15, SKIlark #31). Open:
-   the durable `boot --drivers`, its replies logged as events and replayed.
 
 ## Done: the order agreed 2026-10-05
 

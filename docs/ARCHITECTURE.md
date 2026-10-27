@@ -51,7 +51,9 @@ sync that must reach the disk goes through `src/durable.c`.
 `src/drivers.c` runs a kernel as a program: it walks the cards each poke
 emits, first in, first out, performs writes, answers reads, variables,
 step counts and entropy with reply events, and stops at an exit card
-(DESIGN.md §9.2).  Its log is in memory; `avon run --kernel` calls it.
+(DESIGN.md §9.2).  `avon run --kernel` calls it with its log in memory;
+`avon boot --drivers` with a pier's, which replays the logged answers
+through the walk before the run goes live.
 
 ## The files
 

@@ -2270,8 +2270,12 @@ agrees with SKIjack's reference drivers on 17 runs
 (`tests/drivers_check.sh`, in `make check`). The first user, SKIlark,
 is built: its door (SKIlark #31, `skilark/door.py`) runs every stage-14
 program and every example file under `avon run --kernel`, writing what
-stage 14's host writes, in copy and share mode. The durable form, `boot
---drivers`, is not built.*
+stage 14's host writes, in copy and share mode. The durable form, `avon
+boot --drivers` (`src/pier.c`), is built 2026-10-28: every world of
+`tests/drivers_check.sh` runs in a pier as in memory, each finished pier
+reopened performs nothing, and echo killed while it waits on a read
+resumes to the same output (`tests/test_drivers.c` stops runs at every
+request and resumes them).*
 
 **A program does I/O through effects in one shape, and the pier performs
 them.** SKIlark's I/O words (stage 14) end a run with `RIO n s q`, and
@@ -2346,11 +2350,24 @@ ends with status 0.
 
 **Every answer is logged before it is applied**, as an `eny` record is:
 the bytes read, the variable's value, the step count and the arguments.
+A record keeps the answer as its payload, `rep N <tag, id> <payload>`,
+not the reply's term, which a megabyte read would make gigabytes of jam;
+the reply is built from the payload, live or replayed, the same way.
+Boot's answer is logged when the pier is made, before its image, so the
+arguments survive a crash before the first poke.
+
 Replay answers nothing; it applies the logged replies, so a reopened pier
-reaches the state it left. Writes are not performed again on replay: an
-effect is released only after its event commits, as Vere's are (§21.1),
-and Avon's replay already discards every poke's effects. A pier reopened
-after a crash therefore continues without printing twice.
+reaches the state it left. The walk is replayed with them: a reopened pier
+runs from snapshot 0, its only image, since the queue of cards not yet
+walked is in no snapshot, and each request the walk meets takes the log's
+next answer, its tag and id checked against the request's. Writes are not
+performed again on replay: an effect is released only after its event
+commits, as Vere's are (§21.1). At the first request the log does not
+answer, the run is live again. A pier reopened after a crash therefore
+continues without printing twice. The cost is at most once: a write the
+walk had not reached when the crash came, behind the last logged answer,
+is not performed either. A program waiting on a read, the usual place to
+be killed, loses nothing.
 
 **The clock counts steps, not time, until binary numerals land.** Card 4
 answers the contractions the run's pokes have taken when the walk reaches
@@ -2383,8 +2400,10 @@ the command line says which it has:
   is the kernel itself, as SKIjack's reference host takes it, not a pill,
   and it is adopted unreduced: its first poke reduces it, and the step
   count includes that.
-- **`avon boot --drivers DIR`** is the durable form of the kernel run. It
-  survives a crash mid-run and can be proved event by event.
+- **`avon boot --drivers --pier=DIR FILE ARG…`** is the durable form of
+  the kernel run. It survives a crash mid-run, and can be proved event by
+  event. Without FILE it reopens the pier's run: the log replayed, then
+  the run continued, in the strategy it was made with.
 
 **Proofs keep their shape.** A poke whose event is a reply is a statement
 over that reply's answer, as an entropy reply is (§9.1, "Proved"). The

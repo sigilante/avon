@@ -23,7 +23,7 @@ Around those it supports:
 - data jets;
 - a bound scry namespace that running code reads from; and
 - a kernel loop with a persistent arena; and
-- drivers, which run a kernel as a program (`avon run --kernel`).
+- drivers, which run a kernel as a program (`avon run --kernel`), and durably in a pier (`avon boot --drivers`).
 
 ## Building
 
@@ -113,7 +113,7 @@ Start at [`docs/README.md`](docs/README.md), the index.  In brief:
 
 ## Status
 
-Avon is a research proof of concept.  Built: the three strategies, jets, templates, data jets, scry, kernels on a durable pier, the persistent arena, drivers in memory (`avon run --kernel`), and the SKIjack front end through its fourth milestone, which compiles every corpus program to Python's terms.  Open: the front end's checkers (Stage A and Stage B), and the proof-side items in `docs/DESIGN.md` §11.1.  The structural hash keeps 128 bits of SHA-256.  A jet fires only where its own term stands, so a collision cannot merge two jets.
+Avon is a research proof of concept.  Built: the three strategies, jets, templates, data jets, scry, kernels on a durable pier, the persistent arena, drivers in memory and in a pier (`avon run --kernel`, `avon boot --drivers`), and the SKIjack front end through its fourth milestone, which compiles every corpus program to Python's terms.  Open: the front end's checkers (Stage A and Stage B), and the proof-side items in `docs/DESIGN.md` §11.1.  The structural hash keeps 128 bits of SHA-256.  A jet fires only where its own term stands, so a collision cannot merge two jets.
 
 ## References
 
