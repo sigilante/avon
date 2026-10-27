@@ -44,7 +44,10 @@ HERE = pathlib.Path(__file__).resolve().parent
 
 
 def recording():
-    """Patch aviary's bracket_abstract to record its outermost calls."""
+    """Patch bracket abstraction to record its outermost calls: aviary's,
+    and skijack's own reference to it, by which its expander abstracts each
+    formal over a body whose references are still atoms (skijack #36)."""
+    import skijack.expand as SX
     calls, depth = [], [0]
     real = AB.bracket_abstract
 
@@ -58,7 +61,12 @@ def recording():
             calls.append((x, body, r))
         return r
     AB.bracket_abstract = rec
-    return calls, lambda: setattr(AB, "bracket_abstract", real)
+    SX._bracket_abstract = rec
+
+    def restore():
+        AB.bracket_abstract = real
+        SX._bracket_abstract = real
+    return calls, restore
 
 
 def renamed(x, body, result):

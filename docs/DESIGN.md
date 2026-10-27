@@ -2714,9 +2714,9 @@ in stage 8"):
 
 - **The compiler term compiles its own source to the terms Python
   produced**, for the part of compilation that is bracket abstraction:
-  all 87 distinct abstractions of compiling `abstract.ascii.ski`.
+  all 81 distinct abstractions of compiling `abstract.ascii.ski`.
 - **The corpus compiles in Avon to Python's terms, hash for hash**, again
-  for abstraction: all 8,636 distinct abstractions of the 17 compilable
+  for abstraction: all 8,554 distinct abstractions of the 18 compilable
   corpus programs, by the term (`make selfhost-check`).
 - **The compiler jet, licensed by differential**, agrees on every one,
   every fire checked; a term that does not abstract as aviary does is
@@ -3563,13 +3563,17 @@ one recursive equation, because skijack refused mutual recursion when it
 was written.
 
 - **The fixed point.** skijack compiling `abstract.ascii.ski` performs
-  123 outermost abstractions, 87 distinct once variables are renamed;
+  123 outermost abstractions, 81 distinct once variables are renamed;
   the term, run in Avon, gives every one of them, text and hash, in
-  12,214,849 contractions.
-- **The corpus.** Compiling the 17 corpus programs that compile performs
-  19,301 abstractions, 8,636 distinct; the term gives every one, hash for
-  hash, in 523,815,334 contractions, ten seconds. Each definition's term
-  is the last abstraction of its chain, so every one is Python's.
+  687,177 contractions.
+- **The corpus.** Compiling the 18 corpus programs that compile performs
+  19,358 abstractions, 8,554 distinct; the term gives every one, hash for
+  hash, in 476,833,099 contractions. Since skijack #36 each abstracts a
+  formal over a body whose references are still atoms, and a
+  definition's term is the last abstraction of its chain with each
+  reference replaced by its own term, a substitution; before, the bodies
+  held the references' terms, and the counts were 87 and 8,636 distinct,
+  in 12,214,849 and 523,815,334 contractions. The terms are the same.
 - **The compiler jet** answers `abs x t` natively (`av_abstract`), its
   datum decoded by probing and its result encoded with the program's own
   constructors.
@@ -3578,7 +3582,7 @@ was written.
     `AUDIT.md` item 8).
   - The term must also agree with the native abstraction on sample terms.
   - With `--jet-check=1` every fire is compared with the term's
-    reduction: 8,636 of 8,636 and 87 of 87 agree.
+    reduction: 8,554 of 8,554 and 81 of 81 agree.
 - **The compiler in a pill.** The same source declares a kernel whose
   event `Abs x t` has the effect `Out ([vx] t)`; booted from its pill and
   poked with every call of its own compilation, it answers each with
@@ -3686,8 +3690,44 @@ seconds to compile it, against 9.
   - Its term grew from 117,273 distinct nodes to 131,354; Python takes 63
     seconds to compile it with checking, against 48.
   - It does not yet install `natDiv`, `natRem` or the list operations,
-    which the expander's prelude gained after M4. M6, Stage B, still runs
-    in Python.
+    which the expander's prelude gained after M4.
+
+- **M6, built 2026-10-28: Stage B** (`typecheck.py`), over the generated
+  program with its bodies macro-expanded, after Stage A and before
+  front1's own expansion, as Python orders them; any problem is class 7,
+  TypeMismatchError.
+  - Python's Stage B mutates objects in place: variables bind, and an
+    arrow's elimination, nominal type, datum, checked and numeral marks
+    change during unification. front1 keeps every type node in a store
+    keyed by number, each node the next, so the variables keep Python's
+    order, which generalization sorts by. Unification is oriented and
+    equirecursive, its seen pairs threaded as Python's set is shared down
+    one call. Every problem is the same class, so the first ends the pass.
+  - Its reference is Stage A, generation, Stage B, then the expander.
+    front1 agrees only where both can witness: a refusal Python gives
+    because inference outran its recursion limit is not compared, and
+    front1 may accept that program. None occurred in the runs below.
+  - It agrees on all 22 corpus programs, all 472 edge programs (43 of
+    them M6's), 1,300 random programs of the two generators and 500
+    programs typed as they are written, 429 of them accepted, hash for
+    hash.
+  - Its fixed point: all 1,520 of its names, in 619,922,690 contractions
+    with templates and data jets, 2.46 GB at peak. Without templates
+    Stage B's run passes 12 GB, so the fixed point runs with them.
+  - Two changes outside it made that affordable. skijack's expander
+    abstracts formals with references as atoms and expands them after,
+    the same terms, so front1 compiles with checking in 12 seconds where
+    aviary's order passed an hour (skijack #36). skijack writes template
+    terms in the DAG form, which Avon's loader reads (avon #82, skijack
+    #37): 122 MB where the printed trees were 410 MB and took 7.8 GB to
+    load.
+  - Stage B in SKI doubles front1's work on front0's source, from
+    415,021,159 contractions to 835,862,139. The candidates for
+    supercombinator and data jets, from a profile of that run: the
+    store's tries keyed by numbers (`ndGet`, `ndPut` and their kin, 10%
+    of contractions), name and bit comparisons (`cmpCode`, `eqB`,
+    `cmpBit`, `cmpName`, 9%), a scheme's instantiation (`bInst`), and
+    the continuations built at run time (33%).
 
 ### 20.4 What else the analogy imports
 
