@@ -1335,7 +1335,8 @@ Three of those functions now run natively, as the numeral operations do.
   by the redex's own jet node. An operand not yet a value at the top
   declines the fire; the term runs, a template instantiating, and forces
   it. So an operation forces nothing its term would not. `eqId` fires
-  only where it can decide.
+  only where it can decide. A fire walks 4,096 levels at most, so a step
+  of fuel still bounds its time.
 
 Its first version fired on 81,393 calls of about 1.4 million and saved
 5%: `eqId` passes `eqB` the thunks `idBits x` and `idBits y`, so `eqB`'s own
