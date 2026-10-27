@@ -6,6 +6,12 @@ design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
 
+- **Stage 8's prelude gap** (2026-10-28; SKIjack #39). front1 installs `natDiv`,
+  `natRem` and the list operations as the expander's prelude does; the expander no
+  longer gives an operation installed for another's use the program's name. Every
+  corpus program, all 482 edge programs, 1,300 random and 500 typed programs agree,
+  and the fixed point covers 1,529 names. `tests/pins.sh` moves SKIjack to the merge.
+
 - **Drivers, durably: `avon boot --drivers`** (2026-10-28; DESIGN §9.2). A kernel run
   in a pier, each answer logged as its payload before its reply is applied; reopened,
   the run replays from snapshot 0 through the walk, writing nothing again, and goes
@@ -252,8 +258,10 @@ design lives. Last revised 2026-10-25.
 
 ## Next
 
-1. **Stage 8's prelude gap** (item 3): front1 installs `natDiv`, `natRem` and the list
-   operations, as the expander's prelude does.
+1. **The template load** (item 3): loading front1's templates is 4.3 s of a 5.5 s run
+   on front0's source, mostly SHA-256 and hash-consing, paid again by every run a check
+   makes. A cache of templates already verified would keep the proof, the check of each
+   template against its key, while skipping its repetition.
 
 ## Done: the order agreed 2026-10-05
 
@@ -313,7 +321,7 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
 SKIjack-0's front end compiles itself in Avon. At scoping the rest ran only in Python:
 cores, macros, signatures, quotation, scries, namespace literals and the type checker. Most
 of the work is SKIjack programs in skijack's repository; Avon runs them and checks them
-on the corpus, hash for hash. M1 to M6 are built; the prelude's later operations remain (Next, item 1).
+on the corpus, hash for hash. M1 to M6 are built, and front1 installs the prelude's later operations too.
 
 Scoped 2026-10-05, against skijack `6a870ac`. The SKIjack-0 front end
 (`selfhost/front0.ascii.ski`) is 406 lines; Python's front end about 7,100. Sizes
@@ -344,8 +352,9 @@ Python's parse, then the expander with checking off. Every corpus program, all 4
 programs (97 of them M5's, each check passed and failed, and the order of the first
 problem), 991 of 1,000 random programs of the full language, 100 of a second seed and
 200 of SKIjack-0 agree; the other 9 are too heavy for front1 to finish, and the three
-measured were as heavy for front1 before M5. Open: front1 does not install `natDiv`,
-`natRem` or the list operations, which the expander's prelude gained after M4.
+measured were as heavy for front1 before M5. front1 did not install `natDiv`, `natRem` or
+the list operations, which the expander's prelude gained after M4; it has since
+2026-10-28 (SKIjack #39).
 
 **M6, built 2026-10-28: Stage B** (skijack `front1.ascii.ski` and `run1.py`; `DESIGN.md`
 §20.3). Stage B runs over the generated, macro-expanded program, its types nodes in a
@@ -354,8 +363,9 @@ comments, types and generated names included, against the 400 to 700 scoped. fro
 agrees where both can witness: a Python refusal for its recursion limit is not compared.
 Every corpus program, all 472 edge programs (43 of them M6's), 1,300 random programs and
 500 typed ones agree, and the fixed point covers 1,520 names with templates and data jets
-in 2.46 GB. Open: the jet candidates DESIGN §20.3 lists, and front1's missing `natDiv`,
-`natRem` and list operations, whose Stage B accepting edges wait for them.
+in 2.46 GB. Since, front1 installs `natDiv`, `natRem` and the list operations
+(2026-10-28, SKIjack #39), whose Stage B accepting edges are in: all 482 edge programs and
+500 typed ones agree, and the fixed point covers 1,529 names.
 
 Checking never changes the terms, so M1 to M4 are each checked against
 `skijack.compile(..., check=False)` on the corpus as they land, with `run0.py`'s

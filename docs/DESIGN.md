@@ -3708,8 +3708,8 @@ seconds to compile it, against 9.
     twice.
   - Its term grew from 117,273 distinct nodes to 131,354; Python takes 63
     seconds to compile it with checking, against 48.
-  - It does not yet install `natDiv`, `natRem` or the list operations,
-    which the expander's prelude gained after M4.
+  - It did not yet install `natDiv`, `natRem` or the list operations,
+    which the expander's prelude gained after M4; it has since M6 (below).
 
 - **M6, built 2026-10-28: Stage B** (`typecheck.py`), over the generated
   program with its bodies macro-expanded, after Stage A and before
@@ -3733,6 +3733,16 @@ seconds to compile it, against 9.
   - Its fixed point: all 1,520 of its names, in 619,922,690 contractions
     with templates and data jets, 2.46 GB at peak. Without templates
     Stage B's run passes 12 GB, so the fixed point runs with them.
+  - The prelude's later operations, 2026-10-28 (skijack #39): front1
+    installs all twelve numeral and list operations a program names and
+    does not define, `natDiv` and `natRem` over the prelude's `natSub` and
+    `natIfLe` as `natMul` is over its `natAdd`. It found a bug in the
+    expander: an operation installed only for another's use took the
+    program's name, so a core called `natSub` beside `natDiv` printed its
+    loop but resolved to the prelude's `natSub`; skijack fixed it. Every
+    corpus program, all 482 edge programs (53 of them Stage B's), 1,300
+    random programs and 500 typed ones, 424 accepted, agree, and the
+    fixed point covers 1,529 names in 633,573,940 contractions.
   - Two changes outside it made that affordable. skijack's expander
     abstracts formals with references as atoms and expands them after,
     the same terms, so front1 compiles with checking in 12 seconds where
