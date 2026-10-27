@@ -895,11 +895,69 @@ TEST(a_collection_keeps_bit_string_operations) {
     free(src);
 }
 
+/*  n bits from k, a thunk I x at every other field when lazy. */
+static size_t lazy_bits(char *out, size_t cap, unsigned n, bool lazy, unsigned k) {
+    size_t at = 0;
+    for (unsigned i = 0; i < n; i++)
+        at += (size_t)snprintf(out + at, cap - at, "(%s) (%s", (i + k) % 3 ? BO : BZ,
+                               lazy && i % 2 ? "I (" : "");
+    at += (size_t)snprintf(out + at, cap - at, "%s", BN);
+    for (unsigned i = 0; i < n; i++)
+        at += (size_t)snprintf(out + at, cap - at, "%s)", lazy && i % 2 ? ")" : "");
+    return at;
+}
+
+/*  Collections landing on fires that leave the operation on: 500 eqB
+ *  calls chained, their operands thunks every other bit, under node caps
+ *  across the octave below the first that fits; every run that finishes
+ *  is SKI's, and some collect. */
+TEST(a_collection_mid_fire_keeps_the_operation_on) {
+    char *beq = fixture("bits", "eqB");
+    REQUIRE(beq != NULL);
+    enum { LINKS = 500 };
+    size_t cap = (size_t)LINKS * (strlen(beq) + 4096) + 64;
+    char *src = malloc(cap);
+    REQUIRE(src != NULL);
+    size_t at = 0;
+    for (unsigned k = 0; k < LINKS; k++) {
+        at += (size_t)snprintf(src + at, cap - at, "(%s) (", beq);
+        at += lazy_bits(src + at, cap - at, 6, k % 2 == 0, k);
+        at += (size_t)snprintf(src + at, cap - at, ") (");
+        at += lazy_bits(src + at, cap - at, 6, k % 2 == 1, k);
+        at += (size_t)snprintf(src + at, cap - at, ") (");
+    }
+    at += (size_t)snprintf(src + at, cap - at, "Tt");
+    for (unsigned k = 0; k < LINKS; k++) at += (size_t)snprintf(src + at, cap - at, ") Ff");
+    outcome ski = run(src, "tests/data/bits", SKI, AV_SHARE, true, 100000000, 1u << 12);
+    CHECK(ski.status == AV_WHNF && strcmp(ski.nf, "Tt") == 0);
+    uint32_t fits = 1u << 12;
+    while (fits < 1u << 22) {
+        max_nodes = fits;
+        if (run(src, "tests/data/bits", DATA, AV_SHARE, true, 100000000, 1u << 8).status == AV_WHNF) break;
+        fits *= 2;
+    }
+    unsigned both = 0, done = 0;
+    for (max_nodes = fits / 2; max_nodes <= fits; max_nodes += fits / 64) {
+        outcome dt = run(src, "tests/data/bits", DATA, AV_SHARE, true, 100000000, 1u << 8);
+        if (dt.status != AV_WHNF) continue;     /* past the cap */
+        done++;
+        CHECK(strcmp(dt.nf, "Tt") == 0);
+        CHECK(dt.bit_ops >= LINKS);
+        both += dt.collections > 0;
+    }
+    max_nodes = 0;
+    CHECK(done > 0);
+    CHECK(both > 0);
+    free(src);
+    free(beq);
+}
+
 TEST_MAIN(
     TEST_CASE(every_mode_gives_the_same_answer),
     TEST_CASE(every_bit_string_operation_agrees_with_its_term),
     TEST_CASE(a_bit_string_not_yet_a_value_runs_the_term),
     TEST_CASE(a_collection_keeps_bit_string_operations),
+    TEST_CASE(a_collection_mid_fire_keeps_the_operation_on),
     TEST_CASE(a_joined_case_is_its_instance_and_dispatch),
     TEST_CASE(a_deferred_root_changes_no_count_or_state_with_templates),
     TEST_CASE(a_deferred_root_changes_no_count_or_state_with_data_jets),

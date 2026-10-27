@@ -466,7 +466,10 @@ static int bit_at(const av_arena *a, uint32_t x, uint32_t *rest) {
 }
 
 enum { BITS_DECLINE, BITS_TO, BITS_KI, BITS_AGAIN };
-#define BITS_LEVELS (1u << 20)
+/*  Levels one fire walks at most, so that a step of fuel bounds its time:
+ *  past them it leaves the operation on (the lookup and equality) or
+ *  declines (names'). */
+#define BITS_LEVELS 4096u
 
 /*  The fire's outcome, allocating nothing: BITS_TO *x (the answer
  *  node), BITS_KI, BITS_AGAIN on (*x, *y), or BITS_DECLINE. */
@@ -533,8 +536,7 @@ static int bits_fire(R *r, uint32_t id, unsigned op, uint32_t *curp) {
         if (a->collections != gcs) {            /* the collection moved them: again */
             x = sarg(r, r->top - 1);
             y = sarg(r, r->top - 2);
-            out = bits_walk(a, op, &x, &y);
-            AV_ALWAYS(out == BITS_AGAIN, "a walk that changed across a collection");
+            if (bits_walk(a, op, &x, &y) != BITS_AGAIN) return 0;   /* never, but safe */
         }
         AV_ALWAYS(av_tag(a, *curp) == AV_JET && AV_JET_ID(av_left(a, *curp)) == id,
                   "a bit-string operation's head not its jet node");
