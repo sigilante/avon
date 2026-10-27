@@ -3,7 +3,8 @@
  *  Reading the SKIjack-0 front end's result without the front end: results
  *  built here as Scott data and read by probing.  The probes share --fuel;
  *  a name holding a control character or a space, or longer than 65,536
- *  characters, is refused.  front0_check.sh runs the front end itself,
+ *  characters, is refused.  A refusal reads as `RErr`, or with its class,
+ *  a numeral, as `RErr n`.  front0_check.sh runs the front end itself,
  *  against skijack.
  */
 
@@ -43,13 +44,16 @@ static uint32_t ctor(av_arena *a, unsigned n, unsigned i, unsigned k) {
     return body;
 }
 
-typedef struct { uint32_t rok, onil, ocons, nnil, ncons, code, lo, hi, ts; } ctors;
+typedef struct { uint32_t rok, onil, ocons, nnil, ncons, code, lo, hi, ts, rerr0, rerr1, rerr2,
+                         zero, suc; } ctors;
 
 static ctors make_ctors(av_arena *a) {
     return (ctors){
         .rok = ctor(a, 2, 0, 1), .onil = ctor(a, 2, 0, 0), .ocons = ctor(a, 2, 1, 3),
         .nnil = ctor(a, 2, 0, 0), .ncons = ctor(a, 2, 1, 2), .code = ctor(a, 1, 0, 7),
         .lo = ctor(a, 2, 0, 0), .hi = ctor(a, 2, 1, 0), .ts = ctor(a, 5, 0, 0),
+        .rerr0 = ctor(a, 2, 1, 0), .rerr1 = ctor(a, 2, 1, 1), .rerr2 = ctor(a, 2, 1, 2),
+        .zero = ctor(a, 2, 0, 0), .suc = ctor(a, 2, 1, 1),
     };
 }
 
@@ -88,6 +92,28 @@ static int read_names(unsigned ch1, size_t n1, unsigned ch2, size_t n2, uint64_t
     o.max_steps = fuel;
     *err = NULL;
     int rc = av_front0_read(a, t, &o, f, steps, NULL, err);
+    fclose(f);
+    av_arena_free(a);
+    return rc;
+}
+
+/*  Read a refusal: RErr with no field (fields 0), with the numeral n
+ *  (fields 1), or with two fields, each the numeral n (fields 2). */
+static int read_refusal(unsigned fields, unsigned n, char *out, size_t cap, const char **err) {
+    av_arena *a = av_arena_new(1u << 16);
+    ctors c = make_ctors(a);
+    uint32_t num = c.zero;
+    for (unsigned i = 0; i < n; i++) num = av_app(a, c.suc, num);
+    uint32_t t = fields == 0 ? c.rerr0
+               : fields == 1 ? av_app(a, c.rerr1, num)
+               : av_app(a, av_app(a, c.rerr2, num), num);
+    memset(out, 0, cap);
+    FILE *f = fmemopen(out, cap, "w");
+    if (!f) { CHECK(f != NULL); av_arena_free(a); return -2; }
+    av_opts o = av_opts_default();
+    uint64_t steps;
+    *err = NULL;
+    int rc = av_front0_read(a, t, &o, f, &steps, NULL, err);
     fclose(f);
     av_arena_free(a);
     return rc;
@@ -146,9 +172,30 @@ TEST(a_name_past_65536_characters_is_refused) {
     free(out);
 }
 
+/*  SKIjack-0's refusal carries no class and reads as before; the full
+ *  language's carries its class, a numeral, printed after it. */
+TEST(a_refusal_reads_with_its_class_if_it_has_one) {
+    char out[64];
+    const char *err;
+    CHECK_EQ(read_refusal(0, 0, out, sizeof out, &err), 1);
+    CHECK(strcmp(out, "RErr\n") == 0);
+    CHECK_EQ(read_refusal(1, 0, out, sizeof out, &err), 1);
+    CHECK(strcmp(out, "RErr 0\n") == 0);
+    CHECK_EQ(read_refusal(1, 6, out, sizeof out, &err), 1);
+    CHECK(strcmp(out, "RErr 6\n") == 0);
+    CHECK_EQ(read_refusal(1, 255, out, sizeof out, &err), 1);
+    CHECK(strcmp(out, "RErr 255\n") == 0);
+    CHECK_EQ(read_refusal(1, 256, out, sizeof out, &err), -1);
+    CHECK(err && strstr(err, "past 255"));
+    CHECK_EQ(read_refusal(2, 1, out, sizeof out, &err), -1);
+    CHECK(err && strstr(err, "wrong number of fields"));
+    CHECK(out[0] == '\0');
+}
+
 TEST_MAIN(
     TEST_CASE(a_result_reads_to_lines),
     TEST_CASE(the_probes_share_the_fuel),
     TEST_CASE(a_name_with_a_control_character_or_a_space_is_refused),
     TEST_CASE(a_name_past_65536_characters_is_refused),
+    TEST_CASE(a_refusal_reads_with_its_class_if_it_has_one),
 )

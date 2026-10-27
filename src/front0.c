@@ -3,6 +3,8 @@
  *  Running the SKIjack-0 front end.  The front end consists of one term,
  *  `front`, that takes a program as a list of 7-bit character codes and
  *  reduces to every name's closed term: ROk (OCons name tm ..) or RErr.
+ *  A refusal may carry its class, a numeral (`RErr n`, the full language's
+ *  front end), printed after it; SKIjack-0's `RErr` carries none.
  *  The input is built in the arena, each code's datum once and shared,
  *  and the result is read by probing---a Scott datum applied to one marker
  *  per constructor returns its own marker applied to its fields---into
@@ -36,6 +38,7 @@ typedef struct {
     ski_leaf  mark[5];          /* the markers' leaf ids                  */
     uint32_t  marknode[5];      /* rooted too: a collection moves leaves */
     uint64_t  steps, tmpl_calls, dispatches, fused, word_ops, fix_calls, joins;
+    unsigned  k;                /* the last probe's field count           */
     bool      lost;             /* a remap ran out of memory              */
 } reader;
 
@@ -85,9 +88,14 @@ static bool push_digest(reader *r, av_digest d) {
     return true;
 }
 
+/*  A constructor that may carry no field or one: RErr, with or without
+ *  its class. */
+#define ZERO_OR_ONE 9u
+
 /*  Probe the node on top of the stack, which is popped, as a datum of a
- *  type whose constructor i has fields[i] fields; they are pushed, the last
- *  first, so the first is on top.  Returns the constructor, or -1. */
+ *  type whose constructor i has fields[i] fields, or no field or one where
+ *  fields[i] is ZERO_OR_ONE; they are pushed, the last first, so the first
+ *  is on top, and r->k is their count.  Returns the constructor, or -1. */
 static int probe(reader *r, unsigned nctors, const unsigned *fields, const av_opts *o,
                  const char **err) {
     av_arena *a = r->a;
@@ -126,13 +134,18 @@ static int probe(reader *r, unsigned nctors, const unsigned *fields, const av_op
     unsigned w = 0;
     while (w < nctors && r->mark[w] != id) w++;
     if (w == nctors) { *err = "the head is not a marker: not a value of this type"; return -1; }
-    if (k != fields[w]) { *err = "a constructor with the wrong number of fields"; return -1; }
+    if (fields[w] == ZERO_OR_ONE ? k > 1 : k != fields[w]) {
+        *err = "a constructor with the wrong number of fields";
+        return -1;
+    }
+    r->k = k;
     for (unsigned i = 0; i < k; i++)            /* spine[0] is the last field */
         if (!push(r, spine[i], READ)) { *err = "out of memory"; return -1; }
     return (int)w;
 }
 
-static const unsigned F_RESULT[2] = { 1, 0 };           /* ROk outs | RErr        */
+static const unsigned F_RESULT[2] = { 1, ZERO_OR_ONE }; /* ROk outs | RErr [nat]  */
+static const unsigned F_NAT[2]    = { 0, 1 };           /* Zero | Suc nat         */
 static const unsigned F_OUTS[2]   = { 0, 3 };           /* ONil | OCons name tm . */
 static const unsigned F_NAME[2]   = { 0, 2 };           /* NNil | NCons code name */
 static const unsigned F_CODE[1]   = { 7 };              /* Code b6 .. b0          */
@@ -251,7 +264,20 @@ int av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
     if (!push(&r, t, READ)) { *err = "out of memory"; goto done; }
     int c = probe(&r, 2, F_RESULT, o, err);
     if (c < 0) goto done;
-    if (c == 1) { fputs("RErr\n", out); rc = 1; goto done; }
+    if (c == 1) {
+        if (r.k == 0) { fputs("RErr\n", out); rc = 1; goto done; }
+        unsigned long cls = 0;                  /* the class, a numeral    */
+        for (;;) {
+            int s = probe(&r, 2, F_NAT, o, err);
+            if (s < 0) goto done;
+            if (s == 0) break;
+            if (cls == 255) { *err = "a refusal's class past 255"; goto done; }
+            cls++;
+        }
+        fprintf(out, "RErr %lu\n", cls);
+        rc = 1;
+        goto done;
+    }
     for (;;) {
         c = probe(&r, 2, F_OUTS, o, err);
         if (c < 0) goto done;
