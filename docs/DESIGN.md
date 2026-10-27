@@ -2267,7 +2267,10 @@ chooses them, as the pier's operator does.
 `RUNTIME-DESIGN.md` §3e and `SPEC.md` §4.1, SKIlark's is its `PLAN.md`
 stage 15. Built in memory: `avon run --kernel` (`src/drivers.c`), which
 agrees with SKIjack's reference drivers on 17 runs
-(`tests/drivers_check.sh`, in `make check`). The durable form, `boot
+(`tests/drivers_check.sh`, in `make check`). The first user, SKIlark,
+is built: its door (SKIlark #31, `skilark/door.py`) runs every stage-14
+program and every example file under `avon run --kernel`, writing what
+stage 14's host writes, in copy and share mode. The durable form, `boot
 --drivers`, is not built.*
 
 **A program does I/O through effects in one shape, and the pier performs

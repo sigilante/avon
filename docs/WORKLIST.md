@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-25.
 
 ## Done since the last revision
 
+- **Drivers, and SKIlark's I/O through them** (2026-10-27; avon #78, SKIjack #33 and
+  #34, SKIlark #30 and #31). `avon run --kernel` runs a kernel as a program, performing
+  the standard cards (DESIGN §9.2); SKIjack's reference drivers are the oracle, released
+  in 0.2.5. SKIlark's stage 15 door makes a program or a Joy file such a kernel, its
+  writer and reader in SKI. `tests/pins.sh` moves SKIlark to `1025e36`; the fixtures are
+  as before (fixtures-check, 236 files), since the door adds nothing the exporters
+  write.
+
 - **SKIlark's I/O words and SKIjack 0.2.4** (2026-10-26; SKIlark #27 to #29, SKIjack
   #30, #31). SKIlark gains `put putch putchars get argc argv getenv clock abort quit`:
   an I/O word ends a run with `RIO`, the word, the stack and the rest of the program, and
@@ -237,12 +245,12 @@ design lives. Last revised 2026-10-25.
 ## Next
 
 1. **Stage 8's checkers, M5 and M6** (item 3).
-2. **Drivers: effects every front end shares** (`DESIGN.md` §9.2; decided 2026-10-26;
-   `avon run --kernel` built, the durable `boot --drivers` not).
+2. **Drivers: effects every front end shares** (`DESIGN.md` §9.2; decided 2026-10-26).
    Standard cards for writing, reading, the environment, a step count and an exit, beside entropy's, performed by the pier, so that no
-   front end needs a host of its own. The order is SKIjack's
-   SPEC and reference host first (`RUNTIME-DESIGN.md` §3e), then Avon's drivers and
-   `avon run --kernel`, then SKIlark's door (its stage 15).
+   front end needs a host of its own. Built: SKIjack's SPEC and reference drivers
+   (`RUNTIME-DESIGN.md` §3e, SKIjack #33, released in 0.2.5), Avon's drivers and
+   `avon run --kernel` (#78), and SKIlark's door (its stage 15, SKIlark #31). Open:
+   the durable `boot --drivers`, its replies logged as events and replayed.
 
 ## Done: the order agreed 2026-10-05
 
