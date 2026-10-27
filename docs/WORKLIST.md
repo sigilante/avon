@@ -344,6 +344,21 @@ problem), 991 of 1,000 random programs of the full language, 100 of a second see
 measured were as heavy for front1 before M5. Open: front1 does not install `natDiv`,
 `natRem` or the list operations, which the expander's prelude gained after M4.
 
+**M6, planned 2026-10-27: Stage B** (`typecheck.py`, 947 lines). Its reference adds
+Stage B after Stage A and generation, class 7, TypeMismatchError. front1 must agree only
+where both can witness: a refusal Python gives because inference outran its recursion
+limit (`_UNSETTLED`) is not compared, and front1 may accept that program, as programs too
+heavy for front1 are not compared. Stage B mutates in place: variables bind, and an
+arrow's `elim`, `nominal`, `datum`, `checked` and `numeral` change during unification,
+`checked` undone when it fails. front1 keeps every type node in an explicit store keyed
+by number and threads it, a failure returning the store as Python leaves it; the
+equirecursive `seen` sets are pairs of node numbers. In steps, each checked on the corpus,
+the edges, new edges of its own and random programs before the next: the store,
+unification and inference over names, applications and lambdas with the builtins; cases,
+cells, picks and Scott schemes; `EQ`'s data constraint, the numeral and list constraints,
+and literals settled and defaulted; signatures, which front1's parser now drops and must
+keep, cores and level-1 runs.
+
 Checking never changes the terms, so M1 to M4 are each checked against
 `skijack.compile(..., check=False)` on the corpus as they land, with `run0.py`'s
 random and edge programs extended. The front end stays a separate program from
