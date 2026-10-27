@@ -260,6 +260,38 @@ TEST(collections_keep_the_globals) {
     rmdir_all(d);
 }
 
+/*  The same, the referenced B written in the DAG form: the loader reads
+ *  either form, and the template binds and fires alike. */
+TEST(a_referenced_term_may_be_written_as_a_dag) {
+    char b_hash[AV_HASH_LEN + 1], line[160];
+    hash_of(B_KEY, b_hash);
+    snprintf(line, sizeof line, "S (S I I) (K (" B_KEY "))|1|0|``v0 v0 #%s", b_hash + 10);
+    const char *lines[1] = { line };
+    char d[64];
+    tdir(d, lines, 1, NULL, 0);
+    av_arena *a = av_arena_new(1u << 10);
+    av_buf dag = { 0 };
+    CHECK(av_print_dag(a, av_parse(a, B_KEY, strlen(B_KEY), NULL), 1000, &dag));
+    CHECK(strncmp(dag.s, "dag ", 4) == 0);
+    char path[128];
+    snprintf(path, sizeof path, "%s/template_terms.tsv", d);
+    FILE *f = fopen(path, "w");
+    REQUIRE(f != NULL);
+    fprintf(f, "%s\t0\t%s\n", b_hash, dag.s);
+    fclose(f);
+    av_buf_free(&dag);
+    av_arena_free(a);
+    const char *w = "S (S I I) (K (" B_KEY "))";
+    char src[256];
+    snprintf(src, sizeof src, "%s (%s)", w, w);
+    outcome jet = run(src, d, AV_SHARE, true, 2000, 1u << 8);
+    CHECK_EQ(jet.accepted, 1);
+    CHECK_EQ(jet.status, AV_FUEL);
+    CHECK_EQ(jet.tmpl_calls, 2000);
+    CHECK_EQ(count(jet.nf, B_KEY), 2000 + 2);
+    rmdir_all(d);
+}
+
 TEST_MAIN(
     TEST_CASE(a_template_fires_where_its_key_meets_its_arguments),
     TEST_CASE(a_body_that_is_not_its_key_is_refused),
@@ -267,5 +299,6 @@ TEST_MAIN(
     TEST_CASE(copy_mode_ignores_templates),
     TEST_CASE(short_of_its_arguments_the_key_stays_a_root),
     TEST_CASE(fuel_stops_a_looping_template_program),
-    TEST_CASE(collections_keep_the_globals)
+    TEST_CASE(collections_keep_the_globals),
+    TEST_CASE(a_referenced_term_may_be_written_as_a_dag)
 )

@@ -554,8 +554,13 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
         *t1 = '\0';
         av_digest want;
         if (!av_hash_parse(line, &want)) { msg = "malformed hash in template_terms.tsv"; goto fail; }
+        /* a term printed as a tree, or in the DAG form, its sharing kept:
+         * a large program's referenced terms unfold to trees many times
+         * the size of their graphs */
+        const char *src = t2 + 1, *dmsg = NULL;
         av_parse_error pe;
-        uint32_t t = av_parse(a, t2 + 1, strlen(t2 + 1), &pe);
+        uint32_t t = strncmp(src, "dag ", 4) == 0 ? av_parse_dag(a, src, strlen(src), &dmsg)
+                                                  : av_parse(a, src, strlen(src), &pe);
         if (t == AV_NONE) { msg = "unparsable term in template_terms.tsv"; goto fail; }
         uint32_t c = hc_canon(a, &ts->h, t);
         av_digest d;
