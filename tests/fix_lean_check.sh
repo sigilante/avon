@@ -5,7 +5,8 @@
 # (AvonFix.fix_join, fix_normal), and Y's simulation up to lean-ski's Tr
 # with Y a jet (AvonFix.fix_simulation), which applies to lean-ski's
 # compiled sum and loop programs (sum_fixedJ, loop_fixedJ,
-# sum_fix_simulation).  Every printed theorem must rest on Lean's
+# sum_fix_simulation), and that the simulation over Avon's tree identity,
+# every Ycomb rewritten, is false (first_B_false).  Every printed theorem must rest on Lean's
 # standard axioms alone, never sorryAx.
 #
 # Run from the repository root.  LEAN_SKI defaults to ~/Code/ski/lean-ski.
@@ -22,7 +23,7 @@ mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 ROOT=$(pwd)
 
-THEOREMS="fix_join fix_normal simulationJ_steps fix_simulation fixed_of_fixedJ sum_fix_simulation loop_fixedJ sum_loop_recursive closure_spells_Y"
+THEOREMS="fix_join fix_normal simulationJ_steps fix_simulation fixed_of_fixedJ sum_fix_simulation loop_fixedJ sum_loop_recursive closure_spells_Y first_B_false"
 axioms_ok() {
     local t
     for t in $THEOREMS; do

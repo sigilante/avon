@@ -42,11 +42,12 @@ equation's `Ycomb` the jet, and `TrJ` is lean-ski's `Tr` over it.
 **Why Y is a jet here, and not every `Ycomb` tree.**  Avon finds Y by
 tree identity, so a program whose compiled code happens to spell Y, such
 as the closure `λx. S I I (S (K x) (S I I))`, which compiles to `Ycomb`
-exactly (`closure_spells_Y`), is rewritten too.  Applied to `N`, the
-source takes a β-step that lean-ski's simulation matches by S-reducing
-that very redex; a run that never S-reduces Y rewrites it to `N (Y N)`
-instead, so that simulation does not carry over.  Part A still covers
-that program: the two are convertible.  Part B marks Y where the compiler
+exactly (`closure_spells_Y`), is rewritten too.  Applied to `K`, the
+source steps to `S I I (S (K K) (S I I))`, while a run that rewrites
+every `Ycomb` redex and never S-reduces one reaches only `K` wrapped
+around `Ycomb ⬝ K`: lean-ski's simulation over that run is false
+(`first_B_false`).  Part A still covers that program: the two are
+convertible.  Part B marks Y where the compiler
 ties recursion, as a witness would mark Y's addresses.
 
 **What stays trusted:** that Avon's rewrite is `JStep.fix` and
@@ -871,7 +872,7 @@ theorem fixedJ_of_check {defs : List (Nm × GDef)} {genvJ : Nm → OTerm}
 def genvJOf (src : List Nat) : Nm → OTerm := fun n => jetify (genvOf src n)
 
 theorem genvR_genvJOf (src : List Nat) : genvR (genvJOf src) = genvOf src :=
-  funext fun n => rbT_jetify _
+  funext fun _ => rbT_jetify _
 
 set_option maxRecDepth 100000 in
 /-- **B applies to lean-ski's `sum` program**: its compiled globals, `Ycomb`
@@ -899,6 +900,157 @@ theorem sum_fix_simulation {c c' : Cl} (hs : SSteps (progOf sumText) c c') {t : 
   rw [genvR_genvJOf] at h3
   exact ⟨t', h1, h3⟩
 
+-- ---------------------------------------------------------------------------
+-- B as first stated, refuted
+-- ---------------------------------------------------------------------------
+
+/-! B was first stated over Avon's tree identity: every `Ycomb` redex is
+rewritten, none S-reduced (`FStep`), and lean-ski's `Tr` relates the
+states.  `first_B_false` shows that statement false, with the closure of
+`closure_spells_Y` applied to `K`. -/
+
+/-- A run that rewrites every `Ycomb` redex and never S-reduces one. -/
+inductive FStep : Term → Term → Prop
+  | S (f g x : Term) : S ⬝ f ⬝ g ≠ Ycomb → FStep (S ⬝ f ⬝ g ⬝ x) (f ⬝ x ⬝ (g ⬝ x))
+  | K (x y : Term) : FStep (K ⬝ x ⬝ y) x
+  | I (x : Term) : FStep (I ⬝ x) x
+  | fix (g : Term) : FStep (Ycomb ⬝ g) (g ⬝ (Ycomb ⬝ g))
+  | left {f f' : Term} (x : Term) : FStep f f' → FStep (f ⬝ x) (f' ⬝ x)
+  | right (f : Term) {x x' : Term} : FStep x x' → FStep (f ⬝ x) (f ⬝ x')
+
+inductive FSteps : Term → Term → Prop
+  | refl (t : Term) : FSteps t t
+  | step {t t' u : Term} : FStep t t' → FSteps t' u → FSteps t u
+
+/-- B as first stated: lean-ski's simulation, the run rewriting every Y. -/
+def FirstB : Prop :=
+  ∀ (P : Nm → Option GDef) (genv : Nm → Term), Fixed P genv →
+    ∀ {c c' : Cl} {t : Term}, SStep P c c' → Tr genv P c t →
+      ∃ t', FSteps t t' ∧ Tr genv P c' t'
+
+/-- The names `S`, `K`, `I` of the counterexample's program, which
+    declares nothing. -/
+def nS : Nm := [83]
+def nK : Nm := [75]
+def nI : Nm := [73]
+def genv0 : Nm → Term := fun n => if n = nS then S else if n = nK then K else I
+def P0 : Nm → Option GDef := fun _ => none
+
+/-- The closure's body: `S I I (S (K x) (S I I))`, `x` binder 0. -/
+def body0 : CSrc :=
+  .app (.app (.app (.glob nS) (.glob nI)) (.glob nI))
+    (.app (.app (.glob nS) (.app (.glob nK) (.var 0))) (.app (.app (.glob nS) (.glob nI)) (.glob nI)))
+
+/-- Every term the run reaches from `Ycomb ⬝ K`: `K` over `K` … over it. -/
+inductive Reach : Term → Prop
+  | base : Reach (Ycomb ⬝ K)
+  | wrap {u : Term} : Reach u → Reach (K ⬝ u)
+
+/-- A redex of `FStep`'s rules at the root: three arguments under `S` (an
+    S redex or, under `Ycomb`, the rewrite), two under `K`, one under `I`. -/
+def isRedex : Term → Bool
+  | .app (.app (.app .S _) _) _ => true
+  | .app (.app .K _) _ => true
+  | .app .I _ => true
+  | _ => false
+
+/-- No redex anywhere. -/
+def fnormal : Term → Bool
+  | .app f x => !isRedex (.app f x) && fnormal f && fnormal x
+  | _ => true
+
+theorem fnormal_no_step {t u : Term} (h : FStep t u) : fnormal t = false := by
+  induction h with
+  | S f g x _ => simp [fnormal, isRedex]
+  | K x y => simp [fnormal, isRedex]
+  | I x => simp [fnormal, isRedex]
+  | fix g => simp [fnormal, isRedex, Ycomb]
+  | left x _ ih => simp [fnormal, ih]
+  | right f _ ih => simp [fnormal, ih]
+
+theorem ycomb_fnormal {u : Term} : ¬ FStep Ycomb u := fun h => by
+  have := fnormal_no_step h
+  revert this
+  decide
+
+theorem reach_step {t u : Term} (ht : Reach t) (h : FStep t u) : Reach u := by
+  induction ht generalizing u with
+  | base =>
+    cases h with
+    | S _ _ _ hne => exact absurd rfl hne
+    | fix _ => exact .wrap .base
+    | left _ h1 => exact absurd h1 ycomb_fnormal
+    | right _ h1 => cases h1
+  | wrap hu ih =>
+    cases h with
+    | left _ h1 => cases h1
+    | right _ h1 => exact .wrap (ih h1)
+
+theorem reach_steps {t u : Term} (h : FSteps t u) (ht : Reach t) : Reach u := by
+  induction h with
+  | refl _ => exact ht
+  | step s _ ih => exact ih (reach_step ht s)
+
+/-- The source's next state's only compiled form. -/
+def target0 : Term := S ⬝ I ⬝ I ⬝ (S ⬝ (K ⬝ K) ⬝ (S ⬝ I ⬝ I))
+
+theorem not_reach_target : ¬ Reach target0 := by
+  intro h
+  cases h
+
+/-- **B, as first stated, is false.**  The closure `λx. S I I (S (K x)
+    (S I I))` compiles to `Ycomb` (`closure_spells_Y`); applied to `K` it
+    steps, in the source, to `S I I (S (K K) (S I I))`, whose only
+    compiled form is that term; but a run that rewrites every `Ycomb`
+    redex and never S-reduces one reaches from `Ycomb ⬝ K` only `K`
+    wrapped around it. -/
+theorem first_B_false : ¬ FirstB := by
+  intro hB
+  have hF : Fixed P0 genv0 := ⟨fun _ _ _ _ h => (nomatch h), fun _ _ h => (nomatch h)⟩
+  have hc : Tr genv0 P0 (.app (.clo [] [0] body0 junk) (.const K))
+      ((wrapLift [] [0] (comp ([] ++ [0]) (body0.resolve genv0))).close (fun _ => K) ⬝ K) :=
+    .app (.clo Tr.junk) (.const K)
+  have hstep : SStep P0 (.app (.clo [] [0] body0 junk) (.const K))
+      (inst ([] ++ [0]) (overrideCl junk [0] [.const K]) body0) :=
+    SStep.beta (args := [.const K]) rfl
+  obtain ⟨t', hrun, htr⟩ := hB P0 genv0 hF hstep hc
+  have ht : (wrapLift [] [0] (comp ([] ++ [0]) (body0.resolve genv0))).close (fun _ => K) = Ycomb := by
+    decide
+  rw [ht] at hrun
+  have hr := reach_steps hrun .base
+  -- the source state's compiled forms: the globals' terms, the constant itself
+  have hg : ∀ {n : Nm} {u : Term}, Tr genv0 P0 (.gref n) u → u = genv0 n := by
+    intro n u h
+    cases h with
+    | gref _ => rfl
+    | self hP' _ => exact nomatch hP'
+  have e : t' = target0 := by
+    have htr' : Tr genv0 P0
+        (.app (.app (.app (.gref nS) (.gref nI)) (.gref nI))
+          (.app (.app (.gref nS) (.app (.gref nK) (.const K))) (.app (.app (.gref nS) (.gref nI)) (.gref nI))))
+        t' := htr
+    cases htr' with
+    | app h1 h2 =>
+      cases h1 with
+      | app h11 h12 =>
+        cases h11 with
+        | app h111 h112 =>
+          cases h2 with
+          | app h21 h22 =>
+            cases h21 with
+            | app h211 h212 =>
+              cases h212 with
+              | app h2121 h2122 =>
+                cases h22 with
+                | app h221 h222 =>
+                  cases h221 with
+                  | app h2211 h2212 =>
+                    rw [hg h111, hg h112, hg h12, hg h211, hg h2121, hg h2211, hg h2212, hg h222]
+                    cases h2122
+                    rfl
+  rw [e] at hr
+  exact not_reach_target hr
+
 end AvonFix
 
 #print axioms AvonFix.fix_join
@@ -910,3 +1062,4 @@ end AvonFix
 #print axioms AvonFix.loop_fixedJ
 #print axioms AvonFix.sum_loop_recursive
 #print axioms AvonFix.closure_spells_Y
+#print axioms AvonFix.first_B_false

@@ -238,11 +238,11 @@ tested, not proved.
 **Why B takes Y as a jet.** As first stated, B said the run that always uses the
 rewrite and never S-reduces a Y redex matches every source step through `Tr`. That
 is false under Avon's tree identity. The closure `λx. S I I (S (K x) (S I I))`
-compiles to `Ycomb` exactly (`closure_spells_Y`). Applied to `N`, the source takes a
-β-step, which lean-ski's simulation matches by S-reducing that very redex; a run that
-never S-reduces Y rewrites it to `N (Y N)` instead, so the proof does not go
-through, and the statement was not shown. Part A still covers that program, since
-the two are convertible. B over a jet was approved on 2026-10-29.
+compiles to `Ycomb` exactly (`closure_spells_Y`). Applied to `K`, the source steps
+to `S I I (S (K K) (S I I))`, whose only compiled form is that term; a run that
+rewrites every `Ycomb` redex and never S-reduces one reaches from `Ycomb ⬝ K` only `K`
+wrapped around it. So the statement is false (`first_B_false`). Part A still covers
+that program, since the two are convertible. B over a jet was approved on 2026-10-29.
 
 **What stays trusted.** That Avon's rewrite is `FixStep.fix` and `JStep.fix`
 (`src/reduce.c` writes the redex root as `App(g, y)`, `y` a fresh `App(Y, g)`);
