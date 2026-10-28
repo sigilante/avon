@@ -47,9 +47,11 @@ typedef struct { uint32_t l, r; } av_node;
 #define AV_JET_LIST   (1u << 27)
 #define AV_WORD_MAX   (AV_JET_LIST - 1u)
 
-//  The most arguments a residual jet takes.  SKIlark's words are constructors
-//  of a 12-way sum; Lit and Quote carry a field, so take 13.
-#define AV_JET_ARITY_MAX 32u
+//  The most arguments a jet or template takes: 64, the width of the
+//  template loader's marker sets.  SKIlark's words are constructors of a
+//  12-way sum; Lit and Quote carry a field, so take 13.  front1's tokens
+//  are a 34-way sum, its constructors taking 34 and 35.
+#define AV_JET_ARITY_MAX 64u
 
 //  The leaf nodes of S, K, I are interned at indices 0, 1, 2.
 #define AV_NODE_S 0u

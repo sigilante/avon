@@ -433,7 +433,7 @@ static bool arity_by_running(av_arena *a, const uint32_t *tp, uint64_t max_steps
             }
         /* a combinator short of arguments: one more */
     }
-    *msg = "no arity up to 32 exposes an argument";
+    *msg = "no arity up to the cap exposes an argument";
     return false;
 }
 

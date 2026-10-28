@@ -927,6 +927,21 @@ hold a constructor, 31.6% an unevaluated application and 7.8% a known function; 
 head completes 56,940 of the known functions' calls. On the fixed point: 149,696,475
 instances, 97.1%, 57.8%, 33.2%, 2.9%, and 266,162.
 
+## front1's tokens at the cap of 64
+
+2026-10-28, avon `wide-ctors` against master `95b260c`, the same runs as "The matcher
+by trees": wall clock the best of three on front0's source, one run on the fixed point.
+front1's `tok` is a 34-way sum whose constructors take 34 and 35 arguments; at the cap
+of 64 they are templates and dispatch (`SKA.md` §4). Every output is the same.
+
+| run | master | the cap of 64 |
+|---|---:|---:|
+| templates accepted | 2,262 | 2,296 |
+| front0's source: contractions | 33,814,092 | 32,817,600 |
+| front0's source: wall clock | 2.35 s | 2.32 s |
+| the fixed point: contractions | 411,048,920 | 406,467,740 |
+| the fixed point: wall clock | 11.9 s | 11.8 s |
+
 ## The interpreter jet's wall clock
 
 **The tower collapses in time as well as in steps, by 4.8 times on T2.**

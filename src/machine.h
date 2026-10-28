@@ -63,7 +63,8 @@ typedef struct {
     uint64_t       p2_gen;      /* p2_gen - 1; 0 none                      */
     uint64_t       interp_calls;
     bool           jet_fault;
-    uint32_t       jnode;       /* share: a jet node being demoted        */
+    uint32_t       jnode;       /* share: a jet node held across a
+                                   collection, being demoted or fired */
     bool           normal;      /* share: making the normal form, or the
                                    root's term's head normal form, where a
                                    word must become its term's            */
