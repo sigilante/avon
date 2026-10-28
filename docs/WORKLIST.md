@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **The interpreter jet's adequacy, proved in Lean for `whnfF`** (2026-10-29;
+  `LEAN-JETS.md` §8). Step 5, the plan's last, is done. `lean/Interp.lean` proves the
+  ski-in-ski paper's step and fuel adequacy for the 618-atom `whnfF` the jet serves:
+  `whnfF ⟨k⟩ ⟨M⟩` reduces to the encoding of lean-ski's `evalF k M`. Lean prints
+  `whnfF` and its constructors, and `make interp-lean-check` requires them to be the
+  conformance dictionary's, byte for byte. The other four cores (`wf5Abs`,
+  `wf5Omg`, `wfQ`, `wfN`) stay unproved, as approved.
+
 - **Y in one step, proved in Lean** (2026-10-29; `LEAN-JETS.md` §7). Step 4 is done.
   `lean/Fix.lean` proves that a run mixing `--fix`'s rewrite with weak steps stays
   convertible with the plain run, so a normal form it reaches is SKI's (`fix_normal`,

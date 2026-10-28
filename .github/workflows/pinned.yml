@@ -2,7 +2,8 @@
 # tests/pins.sh pins: every fixture regenerates byte for byte from its
 # exporter (make fixtures-check), and the selfhost, SKIjack-0 and
 # full-language front-end checks pass against SKIjack; and, in a job of
-# their own, the five witness checks and the word, template and Y proofs pass
+# their own, the five witness checks and the word, template, Y and
+# interpreter proofs pass
 # against lean-ski.  The pure-S
 # paper's scripts are a private repository; hider-check stays manual, and
 # refuses a checkout off its pin.
@@ -67,8 +68,8 @@ jobs:
   # Avon's tables against lean-ski's checkers and prover, at lean-ski's pin:
   # make witness-check, jet-witness-check, probe-witness-check,
   # zk-jet-witness-check and p2-witness-check (docs/TESTING.md); and
-# words-lean-check, templates-lean-check and fix-lean-check, the word,
-# template and Y proofs.
+# words-lean-check, templates-lean-check, fix-lean-check and
+# interp-lean-check, the word, template, Y and interpreter proofs.
   lean-ski:
     runs-on: ubuntu-24.04
     timeout-minutes: 150          # a cold lean-ski build takes about 50 minutes
@@ -119,12 +120,14 @@ jobs:
         run: make CC=$CC zk-jet-witness-check
       - name: p2 witness check
         run: make CC=$CC p2-witness-check
-      - name: the modules lean/Words.lean, Templates.lean and Fix.lean import
+      - name: the modules lean/Words.lean, Templates.lean, Fix.lean and Interp.lean import
         working-directory: ext/lean-ski
-        run: lake build Ski.BitArith Ski.Words Ski.Compile Ski.Abs Ski.Simulation
+        run: lake build Ski.BitArith Ski.Words Ski.Compile Ski.Abs Ski.Simulation Ski.Quote Ski.Fuel
       - name: numeral words, proved
         run: make words-lean-check
       - name: templates, proved
         run: make CC=$CC templates-lean-check
       - name: Y in one step, proved
         run: make fix-lean-check
+      - name: the interpreter jet's whnfF, proved
+        run: make interp-lean-check
