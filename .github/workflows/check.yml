@@ -5,7 +5,8 @@
 # LICENSE) runs nothing: no build or test reads those files.  The
 # checks against SKIjack, SKIlark and lean-ski (witness-check,
 # jet-witness-check, probe-witness-check, zk-jet-witness-check,
-# p2-witness-check, words-lean-check, templates-lean-check) run weekly at their pins (pinned.yml); hider-check,
+# p2-witness-check, words-lean-check, templates-lean-check,
+# fix-lean-check) run weekly at their pins (pinned.yml); hider-check,
 # which needs the paper's scripts, stays manual: see the Makefile's header.
 #
 # Pinned: the images, the compiler (the image's clang-18 on Linux, Xcode
