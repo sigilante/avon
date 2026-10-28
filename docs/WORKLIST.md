@@ -11,9 +11,9 @@ design lives. Last revised 2026-10-29.
   convertible with the plain run, so a normal form it reaches is SKI's (`fix_normal`,
   which DESIGN §6.11 had only argued), and Y's simulation up to lean-ski's `Tr`
   with Y a jet at the compiler's recursion sites (`fix_simulation`), decided for
-  lean-ski's compiled `sum` and `loop`. Under Avon's tree identity the simulation's
-  proof does not go through for a closure that happens to compile to Y
-  (`closure_spells_Y`), so B takes Y as a jet, as approved. `make fix-lean-check` runs it, and weekly. Next: the
+  lean-ski's compiled `sum` and `loop`. Under Avon's tree identity the simulation is
+  false, for a closure that happens to compile to Y (`closure_spells_Y`,
+  `first_B_false`), so B takes Y as a jet, as approved. `make fix-lean-check` runs it, and weekly. Next: the
   interpreter jet's adequacy theorem (step 5).
 
 - **Templates, proved in Lean** (2026-10-29; `LEAN-JETS.md` §6). Step 3 is done.
