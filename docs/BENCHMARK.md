@@ -964,6 +964,27 @@ On front1, discovery keeps 25,695 templates, none refused. front1 on front0's so
 passes 3.5 GB between 40 and 100 million contractions with them, and is not measured
 further; with the compiler's templates it takes 32,817,600 in 1.43 GB.
 
+## front1's own templates
+
+2026-10-28, avon `front1-own` (master `ef4721a`, `front0 --emit`), SKIjack #40 (front1's
+`ROk outs tpls`): `avon front0 --data`, front1's terms from Python either way, with no
+templates, discovered, Python's `templates.tsv`, or those front1 emitted compiling its own
+source (`SKA.md` §7). Wall clock the best of three, one run for the fixed point; every
+output the same.
+
+| run | SKI | `--discover` | Python's | front1's own |
+|---|---:|---:|---:|---:|
+| a one-line source: contractions | 1,693,941 | 176,960 | 69,410 | 74,411 |
+| a one-line source: wall clock | 0.04 s | 1.93 s | 1.26 s | 0.81 s |
+| front0's source: contractions | | | 32,817,600 | 32,946,393 |
+| front0's source: wall clock | | | 2.23 s | 1.77 s |
+| front1's fixed point: contractions | | | 410,925,316 | 412,552,742 |
+| front1's fixed point: wall clock | | | 11.5 s | 11.3 s |
+
+front1 emits 2,326 templates for its own source, all of Python's; compiling it with
+`--emit` takes 566,401,252 contractions, 14.7 s and 1.44 GB. Its `template_terms.tsv`
+is 21 MB, Python's 123 MB.
+
 ## The interpreter jet's wall clock
 
 **The tower collapses in time as well as in steps, by 4.8 times on T2.**

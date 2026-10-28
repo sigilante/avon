@@ -6,6 +6,13 @@ design lives. Last revised 2026-10-28.
 
 ## Done since the last revision
 
+- **front1's own templates** (2026-10-28; avon #91, SKIjack #40; `SKA.md` §7). front1's
+  `ROk` carries each rule's template as its expander abstracts it, made only when read,
+  and `front0 --emit` writes them as the files `--templates` reads: for its own source,
+  all 2,326 of `skijack.templates`', key, arity and body alike. With them front1 runs
+  front0's source in 1.77 s against 2.23 s with Python's file, every output the same. A
+  pill holding front1 has its templates with no Python.
+
 - **Templates discovered, and the levers measured** (2026-10-28; `SKA.md` §4 and §6).
   `--discover` inverts bracket abstraction to find templates in a term with no
   compiler's files, each body checked against its key as a loaded one is. The corpus's
@@ -298,11 +305,10 @@ design lives. Last revised 2026-10-28.
 
 ## Next
 
-1. **Subject knowledge analysis** ([`SKA.md`](SKA.md)): steps 1, 2 and 4 done, step 3
-   (specialization) measured and not taken; the cases and thunks a formal holds take
-   no new mechanism (`SKA.md` §4). Open, undecided (`SKA.md` §7): front1 emitting its
-   templates for the pill; discovery that tells references from plumbing by running;
-   compiled template bodies.
+1. **Subject knowledge analysis** ([`SKA.md`](SKA.md)): steps 1, 2, 4 and 5 done, step
+   3 (specialization) measured and not taken; the cases and thunks a formal holds take
+   no new mechanism (`SKA.md` §4). Open, undecided (`SKA.md` §8): discovery that tells
+   references from plumbing by running; compiled template bodies.
 
 ## Done: the order agreed 2026-10-05
 

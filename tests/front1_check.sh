@@ -15,7 +15,10 @@
 #
 # and then all four again with the front end's supercombinator templates,
 # with the templates and data jets, and with those and Y unfolded in one
-# step: the same terms, from fewer contractions.
+# step: the same terms, from fewer contractions.  With data jets, also
+#
+#   5. emits front1's own templates (front0 --emit), for the corpus and its
+#      own source, as skijack.templates has them.
 #
 # Run from the repository root after `make`.  SKIJACK defaults to
 # ~/skijack (master since skijack #8).
@@ -35,7 +38,7 @@ fi
 pin_check skijack "$SKIJACK" "$SKIJACK_PIN"
 pin_aviary_kernel
 fail=0
-for mode in "" "--templates" "--templates --data" "--templates --data --fix"; do
+for mode in "" "--templates" "--templates --data --emit" "--templates --data --fix"; do
     echo "--- the front end${mode:+, with $mode}"
     # shellcheck disable=SC2086
     PYTHONPATH="$SKIJACK/python" python3 -m skijack.selfhost.run1 \
@@ -44,7 +47,7 @@ for mode in "" "--templates" "--templates --data" "--templates --data --fix"; do
         $mode || fail=1
 done
 if [ "$fail" = 0 ]; then
-    echo "front1 check passed through $MILESTONE: the front end compiles its own source, its milestones' corpus programs and every program checked, as the expander does: as SKI, with templates, with data jets, and with Y unfolded"
+    echo "front1 check passed through $MILESTONE: the front end compiles its own source, its milestones' corpus programs and every program checked, as the expander does: as SKI, with templates, with data jets, and with Y unfolded; and emits the expander's templates"
 else
     echo "FRONT1 CHECK FAILED"
     exit 1
