@@ -6,6 +6,15 @@ design lives. Last revised 2026-10-28.
 
 ## Done since the last revision
 
+- **Templates discovered, and the levers measured** (2026-10-28; `SKA.md` §4 and §6).
+  `--discover` inverts bracket abstraction to find templates in a term with no
+  compiler's files, each body checked against its key as a loaded one is. The corpus's
+  43 halting runs take 145,620 steps against SKI's 640,853 and the compiler's
+  templates' 63,774, every normal form SKI's; front1's heavy runs, past 3.5 GB with
+  them, keep the compiler's files. Of the levers step 2 left: every case on a value is
+  joined already, and the thunks a formal holds are template calls the reducer makes
+  next, so neither takes a new mechanism.
+
 - **front1's tokens dispatch: the arity cap is 64** (2026-10-28; `SKA.md` §4, DESIGN
   §6.8). The 90% site of step 2's known functions was not `forceAll`'s chain but `tok`,
   a 34-way sum whose constructors take 34 and 35 arguments, past the cap of 32: a case
@@ -289,15 +298,11 @@ design lives. Last revised 2026-10-28.
 
 ## Next
 
-1. **Subject knowledge analysis** ([`SKA.md`](SKA.md)): steps 1 and 2 done, step 3
-   (specialization) measured and not taken. Open, undecided, in what the measurement
-   found on front1:
-   - the unevaluated applications a formal holds, 32 to 33% of formal heads: item 1,
-     strictness;
-   - the formals a template cases on along every path, taken as fields directly
-     (`SKA.md` §6), since cases are 51 to 58% of formal heads;
-   - discovering templates by running, for programs no compiler hands them for, or
-     front1 emitting its own for the pill (`SKA.md` §6).
+1. **Subject knowledge analysis** ([`SKA.md`](SKA.md)): steps 1, 2 and 4 done, step 3
+   (specialization) measured and not taken; the cases and thunks a formal holds take
+   no new mechanism (`SKA.md` §4). Open, undecided (`SKA.md` §7): front1 emitting its
+   templates for the pill; discovery that tells references from plumbing by running;
+   compiled template bodies.
 
 ## Done: the order agreed 2026-10-05
 

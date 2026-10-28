@@ -273,6 +273,7 @@ struct av_tmplset {
     uint64_t collections;       /* the arena's, at load: the table's node
                                    ids hold only until the next one */
     long     accepted, refused, eta, open, duplicate, wide, unbound;
+    long     discarded;                 /* discovered keys saving too little */
     long     words, words_refused;      /* numeral operations */
     long     bits, bits_refused;        /* bit-string operations */
     bool     fix;                       /* Y registered */
@@ -546,6 +547,79 @@ static char *slurp_path(const char *path, size_t *len) {
     return buf;
 }
 
+/*  What follows the templates, from a file or discovered: the bit-string
+ *  operations, Y, the globals and the scratch.  False, with *msg, on
+ *  failure. */
+static bool load_tail(av_arena *a, av_tmplset *ts, const char **msg) {
+    /* the bit-string operations, with words, where the program holds their
+     * terms: pinned (words.c), run on small bit strings before they are
+     * keyed, as the numeral operations are */
+    for (unsigned op = AV_WOP_BEQ; a->word_suc && op <= AV_WOP_IDEQ; op++) {
+        const char *pin = av_bits_pinned(op);
+        av_parse_error pe;
+        uint32_t pt = av_parse(a, pin, strlen(pin), &pe);
+        if (pt == AV_NONE) { *msg = "a pinned bit-string operation does not parse"; return false; }
+        uint32_t c = hc_find(a, &ts->h, pt, 0);
+        av_digest d;
+        uint64_t have;
+        if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) continue;   /* not the program's */
+        if (nmap_get(&ts->key_jet, c, &have)) {
+            /* a template's key, as a function with formals is: the
+             * operation on the template's own jet, which instantiates when
+             * the operation declines */
+            uint32_t tid = (uint32_t)have - 1;
+            if (!a->jets[tid].tmpl || a->jets[tid].word_op || a->jets[tid].fix) continue;
+            if (!bits_admit(a, c, op)) { ts->bits_refused++; continue; }
+            a->jets[tid].word_op = (uint8_t)op;
+            ts->bits++;
+            continue;
+        }
+        if (!bits_admit(a, c, op)) { ts->bits_refused++; continue; }
+        const char *refusal = NULL;
+        uint32_t id = jet_entry_for(a, d, c, &refusal);
+        if (id == AV_NONE && refusal == jet_collision) { ts->bits_refused++; continue; }
+        if (id == AV_NONE) return false;
+        if (a->jets[id].tmpl || a->jets[id].word_op) { ts->bits_refused++; continue; }
+        if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) return false;
+        a->jets[id].word_op = (uint8_t)op;
+        ts->bits++;
+    }
+    /* Curry's Y, when asked for: keyed like a numeral operation, so
+     * its occurrences in the term and in the globals are wrapped */
+    if (a->fix_on) {
+        static const char Y[] = "S (K (S I I)) (S (S (K S) K) (K (S I I)))";
+        av_parse_error pe;
+        uint32_t t = av_parse(a, Y, sizeof Y - 1, &pe);
+        uint32_t c = t == AV_NONE ? AV_NONE : hc_canon(a, &ts->h, t);
+        av_digest d;
+        uint64_t have;
+        if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) return false;
+        if (!nmap_get(&ts->key_jet, c, &have)) {
+            const char *refusal = NULL;
+            uint32_t id = jet_entry_for(a, d, c, &refusal);
+            if (id == AV_NONE && refusal != jet_collision) return false;
+            if (id != AV_NONE && !a->jets[id].tmpl && !a->jets[id].word_op) {
+                if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) return false;
+                a->jets[id].fix = true;
+                ts->fix = true;
+            }
+        }
+    }
+    if (!make_globals(a, ts)) return false;
+    /* one scratch for every instance: the largest template's results and
+     * constants, so a fire checks nothing */
+    for (uint32_t ti = 0; ti < a->ntmpls; ti++) {
+        uint32_t need = a->tmpls[ti].nops + a->tmpls[ti].nconsts;
+        if (need > a->tmpl_scratch_cap) {
+            uint32_t *q = realloc(a->tmpl_scratch, need * sizeof *q);
+            if (!q) return false;
+            a->tmpl_scratch = q;
+            a->tmpl_scratch_cap = need;
+        }
+    }
+    return true;
+}
+
 av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
     char path[4096];
     size_t len;
@@ -687,72 +761,7 @@ av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err) {
             ts->words++;
         }
     }
-    /* the bit-string operations, with words, where the program holds their
-     * terms: pinned (words.c), run on small bit strings before they are
-     * keyed, as the numeral operations are */
-    for (unsigned op = AV_WOP_BEQ; a->word_suc && op <= AV_WOP_IDEQ; op++) {
-        const char *pin = av_bits_pinned(op);
-        av_parse_error pe;
-        uint32_t pt = av_parse(a, pin, strlen(pin), &pe);
-        if (pt == AV_NONE) { msg = "a pinned bit-string operation does not parse"; goto fail; }
-        uint32_t c = hc_find(a, &ts->h, pt, 0);
-        av_digest d;
-        uint64_t have;
-        if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) continue;   /* not the program's */
-        if (nmap_get(&ts->key_jet, c, &have)) {
-            /* a template's key, as a function with formals is: the
-             * operation on the template's own jet, which instantiates when
-             * the operation declines */
-            uint32_t tid = (uint32_t)have - 1;
-            if (!a->jets[tid].tmpl || a->jets[tid].word_op || a->jets[tid].fix) continue;
-            if (!bits_admit(a, c, op)) { ts->bits_refused++; continue; }
-            a->jets[tid].word_op = (uint8_t)op;
-            ts->bits++;
-            continue;
-        }
-        if (!bits_admit(a, c, op)) { ts->bits_refused++; continue; }
-        const char *refusal = NULL;
-        uint32_t id = jet_entry_for(a, d, c, &refusal);
-        if (id == AV_NONE && refusal == jet_collision) { ts->bits_refused++; continue; }
-        if (id == AV_NONE) goto fail;
-        if (a->jets[id].tmpl || a->jets[id].word_op) { ts->bits_refused++; continue; }
-        if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
-        a->jets[id].word_op = (uint8_t)op;
-        ts->bits++;
-    }
-    /* Curry's Y, when asked for: keyed like a numeral operation, so
-     * its occurrences in the term and in the globals are wrapped */
-    if (a->fix_on) {
-        static const char Y[] = "S (K (S I I)) (S (S (K S) K) (K (S I I)))";
-        av_parse_error pe;
-        uint32_t t = av_parse(a, Y, sizeof Y - 1, &pe);
-        uint32_t c = t == AV_NONE ? AV_NONE : hc_canon(a, &ts->h, t);
-        av_digest d;
-        uint64_t have;
-        if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) goto fail;
-        if (!nmap_get(&ts->key_jet, c, &have)) {
-            const char *refusal = NULL;
-            uint32_t id = jet_entry_for(a, d, c, &refusal);
-            if (id == AV_NONE && refusal != jet_collision) goto fail;
-            if (id != AV_NONE && !a->jets[id].tmpl && !a->jets[id].word_op) {
-                if (!nmap_put(&ts->key_jet, c, (uint64_t)id + 1)) goto fail;
-                a->jets[id].fix = true;
-                ts->fix = true;
-            }
-        }
-    }
-    if (!make_globals(a, ts)) goto fail;
-    /* one scratch for every instance: the largest template's results and
-     * constants, so a fire checks nothing */
-    for (uint32_t ti = 0; ti < a->ntmpls; ti++) {
-        uint32_t need = a->tmpls[ti].nops + a->tmpls[ti].nconsts;
-        if (need > a->tmpl_scratch_cap) {
-            uint32_t *q = realloc(a->tmpl_scratch, need * sizeof *q);
-            if (!q) goto fail;
-            a->tmpl_scratch = q;
-            a->tmpl_scratch_cap = need;
-        }
-    }
+    if (!load_tail(a, ts, &msg)) goto fail;
     free(text);
     free(refs);
     free(b.n);
@@ -761,6 +770,245 @@ fail:
     if (err) *err = msg;
     free(text);
     free(refs);
+    free(b.n);
+    av_templates_free(ts);
+    return NULL;
+}
+
+/*  ----------------------------------------------------------- discovery */
+
+/*  Templates found in the program itself, with no compiler's file: bracket
+ *  abstraction inverted.  The forward rules (hc_abstract) are
+ *
+ *      [x] x = I,  [x] M = K M (x not in M),  [x] (M x) = M (x not in M),
+ *      [x] (M N) = S ([x] M) ([x] N),
+ *
+ *  so a body b with [x] b = t is x for I, M for K M, and for S P Q the
+ *  bodies of P and Q applied, when the forward rules would take that
+ *  application back to S P Q; failing those, t x, which abstracts to t by
+ *  η and is no formal at all.  Peeling formals from a key until only η is
+ *  left gives its arity and body, and load_one checks the body against the
+ *  key as it checks a compiler's: the inversion proposes, the abstraction
+ *  decides.  A body is a weak reduct of its key over the formals, the
+ *  contractions the inversion undid; a key whose instance would save fewer
+ *  than min_steps of them is not worth a template. */
+
+typedef struct {
+    nmap memo[AV_JET_ARITY_MAX];    /* per formal: node -> body | steps << 32 */
+} decomp;
+
+static void decomp_free(decomp *d) {
+    for (unsigned i = 0; i < AV_JET_ARITY_MAX; i++) nmap_free(&d->memo[i]);
+}
+
+/*  The body of canonical t over the marker of formal var, and the
+ *  contractions from t applied to the marker to it (0: only η).  AV_NONE
+ *  out of memory.  Iterative: keys run deep. */
+static uint32_t dec_one(av_arena *a, hcons *h, decomp *d, unsigned var, uint32_t t,
+                        uint32_t *steps) {
+    nmap *memo = &d->memo[var];
+    uint32_t x = a->jet_mark[var];
+    typedef struct { uint32_t node; bool done; } item;
+    size_t cap = 64, top = 0;
+    item *todo = malloc(cap * sizeof *todo);
+    uint64_t v;
+    uint32_t out = AV_NONE;
+    if (!todo) return AV_NONE;
+    todo[top++] = (item){ t, false };
+    while (top) {
+        item it = todo[--top];
+        uint32_t n = it.node;
+        if (!it.done && nmap_get(memo, n, &v)) continue;
+        uint32_t body, st = 0;
+        bool sapp = av_tag(a, n) == AV_APP && av_tag(a, av_left(a, n)) == AV_APP &&
+                    av_left(a, av_left(a, n)) == AV_NODE_S;
+        if (n == AV_NODE_I) {
+            body = x;
+            st = 1;
+        } else if (av_tag(a, n) == AV_APP && av_left(a, n) == AV_NODE_K) {
+            body = av_right(a, n);
+            st = 1;
+        } else if (sapp && !it.done) {
+            if (top + 3 > cap) {
+                item *q = realloc(todo, (cap *= 2) * sizeof *q);
+                if (!q) goto done;
+                todo = q;
+            }
+            todo[top++] = (item){ n, true };
+            todo[top++] = (item){ av_right(a, n), false };
+            todo[top++] = (item){ av_right(a, av_left(a, n)), false };
+            continue;
+        } else if (sapp) {
+            uint64_t vp, vq;
+            nmap_get(memo, av_right(a, av_left(a, n)), &vp);
+            nmap_get(memo, av_right(a, n), &vq);
+            uint32_t bp = (uint32_t)vp, bq = (uint32_t)vq;
+            body = hc_app(a, h, bp, bq);
+            if (body == AV_NONE) goto done;
+            /* forward: x in it, and not η's M x with x not in M */
+            bool back = hc_free_in(h, body, var) && !(bq == x && !hc_free_in(h, bp, var));
+
+            uint64_t s2 = 1 + (vp >> 32) + (vq >> 32);
+            if (back) {
+                st = s2 > UINT32_MAX ? UINT32_MAX : (uint32_t)s2;
+            } else if ((body = hc_app(a, h, n, x)) == AV_NONE) {
+                goto done;
+            }
+        } else if ((body = hc_app(a, h, n, x)) == AV_NONE) {
+            goto done;
+        }
+        if (!nmap_put(memo, n, (uint64_t)st << 32 | body)) goto done;
+    }
+    if (nmap_get(memo, t, &v)) {
+        out = (uint32_t)v;
+        *steps = (uint32_t)(v >> 32);
+    }
+done:
+    free(todo);
+    return out;
+}
+
+/*  A canonical open body as a parsed one: a tree, children first, its
+ *  closed subterms references, its markers variables.  False past `limit`
+ *  nodes, as a shared open subterm unfolds, or out of memory. */
+static bool body_of(av_arena *a, hcons *h, uint32_t t, body *b, uint32_t *root, size_t limit) {
+    typedef struct { uint32_t node; bool done; } item;
+    size_t cap = 64, top = 0;
+    item *todo = malloc(cap * sizeof *todo);
+    uint32_t *val = malloc(cap * sizeof *val);
+    size_t nval = 0, vcap = cap;
+    bool ok = todo && val;
+    b->len = 0;
+    if (ok) todo[top++] = (item){ t, false };
+    while (ok && top) {
+        item it = todo[--top];
+        uint64_t vars = 0;
+        nmap_get(&h->vars, it.node, &vars);
+        if (b->len >= limit) { ok = false; break; }
+        bnode x;
+        if (!vars) {
+            x = (bnode){ B_REF, it.node, 0 };
+        } else if (av_tag(a, it.node) != AV_APP) {
+            unsigned i = (unsigned)__builtin_ctzll(vars);        /* a marker */
+            x = (bnode){ B_VAR, i, 0 };
+        } else if (!it.done) {
+            if (top + 3 > cap) {
+                item *q = realloc(todo, (cap *= 2) * sizeof *q);
+                if (!q) { ok = false; break; }
+                todo = q;
+            }
+            todo[top++] = (item){ it.node, true };
+            todo[top++] = (item){ av_right(a, it.node), false };
+            todo[top++] = (item){ av_left(a, it.node), false };
+            continue;
+        } else {
+            uint32_t r = val[--nval], l = val[--nval];
+            x = (bnode){ B_APP, l, r };
+        }
+        if (!body_push(b, x)) { ok = false; break; }
+        if (nval == vcap) {
+            uint32_t *q = realloc(val, (vcap *= 2) * sizeof *q);
+            if (!q) { ok = false; break; }
+            val = q;
+        }
+        val[nval++] = (uint32_t)(b->len - 1);
+    }
+    if (ok && nval == 1) *root = val[0];
+    else ok = false;
+    free(todo);
+    free(val);
+    return ok;
+}
+
+av_tmplset *av_templates_discover(av_arena *a, uint32_t t, unsigned min_steps,
+                                  const char **err) {
+    const char *msg = "out of memory";
+    av_tmplset *ts = calloc(1, sizeof *ts);
+    decomp d;
+    memset(&d, 0, sizeof d);
+    body b = { 0 };
+    nmap seen = { 0 };
+    uint32_t *todo = NULL;
+    if (!ts || !jet_marks(a)) goto fail;
+    ts->collections = a->collections;
+    hcons *h = &ts->h;
+    if (hc_leaf(a, h, AV_NODE_S) == AV_NONE || hc_leaf(a, h, AV_NODE_K) == AV_NONE ||
+        hc_leaf(a, h, AV_NODE_I) == AV_NONE)
+        goto fail;
+    for (unsigned i = 0; i < AV_JET_ARITY_MAX; i++)
+        if (hc_leaf(a, h, a->jet_mark[i]) == AV_NONE) goto fail;
+    /* the program, canonical: every node a candidate key */
+    uint32_t root = hc_canon(a, h, t);
+    if (root == AV_NONE) goto fail;
+    size_t cap = 256, top = 0;
+    if (!(todo = malloc(cap * sizeof *todo))) goto fail;
+    todo[top++] = root;
+    while (top) {
+        uint32_t n = todo[--top];
+        uint64_t v;
+        if (av_tag(a, n) != AV_APP || nmap_get(&seen, n, &v)) continue;
+        if (!nmap_put(&seen, n, 1)) goto fail;
+        if (top + 2 > cap) {
+            uint32_t *q = realloc(todo, (cap *= 2) * sizeof *q);
+            if (!q) goto fail;
+            todo = q;
+        }
+        todo[top++] = av_right(a, n);
+        todo[top++] = av_left(a, n);
+        /* only an S or K application can be an abstraction */
+        bool sk = av_left(a, n) == AV_NODE_K ||
+                  (av_tag(a, av_left(a, n)) == AV_APP && av_left(a, av_left(a, n)) == AV_NODE_S);
+        if (!sk) continue;
+        /* η erases a formal its body applies last, as [g] (S (K f) g) is
+         * S (K f) and [y] (K y) is K: a partial S P, S or K meets only η,
+         * but applied to the formal it inverts at the next.  So such η
+         * formals are kept pending, and taken with the next formal that
+         * inverts */
+        uint32_t cur = n, best = n, formals[AV_JET_ARITY_MAX];
+        unsigned k = 0, pend = 0;
+        uint64_t saved = 0;
+        while (k + pend < AV_JET_ARITY_MAX) {
+            uint32_t st = 0;
+            uint32_t next = dec_one(a, h, &d, k + pend, cur, &st);
+            if (next == AV_NONE) goto fail;
+            if (st) {
+                for (unsigned i = 0; i <= pend; i++, k++) formals[k] = k;
+                pend = 0;
+                saved += st;
+                cur = best = next;
+            } else if (cur == AV_NODE_S || cur == AV_NODE_K ||
+                       (av_tag(a, cur) == AV_APP && av_left(a, cur) == AV_NODE_S)) {
+                pend++;                         /* S P, S or K: η, pending */
+                cur = next;
+            } else {
+                break;                          /* only η: no formal here */
+            }
+        }
+        cur = best;
+        if (!k || saved < min_steps) { ts->discarded++; continue; }
+        uint32_t broot;
+        if (!body_of(a, h, cur, &b, &broot, 1u << 16)) { ts->wide++; continue; }
+        av_digest key;
+        if (!dmap_get(&h->digest, n, &key)) goto fail;
+        int why = load_one(a, ts, key, formals, k, &b, broot);
+        if (why < 0) goto fail;
+        if (why == 0) ts->accepted++;
+        else if (why == 1) ts->refused++;
+        else if (why == 2) ts->open++;
+        else if (why == 3 || why == 5) ts->eta++;
+        else ts->duplicate++;
+    }
+    if (!load_tail(a, ts, &msg)) goto fail;
+    free(todo);
+    nmap_free(&seen);
+    decomp_free(&d);
+    free(b.n);
+    return ts;
+fail:
+    if (err) *err = msg;
+    free(todo);
+    nmap_free(&seen);
+    decomp_free(&d);
     free(b.n);
     av_templates_free(ts);
     return NULL;
@@ -824,6 +1072,10 @@ void av_templates_free(av_tmplset *ts) {
     hc_free(&ts->h);
     nmap_free(&ts->key_jet);
     free(ts);
+}
+
+long av_templates_discarded(const av_tmplset *ts) {
+    return ts->discarded;
 }
 
 bool av_templates_fix(const av_tmplset *ts) {

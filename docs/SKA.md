@@ -185,6 +185,21 @@ Every output is the same. The contractions fall 3.0% and 1.1%; the wall clock is
 the runs' spread, since an `L` instance was cheap. A case still dispatches once either
 way: before, the last layer's `T x c₀` was itself a dispatch.
 
+**The other two classes take no new mechanism, measured 2026-10-28** on front0's source
+at the cap of 64, with probes not kept in the source:
+
+- *Cases on a value are all joined already.* A case template's instance whose formal
+  holds a value joins its dispatch (§6.10) whenever it can: 6,516,064 joinable at the
+  last sample, 6,516,064 joined, and 6,982,147 joined over the run. Taking a case's
+  fields straight into the instance, along every path, is what the join does.
+- *Thunks are calls the reducer makes next.* Of the unevaluated applications a formal
+  held, 3,360,437 of the first 3,500,000 are templates with all their arguments,
+  131,932 S, K or I redexes and 7,631 constructors holding continuations as well. Each
+  is evaluated as soon as the instance is written, at the same count; forcing it first
+  could only let the case join, and a join writes the body's other applications as an
+  instance does, leaving only the spine, which deferred roots (§6.13) already leave
+  unwritten.
+
 ## 5. Step 3: specialization on known functions (decision: not taken, measured 2026-10-28)
 
 **At most 266,162 calls on the fixed point would become direct, against its 411,048,920
@@ -215,30 +230,83 @@ whose head formal `i` receives a known function `f` holding `m` arguments `c₁ 
   `(formals, open body)` with the same exclusions, so the supercombinator proof jets
   (§18.1) cover it unchanged.
 
-## 6. Later
+## 6. Step 4: templates discovered (built 2026-10-28)
 
-- **Discovery without a compiler.** Every prefix of an atom run is count-exact, not
-  only its end (§6.5): `copy` reduction of `g a₁ … aₖ` reaches `r[aᵢ/Xᵢ]` after any
-  number of the run's contractions. So a residual may stop at a call into another known
-  function instead of inlining it, giving functions with call edges, found by running,
-  for programs no compiler hands templates for. For the pill (§20.3), front1 emitting
-  templates as it compiles is cheaper: it holds each rule before abstraction, and today
-  emits none.
-- **Data requirements and compiled bodies.** SKA II passes a callee only the axes it
-  reads on every path. In SKI the analogue is the formals a template cases on along
-  every path, so its instance could take their fields directly: §6.10's case of a
-  known value, made static. Step 2 puts the cases at 51 to 58% of formal heads and
-  the thunks at 32 to 33%, so this, with `WORKLIST.md` item 1 (strictness), is where SKA's
-  second article points for front1. Compiling bodies to straight-line code is §6.9's
-  "compact template form".
+**`--discover` finds templates in a term with no compiler's files, by inverting bracket
+abstraction.** The forward rules are `hc_abstract`'s:
 
-## 7. Risks
+    [x] x = I    [x] M = K M (x not in M)    [x] (M x) = M (x not in M)
+    [x] (M N) = S ([x] M) ([x] N)
+
+so a body `b` with `[x] b = t` is `x` for `I`, `M` for `K M`, and for `S P Q` the bodies
+of `P` and `Q` applied, when the forward rules take that application back to `S P Q`;
+otherwise `t x`, which is `t` by η and no formal at all.
+
+- *Every S or K application of the program is a candidate key.* Peeling formals until
+  only η is left gives its arity and body. The memos are per formal and shared by every
+  candidate, over the hash-consed program, so a subterm is inverted once per formal.
+- *η erases a formal its body applies last*, as `[g] (S (K f) g)` is `S (K f)` and
+  `[y] (K y)` is `K`. A partial `S P`, `S` or `K` meets only η, but applied to the formal
+  it inverts at the next, so such formals are kept pending and taken with the next one
+  that inverts: B's key `S (K S) K` comes back as `λf g x. f (g x)`.
+- *The abstraction decides.* Each body goes through the loader's own check, abstracted
+  again to its key node for node, with η-templates, open bodies and leaf keys skipped
+  as before. A key whose instance saves fewer than two contractions is discarded.
+- *What it cannot see.* The compiler knows which closed subterms of a body are other
+  rules. Inversion does not: it may take a reference apart, as `S I (K x)` for `T x`,
+  leaving S and K over formals for the instance to run as SKI. The body is still a
+  weak reduct of its key, so the answers stay right and the template is weaker.
+  Telling a reference by its being shared, or by a combinator at an open head, both made
+  front1 slower, and are not used.
+
+**Results, 2026-10-28**, share mode to normal form, every normal form SKI's:
+
+| program | SKI | discovered | the compiler's templates |
+|---|---:|---:|---:|
+| the corpus, the 43 halting runs | 640,853 | 145,620 | 63,774 (BENCHMARK, "Templates on the corpus") |
+| `tests/data/nats` | 58,140 | 8,170 | 7,789 |
+| `tests/data/lists` | 5,380 | 1,010 | 787 |
+| `tests/data/listops` | 5,523 | 907 | 723 |
+| `tests/data/bits` | 9,090 | 1,461 | 726 |
+| `tests/data/quot` | 84,808 | 11,859 | 10,194 |
+| front1 on a one-line source, with `--data` | 1,693,922 | 176,951 | 69,410 |
+
+- *Recall.* On front1, discovery keeps 25,695 templates, none refused, among them
+  2,274 of the compiler's 2,298 keys, 2,168 at the compiler's arity; the rest are
+  pieces of larger abstractions, and sub-abstractions the compiler never named.
+- *Time.* Discovery canonicalizes the whole program: front1 on a one-line source takes
+  2.3 s with it, 1.2 s with the compiler's files and 0.07 s as SKI.
+- *Its limit.* front1 on front0's source passes 3.5 GB between 40 and 100 million
+  contractions, where with the compiler's templates the whole run is 32.8 million in
+  1.43 GB. Stage B needs its templates' real bodies, as DESIGN §20.3 records of the
+  fixed point without templates (past 12 GB), so front1's heavy runs keep the
+  compiler's files.
+
+## 7. Later
+
+- **front1 emitting its templates.** For the pill (§20.3), front1 holds each rule
+  before abstraction and could write the templates file as Python's expander does; it
+  emits none today. Discovery covers programs no compiler hands templates for, at the
+  measured cost above.
+- **Discovery with call edges.** Every prefix of an atom run is count-exact, not only
+  its end (§6.5): `copy` reduction of `g a₁ … aₖ` reaches `r[aᵢ/Xᵢ]` after any number
+  of the run's contractions. A residual that stops at a call into another known
+  function would tell references from plumbing by running, which syntax cannot.
+- **Compiled bodies.** SKA II passes a callee only the axes it reads on every path. In
+  SKI the analogue, a case's fields taken into the instance, is §6.10's join, and §4
+  finds it taking every case on a value already. What is left of SKA II is compiling
+  bodies to straight-line code, §6.9's "compact template form".
+
+## 8. Risks
 
 - Step 2's runs never join a case (§6.10). A join changes how a case's instance is
   written, not its head, so the counts are a plain run's; the wall clock is not.
-- The measurements are front1's alone. SKIlark's interpreted programs and the corpus
+- Steps 2 and 3 measured front1 alone. SKIlark's interpreted programs and the corpus
   pass functions differently, and step 3's verdict holds only for the workloads
   measured.
+- Discovery's bodies differ from the compiler's where inversion takes a reference
+  apart; the corpus and the fixtures bound the cost (5 to 100% more steps than the
+  compiler's templates, 2.3 times on the corpus), front1 alone measures 2.5 times.
 - The specialization key is a site by templates, not by program location: two callers
   that pass the same function share a specialization, and one that passes many
   functions gains little.

@@ -10,14 +10,14 @@
 /*  Each option parse_args takes, a bit of args.given, so options_fit can
  *  refuse one the command would ignore. */
 enum {
-    O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES,
+    O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES, O_DISCOVER,
     O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_INTERP, O_JET_TABLE, O_PLAN,
     O_STATEMENT, O_JET_FLOOR, O_JET_CHECK, O_FUEL, O_MAX_NODES, O_BUDGET, O_ROWS,
     O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_DEFECT, O_DAG, O_FILE, O_COUNT
 };
 static const char *const option_name[O_COUNT] = {
     "--strategy", "--whnf", "--allow-bird-atoms", "--jets", "--ctors", "--no-jets",
-    "--profile", "--templates", "--data", "--fix", "--memory", "--no-defer", "--p2",
+    "--profile", "--templates", "--discover", "--data", "--fix", "--memory", "--no-defer", "--p2",
     "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
     "--fuel", "--max-nodes", "--budget", "--rows", "--cells", "--trace-frame",
     "--passenger", "--records", "--frame-dump", "--defect", "--dag", "a FILE",
@@ -47,7 +47,8 @@ typedef struct {
     const char *statement;        /* lean-ski's composed statement, or NULL */
     uint64_t    jet_floor;
     const char *profile;          /* --profile: a names file, or NULL */
-    const char *templates;        /* --templates: a directory, or NULL */
+    const char *templates;        /* --templates: a directory; "" with --discover;
+                                     NULL without either */
     bool        data;             /* --data: data jets */
     bool        fix;              /* --fix: Y unfolded in one step */
     const char *p2;               /* --p2: P's term, a file, or NULL */
@@ -116,6 +117,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--no-jets") == 0)        g->o.jets = false;
         else if (strncmp(s, "--profile=", 10) == 0 && s[10]) g->profile = s + 10;
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) g->templates = s + 12;
+        else if (strcmp(s, "--discover") == 0)       g->templates = "";
         else if (strcmp(s, "--data") == 0)           g->data = true;
         else if (strcmp(s, "--fix") == 0)            g->fix = true;
         else if (strcmp(s, "--memory") == 0)         g->fix = g->o.fix_shared = true;
@@ -195,7 +197,7 @@ static bool parse_args(int argc, char **argv, args *g) {
  *  only the statement, the jet table and a witness. */
 static bool options_fit(const args *g, const char *cmd) {
     const uint32_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP) | OPT(O_DEFECT);
-    const uint32_t untraced = OPT(O_TEMPLATES) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
+    const uint32_t untraced = OPT(O_TEMPLATES) | OPT(O_DISCOVER) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
                               OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_PROFILE) | OPT(O_JETS) |
                               OPT(O_CTORS) | OPT(O_INTERP) |
                               OPT(O_JET_FLOOR) | OPT(O_JET_CHECK) | OPT(O_BUDGET) |
@@ -307,9 +309,10 @@ bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
         fprintf(stderr, "avon: out of memory\n");
         return false;
     }
-    av_tmplset *ts = av_templates_load(a, dir, &err);
+    /* "" is --discover: the templates found in *t itself */
+    av_tmplset *ts = *dir ? av_templates_load(a, dir, &err) : av_templates_discover(a, *t, 2, &err);
     if (!ts) {
-        fprintf(stderr, "avon: %s: %s\n", dir, err ? err : "cannot load templates");
+        fprintf(stderr, "avon: %s: %s\n", *dir ? dir : "--discover", err ? err : "cannot load templates");
         return false;
     }
     if (fix && !av_templates_fix(ts)) {
@@ -321,6 +324,9 @@ bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
     bool ok = *t != AV_NONE && av_templates_bind(a, ts, *t);
     if (ok) av_templates_counts(ts, &counts[0], &counts[1], &counts[2], &counts[3]);
     else fprintf(stderr, "avon: could not bind the templates\n");
+    if (ok && !*dir)
+        fprintf(stderr, "discovered: %ld keys kept as templates, %ld discarded as saving under "
+                "2 contractions\n", counts[0], av_templates_discarded(ts));
     if (ok && data) {           /* data jets: the numerals, as words */
         av_templates_word_counts(ts, &wc[0], &wc[1]);
         wc[2] = av_words_scan(a, *t, &wc[3]);
@@ -485,17 +491,17 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     }
     long tc[4] = { 0, 0, 0, 0 }, wc[4] = { 0, 0, 0, 0 };
     if (g->templates && g->o.strategy != AV_SHARE) {
-        fprintf(stderr, "avon: --templates runs in share mode only; copy mode keeps its counts\n");
+        fprintf(stderr, "avon: --templates and --discover run in share mode only; copy mode keeps its counts\n");
         av_arena_free(a);
         return 1;
     }
     if (g->data && !g->templates) {
-        fprintf(stderr, "avon: --data needs --templates=DIR, which holds words.tsv\n");
+        fprintf(stderr, "avon: --data needs --templates=DIR or --discover\n");
         av_arena_free(a);
         return 1;
     }
     if (g->fix && !g->templates) {
-        fprintf(stderr, "avon: %s needs --templates=DIR: Y is registered with them\n",
+        fprintf(stderr, "avon: %s needs --templates=DIR or --discover: Y is registered with them\n",
                 g->o.fix_shared ? "--memory" : "--fix");
         av_arena_free(a);
         return 1;
