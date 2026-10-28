@@ -19,7 +19,7 @@ Avon reduces closed $SKI$ terms, plus inert atoms, using three strategies:
 
 Around those it supports:
 - code jets, including an interpreter jet;
-- supercombinator templates;
+- supercombinator templates, handed over by the front end or discovered in the term itself;
 - data jets;
 - a bound scry namespace that running code reads from; and
 - a kernel loop with a persistent arena; and
@@ -97,6 +97,7 @@ Start at [`docs/README.md`](docs/README.md), the index.  In brief:
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): a map of the source.
 - [`docs/TESTING.md`](docs/TESTING.md): every check, and the outside checkouts some of them need.
 - [`docs/DESIGN.md`](docs/DESIGN.md): the design, its reasons and its history.
+- [`docs/SKA.md`](docs/SKA.md): how Avon recovers a program's functions, after Afonin's subject knowledge analysis.
 
 ## Checks that need other repositories
 
@@ -113,7 +114,7 @@ Start at [`docs/README.md`](docs/README.md), the index.  In brief:
 
 ## Status
 
-Avon is a research proof of concept.  Built: the three strategies, jets, templates, data jets, scry, kernels on a durable pier, the persistent arena, drivers in memory and in a pier (`avon run --kernel`, `avon boot --drivers`), and the SKIjack front end through its sixth milestone, which checks a program as Python's Stage A and Stage B do and compiles every corpus program to Python's terms.  Open: the proof-side items in `docs/DESIGN.md` §11.1.  The structural hash keeps 128 bits of SHA-256.  A jet fires only where its own term stands, so a collision cannot merge two jets.
+Avon is a research proof of concept.  Built: the three strategies, jets, templates (from Python's front end, from front1 itself, or discovered with no front end), data jets, scry, kernels on a durable pier, the persistent arena, drivers in memory and in a pier (`avon run --kernel`, `avon boot --drivers`), and the SKIjack front end through its sixth milestone, which checks a program as Python's Stage A and Stage B do and compiles every corpus program to Python's terms.  Open: the proof-side items in `docs/DESIGN.md` §11.1.  The structural hash keeps 128 bits of SHA-256.  A jet fires only where its own term stands, so a collision cannot merge two jets.
 
 ## References
 

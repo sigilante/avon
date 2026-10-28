@@ -70,8 +70,8 @@ typedef struct {
 
 static bool shared;     /* run()'s fix shares each g's Y g when set */
 
-/*  src reduced; with dir, its templates loaded, data jets on, and fix when
- *  asked. */
+/*  src reduced; with dir, its templates loaded (discovered in src when dir
+ *  is ""), data jets on, and fix when asked. */
 static outcome run(const char *src, const char *dir, bool fix, av_strategy st,
                    bool whnf, uint64_t fuel, uint32_t cap) {
     static outcome out;
@@ -83,7 +83,9 @@ static outcome run(const char *src, const char *dir, bool fix, av_strategy st,
         CHECK(av_words_on(a));
         if (fix) av_fix_on(a);
         const char *err = NULL;
-        av_tmplset *ts = av_templates_load(a, dir, &err);
+        av_root_push(a, &t);
+        av_tmplset *ts = *dir ? av_templates_load(a, dir, &err) : av_templates_discover(a, t, 2, &err);
+        av_root_pop(a);
         CHECK(ts != NULL);
         if (ts) {
             out.registered = av_templates_fix(ts);
@@ -218,6 +220,21 @@ TEST(the_fixtures_answer_and_normalize_as_without) {
     }
 }
 
+/*  Discovery finds Y's own term a key too; with fix on it leaves Y to
+ *  fix, which registers it and unfolds it. */
+TEST(discovery_leaves_y_to_fix) {
+    const char *progs[2] = { "lists", "nats" };
+    for (int i = 0; i < 2; i++) {
+        char *main_src = fixture(progs[i], "main");
+        if (!main_src) continue;
+        outcome fx = run(main_src, "", true, AV_SHARE, true, 10000000, 1u << 12);
+        CHECK(fx.registered);
+        CHECK(fx.status == AV_WHNF && strcmp(fx.nf, "Ff") == 0);
+        CHECK(fx.fix_calls > 0);
+        free(main_src);
+    }
+}
+
 TEST(collections_keep_the_answer) {
     char *src = fixture("nats", "main");
     if (!src) return;
@@ -296,6 +313,7 @@ TEST_MAIN(
     TEST_CASE(y_short_of_its_argument_is_left_alone),
     TEST_CASE(copy_mode_ignores_fix),
     TEST_CASE(the_fixtures_answer_and_normalize_as_without),
+    TEST_CASE(discovery_leaves_y_to_fix),
     TEST_CASE(collections_keep_the_answer),
     TEST_CASE(a_shared_unfolding_answers_as_fix_does)
 )

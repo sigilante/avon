@@ -1,7 +1,8 @@
 # Subject knowledge analysis, for SKI
 
-A plan, written 2026-10-28: what Afonin's subject knowledge analysis (SKA) does for
-Nock, what Avon already has of it, and what Avon takes next. The two articles:
+A plan, written 2026-10-28 and every step decided by 2026-10-29: what Afonin's subject
+knowledge analysis (SKA) does for Nock, what Avon already had of it, and what Avon took
+from it. The two articles:
 
 - K. Afonin, "Subject Knowledge Analysis", *Urbit Systems Technical Journal* 3.1
   (2026), <https://urbitsystems.tech/article/v03-i01/subject-knowledge-analysis>.
@@ -252,6 +253,10 @@ otherwise `t x`, which is `t` by η and no formal at all.
 - *The abstraction decides.* Each body goes through the loader's own check, abstracted
   again to its key node for node, with η-templates, open bodies and leaf keys skipped
   as before. A key whose instance saves fewer than two contractions is discarded.
+- *Y is left to `--fix`.* Curry's Y is an abstraction too, and discovery finds its key.
+  With `--fix` on, discovery skips it, so `--fix` registers Y and unfolds it in one step:
+  `tests/data/nats` to head normal form falls from 8,170 steps to 7,193, with 478
+  unfoldings.
 - *What it cannot see.* The compiler knows which closed subterms of a body are other
   rules. Inversion does not: it may take a reference apart, as `S I (K x)` for `T x`,
   inlining it, S and K over formals included. The body is still a weak reduct of its

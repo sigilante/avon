@@ -10,7 +10,7 @@
 | [`BENCHMARK.md`](BENCHMARK.md) | How fast is it?  Every measurement, with the commit it was taken at. |
 | [`ZK-JETS.md`](ZK-JETS.md) | How do jets enter a zero-knowledge proof?  Statements, tables and their checks. |
 | [`WORKLIST.md`](WORKLIST.md) | What has been done lately, and what is next? |
-| [`SKA.md`](SKA.md) | What does subject knowledge analysis offer an SKI runtime, and what does Avon take from it next? |
+| [`SKA.md`](SKA.md) | What does subject knowledge analysis offer an SKI runtime, and what did Avon take from it? |
 | [`AUDIT.md`](AUDIT.md) | The codebase audit of 2026-10-05, closed 2026-10-11; a record, with line numbers as they were. |
 
 ## Reading order

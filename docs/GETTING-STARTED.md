@@ -164,7 +164,13 @@ build/avon reduce --whnf $D/main.txt                                  # WHNF 581
 build/avon reduce --whnf --templates=$D $D/main.txt                   # WHNF 7789
 build/avon reduce --whnf --templates=$D --data $D/main.txt            # WHNF 5986
 build/avon reduce --whnf --templates=$D --data --fix $D/main.txt      # WHNF 4201
+build/avon reduce --whnf --discover $D/main.txt                       # WHNF 8170
 ```
+
+The templates come from the compiler, which knew the program's functions.
+`--discover` needs no file: it finds them in the term by inverting
+bracket abstraction, and checks each as a loaded one is checked
+(`SKA.md` §6).
 
 Each option prints a report line on stderr.  None of them runs in copy
 mode, which keeps its counts.

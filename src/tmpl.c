@@ -550,6 +550,14 @@ static char *slurp_path(const char *path, size_t *len) {
 /*  What follows the templates, from a file or discovered: the bit-string
  *  operations, Y, the globals and the scratch.  False, with *msg, on
  *  failure. */
+/*  Curry's Y in h, canonical; AV_NONE if out of memory. */
+static uint32_t y_canon(av_arena *a, hcons *h) {
+    static const char Y[] = "S (K (S I I)) (S (S (K S) K) (K (S I I)))";
+    av_parse_error pe;
+    uint32_t t = av_parse(a, Y, sizeof Y - 1, &pe);
+    return t == AV_NONE ? AV_NONE : hc_canon(a, h, t);
+}
+
 static bool load_tail(av_arena *a, av_tmplset *ts, const char **msg) {
     /* the bit-string operations, with words, where the program holds their
      * terms: pinned (words.c), run on small bit strings before they are
@@ -587,10 +595,7 @@ static bool load_tail(av_arena *a, av_tmplset *ts, const char **msg) {
     /* Curry's Y, when asked for: keyed like a numeral operation, so
      * its occurrences in the term and in the globals are wrapped */
     if (a->fix_on) {
-        static const char Y[] = "S (K (S I I)) (S (S (K S) K) (K (S I I)))";
-        av_parse_error pe;
-        uint32_t t = av_parse(a, Y, sizeof Y - 1, &pe);
-        uint32_t c = t == AV_NONE ? AV_NONE : hc_canon(a, &ts->h, t);
+        uint32_t c = y_canon(a, &ts->h);
         av_digest d;
         uint64_t have;
         if (c == AV_NONE || !dmap_get(&ts->h.digest, c, &d)) return false;
@@ -940,6 +945,9 @@ av_tmplset *av_templates_discover(av_arena *a, uint32_t t, unsigned min_steps,
     /* the program, canonical: every node a candidate key */
     uint32_t root = hc_canon(a, h, t);
     if (root == AV_NONE) goto fail;
+    /* with --fix, Y's own term is left to --fix, which unfolds it */
+    uint32_t y = AV_NONE;
+    if (a->fix_on && (y = y_canon(a, h)) == AV_NONE) goto fail;
     size_t cap = 256, top = 0;
     if (!(todo = malloc(cap * sizeof *todo))) goto fail;
     todo[top++] = root;
@@ -958,7 +966,7 @@ av_tmplset *av_templates_discover(av_arena *a, uint32_t t, unsigned min_steps,
         /* only an S or K application can be an abstraction */
         bool sk = av_left(a, n) == AV_NODE_K ||
                   (av_tag(a, av_left(a, n)) == AV_APP && av_left(a, av_left(a, n)) == AV_NODE_S);
-        if (!sk) continue;
+        if (!sk || n == y) continue;
         /* η erases a formal its body applies last, as [g] (S (K f) g) is
          * S (K f) and [y] (K y) is K: a partial S P, S or K meets only η,
          * but applied to the formal it inverts at the next.  So such η

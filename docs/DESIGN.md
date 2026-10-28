@@ -1,9 +1,9 @@
 # Avon: the native runtime, planned
 
-> **Status (2026-10-22).**
+> **Status (2026-10-29).**
 >
-> - **Built:** stages 0 to 7 and 9 of §11. Stage 8 has the compiler's core, the SKIjack-0 front end, and the full language's front end through M4: every corpus program compiles in Avon to Python's terms. Its checkers, M5 (Stage A) and M6 (Stage B), remain (§11.1, §20.3).
-> - **Beyond the stages:** share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof. Jets under hiding are built (`ZK-JETS.md`). Frame traces and the defect count serve the pure-S paper's hider census (§22). The structural hash is `skijack-2`, 128 bits (§5), and a dashboard entry is its term, not its digest (§6.5).
+> - **Built:** stages 0 to 7 and 9 of §11. Stage 8 has the compiler's core, the SKIjack-0 front end, and the full language's front end through M6: it checks a program as Python's Stage A and Stage B do, and compiles every corpus program in Avon to Python's terms (§11.1, §20.3).
+> - **Beyond the stages:** share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof. Its templates come from Python's expander, from front1 itself, or from the term with no front end, by inverting bracket abstraction (§6.9, `SKA.md`). Jets under hiding are built (`ZK-JETS.md`). Frame traces and the defect count serve the pure-S paper's hider census (§22). The structural hash is `skijack-2`, 128 bits (§5), and a dashboard entry is its term, not its digest (§6.5).
 > - **Open:** what the proofs do not yet cover, and the unbuilt stage work, are listed in §11.1, "Open". `WORKLIST.md` orders what is next.
 >
 > **How to read this note.** It began on 2026-09-16 as the build plan, before any code existed, and grew as the stages were built. §0 to §4 and §10 to §16 are the plan and its decisions; §11.1 is the record of what was built, with figures as measured at the time; §5 to §9 and §17 to §22 are the current design. `RUNTIME.md` is the user's reference, `ARCHITECTURE.md` the map of the source. Where this note and the compiler differ, the compiler (SKIjack's `python/skijack`) and its tests are authoritative. Paths that begin `avon/bench/` are in the [SKIjack repository](https://github.com/sigilante/SKIjack/tree/master/avon/bench), where this note was first written; `RUNTIME-DESIGN.md` and `SPEC.md` are SKIjack's too.
@@ -1201,6 +1201,14 @@ inversion proposes and the abstraction decides. It cannot tell a closed
 reference from abstraction plumbing, so its bodies are weaker than the
 compiler's: the corpus's 43 halting runs take 145,620 steps, against SKI's
 640,853 and the compiler's templates' 63,774, every normal form the same.
+
+**Handed over by front1, 2026-10-28.** The full language's front end makes
+each rule's template as it abstracts the rule, and `front0 --emit` writes
+them as the files `--templates` reads (§20, `SKA.md` §7). For its own
+source front1 emits all 2,326 of Python's templates, so a pill holding
+front1 compiles with templates and no Python. Three producers now feed one
+loader: Python's expander, front1 and discovery, and the loader checks
+each body the same way.
 
 ### 6.10 Data jets: constructors dispatched, numerals held as numbers
 
