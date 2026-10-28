@@ -157,11 +157,33 @@ is called there.**
   strictness question of `WORKLIST.md` item 1.
 - *Known functions*, 3 to 8%, at 28 sites, the top 10 holding 98.5%. Only 6.3% of them
   are calls the head completes. The rest are partial applications the instance builds,
-  and one site holds 90%: a lifted branch of front1's `forceAll`, `λa b c d e. a b c e`,
-  whose first formal holds itself with one argument, short of its five (810,911 instances
-  on front0's source, 3,817,563 on the fixed point). It is a chain of partial
-  applications, one per name `forceAll` walks: a candidate for a supercombinator or data
-  jet in its own right, not for specialization.
+  and one site holds 90% (810,911 instances on front0's source, 3,817,563 on the fixed
+  point): a template `λa b c d e. a b c e`, its first formal holding itself with one
+  argument, short of its five.
+
+**That site was front1's tokens, past the arity cap.** The template is a lifted branch
+of `forceAll`, and the first reading of this table took the site for `forceAll`'s own
+chain, but a jet is its tree: the branch's key
+is `S (K (S (K K)))`, a layer `L` with `L x b c d = x b c`, and a probe of the site's
+argument found `L` 32 deep over `T`. front1's `tok` is a 34-way sum; its constructor
+`TName` is `L³³ T`, `λx c₀ … c₃₃. c₀ x`, and takes 35 arguments, past the cap of 32,
+so no `tok` constructor was a template. A case on a token peeled the 33 layers one
+instance each, every `L` inside the constructor's term a jet node of the branch's key.
+The cap is now 64 (§6.8), and the 34 constructors dispatch as templates:
+
+| front1, master `95b260c` against the cap of 64 | before | after |
+|---|---:|---:|
+| templates accepted | 2,262 | 2,296 |
+| front0's source: contractions | 33,814,092 | 32,817,600 |
+| front0's source: template instances | 12,118,784 | 11,268,473 |
+| front0's source: wall clock, best of three | 2.35 s | 2.32 s |
+| the fixed point: contractions | 411,048,920 | 406,467,740 |
+| the fixed point: wall clock, one run | 11.9 s | 11.8 s |
+| known functions at a formal, front0's source | 903,538 | 21,683 |
+
+Every output is the same. The contractions fall 3.0% and 1.1%; the wall clock is within
+the runs' spread, since an `L` instance was cheap. A case still dispatches once either
+way: before, the last layer's `T x c₀` was itself a dispatch.
 
 ## 5. Step 3: specialization on known functions (decision: not taken, measured 2026-10-28)
 

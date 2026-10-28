@@ -8,7 +8,7 @@
  *    instantiated, one step, and the normal form is the unjetted one.
  *  - A body that does not abstract to its key is refused, and the term runs
  *    as pure SKI; an η-template, an open body, a leaf key and a template of
- *    more than 32 formals are skipped.
+ *    more than 64 formals are skipped.
  *  - Copy mode ignores templates: its counts are the unjetted ones.
  *  - Short of its arguments the key's term is entered and its node stays a
  *    jet node, not demoted: the next full application of it fires.
@@ -151,11 +151,11 @@ TEST(eta_open_and_leaf_templates_are_skipped) {
     char b_hash[AV_HASH_LEN + 1], eta[128];
     hash_of(B_KEY, b_hash);
     snprintf(eta, sizeof eta, B_KEY "|1|0|`#%s v0", b_hash + 10);
-    /* and one of 33 formals, past the 32 a fire takes: skipped, not refused */
+    /* and one of 65 formals, past the 64 a fire takes: skipped, not refused */
     char wide[512];
-    size_t at = (size_t)snprintf(wide, sizeof wide, "K|33|");
-    for (int i = 0; i < 33; i++)
-        at += (size_t)snprintf(wide + at, sizeof wide - at, i ? ",%d" : "%d", i % 32);
+    size_t at = (size_t)snprintf(wide, sizeof wide, "K|%u|", AV_JET_ARITY_MAX + 1);
+    for (unsigned i = 0; i <= AV_JET_ARITY_MAX; i++)
+        at += (size_t)snprintf(wide + at, sizeof wide - at, i ? ",%u" : "%u", i % AV_JET_ARITY_MAX);
     snprintf(wide + at, sizeof wide - at, "|v0");
     const char *lines[4] = { eta, "K|1|0|v1", "K|2|0,1|v0", wide };
     const char *refs[1] = { B_KEY };

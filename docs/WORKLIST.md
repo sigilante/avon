@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-28.
 
 ## Done since the last revision
 
+- **front1's tokens dispatch: the arity cap is 64** (2026-10-28; `SKA.md` §4, DESIGN
+  §6.8). The 90% site of step 2's known functions was not `forceAll`'s chain but `tok`,
+  a 34-way sum whose constructors take 34 and 35 arguments, past the cap of 32: a case
+  on a token peeled 33 layers, one template instance each. At 64 the 34 constructors are
+  templates and dispatch: front0's source 33,814,092 contractions to 32,817,600, the
+  fixed point 411,048,920 to 406,467,740, every output the same. `word` in SKIlark now
+  has room for 63 one-field constructors.
+
 - **Subject knowledge analysis: the plan, the template load and the measurement**
   (2026-10-28; [`SKA.md`](SKA.md)). `SKA.md` maps Afonin's two SKA articles onto Avon:
   templates are its recovered functions and the load-time matcher its compile-time jet
@@ -288,8 +296,6 @@ design lives. Last revised 2026-10-28.
      strictness;
    - the formals a template cases on along every path, taken as fields directly
      (`SKA.md` §6), since cases are 51 to 58% of formal heads;
-   - `forceAll`'s chain of partial applications, one site of 3,817,563 instances on the
-     fixed point: a candidate supercombinator or data jet;
    - discovering templates by running, for programs no compiler hands them for, or
      front1 emitting its own for the pill (`SKA.md` §6).
 

@@ -174,7 +174,7 @@ templates: 641 accepted, 0 refused, 352 skipped, 0 unbound; 18930884 instantiati
 
 `refused` counts templates whose body does not abstract to their key, or
 malformed lines; `skipped` counts duplicates, η-templates, open bodies,
-bare-leaf keys, and templates of more than 32 formals (a constructor of a
+bare-leaf keys, and templates of more than 64 formals (a constructor of a
 128-way type takes 128), the most one fire takes.
 
 **Data jets** (`--data`, §6.10) add three things to templates, and print a

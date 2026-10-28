@@ -1217,7 +1217,13 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                     return AV_INTERRUPTED;
                 }
             }
-            if (!ensure(r, a->jets[id].nodes)) return AV_SIZE;
+            /* the jet node rooted while ensure may collect: the stats key
+             * on where it is now */
+            r->jnode = cur;
+            bool room = ensure(r, a->jets[id].nodes);
+            cur = r->jnode;
+            r->jnode = AV_NONE;
+            if (!room) return AV_SIZE;
             for (unsigned i = 0; i < k; i++)
                 args[i] = av_res(a, av_right(a, r->stk[r->top - 1 - i]));
             if (o->jetstats) jetstats_fire(o->jetstats, cur, id);

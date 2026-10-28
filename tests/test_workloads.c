@@ -106,7 +106,7 @@ TEST(joys_words_are_wide_constructors) {
     /* the interpreted kernel: Joy's words of a 30-way word, the 29th the
        internal Choose and the 30th Ext, the kernel's further words in a
        sum of their own; the one-field words, Lit of an item and Def, take
-       31 arguments, under the cap of 32 */
+       31 arguments, under the cap of 64 */
     static const char *const kernel[] = { "Dup", "Swap", "Pop", "Qcons", "Cat", "Unit",
                                           "Dip", "Do", "Lit", "Add", "Sub", "Mul", "Div",
                                           "Rem", "Eql", "Lt", "Branch", "Ifte", "Uncons",
