@@ -45,8 +45,8 @@ static void tdir(char dir[64], const char *const *lines, int n,
     snprintf(path, sizeof path, "%s/templates.tsv", dir);
     FILE *f = fopen(path, "w");
     for (int i = 0; i < n; i++) {
-        char key[128], k[8], formals[256], body[256], h[AV_HASH_LEN + 1];
-        CHECK(sscanf(lines[i], "%127[^|]|%7[^|]|%255[^|]|%255[^\n]", key, k, formals, body) == 4);
+        char key[1024], k[8], formals[256], body[256], h[AV_HASH_LEN + 1];
+        CHECK(sscanf(lines[i], "%1023[^|]|%7[^|]|%255[^|]|%255[^\n]", key, k, formals, body) == 4);
         hash_of(key, h);
         fprintf(f, "%s\ttest\tt%d\t%s\t%s\t%s\n", h, i, k, formals, body);
     }
@@ -304,7 +304,7 @@ TEST(a_referenced_term_may_be_written_as_a_dag) {
 #define T_KEY  "S (K (S I)) K"
 #define W_KEY  "S S I"
 
-static av_jetstat_heads heads_of(const char *src, const char *dir, av_jetstats *s) {
+static av_jetstat_heads heads_of(const char *src, const char *dir, av_jetstats *s, long templates) {
     av_arena *a = av_arena_new(1u << 12);
     uint32_t t = av_parse(a, src, strlen(src), NULL);
     const char *err = NULL;
@@ -315,7 +315,7 @@ static av_jetstat_heads heads_of(const char *src, const char *dir, av_jetstats *
         CHECK(av_templates_bind(a, ts, t));
         long acc, ref, skip, unb;
         av_templates_counts(ts, &acc, &ref, &skip, &unb);
-        CHECK_EQ(acc, 4);
+        CHECK_EQ(acc, templates);
         av_templates_free(ts);
     }
     av_root_push(a, &t);
@@ -339,7 +339,7 @@ TEST(instances_are_counted_by_their_bodys_head) {
     tdir(d, lines, 4, NULL, 0);
     av_jetstats *s = av_jetstats_new();
     REQUIRE(s != NULL);
-    av_jetstat_heads h = heads_of(B_KEY " (" F_KEY " a) g x", d, s);
+    av_jetstat_heads h = heads_of(B_KEY " (" F_KEY " a) g x", d, s, 4);
     CHECK_EQ(h.instances, 2);
     CHECK_EQ(h.formal, 2);
     CHECK_EQ(h.known, 0);
@@ -367,16 +367,16 @@ TEST(instances_are_counted_by_their_bodys_head) {
         CHECK_EQ(sites[0].n, 1);
     }
     free(sites);
-    h = heads_of(W_KEY " y", d, s);             /* the counts accumulate */
+    h = heads_of(W_KEY " y", d, s, 4);             /* the counts accumulate */
     CHECK_EQ(h.instances, 3);
     CHECK_EQ(h.known, 1);
-    h = heads_of(B_KEY " (" T_KEY " a) g x", d, s);
+    h = heads_of(B_KEY " (" T_KEY " a) g x", d, s, 4);
     CHECK_EQ(h.instances, 5);
     CHECK_EQ(h.held[AV_HELD_CTOR], 1);
     CHECK_EQ(h.held[AV_HELD_OTHER], 2);
     CHECK_EQ(av_jetstats_sites(s, &sites), 1);  /* no known function */
     free(sites);
-    h = heads_of(B_KEY " (" B_KEY " a) g x", d, s);   /* B a (g x): two of B's three */
+    h = heads_of(B_KEY " (" B_KEY " a) g x", d, s, 4);   /* B a (g x): two of B's three */
     CHECK_EQ(h.instances, 6);
     CHECK_EQ(h.held[AV_HELD_FUNCTION], 2);
     CHECK_EQ(h.full, 1);
@@ -384,6 +384,45 @@ TEST(instances_are_counted_by_their_bodys_head) {
     CHECK_EQ(n, 2);
     for (size_t i = 0; i < n; i++)
         if (!sites[i].full) CHECK(sites[i].caller == sites[i].callee && sites[i].args == 1);
+    free(sites);
+    av_jetstats_free(s);
+    rmdir_all(d);
+}
+
+/*  A site's formal past 31: P is λx c0 .. c32. c32 x, its head formal 33,
+ *  which here holds F q, completed by x.  P's key is 32 layers of S (K K)
+ *  over S (K (S I)) K. */
+TEST(a_site_keeps_a_formal_past_31) {
+    char key[1024] = "", line[1400], body[64];
+    size_t at = 0;
+    for (int i = 0; i < 32; i++) at += (size_t)snprintf(key + at, sizeof key - at, "S (K K) (");
+    at += (size_t)snprintf(key + at, sizeof key - at, "S (K (S I)) K");
+    for (int i = 0; i < 32; i++) at += (size_t)snprintf(key + at, sizeof key - at, ")");
+    char formals[256];
+    size_t fa = 0;
+    for (int i = 0; i < 34; i++) fa += (size_t)snprintf(formals + fa, sizeof formals - fa, i ? ",%d" : "%d", i);
+    snprintf(body, sizeof body, "`v33 v0");
+    snprintf(line, sizeof line, "%s|34|%s|%s", key, formals, body);
+    const char *lines[2] = { F_KEY "|2|0,1|``v1 v0 v0", line };
+    char d[64];
+    tdir(d, lines, 2, NULL, 0);
+    char src[2048];
+    size_t sa = (size_t)snprintf(src, sizeof src, "(%s) x", key);
+    for (int i = 0; i < 32; i++) sa += (size_t)snprintf(src + sa, sizeof src - sa, " c%d", i);
+    snprintf(src + sa, sizeof src - sa, " (" F_KEY " q)");
+    av_jetstats *s = av_jetstats_new();
+    REQUIRE(s != NULL);
+    av_jetstat_heads h = heads_of(src, d, s, 2);
+    CHECK_EQ(h.held[AV_HELD_FUNCTION], 1);
+    CHECK_EQ(h.full, 1);
+    av_jetstat_site *sites;
+    size_t n = av_jetstats_sites(s, &sites);
+    CHECK_EQ(n, 1);
+    if (n == 1) {
+        CHECK_EQ(sites[0].formal, 33);
+        CHECK_EQ(sites[0].args, 1);
+        CHECK(sites[0].full);
+    }
     free(sites);
     av_jetstats_free(s);
     rmdir_all(d);
@@ -398,5 +437,6 @@ TEST_MAIN(
     TEST_CASE(fuel_stops_a_looping_template_program),
     TEST_CASE(collections_keep_the_globals),
     TEST_CASE(a_referenced_term_may_be_written_as_a_dag),
-    TEST_CASE(instances_are_counted_by_their_bodys_head)
+    TEST_CASE(instances_are_counted_by_their_bodys_head),
+    TEST_CASE(a_site_keeps_a_formal_past_31)
 )

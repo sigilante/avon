@@ -288,8 +288,8 @@ void jetstats_instance(av_jetstats *s, const av_arena *a, uint32_t id, const uin
     bool full = m + p >= need;
     if (full) H->full++;
     if (caller >= 1u << 24 || callee >= 1u << 24) { s->lost = true; return; }
-    count_add(s, &s->sites, &s->nsites, &s->sitecap,
-              (uint64_t)full << 58 | caller << 34 | (uint64_t)f << 29 | (uint64_t)callee << 5 | m);
+    count_add(s, &s->sites, &s->nsites, &s->sitecap,       /* formal and m below 64 */
+              (uint64_t)full << 62 | caller << 38 | (uint64_t)f << 32 | (uint64_t)callee << 6 | m);
 }
 
 void jetstats_miss(av_jetstats *s, uint32_t id) {
@@ -357,9 +357,9 @@ size_t av_jetstats_sites(const av_jetstats *s, av_jetstat_site **out) {
     for (size_t k = 0; k < s->sitecap; k++) {
         if (!s->sites[k].n) continue;
         uint64_t key = s->sites[k].key;
-        (*out)[n++] = (av_jetstat_site){ (size_t)(key >> 34 & 0xffffffu), (unsigned)(key >> 29 & 31),
-                                         (size_t)(key >> 5 & 0xffffffu), (unsigned)(key & 31),
-                                         (key >> 58 & 1) != 0, s->sites[k].n };
+        (*out)[n++] = (av_jetstat_site){ (size_t)(key >> 38 & 0xffffffu), (unsigned)(key >> 32 & 63),
+                                         (size_t)(key >> 6 & 0xffffffu), (unsigned)(key & 63),
+                                         (key >> 62 & 1) != 0, s->sites[k].n };
     }
     return n;
 }
