@@ -217,6 +217,77 @@ static int by_pair_fires(const void *x, const void *y) {
     return (p->kind > q->kind) - (p->kind < q->kind);
 }
 
+static int by_site(const void *x, const void *y) {
+    const av_jetstat_site *p = x, *q = y;
+    if (p->n != q->n) return (p->n < q->n) - (p->n > q->n);
+    if (p->caller != q->caller) return (p->caller > q->caller) - (p->caller < q->caller);
+    if (p->formal != q->formal) return (p->formal > q->formal) - (p->formal < q->formal);
+    if (p->callee != q->callee) return (p->callee > q->callee) - (p->callee < q->callee);
+    return (p->args > q->args) - (p->args < q->args);
+}
+
+static double pct(uint64_t n, uint64_t of) { return of ? 100.0 * (double)n / (double)of : 0.0; }
+
+/*  Template instances by their body's head, and the known functions their
+ *  formals held there: how many indirect calls a specialization on the
+ *  argument could make direct (docs/SKA.md). */
+static void print_heads(FILE *out, const av_jetstats *all, size_t top, const drow *rows,
+                        size_t nr, const jname *names, size_t nnames) {
+    av_jetstat_heads h;
+    av_jetstats_heads(all, &h);
+    if (!h.instances) return;
+    fprintf(out, "\ntemplate instances by their body's head: %llu\n",
+            (unsigned long long)h.instances);
+    fprintf(out, "%10llu %5.1f%%  a closed term: a known call\n",
+            (unsigned long long)h.known, pct(h.known, h.instances));
+    fprintf(out, "%10llu %5.1f%%  a formal: a call to what its argument holds\n",
+            (unsigned long long)h.formal, pct(h.formal, h.instances));
+    fprintf(out, "%10llu %5.1f%%  no application\n",
+            (unsigned long long)h.bare, pct(h.bare, h.instances));
+    static const char *const held[AV_HELD_KINDS] = {
+        "a constructor with its fields",
+        "a numeral or list word",
+        "a template or residual jet short of its arguments: a known function",
+        "S, K or I short of their arguments",
+        "a head with all its arguments: not yet a value",
+        "an atom, a native operation or Y",
+    };
+    fprintf(out, "what the formal held\n");
+    for (unsigned k = 0; k < AV_HELD_KINDS; k++)
+        fprintf(out, "%10llu %5.1f%%  %s\n", (unsigned long long)h.held[k],
+                pct(h.held[k], h.formal), held[k]);
+    av_jetstat_site *sites;
+    size_t ns = av_jetstats_sites(all, &sites);
+    if (!ns) { free(sites); return; }
+    qsort(sites, ns, sizeof *sites, by_site);
+    uint64_t in10 = 0, in100 = 0;
+    for (size_t k = 0; k < ns; k++) {
+        if (k < 10) in10 += sites[k].n;
+        if (k < 100) in100 += sites[k].n;
+    }
+    uint64_t fn = h.held[AV_HELD_FUNCTION];
+    fprintf(out, "known functions at a formal: %llu (%.1f%%) given all their arguments by the "
+            "head, a call made at once; the rest short of them\n",
+            (unsigned long long)h.full, pct(h.full, fn));
+    fprintf(out, "%zu sites (caller, formal, callee and the arguments it held); the top 10 "
+            "hold %.1f%%, the top 100 %.1f%%\n", ns, pct(in10, fn), pct(in100, fn));
+    for (size_t k = 0; k < ns && k < top; k++) {
+        char hc[AV_HASH_LEN + 1], hf[AV_HASH_LEN + 1], lc[64], lf[64];
+        unsigned ar;
+        uint64_t cost;
+        size_t atoms;
+        av_jetstat_row cc, cf;
+        av_jetstats_row(all, sites[k].caller, hc, &ar, &cost, &atoms, &cc);
+        av_jetstats_row(all, sites[k].callee, hf, &ar, &cost, &atoms, &cf);
+        jet_label(lc, sizeof lc, hc, cc.ctor, names, nnames, rows, nr);
+        jet_label(lf, sizeof lf, hf, cf.ctor, names, nnames, rows, nr);
+        fprintf(out, "%10llu  %-5s %s, holding %u  <-  formal %u of %s\n",
+                (unsigned long long)sites[k].n, sites[k].full ? "call" : "short", lf,
+                sites[k].args, sites[k].formal, lc);
+    }
+    free(sites);
+}
+
 /*  The jets' table, most absorbed first, then the nested fires; with the
  *  alone arrays (per dictionary row), each jet's run by itself beside. */
 void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t top,
@@ -299,6 +370,7 @@ void print_jetstats(FILE *out, const av_jetstats *all, uint64_t total, size_t to
                pairs[k].kind == AV_FROM_RESIDUAL ? "residual" : "term", li, lo);
     }
     free(pairs);
+    print_heads(out, all, top, rows, nr, names, nnames);
     free(order);
 }
 

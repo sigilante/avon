@@ -557,16 +557,22 @@ plan left open:
   row's hash from its term and refuses a mismatch, registers the rows at
   or above a size floor (default 8 atoms: 139 of 286), and wraps each
   jet's inner jets in its term and residual.
-- **A match is tree identity, not a digest.** `av_jets_match` finds a
-  candidate by the 128-bit digest. It wraps the node only if the node is
-  the jet's term, tree for tree.
+- **A match is tree identity, not a digest.** `av_jets_match` wraps a
+  node exactly when the node is a jet's term, tree for tree, and reads no
+  digest.
   - Before 2026-10-06 a digest alone sufficed, so a term built to
     collide in about 2^32 work ran as another (`AUDIT.md` item 8). An
     interpreter's dictionary rows are held to their hashes the same way.
-  - Trees are compared by canonical ids. A leaf's id is its interned
-    node; an application's is the pair of its children's ids. The table
-    lasts a whole match, so the program and the jets' terms each cost
-    their nodes once.
+  - Trees are compared by canonical ids. A leaf's id is its atom's; an
+    application's is the pair of its children's ids. The jets' terms are
+    canonicalized once into a table the arena keeps, and each program node
+    is looked up by its children's ids without adding any: a subtree no
+    jet's term holds has no id, nor has anything above it.
+  - Until 2026-10-28 a digest proposed each candidate, so every program
+    node was hashed with SHA-256: 1.9 s of a 3.4 s front1 run on a
+    one-line source, the "template load" the worklist named. One digest holds one term, and
+    every jet's digest is its term's (asserted in debug builds), so the
+    table finds the jet the digest did (`SKA.md` §3).
   - The first version, in #26, compared with a pair budget set by the
     jet's size. It refused a program whose copy of a term shared less
     than the jet's term: 92 templates on front1's own source. That made
@@ -1352,7 +1358,8 @@ the same, every name's hash:
 | with the bit-string operations | 411,048,920 | | |
 
 The fixed point fell from 53 s to 47 s, the template load among them:
-loading front1's templates is 4.3 s of front0's source's 5.5 (§20.3).
+loading front1's templates was 4.3 s of front0's source's 5.5 (§20.3),
+until matching by trees alone took most of it away (§6.5).
 Each operation is native code the runtime trusts, as a numeral
 operation is, and a proof would owe a theorem for each. `tests/test_data.c`
 runs every pair and key above, each in one native step to the term's
@@ -3811,10 +3818,11 @@ seconds to compile it, against 9.
   - With templates and data jets, the run's own profile (2026-10-28)
     puts a third of it in bit strings, and three bit-string operations
     run natively (§6.10, "Bit strings"): front1's fixed point from
-    633,573,940 contractions to 411,048,920. The rest of a run's time is
-    mostly the template load, 4.3 s of 5.5 on front0's source, in SHA-256
-    and hash-consing: a lever for a cache of verified templates, not a
-    jet.
+    633,573,940 contractions to 411,048,920. The rest of a run's time was
+    mostly the template load, 4.3 s of 5.5 on front0's source. It was the
+    matcher hashing every program node with SHA-256; matching by trees
+    alone (§6.5, 2026-10-28) takes front0's source from 5.1 s to 2.4 s
+    and the fixed point from 14.4 s to 11.3 s (`SKA.md` §3).
 
 ### 20.4 What else the analogy imports
 

@@ -100,6 +100,7 @@ void av_arena_free(av_arena *a) {
         free(a->jets[k].consts);
     }
     free(a->jets);
+    jet_dict_free(a);
     free(a->jet_scratch);
     for (uint32_t k = 0; k < a->ntmpls; k++) {
         free(a->tmpls[k].ops);

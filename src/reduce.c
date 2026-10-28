@@ -1145,6 +1145,7 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                     uint32_t args[AV_JET_ARITY_MAX];
                     for (unsigned i = 0; i < T->k; i++)
                         args[i] = av_res(a, ssarg(r, D, r->top - 1 - i));
+                    if (o->jetstats) jetstats_instance(o->jetstats, a, id, args);
                     unsigned ck;
                     if (joins && (ck = case_kind(a, T, args)) != CJ_NONE) {
                         int cj = case_join(r, T, args, p, ck, &cur);

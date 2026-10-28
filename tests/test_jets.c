@@ -347,11 +347,11 @@ static size_t jet_nodes(const av_arena *a, uint32_t t, size_t depth) {
     return jet_nodes(a, av_left(a, t), depth + 1) + jet_nodes(a, av_right(a, t), depth + 1);
 }
 
-/*  A node is a jet's only if it is the jet's term: the 64-bit digest
- *  finds a candidate, and the trees must match.  Here the jet's term is
- *  changed after registration, as a colliding term under the same digest
- *  would be. */
-TEST(a_digest_match_is_not_enough) {
+/*  A node is a jet's exactly when it is the jet's term, tree for tree: a
+ *  copy built apart, sharing no node with the term, is wrapped, and a term
+ *  one leaf off is not.  The matcher reads no digest, so a term colliding
+ *  with a jet's digest cannot pass for it. */
+TEST(a_match_is_the_term_not_its_digest) {
     av_arena *a = av_arena_new(0);
     const char *pair = "S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K)";
     uint32_t p = av_parse(a, pair, strlen(pair), NULL);
@@ -363,9 +363,15 @@ TEST(a_digest_match_is_not_enough) {
     av_root_push(a, &prog);
     uint32_t m = av_jets_match(a, prog);
     CHECK_EQ(jet_nodes(a, m, 0), 1);                /* the term: wrapped */
-    a->jets[id].fallback = av_parse(a, "K K", 3, NULL);
+    uint32_t copy = av_parse(a, pair, strlen(pair), NULL);
+    REQUIRE(copy != av_view(a, p));
+    prog = av_app(a, copy, x);
     m = av_jets_match(a, prog);
-    CHECK_EQ(jet_nodes(a, m, 0), 0);                /* the digest alone: not */
+    CHECK_EQ(jet_nodes(a, m, 0), 1);                /* a copy: wrapped */
+    const char *off = "S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K I)";
+    prog = av_app(a, av_parse(a, off, strlen(off), NULL), x);
+    m = av_jets_match(a, prog);
+    CHECK_EQ(jet_nodes(a, m, 0), 0);                /* one leaf off: not */
     av_root_pop(a);
     av_root_pop(a);
     av_arena_free(a);
@@ -585,7 +591,7 @@ TEST_MAIN(
     TEST_CASE(the_dictionary_registers),
     TEST_CASE(every_jet_leaves_counts_and_states_alone),
     TEST_CASE(the_check_catches_a_corrupted_jet),
-    TEST_CASE(a_digest_match_is_not_enough),
+    TEST_CASE(a_match_is_the_term_not_its_digest),
     TEST_CASE(a_collision_is_refused_not_merged),
     TEST_CASE(a_jet_matches_a_copy_that_shares_less),
     TEST_CASE(share_mode_never_writes_the_dashboard),

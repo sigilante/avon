@@ -43,6 +43,9 @@ bool     hash_all(const av_arena *a, uint32_t t, dmap *m);
 
 uint32_t jet_find(const av_arena *a, av_digest digest);
 
+/*  The matcher's dictionary of jets' terms, freed with the arena. */
+void jet_dict_free(av_arena *a);
+
 /*  The profile's hooks (profile.c): charge one contraction of combinator
  *  c, whose partial applications are spine[-1] .. spine[-k], innermost
  *  first; follow a collection. */
@@ -97,6 +100,8 @@ void     jetstats_miss(av_jetstats *s, uint32_t id);
 void     jetstats_demote(av_jetstats *s, uint32_t id, bool copied);
 void     jetstats_made(av_jetstats *s, uint32_t node, uint32_t owner, unsigned kind);
 void     jetstats_remap(av_jetstats *s, const av_gc *g);
+/*  A template instance over args, by its body's head (jetstats.c). */
+void     jetstats_instance(av_jetstats *s, const av_arena *a, uint32_t id, const uint32_t *args);
 
 /*  A redex root rewritten in place is no longer loaded code. */
 void     profile_rewrote(av_profile *p, uint32_t node);
