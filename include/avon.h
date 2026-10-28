@@ -101,6 +101,8 @@ typedef struct {
     uint32_t   njets, jetcap;
     uint32_t  *jet_index;       /* open addressing, hash -> jet id */
     uint32_t   jet_index_cap;
+    struct av_jet_dict *jet_dict;   /* the jets' terms, canonicalized, for
+                                       the matcher; built as asked (jets.c) */
     uint32_t   jet_mark[AV_JET_ARITY_MAX];  /* residuals' atoms: @x0 .. */
     uint32_t  *jet_scratch;     /* an instance's intermediate results    */
     uint32_t   jet_scratch_cap;
@@ -1127,6 +1129,36 @@ bool         av_jetstats_find(const av_jetstats *s, const char *hash, size_t *i)
 size_t       av_jetstats_pairs(const av_jetstats *s, av_jetstat_pair **out);
 /*  Whether an origin was lost to memory, so counts undercount. */
 bool         av_jetstats_lost(const av_jetstats *s);
+
+/*  Template instances by the head of the body's root: a closed term, a
+ *  call whose target is known (SKA's direct call); a formal, a call to
+ *  whatever the argument holds (its indirect call); or no application at
+ *  all.  For a formal, what the argument held when the instance was made.
+ *  Counted at the instances share mode writes; with --jet-stats a case
+ *  never joins its instance, so every case is counted. */
+enum {
+    AV_HELD_CTOR,               /* a constructor with its fields: a case   */
+    AV_HELD_WORD,               /* a numeral or list word                  */
+    AV_HELD_FUNCTION,           /* a template or residual jet short of its
+                                   arguments: a known function             */
+    AV_HELD_COMB,               /* S, K or I short of their arguments      */
+    AV_HELD_CALL,               /* a head holding all its arguments: not
+                                   yet a value                             */
+    AV_HELD_OTHER,              /* an atom, a native operation, Y          */
+    AV_HELD_KINDS
+};
+typedef struct {
+    uint64_t instances;
+    uint64_t known, formal, bare;   /* by the root's head */
+    uint64_t held[AV_HELD_KINDS];   /* the formal's argument, by kind */
+} av_jetstat_heads;
+void av_jetstats_heads(const av_jetstats *s, av_jetstat_heads *h);
+/*  The instances whose head formal held a known function, by caller
+ *  template, formal, callee and the arguments the callee held; *out is
+ *  malloc'd. */
+typedef struct { size_t caller; unsigned formal; size_t callee; unsigned args; uint64_t n; }
+    av_jetstat_site;
+size_t av_jetstats_sites(const av_jetstats *s, av_jetstat_site **out);
 
 /*  av_jets_load, registering only the row whose hash is `only`. */
 long av_jets_load_only(av_arena *a, const char *path, size_t min_atoms,

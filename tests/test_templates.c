@@ -13,6 +13,8 @@
  *  - Short of its arguments the key's term is entered and its node stays a
  *    jet node, not demoted: the next full application of it fires.
  *  - Fuel stops a looping template program; collections keep the globals.
+ *  - --jet-stats counts instances by their body's head, and what a formal
+ *    at the head held.
  */
 
 #include <stdio.h>
@@ -292,6 +294,89 @@ TEST(a_referenced_term_may_be_written_as_a_dag) {
     rmdir_all(d);
 }
 
+/*  --jet-stats counts each instance by its body's head.  B's head is its
+ *  formal f, here F a: a template short of its arguments, a known function;
+ *  or T a, T's body y x a constructor's, so a constructor with its field.
+ *  F's, y x x, is its formal y, here g x: an atom's application.  W's,
+ *  S x x, is S, a closed term. */
+#define F_KEY  "S (S (K S) (S (K (S I)) K)) K"
+#define T_KEY  "S (K (S I)) K"
+#define W_KEY  "S S I"
+
+static av_jetstat_heads heads_of(const char *src, const char *dir, av_jetstats *s) {
+    av_arena *a = av_arena_new(1u << 12);
+    uint32_t t = av_parse(a, src, strlen(src), NULL);
+    const char *err = NULL;
+    av_tmplset *ts = av_templates_load(a, dir, &err);
+    CHECK(ts != NULL);
+    if (ts) {
+        t = av_jets_match(a, t);
+        CHECK(av_templates_bind(a, ts, t));
+        long acc, ref, skip, unb;
+        av_templates_counts(ts, &acc, &ref, &skip, &unb);
+        CHECK_EQ(acc, 4);
+        av_templates_free(ts);
+    }
+    av_root_push(a, &t);
+    CHECK(av_jetstats_begin(s, a, t));
+    av_opts o = av_opts_default();
+    o.templates = true;
+    o.jetstats = s;
+    av_result r = av_reduce(a, t, &o);
+    CHECK_EQ(r.status, AV_NORMAL);
+    av_root_pop(a);
+    av_arena_free(a);
+    av_jetstat_heads h;
+    av_jetstats_heads(s, &h);
+    return h;
+}
+
+TEST(instances_are_counted_by_their_bodys_head) {
+    const char *lines[4] = { B_KEY "|3|0,1,2|`v0 `v1 v2", F_KEY "|2|0,1|``v1 v0 v0",
+                             W_KEY "|1|0|``S v0 v0", T_KEY "|2|0,1|`v1 v0" };
+    char d[64];
+    tdir(d, lines, 4, NULL, 0);
+    av_jetstats *s = av_jetstats_new();
+    REQUIRE(s != NULL);
+    av_jetstat_heads h = heads_of(B_KEY " (" F_KEY " a) g x", d, s);
+    CHECK_EQ(h.instances, 2);
+    CHECK_EQ(h.formal, 2);
+    CHECK_EQ(h.known, 0);
+    CHECK_EQ(h.held[AV_HELD_FUNCTION], 1);
+    CHECK_EQ(h.held[AV_HELD_OTHER], 1);
+    av_jetstat_site *sites;
+    size_t n = av_jetstats_sites(s, &sites);
+    CHECK_EQ(n, 1);
+    if (n == 1) {
+        char hc[AV_HASH_LEN + 1], hf[AV_HASH_LEN + 1], want[AV_HASH_LEN + 1];
+        unsigned ar;
+        uint64_t cost;
+        size_t atoms;
+        av_jetstat_row c;
+        av_jetstats_row(s, sites[0].caller, hc, &ar, &cost, &atoms, &c);
+        av_jetstats_row(s, sites[0].callee, hf, &ar, &cost, &atoms, &c);
+        hash_of(B_KEY, want);
+        CHECK(strcmp(hc, want) == 0);
+        hash_of(F_KEY, want);
+        CHECK(strcmp(hf, want) == 0);
+        CHECK_EQ(sites[0].formal, 0);
+        CHECK_EQ(sites[0].args, 1);
+        CHECK_EQ(sites[0].n, 1);
+    }
+    free(sites);
+    h = heads_of(W_KEY " y", d, s);             /* the counts accumulate */
+    CHECK_EQ(h.instances, 3);
+    CHECK_EQ(h.known, 1);
+    h = heads_of(B_KEY " (" T_KEY " a) g x", d, s);
+    CHECK_EQ(h.instances, 5);
+    CHECK_EQ(h.held[AV_HELD_CTOR], 1);
+    CHECK_EQ(h.held[AV_HELD_OTHER], 2);
+    CHECK_EQ(av_jetstats_sites(s, &sites), 1);  /* no known function */
+    free(sites);
+    av_jetstats_free(s);
+    rmdir_all(d);
+}
+
 TEST_MAIN(
     TEST_CASE(a_template_fires_where_its_key_meets_its_arguments),
     TEST_CASE(a_body_that_is_not_its_key_is_refused),
@@ -300,5 +385,6 @@ TEST_MAIN(
     TEST_CASE(short_of_its_arguments_the_key_stays_a_root),
     TEST_CASE(fuel_stops_a_looping_template_program),
     TEST_CASE(collections_keep_the_globals),
-    TEST_CASE(a_referenced_term_may_be_written_as_a_dag)
+    TEST_CASE(a_referenced_term_may_be_written_as_a_dag),
+    TEST_CASE(instances_are_counted_by_their_bodys_head)
 )

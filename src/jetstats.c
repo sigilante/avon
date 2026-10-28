@@ -53,6 +53,10 @@ struct av_jetstats {
     nmap      origin;           /* jet node -> row << 1 | kind, or TOPMARK */
     pairslot *pairs;            /* (outer row, inner row, kind) -> fires  */
     size_t    npairs, paircap;
+    av_jetstat_heads heads;     /* template instances by their body's head */
+    pairslot *sites;            /* (caller row, formal, callee row, held
+                                   arguments) -> instances */
+    size_t    nsites, sitecap;
     bool      lost;             /* out of memory: counts undercount */
 };
 
@@ -63,6 +67,7 @@ void av_jetstats_free(av_jetstats *s) {
     free(s->rows);
     free(s->row_of_id);
     free(s->pairs);
+    free(s->sites);
     nmap_free(&s->origin);
     free(s);
 }
@@ -183,25 +188,30 @@ bool av_jetstats_begin(av_jetstats *s, const av_arena *a, uint32_t t) {
     return true;
 }
 
-static void pair_add(av_jetstats *s, uint64_t key) {
-    if (2 * (s->npairs + 1) > s->paircap) {
-        size_t cap = s->paircap ? 2 * s->paircap : 256;
+/*  One more under key in a counting table. */
+static void count_add(av_jetstats *s, pairslot **tab, size_t *n, size_t *tcap, uint64_t key) {
+    if (2 * (*n + 1) > *tcap) {
+        size_t cap = *tcap ? 2 * *tcap : 256;
         pairslot *q = calloc(cap, sizeof *q);
         if (!q) { s->lost = true; return; }
-        for (size_t i = 0; i < s->paircap; i++) {
-            if (!s->pairs[i].n) continue;
-            size_t k = (size_t)(s->pairs[i].key * 0x9e3779b97f4a7c15u >> 20) & (cap - 1);
+        for (size_t i = 0; i < *tcap; i++) {
+            if (!(*tab)[i].n) continue;
+            size_t k = (size_t)((*tab)[i].key * 0x9e3779b97f4a7c15u >> 20) & (cap - 1);
             while (q[k].n) k = (k + 1) & (cap - 1);
-            q[k] = s->pairs[i];
+            q[k] = (*tab)[i];
         }
-        free(s->pairs);
-        s->pairs = q;
-        s->paircap = cap;
+        free(*tab);
+        *tab = q;
+        *tcap = cap;
     }
-    size_t k = (size_t)(key * 0x9e3779b97f4a7c15u >> 20) & (s->paircap - 1);
-    while (s->pairs[k].n && s->pairs[k].key != key) k = (k + 1) & (s->paircap - 1);
-    if (!s->pairs[k].n) { s->pairs[k].key = key; s->npairs++; }
-    s->pairs[k].n++;
+    size_t k = (size_t)(key * 0x9e3779b97f4a7c15u >> 20) & (*tcap - 1);
+    while ((*tab)[k].n && (*tab)[k].key != key) k = (k + 1) & (*tcap - 1);
+    if (!(*tab)[k].n) { (*tab)[k].key = key; (*n)++; }
+    (*tab)[k].n++;
+}
+
+static void pair_add(av_jetstats *s, uint64_t key) {
+    count_add(s, &s->pairs, &s->npairs, &s->paircap, key);
 }
 
 void jetstats_fire(av_jetstats *s, uint32_t node, uint32_t id) {
@@ -215,6 +225,67 @@ void jetstats_fire(av_jetstats *s, uint32_t node, uint32_t id) {
     if (kind == AV_FROM_RESIDUAL) r->c.in_residual++;
     else r->c.in_term++;
     pair_add(s, (o >> 1) << 33 | (uint64_t)(s->row_of_id[id] - 1) << 1 | kind);
+}
+
+/*  What an argument is, by its head and how many arguments the head holds:
+ *  the held kind, and for a known function its row and the count. */
+static unsigned held(const av_jetstats *s, const av_arena *a, uint32_t v, uint32_t *callee,
+                     unsigned *m) {
+    uint32_t h = av_res(a, v);
+    unsigned n = 0;
+    while (av_tag(a, h) == AV_APP) {
+        if (++n > AV_JET_ARITY_MAX) return AV_HELD_CALL;    /* past every arity */
+        h = av_res(a, av_left(a, h));
+    }
+    *m = n;
+    if (av_tag(a, h) == AV_JET) {
+        uint32_t l = a->nodes[h].l;
+        if (l & AV_JET_WORD) return n ? AV_HELD_CALL : AV_HELD_WORD;
+        uint32_t id = AV_JET_ID(l);
+        const av_jet *j = &a->jets[id];
+        unsigned need = j->arity;
+        if (j->tmpl) {
+            const av_tmpl *T = &a->tmpls[j->tmpl - 1];
+            if (av_ctor_is(T->ctor) && n == T->ctor.fields) return AV_HELD_CTOR;
+            need = T->k;
+        } else if (!j->residual_ok) {
+            return AV_HELD_OTHER;           /* a native operation or Y */
+        }
+        if (n >= need) return AV_HELD_CALL;
+        if (id >= s->nids || !s->row_of_id[id]) return AV_HELD_OTHER;
+        *callee = s->row_of_id[id] - 1;
+        return AV_HELD_FUNCTION;
+    }
+    if (h == AV_NODE_S || h == AV_NODE_K || h == AV_NODE_I) {
+        unsigned need = h == AV_NODE_S ? 3 : h == AV_NODE_K ? 2 : 1;
+        return n >= need ? AV_HELD_CALL : AV_HELD_COMB;
+    }
+    return AV_HELD_OTHER;
+}
+
+void jetstats_instance(av_jetstats *s, const av_arena *a, uint32_t id, const uint32_t *args) {
+    if (id >= s->nids || !s->row_of_id[id] || !a->jets[id].tmpl) return;
+    const av_tmpl *T = &a->tmpls[a->jets[id].tmpl - 1];
+    av_jetstat_heads *H = &s->heads;
+    H->instances++;
+    uint32_t x = T->root;
+    unsigned p = 0;
+    while (x >> 30 == TMPL_RES) {
+        x = T->ops[2 * (x & AV_PAYLOAD)];
+        p++;
+    }
+    if (!p) { H->bare++; return; }
+    if (x >> 30 != TMPL_ARG) { H->known++; return; }
+    H->formal++;
+    unsigned f = x & AV_PAYLOAD, m = 0;
+    uint32_t callee = AV_NONE;
+    unsigned k = held(s, a, args[f], &callee, &m);
+    H->held[k]++;
+    uint64_t caller = s->row_of_id[id] - 1;
+    if (k != AV_HELD_FUNCTION) return;
+    if (caller >= 1u << 24 || callee >= 1u << 24) { s->lost = true; return; }
+    count_add(s, &s->sites, &s->nsites, &s->sitecap,
+              caller << 34 | (uint64_t)f << 29 | (uint64_t)callee << 5 | m);
 }
 
 void jetstats_miss(av_jetstats *s, uint32_t id) {
@@ -271,6 +342,22 @@ bool av_jetstats_find(const av_jetstats *s, const char *hash, size_t *i) {
     for (size_t k = 0; k < s->nrows; k++)
         if (av_digest_eq(s->rows[k].digest, d)) { *i = k; return true; }
     return false;
+}
+
+void av_jetstats_heads(const av_jetstats *s, av_jetstat_heads *h) { *h = s->heads; }
+
+size_t av_jetstats_sites(const av_jetstats *s, av_jetstat_site **out) {
+    *out = malloc((s->nsites ? s->nsites : 1) * sizeof **out);
+    if (!*out) return 0;
+    size_t n = 0;
+    for (size_t k = 0; k < s->sitecap; k++) {
+        if (!s->sites[k].n) continue;
+        uint64_t key = s->sites[k].key;
+        (*out)[n++] = (av_jetstat_site){ (size_t)(key >> 34), (unsigned)(key >> 29 & 31),
+                                         (size_t)(key >> 5 & 0xffffffu), (unsigned)(key & 31),
+                                         s->sites[k].n };
+    }
+    return n;
 }
 
 size_t av_jetstats_pairs(const av_jetstats *s, av_jetstat_pair **out) {

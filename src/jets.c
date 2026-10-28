@@ -576,6 +576,16 @@ uint32_t jet_entry_for(av_arena *a, av_digest digest, uint32_t t, const char **w
         a->jets = j;
         a->jetcap = cap;
     }
+#ifndef NDEBUG
+    {   /* the caller computed the digest from t, or checked t against it:
+         * the matcher's dictionary rests on it (match) */
+        char h[AV_HASH_LEN + 1];
+        av_digest got;
+        bool ok = av_structural_hash(a, t, h) && av_hash_parse(h, &got);
+        assert(ok && av_digest_eq(got, digest) && "a jet's digest is its term's");
+        (void)ok;
+    }
+#endif
     uint32_t id = a->njets;
     uint32_t tn = template_nodes(a, t);
     if (tn == AV_NONE) { if (why) *why = "out of memory"; return AV_NONE; }
@@ -601,13 +611,13 @@ uint32_t jet_wrap(av_arena *a, uint32_t id, uint32_t inner) {
 }
 
 /*  Trees by identity, for the matcher: each node, seen through views, gets
- *  a canonical id, a leaf its interned node and an application the pair of
- *  its children's ids, so two nodes are the same tree exactly when their
- *  ids are equal.  The memo and the pair table last a whole match, so
- *  canonicalizing the program and the jets' terms costs their nodes once,
- *  with no budget to run past: an av_equal with a budget on the jet's size
- *  refused a program whose copy of the term shared less, 92 templates on
- *  front1's own source. */
+ *  a canonical id, a leaf its atom's id and an application the pair of its
+ *  children's ids, so two nodes are the same tree exactly when their ids
+ *  are equal.  The ids name trees, not nodes, so a collection leaves the
+ *  pair table true; only the memo, keyed by node, is lost.  Canonicalizing
+ *  costs a term's nodes once, with no budget to run past: an av_equal with
+ *  a budget on the jet's size refused a program whose copy of the term
+ *  shared less, 92 templates on front1's own source. */
 typedef struct {
     nmap memo;                  /* viewed node -> canonical id */
     uint64_t *key;              /* (left id, right id) + 1, 0 empty */
@@ -653,8 +663,8 @@ static uint32_t canon_pair(canon_tab *c, uint32_t l, uint32_t r) {
     return c->val[i];
 }
 
-/*  t's canonical id, AV_NONE when out of memory.  Leaves keep their
- *  interned node, below AV_MAX_NODES; applications count up from it. */
+/*  t's canonical id, AV_NONE when out of memory.  A leaf's is its atom's
+ *  id, below AV_MAX_NODES; applications count up from it. */
 static uint32_t canon_of(const av_arena *a, canon_tab *c, uint32_t t) {
     typedef struct { uint32_t node; bool done; } item;
     size_t cap = 64, top = 0;
@@ -669,7 +679,7 @@ static uint32_t canon_of(const av_arena *a, canon_tab *c, uint32_t t) {
         if (!it.done && nmap_get(&c->memo, it.node, &v)) continue;
         uint32_t id;
         if (av_tag(a, it.node) != AV_APP) {
-            id = it.node;                       /* a leaf: interned */
+            id = av_right(a, it.node);          /* a leaf: its atom */
         } else if (!it.done) {
             if (top + 3 > cap) {
                 item *q = realloc(todo, (cap *= 2) * sizeof *q);
@@ -696,18 +706,80 @@ done:
     return out;
 }
 
+/*  The canonical id of the application of ids l and r if the table holds
+ *  it, else AV_NONE: nothing is added. */
+static uint32_t canon_find(const canon_tab *c, uint32_t l, uint32_t r) {
+    if (l == AV_NONE || r == AV_NONE || !c->cap) return AV_NONE;
+    uint64_t key = ((uint64_t)l << 32 | r) + 1;
+    for (size_t i = (size_t)(key * 0x9e3779b97f4a7c15u >> 32) & (c->cap - 1); c->key[i];
+         i = (i + 1) & (c->cap - 1))
+        if (c->key[i] == key) return c->val[i];
+    return AV_NONE;
+}
+
+/*  Every jet's term, canonicalized: the matcher's dictionary.  A jet's
+ *  digest is its term's (each registration computes it, or checks the term
+ *  against it), and one digest holds one term, so two jets never share a
+ *  canonical term, and finding a node's term here finds the jet a digest
+ *  lookup would.
+ *
+ *  The arena keeps it, since a matcher runs on every fire of an
+ *  interpreter jet and every poke: the jets registered since it was last
+ *  asked for are added to it.  Its ids name trees, so a collection costs
+ *  it only the memo, which names nodes. */
+struct av_jet_dict {
+    canon_tab canon;
+    nmap      jet;              /* canonical id -> jet id + 1 */
+    uint32_t  njets;            /* the jets it holds: ids 0 .. njets - 1 */
+    uint64_t  collections;      /* the arena's when the memo was begun */
+};
+typedef struct av_jet_dict jet_dict;
+
+void jet_dict_free(av_arena *a) {
+    jet_dict *d = a->jet_dict;
+    if (!d) return;
+    canon_free(&d->canon);
+    nmap_free(&d->jet);
+    free(d);
+    a->jet_dict = NULL;
+}
+
+/*  The arena's dictionary, holding every jet; NULL out of memory. */
+static const jet_dict *dict_get(av_arena *a) {
+    if (!a->jet_dict && !(a->jet_dict = calloc(1, sizeof *a->jet_dict))) return NULL;
+    jet_dict *d = a->jet_dict;
+    if (d->collections != a->collections) {
+        nmap_free(&d->canon.memo);
+        d->collections = a->collections;
+    }
+    for (; d->njets < a->njets; d->njets++) {
+        uint32_t c = canon_of(a, &d->canon, a->jets[d->njets].fallback);
+        if (c == AV_NONE || !nmap_put(&d->jet, c, (uint64_t)d->njets + 1)) {
+            jet_dict_free(a);
+            return NULL;
+        }
+    }
+    return d;
+}
+
 /*  A fresh copy of t with jets wrapped; the root itself is not wrapped
  *  when skip_root, which is how a jet's own term is matched for its
- *  insides.  shared marks the jet nodes' terms as the dashboard's. */
-static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared) {
-    dmap dig = { 0 };
+ *  insides.  shared marks the jet nodes' terms as the dashboard's.
+ *
+ *  A node is a jet's exactly when it is the jet's term, tree for tree: its
+ *  canonical id, found from its children's without adding any, is a jet
+ *  term's.  A subtree no jet's term holds has no id, nor has anything
+ *  above it, so the program's nodes cost a table probe each, and no
+ *  digest. */
+static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared,
+                      const jet_dict *dict) {
     nmap out = { 0 };
-    canon_tab canon = { 0 };
+    nmap cid = { 0 };           /* viewed node -> canonical id, if any */
     typedef struct { uint32_t node; bool done; } item;
     size_t cap = 256, top = 0;
     item *todo = malloc(cap * sizeof *todo);
     uint32_t root = av_view(a, t), result = AV_NONE;
-    if (!todo || !hash_all(a, root, &dig)) goto done;
+    if (!todo) goto done;
     todo[top++] = (item){ root, false };
     while (top) {
         item it = todo[--top];
@@ -735,18 +807,21 @@ static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared) {
             built = av_app(a, (uint32_t)nf, (uint32_t)nx);   /* never reused */
             if (built == AV_NONE) goto done;
         }
-        av_digest d;
-        dmap_get(&dig, it.node, &d);
-        uint32_t id = jet_find(a, d);
-        /* a digest names a term: the node is the jet's only if it is the
-         * jet's term, tree for tree */
-        if (id != AV_NONE) {
-            uint32_t cn = canon_of(a, &canon, it.node), cj = canon_of(a, &canon, a->jets[id].fallback);
-            if (cn == AV_NONE || cj == AV_NONE) goto done;
-            if (cn != cj) id = AV_NONE;
+        /* the canonical id, as canon_of gives it: a leaf its atom's */
+        uint32_t c = av_right(a, it.node);
+        if (av_tag(a, it.node) == AV_APP) {
+            uint64_t cf = AV_NONE, cx = AV_NONE;
+            nmap_get(&cid, av_view(a, av_left(a, it.node)), &cf);
+            nmap_get(&cid, av_view(a, av_right(a, it.node)), &cx);
+            c = canon_find(&dict->canon, (uint32_t)cf, (uint32_t)cx);
         }
-        if (id != AV_NONE && !(skip_root && it.node == root)) {
-            built = jet_node(a, id | (shared ? AV_JET_SHARED : 0), built);
+        uint64_t jid = 0;
+        if (c != AV_NONE) {
+            if (!nmap_put(&cid, it.node, c)) goto done;
+            nmap_get(&dict->jet, c, &jid);
+        }
+        if (jid && !(skip_root && it.node == root)) {
+            built = jet_node(a, (uint32_t)(jid - 1) | (shared ? AV_JET_SHARED : 0), built);
             if (built == AV_NONE) goto done;
         }
         if (!nmap_put(&out, it.node, built)) goto done;
@@ -755,14 +830,14 @@ static uint32_t match(av_arena *a, uint32_t t, bool skip_root, bool shared) {
     if (nmap_get(&out, root, &r)) result = (uint32_t)r;
 done:
     free(todo);
-    dmap_free(&dig);
     nmap_free(&out);
-    canon_free(&canon);
+    nmap_free(&cid);
     return result;
 }
 
 uint32_t av_jets_match(av_arena *a, uint32_t t) {
-    return match(a, t, false, false);
+    const jet_dict *dict = dict_get(a);
+    return dict ? match(a, t, false, false, dict) : AV_NONE;
 }
 
 static bool wrap_insides(av_arena *a);
@@ -815,10 +890,14 @@ long av_jets_ctors(av_arena *a, uint32_t t, size_t max_atoms) {
 /*  After a dictionary is registered: wrap each jet's inner jets, in its
  *  term and in its residual, so a fire or an unwrap keeps them. */
 static bool wrap_insides(av_arena *a) {
+    /* a wrapped term is the same tree seen through its jet nodes, so the
+     * dictionary holds for the whole pass */
+    const jet_dict *dict = dict_get(a);
+    if (!dict) return false;
     for (uint32_t id = 0; id < a->njets; id++) {
         if (!a->jets[id].residual_ok) continue;
-        uint32_t f = match(a, a->jets[id].fallback, true, true);
-        uint32_t r = match(a, a->jets[id].residual, true, true);
+        uint32_t f = match(a, a->jets[id].fallback, true, true, dict);
+        uint32_t r = match(a, a->jets[id].residual, true, true, dict);
         if (f == AV_NONE || r == AV_NONE) return false;
         a->jets[id].fallback = f;
         a->jets[id].residual = r;
