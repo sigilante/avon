@@ -1360,9 +1360,12 @@ Three of those functions now run natively, as the numeral operations do.
 - *Reading only values.* An operand is read only where it is a value
   already: a constructor template's node applied to exactly its fields,
   or `K` and `K I`. The walk takes the term's cases in its order. Where it
-  meets a field not yet a value, the operation applied to what it has
-  reached is a weak reduct of the redex, and the fire leaves that, headed
-  by the redex's own jet node. An operand not yet a value at the top
+  meets a field not yet a value, the fire leaves the operation applied to
+  what it has reached, headed by the redex's own jet node. That term is
+  convertible with the redex, not a reduct of it: both reduce to the
+  operation's recursion over those fields, and Curry's Y reduces to that
+  recursion only one way (`lean/Words.lean`, `beq_fire`; `LEAN-JETS.md`
+  §5). An operand not yet a value at the top
   declines the fire; the term runs, a template instantiating, and forces
   it. So an operation forces nothing its term would not. `eqId` fires
   only where it can decide. A fire walks 4,096 levels at most, so a step
@@ -1867,8 +1870,9 @@ prelude and in Avon's `words.c`. (3) The cap: markers and
 needed neither (the sidestep, 2026-10-24); the cap is 64 since
 2026-10-28, markers with it, so list kernel words fit. (4) List words: the prelude's list operations, Avon's list jet
 node, and `tests/test_data.c`'s parity at every fuel. (5) The proofs:
-§18.2's word cells, and a list cell beside them, each operation's
-licence a Lean theorem owed.
+each operation's licence is a Lean theorem, proved for share mode
+(`lean/Words.lean`, 2026-10-29; `LEAN-JETS.md` §4 and §5); a witness
+still needs §18.2's word cells, and a list cell beside them.
 
 ## 7. The interpreter jet
 

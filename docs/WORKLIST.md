@@ -6,6 +6,15 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **Lists and bit strings, proved in Lean** (2026-10-29; `LEAN-JETS.md` §5). Step 2
+  is done. `lean/Words.lean` now proves all fifteen word operations' terms (numerals,
+  `len` .. `drop`, `beq`, `bget`, `ideq`) and models `list_fire` and `bits_walk`,
+  proving them sound. Lean prints every pin `words.c` holds, byte for byte the old
+  ones. The proofs corrected a claim: a bit-string fire that stops early leaves a
+  term convertible with the redex, not a reduct of it, since Curry's Y reaches its
+  knot only one way; `reduce.c` and DESIGN §6.10 now say so. Next: templates checked
+  by Lean (step 3).
+
 - **The numeral words, proved in Lean** (2026-10-29; `LEAN-JETS.md`). The plan for
   proving Avon's C jets is `docs/LEAN-JETS.md`; its step 1 is done. `lean/Words.lean`
   proves each of the seven numeral operations' pinned terms reduces to its operation's

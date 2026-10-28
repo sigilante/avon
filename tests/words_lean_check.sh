@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# The numeral words, proved: lean/Words.lean, checked against lean-ski,
-# proves each numeral operation's pinned term computes the operation on
-# every pair of Scott numerals (AvonWords.add_spec .. rem_spec) and
-# word_fire's arithmetic the same values (AvonWords.fireC_num and fireC_arg,
-# on lean-ski's axioms only), and prints the pins; the print must be
-# src/word_pins.h, byte for byte.
+# The word operations, proved: lean/Words.lean, checked against lean-ski,
+# proves each numeral, list and bit-string operation's pinned term computes
+# its function on every input, and word_fire's, list_fire's and bits_walk's
+# results sound (docs/LEAN-JETS.md), on Lean's axioms only, and prints the
+# pins; the print must be src/word_pins.h, byte for byte.
 #
 # Run from the repository root.  LEAN_SKI defaults to ~/Code/ski/lean-ski.
 
@@ -21,11 +20,19 @@ OUT=$(cd "$OUT" && pwd)
 ROOT=$(pwd)
 fail=0
 
+# The nine theorems the file prints must rest on Lean's own axioms alone:
+# propext and Quot.sound, never sorryAx or Lean.ofReduceBool.
+THEOREMS="fireC_num fireC_arg listFireC_sound beq_fire bget_fire ideq_fire ideq_spec bget_spec ctors_compiled"
+axioms_ok() {
+    local t
+    for t in $THEOREMS; do
+        grep -qE "^'AvonWords\.$t' depends on axioms: \[propext(, Quot\.sound)?\]$" "$OUT/lean.txt" || return 1
+    done
+}
 if (cd "$LEAN_SKI" && lake env lean --run "$ROOT/lean/Words.lean" "$OUT/word_pins.h") > "$OUT/lean.txt" 2>&1 &&
-    grep -qx "'AvonWords.fireC_num' depends on axioms: \[propext, Quot.sound\]" "$OUT/lean.txt" &&
-    grep -qx "'AvonWords.fireC_arg' depends on axioms: \[propext, Quot.sound\]" "$OUT/lean.txt"; then
+    axioms_ok; then
     if cmp -s "$OUT/word_pins.h" src/word_pins.h; then
-        echo "AvonWords.fireC_num and fireC_arg checked; src/word_pins.h is their print, byte for byte"
+        echo "AvonWords: $THEOREMS checked; src/word_pins.h is their print, byte for byte"
     else
         echo "FAIL: src/word_pins.h is not lean/Words.lean's print"
         fail=1
