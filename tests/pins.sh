@@ -7,7 +7,7 @@
 # AVON_UNPINNED=1.  To move a pin, run the checks it serves at the new
 # commit and change it here.
 
-SKIJACK_PIN=b0b980adcca2038c57ae1ecafe501a15ba59b03c
+SKIJACK_PIN=935683f5757fe0184a46db176c1306f4c083a213
 SKILARK_PIN=1025e3646a1fefd5b5cca7f38a3694f8e28feeb6     # sigilante/SKIlark, public
 AVIARY_PIN=ec4b418c527408c3a513bee2735e6b0f862accda      # sigilante/aviary, public
 LEAN_SKI_PIN=fb65141f7ab4685e1b9cd4d2366048bb9cebcba2    # sigilante/lean-ski, public: paper-v9

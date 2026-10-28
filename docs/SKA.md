@@ -282,12 +282,54 @@ otherwise `t x`, which is `t` by η and no formal at all.
   fixed point without templates (past 12 GB), so front1's heavy runs keep the
   compiler's files.
 
-## 7. Later
+## 7. Step 5: front1's own templates (built 2026-10-28)
 
-- **front1 emitting its templates.** For the pill (§20.3), front1 holds each rule
-  before abstraction and could write the templates file as Python's expander does; it
-  emits none today. Discovery covers programs no compiler hands templates for, at the
-  measured cost above.
+**front1 hands over its templates itself, so a pill holding front1 needs no Python for
+them.** Its expander already holds each rule's template at the moment it abstracts it:
+`ruleTm` takes the formals, the body with each reference a variable numbered past them,
+and the references' terms, then abstracts and substitutes.
+
+- *front1* (SKIjack #40). `ROk outs tpls`: the second field is each rule's template,
+  made by `ruleTp` and `inlT`, which mirror `ruleTm` and `inl` step for step over the
+  rule map from the memo the terms were made with; a lifted rule inside a body gives its
+  own. `sucR`, the prelude's successor, became a rule of its own, so a body names it as
+  `skijack.templates` does; the terms are the same.
+- *Laziness.* Only `front0 --emit` reads the field. A run that never reads it never
+  makes it: a plain run's contractions are unchanged, and `tests/test_front0.c` reads a
+  result whose templates field diverges.
+- *Avon* (#91). `front0 --emit=OUT` writes the field as `OUT/templates.tsv` and
+  `OUT/template_terms.tsv`, each key and reference once and no η-template, and every
+  name's term as `OUT/terms.tsv`. The loader then checks each body against its key as
+  it checks Python's.
+- *Parity.* For its own source front1 emits all 2,326 of `skijack.templates`'
+  templates, key, arity and body alike. Every accepted corpus program emits Python's;
+  the four scry and namespace programs give one key more each, a rule front1 makes
+  where Python builds the same term without one. `run1 --emit` checks both, and
+  `front1-check` runs it.
+
+**Results, 2026-10-28**, front1 with SKIjack #40, `avon front0 --data`, wall clock the
+best of three (one run for the fixed point), every output the same:
+
+| run | SKI | `--discover` | Python's templates | front1's own |
+|---|---:|---:|---:|---:|
+| a one-line source: contractions | 1,693,941 | 176,960 | 69,410 | 74,411 |
+| a one-line source: wall clock | 0.04 s | 1.93 s | 1.26 s | 0.81 s |
+| front0's source: contractions | | past 3.5 GB | 32,817,600 | 32,946,393 |
+| front0's source: wall clock | | | 2.23 s | 1.77 s |
+| the fixed point: contractions | | | 410,925,316 | 412,552,742 |
+| the fixed point: wall clock | | | 11.5 s | 11.3 s |
+
+- *Faster to load.* front1's `template_terms.tsv` is one DAG shared across its
+  references, 21 MB against Python's 123 MB.
+- *Contractions 0.4% apart.* Where two rules compile to one term, Python's file lists
+  both and its loader keeps the first line's body; front1 keeps the first rule its rule
+  map yields. Both bodies are the key's, and their instances differ.
+- *What emitting costs.* front1 compiling its own source with `--emit` takes
+  566,401,252 contractions, 14.7 s and 1.44 GB: the templates' pass redoes each lifted
+  rule's abstraction. A pill emits once per program it compiles.
+
+## 8. Later
+
 - **Discovery with call edges.** Every prefix of an atom run is count-exact, not only
   its end (§6.5): `copy` reduction of `g a₁ … aₖ` reaches `r[aᵢ/Xᵢ]` after any number
   of the run's contractions. A residual that stops at a call into another known
@@ -297,7 +339,7 @@ otherwise `t x`, which is `t` by η and no formal at all.
   finds it taking every case on a value already. What is left of SKA II is compiling
   bodies to straight-line code, §6.9's "compact template form".
 
-## 8. Risks
+## 9. Risks
 
 - Step 2's runs never join a case (§6.10). A join changes how a case's instance is
   written, not its head, so the counts are a plain run's; the wall clock is not.

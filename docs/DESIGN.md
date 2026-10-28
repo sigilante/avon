@@ -3647,6 +3647,13 @@ own source to the term Python produced for it. That is stage 8's
 acceptance test (§11), and a fixed point checked once per compiler version
 thereafter.
 
+**And the compiler hands over its templates too** (2026-10-28, SKIjack #40,
+avon #91). front1's `ROk` carries each rule's template as its expander
+abstracts it, made only when read, and `front0 --emit` writes them as the
+files `--templates` reads (§6.9): for its own source, all 2,326 of
+Python's, key, arity and body alike. A pill holding front1 so runs what it
+compiles with templates and no Python (`SKA.md` §7).
+
 **Built in stage 8, for the compiler's core** (`tests/selfhost/`,
 `src/compiler.c`, `avon selfhost`). skijack compiles every equation by
 bracket abstraction (aviary's `expand` abstracts each formal in turn),
