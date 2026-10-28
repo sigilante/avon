@@ -78,7 +78,7 @@
  *                                     DIR/abs.skit or its jet, checked
  *                                     against Python's by hash
  *      avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]
- *                  [--templates=DIR [--data] [--fix] [--memory] [--no-defer]] [--names=FILE]... [--fuel=N]
+ *                  [--templates=DIR|--discover [--data] [--fix] [--memory] [--no-defer]] [--names=FILE]... [--fuel=N]
  *                  [--max-nodes=N] DIR SOURCE
  *                                     the SKIjack-0 front end on SOURCE:
  *                                     DIR/front.skit and the input's
@@ -142,7 +142,7 @@ int usage(void) {
         "                    [FILE]\n"
         "       (all but witness --statement accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
-        "        --interp=FILE --profile=NAMES --templates=DIR --data --fix --memory --no-defer\n"
+        "        --interp=FILE --profile=NAMES --templates=DIR --discover --data --fix --memory --no-defer\n"
         "        --p2=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
@@ -163,7 +163,7 @@ int usage(void) {
         "        which boot --pier takes only with --entropy)\n"
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
-        "                   [--templates=DIR [--data] [--fix] [--memory] [--no-defer]]\n"
+        "                   [--templates=DIR|--discover [--data] [--fix] [--memory] [--no-defer]]\n"
         "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
         "       avon enum N [--start=K] [--count=M]      (N from 1 to 20)\n"
         "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"

@@ -25,6 +25,7 @@ int front0_main(int argc, char **argv) {
         else if (strcmp(s, "--ctors") == 0) ctors = 64;
         else if (strncmp(s, "--ctors=", 8) == 0 && number(s + 8, &v) && v) ctors = v;
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) templates = s + 12;
+        else if (strcmp(s, "--discover") == 0) templates = "";      /* found in the term */
         else if (strcmp(s, "--data") == 0) data = true;
         else if (strcmp(s, "--fix") == 0) fix = true;
         else if (strcmp(s, "--memory") == 0) fix = o.fix_shared = true;

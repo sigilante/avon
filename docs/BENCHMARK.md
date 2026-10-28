@@ -942,6 +942,28 @@ of 64 they are templates and dispatch (`SKA.md` §4). Every output is the same.
 | the fixed point: contractions | 411,048,920 | 406,467,740 |
 | the fixed point: wall clock | 11.9 s | 11.8 s |
 
+## Templates discovered
+
+2026-10-28, avon `discover` (on master `ac3f654`): `avon reduce --strategy=share` to
+normal form, and `front0 --data`, with no templates, with `--discover`, and with the
+compiler's templates (`SKA.md` §6). Every normal form is SKI's, and front1's output
+the same.
+
+| program | SKI | `--discover` | compiler's templates |
+|---|---:|---:|---:|
+| the corpus, the 43 halting runs, fuel ten times the manifest's | 640,853 | 145,620 | 63,774 (`a0fba14`, above) |
+| `tests/data/nats` | 58,140 | 8,170 | 7,789 |
+| `tests/data/lists` | 5,380 | 1,010 | 787 |
+| `tests/data/listops` | 5,523 | 907 | 723 |
+| `tests/data/bits` | 9,090 | 1,461 | 726 |
+| `tests/data/quot` | 84,808 | 11,859 | 10,194 |
+| front1 on a one-line source: contractions | 1,693,922 | 176,951 | 69,410 |
+| front1 on a one-line source: wall clock | 0.07 s | 2.3 s | 1.2 s |
+
+On front1, discovery keeps 25,695 templates, none refused. front1 on front0's source
+passes 3.5 GB between 40 and 100 million contractions with them, and is not measured
+further; with the compiler's templates it takes 32,817,600 in 1.43 GB.
+
 ## The interpreter jet's wall clock
 
 **The tower collapses in time as well as in steps, by 4.8 times on T2.**

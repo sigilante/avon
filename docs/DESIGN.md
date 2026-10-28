@@ -1192,6 +1192,16 @@ cells"): of the cells instances write, 8 to 20% are argument thunks and
 a formal that arrived already a value, a dispatch that could join the
 instance.
 
+**Discovered, 2026-10-28: templates with no compiler's file.** `--discover`
+inverts bracket abstraction over the program itself (`SKA.md` §6): every S or
+K application is a candidate key, its formals peeled until only η is left,
+the formals η erased kept pending on a partial `S P`, `S` or `K`. Each body
+passes `load_one`'s check like a loaded one, so the trust is unchanged: the
+inversion proposes and the abstraction decides. It cannot tell a closed
+reference from abstraction plumbing, so its bodies are weaker than the
+compiler's: the corpus's 43 halting runs take 145,620 steps, against SKI's
+640,853 and the compiler's templates' 63,774, every normal form the same.
+
 ### 6.10 Data jets: constructors dispatched, numerals held as numbers
 
 **Data jets make a `case` and a numeral cheaper in share mode, and change

@@ -15,6 +15,9 @@
  *  - Fuel stops a looping template program; collections keep the globals.
  *  - --jet-stats counts instances by their body's head, and what a formal
  *    at the head held.
+ *  - Discovery inverts bracket abstraction to find templates in a term
+ *    with no file: formals η erased are recovered, every body is checked as
+ *    a loaded one is, and normal forms are SKI's.
  */
 
 #include <stdio.h>
@@ -77,7 +80,8 @@ typedef struct {
     char      nf[1 << 16];
 } outcome;
 
-/*  src reduced in mode, with dir's templates when dir is not NULL. */
+/*  src reduced in mode, with dir's templates when dir is not NULL, and
+ *  with templates discovered in src when dir is "". */
 static outcome run(const char *src, const char *dir, av_strategy mode, bool whnf,
                    uint64_t fuel, uint32_t cap) {
     outcome out = { 0 };
@@ -86,7 +90,9 @@ static outcome run(const char *src, const char *dir, av_strategy mode, bool whnf
     CHECK(t != AV_NONE);
     if (dir) {
         const char *err = NULL;
-        av_tmplset *ts = av_templates_load(a, dir, &err);
+        av_root_push(a, &t);
+        av_tmplset *ts = *dir ? av_templates_load(a, dir, &err) : av_templates_discover(a, t, 2, &err);
+        av_root_pop(a);
         CHECK(ts != NULL);
         if (ts) {
             t = av_jets_match(a, t);
@@ -428,6 +434,54 @@ TEST(a_site_keeps_a_formal_past_31) {
     rmdir_all(d);
 }
 
+/*  Discovery: bracket abstraction inverted.  B's key S (K S) K abstracts
+ *  λf g x. f (g x) with η, which erases g and x; the formals pending on
+ *  S (K f) and S (K f) g are recovered, and B fires in one step. */
+TEST(discovery_recovers_a_key_s_formals_eta_erased) {
+    outcome plain = run(B_KEY " f g x", NULL, AV_SHARE, false, 1000, 1u << 10);
+    outcome found = run(B_KEY " f g x", "", AV_SHARE, false, 1000, 1u << 10);
+    CHECK(found.accepted >= 1);
+    CHECK_EQ(found.refused, 0);
+    CHECK(strcmp(found.nf, plain.nf) == 0);
+    CHECK(strcmp(found.nf, "f (g x)") == 0);
+    CHECK_EQ(found.steps, 1);
+    CHECK_EQ(found.tmpl_calls, 1);
+}
+
+/*  On skijack's own programs (tests/data), with no file of templates:
+ *  every discovered body abstracts back to its key, nothing is refused,
+ *  and each normal form is SKI's in fewer steps. */
+TEST(discovered_templates_keep_normal_forms) {
+    static const char *const progs[] = { "nats", "lists", "listops", "bits", "quot" };
+    for (size_t i = 0; i < sizeof progs / sizeof *progs; i++) {
+        char path[128];
+        snprintf(path, sizeof path, "tests/data/%s/main.txt", progs[i]);
+        FILE *f = fopen(path, "rb");
+        REQUIRE(f != NULL);
+        static char src[1 << 20];
+        size_t n = fread(src, 1, sizeof src - 1, f);
+        fclose(f);
+        src[n] = '\0';
+        outcome plain = run(src, NULL, AV_SHARE, false, 100000000, 1u << 16);
+        outcome found = run(src, "", AV_SHARE, false, 100000000, 1u << 16);
+        CHECK_EQ(plain.status, AV_NORMAL);
+        CHECK_EQ(found.status, AV_NORMAL);
+        CHECK(found.accepted > 0);
+        CHECK_EQ(found.refused, 0);
+        CHECK(found.steps < plain.steps);
+        CHECK(strcmp(found.nf, plain.nf) == 0);
+    }
+}
+
+/*  T's key, S (K (S I)) K, is found as λx y. y x, its body checked by
+ *  abstracting it again as a loaded one is, and fires in one step. */
+TEST(a_discovered_key_is_checked_like_a_loaded_one) {
+    outcome found = run("S (K (S I)) K a b", "", AV_SHARE, false, 1000, 1u << 10);
+    CHECK_EQ(found.refused, 0);
+    CHECK(strcmp(found.nf, "b a") == 0);
+    CHECK_EQ(found.steps, 1);
+}
+
 TEST_MAIN(
     TEST_CASE(a_template_fires_where_its_key_meets_its_arguments),
     TEST_CASE(a_body_that_is_not_its_key_is_refused),
@@ -438,5 +492,8 @@ TEST_MAIN(
     TEST_CASE(collections_keep_the_globals),
     TEST_CASE(a_referenced_term_may_be_written_as_a_dag),
     TEST_CASE(instances_are_counted_by_their_bodys_head),
-    TEST_CASE(a_site_keeps_a_formal_past_31)
+    TEST_CASE(a_site_keeps_a_formal_past_31),
+    TEST_CASE(discovery_recovers_a_key_s_formals_eta_erased),
+    TEST_CASE(discovered_templates_keep_normal_forms),
+    TEST_CASE(a_discovered_key_is_checked_like_a_loaded_one)
 )

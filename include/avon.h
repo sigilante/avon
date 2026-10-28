@@ -1022,6 +1022,18 @@ typedef struct av_tmplset av_tmplset;
  *  a malformed file or a term that does not match its hash; a template
  *  whose body does not abstract to its key is counted as refused. */
 av_tmplset *av_templates_load(av_arena *a, const char *dir, const char **err);
+/*  Templates discovered in t itself, with no compiler's files: every S or
+ *  K application of t is a candidate key, its formals and body found by
+ *  inverting bracket abstraction, and kept as a loaded template is, only
+ *  if the body abstracts back to the key; one whose instance would save
+ *  fewer than min_steps contractions is discarded.  The bit-string
+ *  operations and Y register as with av_templates_load; numeral
+ *  operations, which need words.tsv, do not.  Then av_jets_match and
+ *  av_templates_bind as after a load.  NULL, with *err, out of memory. */
+av_tmplset *av_templates_discover(av_arena *a, uint32_t t, unsigned min_steps,
+                                  const char **err);
+/*  Candidates av_templates_discover discarded as saving too little. */
+long        av_templates_discarded(const av_tmplset *ts);
 /*  After av_jets_match: unwrap every jet node of t for a template whose
  *  term the node's is not.  False if a collection intervened, or memory. */
 bool        av_templates_bind(av_arena *a, av_tmplset *ts, uint32_t t);

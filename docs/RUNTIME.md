@@ -151,10 +151,11 @@ differently (§6).
 | `--no-jets` | match nothing | | |
 | `--interp=FILE` | `interpreters.tsv`: interpreter jets (§7); needs `--jets` | both | changes counts; off unless asked |
 | `--templates=DIR` | `DIR/templates.tsv` and `DIR/template_terms.tsv`: supercombinator templates (§6.9) | `share` only; `copy` refuses | one step per instantiation, reported |
-| `--data` | with `--templates`: data jets (§6.10), constructor dispatch and numerals held as words, and `DIR/words.tsv`'s numeral operations | `share` only | one step per dispatch or operation, reported |
-| `--fix` | with `--templates`: Curry's Y at the head with an argument, `Y g`, rewritten to `g (Y g)` in one step (§6.11) | `share` only | one step per unfolding, reported |
-| `--memory` | with `--templates`: `--fix`, and every unfolding of a generator `g` passes on one `Y g`, never written, leading to one shared unfolding (§6.11, "Shared"): peak memory of a few MB where `--fix` holds hundreds, at about `--fix`'s time | `share` only | one step per unfolding, and one per call through the shared `Y g`, reported |
-| `--no-defer` | with `--templates`: every instance writes its root and spine at once, as before deferred roots (§6.13), for comparing the two | `share` only | none: every count and state is the same |
+| `--discover` | templates found in the term itself, with no files: bracket abstraction inverted, each body checked against its key as a loaded one is (`SKA.md` §6); a key saving under 2 contractions is discarded, and `discovered:` reports both | `share` only; `copy` refuses | one step per instantiation, reported |
+| `--data` | with `--templates` or `--discover`: data jets (§6.10), constructor dispatch and numerals held as words, and `DIR/words.tsv`'s numeral operations (none with `--discover`) | `share` only | one step per dispatch or operation, reported |
+| `--fix` | with `--templates` or `--discover`: Curry's Y at the head with an argument, `Y g`, rewritten to `g (Y g)` in one step (§6.11) | `share` only | one step per unfolding, reported |
+| `--memory` | with `--templates` or `--discover`: `--fix`, and every unfolding of a generator `g` passes on one `Y g`, never written, leading to one shared unfolding (§6.11, "Shared"): peak memory of a few MB where `--fix` holds hundreds, at about `--fix`'s time | `share` only | one step per unfolding, and one per call through the shared `Y g`, reported |
+| `--no-defer` | with `--templates` or `--discover`: every instance writes its root and spine at once, as before deferred roots (§6.13), for comparing the two | `share` only | none: every count and state is the same |
 | `--p2=FILE` | lean-ski's Poseidon2 term `P` (`lake exe p2run` writes `P.dag`): `P` applied to a state of sixteen 31-bit elements runs natively (§6.12) | `share` only; `copy` refuses | one step per permutation, reported |
 
 ```sh
@@ -298,7 +299,7 @@ PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --templat
 PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --profile
 ```
 
-`front0` also takes `--templates=DIR`, `--data`, `--fix`, `--memory`,
+`front0` also takes `--templates=DIR`, `--discover`, `--data`, `--fix`, `--memory`,
 `--no-defer`, `--profile=NAMES`, `--jets=DICT`, `--ctors[=N]`,
 `--jet-stats[=N]`, `--names=FILE`, `--fuel=N` and `--max-nodes=N`.
 `--memory` and `--no-defer` mean what they mean to `reduce`.
@@ -497,7 +498,7 @@ build/avon enum 12 | sed 's/$/ X/' | build/avon batch --trace-frame=summary --fu
 `--trace-frame` runs copy mode, head run only, never collecting, with no
 jets; a term with K, I or another atom is refused. Options it would ignore
 are refused: `--strategy=share`, `--jets`, `--ctors`, `--interp`,
-`--jet-floor`, `--jet-check`, `--templates`, `--data`, `--fix`,
+`--jet-floor`, `--jet-check`, `--templates`, `--discover`, `--data`, `--fix`,
 `--memory`, `--no-defer`, `--p2`, `--profile`, `--budget`. So are
 `--passenger`, `--records`, `--frame-dump` and `--defect` without it. Each term gives one block:
 

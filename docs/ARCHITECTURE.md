@@ -79,7 +79,7 @@ through the walk before the run goes live.
 | `reduce.c` | the share machine, jet and template dispatch, and the `av_reduce` driver |
 | `stack.h` | the share machine's spine stack, with deferred roots |
 | `jets.c`, `jets.h` | the structural hash, the dashboard, residual jets, the loader's match |
-| `tmpl.c` | supercombinator templates, each checked by abstracting its body back to its key |
+| `tmpl.c` | supercombinator templates, loaded or discovered by inverting bracket abstraction, each checked by abstracting its body back to its key |
 | `words.c` | Scott numerals held as numbers, and the numeral operations on them |
 | `interp.c` | the interpreter jet: a generated interpreter's fuel loop, run natively |
 | `compiler.c` | the compiler jet: bracket abstraction run natively, checked against its term |
