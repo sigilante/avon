@@ -1202,6 +1202,16 @@ uint32_t av_front0_input(av_arena *a, const av_front0 *f, const char *src, size_
  *  operations among them. */
 int      av_front0_read(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
                         uint64_t *steps, av_result *tally, const char **err);
+/*  av_front0_read, and with emit a directory, the front end's own
+ *  templates too, as ROk's second field gives them (front1's): written as
+ *  emit/templates.tsv and emit/template_terms.tsv, which --templates reads,
+ *  each key and each reference once, with every name's term in
+ *  emit/terms.tsv (`name TAB hash TAB dag`).  *ntemplates, if not NULL,
+ *  counts the templates written.  A front end whose ROk has one field
+ *  emits nothing, and is an error. */
+int      av_front0_read_emit(av_arena *a, uint32_t t, const av_opts *o, FILE *out,
+                             const char *emit, long *ntemplates, uint64_t *steps,
+                             av_result *tally, const char **err);
 
 /*  ---------------------------------------------------------------- profile
  *

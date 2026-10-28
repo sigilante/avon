@@ -301,8 +301,15 @@ PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --profile
 
 `front0` also takes `--templates=DIR`, `--discover`, `--data`, `--fix`, `--memory`,
 `--no-defer`, `--profile=NAMES`, `--jets=DICT`, `--ctors[=N]`,
-`--jet-stats[=N]`, `--names=FILE`, `--fuel=N` and `--max-nodes=N`.
-`--memory` and `--no-defer` mean what they mean to `reduce`.
+`--jet-stats[=N]`, `--names=FILE`, `--fuel=N`, `--max-nodes=N` and
+`--emit=OUT`. `--memory` and `--no-defer` mean what they mean to `reduce`.
+- `--emit=OUT` writes the templates the front end itself gives, as front1's
+  `ROk outs tpls` carries them, into `OUT/templates.tsv` and
+  `OUT/template_terms.tsv`, which `--templates=OUT` reads, each key and each
+  reference once and no η-template; and every name's term, `name TAB hash TAB
+  dag`, into `OUT/terms.tsv`. OUT must exist. stderr adds `emitted: N
+  templates`. A front end whose `ROk` has one field, as SKIjack-0's, is
+  refused. Without `--emit` the templates are never read, and so never made.
 - `--fuel` bounds the whole read: every probe draws on the same fuel.
 - A name the result holds is at most 65,536 characters, with no control
   character or space, since the output is a line per name with a tab
