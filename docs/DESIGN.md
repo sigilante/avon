@@ -1270,9 +1270,13 @@ running.** `natAdd`, `natSub` (truncated), `natMul`, `natIfEq` and
   the numerals 0 to 5, run in share mode on private copies.
 - A row that fails any of these runs as its term.
 
-Neither the pin nor the match on 36 pairs is a proof: each admitted operation
-is native code the runtime trusts, as a Vere jet is, and its licence for
-a proof is §18.2's word-level theorem, owed per operation. An operation
+Neither the pin nor the match on 36 pairs is a proof. The proof is
+`lean/Words.lean` (2026-10-29, `LEAN-JETS.md` §4): each of the seven
+numeral operations' terms reduces to its operation's numeral on every pair
+of Scott numerals, and `word_fire`'s arithmetic gives that numeral's value
+whenever it fires. Lean prints the pins (`src/word_pins.h`), so the terms
+proved are the terms matched. The reducer's glue stays trusted, as a Vere
+jet's is; in a witness these operations still need §18.2's word cells. An operation
 fires only when both numeral operands are words already, as the
 Reduceron's primitive-redex speculation fires only on evaluated
 operands; otherwise its node runs its term, kept for the next call. So an

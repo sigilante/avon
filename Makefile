@@ -5,7 +5,8 @@
 # `make jet-witness-check` runs tests/jet_witness_check.sh,
 # `make probe-witness-check` runs tests/probe_witness_check.sh,
 # `make zk-jet-witness-check` runs tests/zk_jet_witness_check.sh,
-# `make p2-witness-check` runs tests/p2_witness_check.sh (the last five
+# `make p2-witness-check` runs tests/p2_witness_check.sh,
+# `make words-lean-check` runs tests/words_lean_check.sh (the last six
 # need a lean-ski checkout), `make selfhost-check` runs
 # tests/selfhost_check.sh, `make front0-check` runs tests/front0_check.sh
 # and `make front1-check` runs tests/front1_check.sh (the three need a
@@ -39,7 +40,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h src/cli/*.h tests/*.h)
 
-.PHONY: all check smoke clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check \
+.PHONY: all check smoke clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check words-lean-check \
 	selfhost-check front0-check front1-check fixtures-check hider-check
 .SECONDARY:
 
@@ -104,6 +105,9 @@ zk-jet-witness-check: $(BUILD)/avon
 
 p2-witness-check: $(BUILD)/avon
 	tests/p2_witness_check.sh
+
+words-lean-check:
+	tests/words_lean_check.sh
 
 selfhost-check: $(BUILD)/avon
 	tests/selfhost_check.sh

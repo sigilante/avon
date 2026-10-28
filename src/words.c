@@ -31,6 +31,7 @@
 
 #include "avon.h"
 #include "jets.h"
+#include "word_pins.h"
 
 static const char SUC_TEXT[] = "S (K K) (S (K (S I)) K)";
 static const char CONS_TEXT[] = "S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))";
@@ -237,67 +238,14 @@ static uint32_t plain_numeral(av_arena *a, uint32_t n) {
  *  natDiv and natRem, over its prelude's suc and zero), pinned: a words.tsv
  *  row is admitted only if its term is this one, node for node, so a row
  *  cannot bring an operation of its own; word_admit's test on small
- *  numerals runs as well.  Then the list operations, skijack's listLength
+ *  numerals runs as well.  The numeral operations' terms are printed by
+ *  lean/Words.lean (src/word_pins.h), which proves each computes its
+ *  operation on every pair of numerals.  Then the list operations, skijack's listLength
  *  .. listDrop (expand.py, over its prelude's nil and cons), on small
  *  lists.  Index AV_WOP_ADD .. AV_WOP_DROP. */
 static const char *const PINNED[] = {
     NULL,
-    /* add */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S"
-        " I)) K)))) (S (K (S (K K))) (S (K (S (K (S (K K) (S (K (S I)) K)))))"
-        ")))",
-    /* sub */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S"
-        " I)) K)))) (S (K (S (K K))) (S (S (K S) K) (K (S (S I (K K)) (K I)))"
-        ")))",
-    /* mul */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (K (S (S I (K K))"
-        ")))) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K (S I I)) (S (S (K S"
-        ") K) (K (S I I))) (S (K (S (S (K S) (S (K (S I)) K)))) (S (K (S (K K"
-        "))) (S (K (S (K (S (K K) (S (K (S I)) K))))))))))))))",
-    /* ifeq */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S"
-        " (K S))) (S (K (S (K (S (K S))))) (S (S (K S) (S (K K) (S (K S) (S ("
-        "K K) (S (K S) K))))) (K (S (S (K S) (S (K (S (K S))) (S (K K)))) (K "
-        "(K K)))))))))) (S (K K) (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S"
-        " (K S))) (S (K K)))))))) (S (K K) (S (S (K S) (S (K (S (K S))) (S (K"
-        " (S (K K))) (S (K (S (K S))) (S (K (S (K (S (K S))))) (S (S (K S) (S"
-        " (K K) (S (K S) (S (K S))))) (K (S (K K) K)))))))) (K (K (S (K K) K)"
-        ")))))))",
-    /* ifle */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K K)"
-        " (S (K S) (S (K (S (K S))) (S (K K)))))))) (S (K K) (S (K (S (S (K S"
-        ") (S (K K) (S (K S) (S (K (S (K S))) (S (K K)))))))) (S (K K) (S (S "
-        "(K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S (K S))) (S (K (S (K"
-        " (S (K S))))) (S (S (K S) (S (K K) (S (K S) (S (K S))))) (K (S (K K)"
-        " K)))))))) (K (K (S (K K) K))))))))",
-    /* div */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (K (S (S I (K K))"
-        ")))) (S (K (S (K (S (K K))))) (S (S (K S) (S (K (S (K S))) (S (K (S "
-        "(S (K S) (S (K (S (S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K ("
-        "S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K K)))))))) (S (K "
-        "K) (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K K)))))"
-        "))) (S (K K) (S (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S "
-        "(K S))) (S (K (S (K (S (K S))))) (S (S (K S) (S (K K) (S (K S) (S (K"
-        " S))))) (K (S (K K) K)))))))) (K (K (S (K K) K))))))))))) K)))) (S ("
-        "K (S (K (S (K (S (K K) (S (K (S I)) K))))))) (S (S (K S) (S (K (S (K"
-        " S))) (S (S (K S) (S (K K) (S (K S) K))) (K (S (K (S I I)) (S (S (K "
-        "S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S I)) K)))) (S (K (S (K "
-        "K))) (S (S (K S) K) (K (S (S I (K K)) (K I))))))))))) (K (K I)))))))"
-        " (K (K (K K))))))",
-    /* rem */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S"
-        " I)) K)))) (S (K (S (K (S (K K))))) (S (S (K S) (S (K (S (K S))) (S "
-        "(K (S (S (K S) (S (K (S (S (K (S I I)) (S (S (K S) K) (K (S I I))) ("
-        "S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K K)))))))) "
-        "(S (K K) (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S (K "
-        "K)))))))) (S (K K) (S (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S "
-        "(K (S (K S))) (S (K (S (K (S (K S))))) (S (S (K S) (S (K K) (S (K S)"
-        " (S (K S))))) (K (S (K K) K)))))))) (K (K (S (K K) K))))))))))) K)))"
-        ") (S (S (K S) (S (K (S (K S))) (S (S (K S) (S (K K) (S (K S) K))) (K"
-        " (S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K "
-        "(S I)) K)))) (S (K (S (K K))) (S (S (K S) K) (K (S (S I (K K)) (K I)"
-        ")))))))))) (K (K I)))))) (K K))))",
+    AV_PIN_ADD, AV_PIN_SUB, AV_PIN_MUL, AV_PIN_IFEQ, AV_PIN_IFLE, AV_PIN_DIV, AV_PIN_REM,
     /* len */
         "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S I (K K)))) (S (K"
         " K) (S (K K) (S (K (S (K K) (S (K (S I)) K)))))))",

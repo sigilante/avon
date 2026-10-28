@@ -60,7 +60,7 @@ to master, and on macOS too for pushes to master.  A change to
 documentation alone (Markdown, `docs/`, `img/`, `LICENSE`) runs nothing.
 `.github/workflows/pinned.yml` runs `fixtures-check`, `selfhost-check`,
 `front0-check` and `front1-check` weekly against the public repositories
-at their pins, and in a job of its own the five checks that need lean-ski,
+at their pins, and in a job of its own the six checks that need lean-ski,
 at lean-ski's pin.  `hider-check`, which needs the paper's scripts, runs by
 hand.
 
@@ -77,6 +77,7 @@ hand.
 | `make probe-witness-check` | the same, with probe segments | lean-ski | |
 | `make zk-jet-witness-check` | composed statements with jets: Avon's tables are ski-air's, accepted by `check-cj`, proved under hiding and verified; bad witnesses and budgets refused (`ZK-JETS.md`) | lean-ski | |
 | `make p2-witness-check` | the Poseidon2 statements: Avon's tables are byte-identical to ski-air's for `p2pre` and the two `p2commit` hand-off stages, proved and verified, a flipped bit refused; `reduce --p2` runs each test vector's permutation natively in one step, and a chain of three in three | lean-ski | |
+| `make words-lean-check` | `lean/Words.lean` elaborates: each of the seven numeral operations' pinned terms computes its operation on every pair of Scott numerals, and `word_fire`'s arithmetic agrees, on lean-ski's axioms only; its print is `src/word_pins.h`, byte for byte (`LEAN-JETS.md`) | lean-ski | 2 s |
 | `make hider-check` | `avon enum` gives the census's terms in its order; every frame trace of a term of size 12 or less equals the census's run line for line, and of size 10 or less at horizons 1 to 21; the census through Avon gives its verdicts and trails; every defect count of a term of size 11 or less equals the definitions', and their totals the paper's mode `defect`; the five named cases (`DESIGN.md` §22) | the pure-S paper's scripts | 35 min |
 | `tests/diff_aviary.py` | `copy` mode against `aviary_kernel` on random terms | `aviary_kernel` installed, and `build/dbg/avon` | |
 
