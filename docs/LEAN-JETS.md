@@ -1,6 +1,6 @@
 # Lean proofs for Avon's C jets: a plan
 
-Written 2026-10-29. Steps 1 and 2 are done (§4, §5; 2026-10-29). A jet is native code that stands for a term (`DESIGN.md` §6);
+Written 2026-10-29. Steps 1 to 3 are done (§4 to §6; 2026-10-29). A jet is native code that stands for a term (`DESIGN.md` §6);
 today most of Avon's jets are licensed by testing. This note plans their proofs in
 Lean, jet by jet, and records what each proof covers and what stays trusted.
 
@@ -34,8 +34,8 @@ contractions (§6.5), so none of these theorems says anything about steps.
 
 | jet | the term computes the function | the C computes the function | left |
 |---|---|---|---|
-| supercombinator templates (`tmpl.c`) | done for all at once: `absN_beta_close`, `inst_sound_g` | trusted | Lean, not C, checks the loaded table (`rootOKB`) |
-| Scott constructors (§6.8) | done: they compile through `ctorO` | trusted | as templates |
+| supercombinator templates (`tmpl.c`) | done for all at once: lean-ski's `absN_beta_subst` | done: the load check (`absC_eq`, `loadC_accept`) and the instance (`template_fire`), modelled and replayed against the loader | nothing |
+| Scott constructors (§6.8) | done: they compile through `ctorO` | done as templates; the dispatch that fires them is glue | nothing |
 | Poseidon2 (`--p2`, §6.12) | done: `poseidon2_respects`, P proved in lean-ski | done: `AvonP2.permuteC` | nothing |
 | numeral words: `add` `sub` `mul` `ifeq` `ifle` `div` `rem` (§6.10) | done: `add_spec` .. `rem_spec` | done: `fireC_num`, `fireC_arg` | nothing; a witness still needs word cells |
 | list words: `len` `at` `app` `take` `drop` | done: `len_spec` .. `drop_spec` | done: `listFireC_sound`; the cell walks are glue | nothing |
@@ -53,8 +53,7 @@ and §18.4 name as owed, not an `Implements` lemma.
 
 1. **Numeral words**, by `P2Prog.lean`'s pattern (§4).
 2. **List words, then bit strings**, on the same scaffolding (§5).
-3. **Templates checked by Lean** at load, with lean-ski's `rootOKB`, replacing
-   the check in C.
+3. **Templates**: the load check and the instance (§6).
 4. **Y's simulation theorem.**
 5. **The interpreter jet's adequacy theorem.**
 
@@ -166,3 +165,46 @@ form. Both comments now say so.
 **What stays trusted.** The models (`listFireC` and the walks) as readings of the C;
 `View.OK`, that `ctor_at` reads a constructor template's node over its fields, or `K`
 and `K I`, as that constructor; and the glue of §1, which builds and reads the cells.
+
+## 6. Step 3: templates
+
+**Done, 2026-10-29.** `lean/Templates.lean` proves the check `src/tmpl.c` makes
+before it uses a template, and the fire that follows.
+
+- **The check computes lean-ski's abstraction.** `absC`, `hc_abstract` line for
+  line, is lean-ski's `abs` (`absC_eq`), and `load_one`'s loop over the formals is
+  `absN` (`keyC_eq`). A template `load_one` accepts has key `absN xs body`
+  (`loadC_accept`).
+- **The fire is a reduct.** `compile` is `load_one`'s compile into instructions,
+  constants and arguments; `instC` is `tmpl_instance`'s run of them. For an accepted
+  template and any arguments, the key applied to them weakly reduces to what
+  `tmpl_instance` builds (`template_fire`, from lean-ski's `absN_beta_subst`). The
+  proof covers every producer, since Python's files, front1's and discovery's
+  templates all pass the same `load_one`.
+- **The replay.** `Replay.replay` runs `av_templates_load`'s loop with the model,
+  the file's digests (SHA-256, written in Lean) and the duplicate check.
+  `make templates-lean-check` requires its counts to be Avon's on the five sets the
+  tests ship (137 accepted, 56 skipped) and on eight copies changed to reach each
+  refusal. A model with η removed disagrees at once (nats: 4 accepted, 26 refused).
+
+**The plan changed.** §3 said Lean would check the loaded table "replacing the
+check in C", with lean-ski's `rootOKB`. That was the wrong design. Avon cannot run
+Lean at load; discovery makes templates at run time, with no file for Lean to
+read; and `rootOKB` licenses a witness heap's roots, not a share-mode table. The
+check stays in C and is now proved, and the replay checks the model against the C.
+
+**What the proofs settled.**
+
+- *Repeated formals.* `load_one` binds a formal to its last occurrence (`argix`),
+  and lean-ski's `override` does the same, so a template like `λ x x. x` is sound
+  as Avon loads it (`override_lastIdx`).
+- *Referenced terms hold no formal.* `hc_abstract` reads a formal's marker leaf
+  anywhere, inside a referenced term too, while the compile treats that term as a
+  constant. Both parsers refuse a leaf name beginning `@`, the markers' prefix, so
+  a referenced term cannot hold one; `template_fire` takes it as a hypothesis.
+
+**What stays trusted.** The models as readings of the C (the replay tests them);
+`hc_canon`, that a canonical node is the term it stands for; the globals, each a jet
+node standing for its constant; and the reducer's other paths for a template, a
+constructor's dispatch and a case's join, which act as the instance would and are
+tested, not proved.

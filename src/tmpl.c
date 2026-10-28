@@ -7,7 +7,9 @@
  *  the S/K plumbing bracket abstraction built.
  *
  *  Nothing is trusted.  A template is used only if abstracting its body
- *  over its formals, the last first, gives its key; the check runs here,
+ *  over its formals, the last first, gives its key (lean/Templates.lean
+ *  proves that check lean-ski's abstraction, and an accepted template's
+ *  instance a reduct of its redex: template_fire); the check runs here,
  *  on terms built in one hash-consed table, so equal trees are one node
  *  and every comparison is node identity.  The hash only finds
  *  candidates: a loaded term's jet node is kept for a template only if its
