@@ -6,6 +6,12 @@ design lives. Last revised 2026-10-28.
 
 ## Done since the last revision
 
+- **Discovery leaves Y to `--fix`** (2026-10-29; `SKA.md` §6). Discovery found Y's own
+  term a key, so `--discover --fix` refused to start ("Y is already another jet"). With
+  `--fix` on it now skips Y's key: `tests/data/nats` to head normal form falls from
+  8,170 steps to 7,193. The README, the tour and DESIGN §6.9 now name all three
+  template producers: Python's expander, front1 and discovery.
+
 - **SKA's last two levers, measured** (2026-10-29; `SKA.md` §8). Discovery that keeps
   the keys a run fired whole, as references, takes the corpus's 43 halting runs to
   286,662 steps against 145,620: inlining a reference saves its instance. Compiled
