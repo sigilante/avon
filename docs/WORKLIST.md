@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-28.
 
 ## Done since the last revision
 
+- **SKA's last two levers, measured** (2026-10-29; `SKA.md` §8). Discovery that keeps
+  the keys a run fired whole, as references, takes the corpus's 43 halting runs to
+  286,662 steps against 145,620: inlining a reference saves its instance. Compiled
+  template bodies would keep the cost: 37.5% of the fixed point's samples write
+  instances, 3.3 open applications each, and straight-line code would still write them.
+  Neither is taken. The stats build crashes on front1 runs, as it did before this arc
+  (small item 8).
+
 - **front1's own templates** (2026-10-28; avon #91, SKIjack #40; `SKA.md` §7). front1's
   `ROk` carries each rule's template as its expander abstracts it, made only when read,
   and `front0 --emit` writes them as the files `--templates` reads: for its own source,
@@ -305,10 +313,10 @@ design lives. Last revised 2026-10-28.
 
 ## Next
 
-1. **Subject knowledge analysis** ([`SKA.md`](SKA.md)): steps 1, 2, 4 and 5 done, step
-   3 (specialization) measured and not taken; the cases and thunks a formal holds take
-   no new mechanism (`SKA.md` §4). Open, undecided (`SKA.md` §8): discovery that tells
-   references from plumbing by running; compiled template bodies.
+1. **Subject knowledge analysis** ([`SKA.md`](SKA.md)): every step decided. Built: the
+   template load, the measurement, discovery and front1's own templates. Measured and
+   not taken: specialization (§5), new mechanisms for cases and thunks (§4), discovery
+   told references by running, and compiled template bodies (§8).
 
 ## Done: the order agreed 2026-10-05
 
@@ -477,6 +485,12 @@ When lean-ski changes a table format or the prover's inputs, Avon matches it and
 reruns `make zk-jet-witness-check`.
 
 ## Small items
+
+### 8. The stats build crashes on front1
+
+Found 2026-10-29: `make stats` builds, and `build/stats/avon front0` on front1 stops with
+a bus error even on a one-line source, as it does at `298c252`, before the SKA arc; a
+small `reduce` completes. Open, unexamined; the stats build is diagnostic only.
 
 ### 6. From the reviews of avon PR #3
 
