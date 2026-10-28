@@ -2,9 +2,17 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-28.
+design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
+
+- **The numeral words, proved in Lean** (2026-10-29; `LEAN-JETS.md`). The plan for
+  proving Avon's C jets is `docs/LEAN-JETS.md`; its step 1 is done. `lean/Words.lean`
+  proves each of the seven numeral operations' pinned terms reduces to its operation's
+  numeral on every pair of Scott numerals, and `word_fire`'s `uint64_t` arithmetic
+  gives the same values. Lean prints the pins as `src/word_pins.h`, which `words.c`
+  now includes; `make words-lean-check` reruns the proofs and compares the print, and
+  joins the weekly lean-ski job. Next: list words and bit strings (step 2).
 
 - **Discovery leaves Y to `--fix`** (2026-10-29; `SKA.md` §6). Discovery found Y's own
   term a key, so `--discover --fix` refused to start ("Y is already another jet"). With

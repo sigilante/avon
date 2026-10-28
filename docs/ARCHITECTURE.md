@@ -80,7 +80,7 @@ through the walk before the run goes live.
 | `stack.h` | the share machine's spine stack, with deferred roots |
 | `jets.c`, `jets.h` | the structural hash, the dashboard, residual jets, the loader's match |
 | `tmpl.c` | supercombinator templates, loaded or discovered by inverting bracket abstraction, each checked by abstracting its body back to its key |
-| `words.c` | Scott numerals held as numbers, and the numeral operations on them |
+| `words.c`, `word_pins.h` | Scott numerals held as numbers, and the numeral operations on them; the header is generated from Lean |
 | `interp.c` | the interpreter jet: a generated interpreter's fuel loop, run natively |
 | `compiler.c` | the compiler jet: bracket abstraction run natively, checked against its term |
 | `install.c` | install: an encoded term becomes the live term it encodes; the unquoter's jet |
@@ -117,6 +117,7 @@ Outside `src/`
 | path | what it holds |
 |---|---|
 | `lean/P2Prog.lean` | the Lean program printed as `src/p2_prog.h`, with its proof against the specification |
+| `lean/Words.lean` | the numeral operations' terms, printed as `src/word_pins.h`, each proved to compute its operation, and `word_fire`'s arithmetic proved to agree (`LEAN-JETS.md`) |
 | `jets/` | the bird and Joy jet dictionaries and the scripts that write them |
 | `tests/test_*.c`, `tests/test.h` | the unit suites (`TESTING.md`) |
 | `tests/*_check.sh`, `tests/pins.sh` | the checks against other repositories, and their pins |
