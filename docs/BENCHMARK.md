@@ -985,6 +985,17 @@ front1 emits 2,326 templates for its own source, all of Python's; compiling it w
 `--emit` takes 566,401,252 contractions, 14.7 s and 1.44 GB. Its `template_terms.tsv`
 is 21 MB, Python's 123 MB.
 
+## Discovery told references by running
+
+2026-10-29, an experiment on master `ed2b360`, not kept (`SKA.md` §8): discovered
+templates run once recording the keys that fired, then discovery again keeping each
+fired key whole inside other keys. Share mode to normal form, every normal form SKI's.
+
+| program | `--discover` | with the fired keys kept whole |
+|---|---:|---:|
+| the corpus, the 43 halting runs | 145,620 | 286,662 |
+| `tests/data`: nats, lists, listops, bits, quot | 8,170 / 1,010 / 907 / 1,461 / 11,859 | 18,790 / 1,954 / 2,302 / 3,652 / 29,580 |
+
 ## The interpreter jet's wall clock
 
 **The tower collapses in time as well as in steps, by 4.8 times on T2.**

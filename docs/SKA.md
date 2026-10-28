@@ -254,10 +254,10 @@ otherwise `t x`, which is `t` by η and no formal at all.
   as before. A key whose instance saves fewer than two contractions is discarded.
 - *What it cannot see.* The compiler knows which closed subterms of a body are other
   rules. Inversion does not: it may take a reference apart, as `S I (K x)` for `T x`,
-  leaving S and K over formals for the instance to run as SKI. The body is still a
-  weak reduct of its key, so the answers stay right and the template is weaker.
-  Telling a reference by its being shared, or by a combinator at an open head, both made
-  front1 slower, and are not used.
+  inlining it, S and K over formals included. The body is still a weak reduct of its
+  key, so the answers stay right. Telling a reference by its being shared, by a
+  combinator at an open head, or by its firing in a run (§8) each made discovery slower:
+  inlining a reference is not where its templates lose to the compiler's.
 
 **Results, 2026-10-28**, share mode to normal form, every normal form SKI's:
 
@@ -328,16 +328,39 @@ best of three (one run for the fixed point), every output the same:
   566,401,252 contractions, 14.7 s and 1.44 GB: the templates' pass redoes each lifted
   rule's abstraction. A pill emits once per program it compiles.
 
-## 8. Later
+## 8. The last two levers, measured (2026-10-29): neither taken
 
-- **Discovery with call edges.** Every prefix of an atom run is count-exact, not only
-  its end (§6.5): `copy` reduction of `g a₁ … aₖ` reaches `r[aᵢ/Xᵢ]` after any number
-  of the run's contractions. A residual that stops at a call into another known
-  function would tell references from plumbing by running, which syntax cannot.
-- **Compiled bodies.** SKA II passes a callee only the axes it reads on every path. In
-  SKI the analogue, a case's fields taken into the instance, is §6.10's join, and §4
-  finds it taking every case on a value already. What is left of SKA II is compiling
-  bodies to straight-line code, §6.9's "compact template form".
+**Discovery told references from plumbing by running: twice the steps.** The cue
+syntax lacks is which closed nodes behave as functions. A run gives it: discovered
+templates run once, recording the keys that fired, and discovery runs again keeping
+each fired key whole wherever it sits inside another key, a call and not plumbing to
+invert. Built on a branch and measured, share mode to normal form, every normal form
+SKI's:
+
+| program | `--discover` | with the fired keys kept whole |
+|---|---:|---:|
+| the corpus, the 43 halting runs | 145,620 | 286,662 |
+| `tests/data/nats` | 8,170 | 18,790 |
+| `tests/data/lists` | 1,010 | 1,954 |
+| `tests/data/listops` | 907 | 2,302 |
+| `tests/data/bits` | 1,461 | 3,652 |
+| `tests/data/quot` | 11,859 | 29,580 |
+
+Inverting into a reference is not the cost §6 took it for: the body so made inlines
+the callee and saves its instance on every call, where a reference kept whole pays a
+fire more. With sharing (§6), it is the second cue that names references and makes
+discovery slower; the gap to the compiler's templates is not in references. The code
+is not kept.
+
+**Compiled template bodies: the writes they would keep are the cost.** A profile of
+front1's fixed point (4,642 samples, master `ed2b360`) puts 1,741 of them, 37.5%, in
+the two functions that write template instances, `case_join` and `tmpl_defer`. An
+instance writes its body's open applications, 3.3 on average (86,182,573 over front0's
+source's 25,949,842 template fires, weighting each template's open applications by its
+fires), each an 8-byte node allocated and written. A body compiled to straight-line
+code writes every one of them still; it saves only decoding each operand, a shift, a
+mask and a table load beside the node it writes. That is a part of the 37.5% small
+enough not to repay a code generator, so the bodies stay instruction lists.
 
 ## 9. Risks
 
