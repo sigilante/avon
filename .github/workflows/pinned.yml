@@ -118,5 +118,8 @@ jobs:
         run: make CC=$CC zk-jet-witness-check
       - name: p2 witness check
         run: make CC=$CC p2-witness-check
+      - name: the modules lean/Words.lean imports
+        working-directory: ext/lean-ski
+        run: lake build Ski.BitArith Ski.Words Ski.Compile
       - name: numeral words, proved
         run: make words-lean-check
