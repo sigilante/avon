@@ -105,8 +105,9 @@ same byte for byte, and every count:
 | front0's source, 33,814,092 contractions | 5.1 s | 2.4 s | 1.66 GB | 1.43 GB |
 | front1's fixed point, 1,529 names, 411,048,920 contractions | 14.4 s | 11.3 s | 1.74 GB | 1.43 GB |
 
-The match no longer holds a digest for every program node, and the peak falls by 0.2 to
-0.3 GB. `tests/test_jets.c` falls from 23.6 s to 14.5 s under ASan, and
+front1 against Python's front end on the corpus and every edge program, 504 in all,
+agrees on each with templates and data jets, and with `--fix` too. The match no longer
+holds a digest for every program node, and the peak falls by 0.2 to 0.3 GB. `tests/test_jets.c` falls from 23.6 s to 14.5 s under ASan, and
 `tests/test_interp.c` from 3:46 to 2:12, since the interpreter jet matches on every
 fire. Of a one-line source's 1.3 s of user time, 0.9 s is what the profile put in
 loading the templates, which checks each, and binding them.
