@@ -295,8 +295,9 @@ TEST(a_referenced_term_may_be_written_as_a_dag) {
 }
 
 /*  --jet-stats counts each instance by its body's head.  B's head is its
- *  formal f, here F a: a template short of its arguments, a known function;
- *  or T a, T's body y x a constructor's, so a constructor with its field.
+ *  formal f, here F a: a template short of its arguments, a known function,
+ *  which the head's g x completes; or B a, which it leaves short; or T a,
+ *  T's body y x a constructor's, so a constructor with its field.
  *  F's, y x x, is its formal y, here g x: an atom's application.  W's,
  *  S x x, is S, a closed term. */
 #define F_KEY  "S (S (K S) (S (K (S I)) K)) K"
@@ -343,6 +344,7 @@ TEST(instances_are_counted_by_their_bodys_head) {
     CHECK_EQ(h.formal, 2);
     CHECK_EQ(h.known, 0);
     CHECK_EQ(h.held[AV_HELD_FUNCTION], 1);
+    CHECK_EQ(h.full, 1);
     CHECK_EQ(h.held[AV_HELD_OTHER], 1);
     av_jetstat_site *sites;
     size_t n = av_jetstats_sites(s, &sites);
@@ -361,6 +363,7 @@ TEST(instances_are_counted_by_their_bodys_head) {
         CHECK(strcmp(hf, want) == 0);
         CHECK_EQ(sites[0].formal, 0);
         CHECK_EQ(sites[0].args, 1);
+        CHECK(sites[0].full);                       /* F a (g x): F's two */
         CHECK_EQ(sites[0].n, 1);
     }
     free(sites);
@@ -372,6 +375,15 @@ TEST(instances_are_counted_by_their_bodys_head) {
     CHECK_EQ(h.held[AV_HELD_CTOR], 1);
     CHECK_EQ(h.held[AV_HELD_OTHER], 2);
     CHECK_EQ(av_jetstats_sites(s, &sites), 1);  /* no known function */
+    free(sites);
+    h = heads_of(B_KEY " (" B_KEY " a) g x", d, s);   /* B a (g x): two of B's three */
+    CHECK_EQ(h.instances, 6);
+    CHECK_EQ(h.held[AV_HELD_FUNCTION], 2);
+    CHECK_EQ(h.full, 1);
+    n = av_jetstats_sites(s, &sites);
+    CHECK_EQ(n, 2);
+    for (size_t i = 0; i < n; i++)
+        if (!sites[i].full) CHECK(sites[i].caller == sites[i].callee && sites[i].args == 1);
     free(sites);
     av_jetstats_free(s);
     rmdir_all(d);

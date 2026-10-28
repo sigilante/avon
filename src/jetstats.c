@@ -230,7 +230,7 @@ void jetstats_fire(av_jetstats *s, uint32_t node, uint32_t id) {
 /*  What an argument is, by its head and how many arguments the head holds:
  *  the held kind, and for a known function its row and the count. */
 static unsigned held(const av_jetstats *s, const av_arena *a, uint32_t v, uint32_t *callee,
-                     unsigned *m) {
+                     unsigned *m, unsigned *need_out) {
     uint32_t h = av_res(a, v);
     unsigned n = 0;
     while (av_tag(a, h) == AV_APP) {
@@ -254,6 +254,7 @@ static unsigned held(const av_jetstats *s, const av_arena *a, uint32_t v, uint32
         if (n >= need) return AV_HELD_CALL;
         if (id >= s->nids || !s->row_of_id[id]) return AV_HELD_OTHER;
         *callee = s->row_of_id[id] - 1;
+        *need_out = need;
         return AV_HELD_FUNCTION;
     }
     if (h == AV_NODE_S || h == AV_NODE_K || h == AV_NODE_I) {
@@ -277,15 +278,18 @@ void jetstats_instance(av_jetstats *s, const av_arena *a, uint32_t id, const uin
     if (!p) { H->bare++; return; }
     if (x >> 30 != TMPL_ARG) { H->known++; return; }
     H->formal++;
-    unsigned f = x & AV_PAYLOAD, m = 0;
+    unsigned f = x & AV_PAYLOAD, m = 0, need = 0;
     uint32_t callee = AV_NONE;
-    unsigned k = held(s, a, args[f], &callee, &m);
+    unsigned k = held(s, a, args[f], &callee, &m, &need);
     H->held[k]++;
     uint64_t caller = s->row_of_id[id] - 1;
     if (k != AV_HELD_FUNCTION) return;
+    /* the head's p operands complete the call, or leave it short */
+    bool full = m + p >= need;
+    if (full) H->full++;
     if (caller >= 1u << 24 || callee >= 1u << 24) { s->lost = true; return; }
     count_add(s, &s->sites, &s->nsites, &s->sitecap,
-              caller << 34 | (uint64_t)f << 29 | (uint64_t)callee << 5 | m);
+              (uint64_t)full << 58 | caller << 34 | (uint64_t)f << 29 | (uint64_t)callee << 5 | m);
 }
 
 void jetstats_miss(av_jetstats *s, uint32_t id) {
@@ -353,9 +357,9 @@ size_t av_jetstats_sites(const av_jetstats *s, av_jetstat_site **out) {
     for (size_t k = 0; k < s->sitecap; k++) {
         if (!s->sites[k].n) continue;
         uint64_t key = s->sites[k].key;
-        (*out)[n++] = (av_jetstat_site){ (size_t)(key >> 34), (unsigned)(key >> 29 & 31),
+        (*out)[n++] = (av_jetstat_site){ (size_t)(key >> 34 & 0xffffffu), (unsigned)(key >> 29 & 31),
                                          (size_t)(key >> 5 & 0xffffffu), (unsigned)(key & 31),
-                                         s->sites[k].n };
+                                         (key >> 58 & 1) != 0, s->sites[k].n };
     }
     return n;
 }

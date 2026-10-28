@@ -895,9 +895,37 @@ strings"). Every name's hash is the same both ways.
 | front1's fixed point: wall clock | 53 s | 47 s | |
 | front1's fixed point: peak | 2.24 GB | 2.12 GB | |
 
-Loading front1's templates alone, on a one-line source, takes 4.3 s; the
-sampled profile of front0's source is mostly that load, SHA-256 and
-hash-consing.
+Loading front1's templates alone, on a one-line source, took 4.3 s; the
+sampled profile of front0's source was mostly that load, SHA-256 and
+hash-consing. The SHA-256 was the matcher's, and is gone: see the next
+section.
+
+## The matcher by trees
+
+2026-10-28, avon `d8baad7` against master `298c252`, skijack front1 at `b0b980a`:
+`avon front0 --templates --data`, wall clock with `/usr/bin/time`, the best of three
+runs for the two sources and one run for the fixed point (`SKA.md` §3). Every output
+and every count is the same both ways.
+
+| run | master | by trees | peak, master | peak |
+|---|---:|---:|---:|---:|
+| a one-line source | 4.0 s | 1.4 s | | |
+| front0's source, 33,814,092 contractions | 5.1 s | 2.4 s | 1.66 GB | 1.43 GB |
+| front1's fixed point, 411,048,920 contractions | 14.4 s | 11.3 s | 1.74 GB | 1.43 GB |
+
+The sampled profile of master on the one-line source: 3,432 ms in all, 2,012 in
+`av_jets_match` (1,918 of them SHA-256 over the program's nodes), 639 loading the
+template files and 288 binding them. Under ASan, `tests/test_jets.c` takes 14.5 s
+against 23.6 and `tests/test_interp.c` 2:12 against 3:46.
+
+## Template instances by their head
+
+The same sources with that branch's `--jet-stats`, which also reports whether the head
+completes a known function's call (`SKA.md` §4): of 12,118,784 template
+instances on front0's source, 95.0% have a formal at the body's head, and of those 51.3%
+hold a constructor, 31.6% an unevaluated application and 7.8% a known function; the
+head completes 56,940 of the known functions' calls. On the fixed point: 149,696,475
+instances, 97.1%, 57.8%, 33.2%, 2.9%, and 266,162.
 
 ## The interpreter jet's wall clock
 

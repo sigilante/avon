@@ -266,9 +266,11 @@ static void print_heads(FILE *out, const av_jetstats *all, size_t top, const dro
         if (k < 100) in100 += sites[k].n;
     }
     uint64_t fn = h.held[AV_HELD_FUNCTION];
-    fprintf(out, "known functions at a formal: %zu sites (caller, formal, callee and the "
-            "arguments it held); the top 10 hold %.1f%%, the top 100 %.1f%%\n",
-            ns, pct(in10, fn), pct(in100, fn));
+    fprintf(out, "known functions at a formal: %llu (%.1f%%) given all their arguments by the "
+            "head, a call made at once; the rest short of them\n",
+            (unsigned long long)h.full, pct(h.full, fn));
+    fprintf(out, "%zu sites (caller, formal, callee and the arguments it held); the top 10 "
+            "hold %.1f%%, the top 100 %.1f%%\n", ns, pct(in10, fn), pct(in100, fn));
     for (size_t k = 0; k < ns && k < top; k++) {
         char hc[AV_HASH_LEN + 1], hf[AV_HASH_LEN + 1], lc[64], lf[64];
         unsigned ar;
@@ -279,8 +281,9 @@ static void print_heads(FILE *out, const av_jetstats *all, size_t top, const dro
         av_jetstats_row(all, sites[k].callee, hf, &ar, &cost, &atoms, &cf);
         jet_label(lc, sizeof lc, hc, cc.ctor, names, nnames, rows, nr);
         jet_label(lf, sizeof lf, hf, cf.ctor, names, nnames, rows, nr);
-        fprintf(out, "%10llu  %s, holding %u  <-  formal %u of %s\n", (unsigned long long)sites[k].n,
-                lf, sites[k].args, sites[k].formal, lc);
+        fprintf(out, "%10llu  %-5s %s, holding %u  <-  formal %u of %s\n",
+                (unsigned long long)sites[k].n, sites[k].full ? "call" : "short", lf,
+                sites[k].args, sites[k].formal, lc);
     }
     free(sites);
 }

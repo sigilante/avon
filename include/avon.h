@@ -1151,13 +1151,17 @@ typedef struct {
     uint64_t instances;
     uint64_t known, formal, bare;   /* by the root's head */
     uint64_t held[AV_HELD_KINDS];   /* the formal's argument, by kind */
+    uint64_t full;                  /* of the known functions, those the
+                                       head's operands give all their
+                                       arguments: a call made at once */
 } av_jetstat_heads;
 void av_jetstats_heads(const av_jetstats *s, av_jetstat_heads *h);
 /*  The instances whose head formal held a known function, by caller
- *  template, formal, callee and the arguments the callee held; *out is
- *  malloc'd. */
-typedef struct { size_t caller; unsigned formal; size_t callee; unsigned args; uint64_t n; }
-    av_jetstat_site;
+ *  template, formal, callee and the arguments the callee held, and whether
+ *  the head's operands complete the call; *out is malloc'd. */
+typedef struct {
+    size_t caller; unsigned formal; size_t callee; unsigned args; bool full; uint64_t n;
+} av_jetstat_site;
 size_t av_jetstats_sites(const av_jetstats *s, av_jetstat_site **out);
 
 /*  av_jets_load, registering only the row whose hash is `only`. */

@@ -11,8 +11,8 @@ them.  `DESIGN.md` gives the reasons; this page gives the places.
    term becomes nodes in an arena (`src/arena.c`): eight bytes each,
    addressed by 32-bit index, S, K and I interned at 0, 1 and 2.
 2. **Match.**  With `--jets`, `--ctors`, `--templates` or `--p2`, the
-   structural hash (`src/jets.c`) finds the subterms the dashboard knows
-   and binds each to its jet; templates (`src/tmpl.c`) and words
+   matcher (`src/jets.c`) finds the subterms that are the dashboard's
+   terms, tree for tree, and binds each to its jet; templates (`src/tmpl.c`) and words
    (`src/words.c`) register theirs the same way.
 3. **Reduce.**  `av_reduce` (`src/reduce.c`) runs the copy machine
    (`src/copy.c`, the reference host's algorithm, whose counts are the
@@ -96,7 +96,7 @@ through the walk before the run goes live.
 | `witness.c` | the witness strategy: lean-ski's machine, its trace written as a table; and the prefix form's reader and writer |
 | `p2.c`, `p2_consts.h`, `p2_prog.h` | Poseidon2 over BabyBear and its jet; the two headers are generated from Lean |
 | `census.c` | a census of the terms a run calls, for choosing jets |
-| `jetstats.c` | each jet's fires, misses, demotions and their origins |
+| `jetstats.c` | each jet's fires, misses, demotions and their origins; template instances by their body's head |
 | `profile.c` | which named terms a share-mode run's contractions execute |
 | `trace.c` | frame traces and the defect count, for the pure-S paper's census |
 | `sstats.h` | strictness counters, built only by `make stats` |

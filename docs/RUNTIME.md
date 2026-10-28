@@ -252,7 +252,7 @@ build/avon reduce --p2=/tmp/p2/P.dag /tmp/p2/p2.dag   # NORMAL 1, then p2.expect
 | `reduce --profile=NAMES` | which named code each contraction runs (§6.7) | `share` only; NAMES is `kind TAB name TAB hash` lines; report on stderr |
 | `census MANIFEST...` | which terms the manifests' runs call, ranked by what a jet on each would absorb (§6.7) | `copy`, never collects |
 | `jetstat MANIFEST...` | per jet: fires, absorbed contractions, misses, demotions, each fire's origin | `copy` unless `--share` |
-| `front0 --jet-stats[=N]` | the same, on the front end's run; with `--templates`, each template's fires too, and with `--data` each constructor's dispatches | |
+| `front0 --jet-stats[=N]` | the same, on the front end's run; with `--templates`, each template's fires too, its instances by their body's head, what a formal at the head held, and the N commonest sites where it held a known function (`SKA.md` §4); with `--data` each constructor's dispatches | a case never joins its instance under it |
 
 `census` options: `--select=N` (prefixes captured, default 400),
 `--top=N` (rows shown, default 40), `--min-atoms=N` (default 5), `--all`

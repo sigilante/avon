@@ -2,9 +2,23 @@
 
 What remains, in the order we mean to take it. `DESIGN.md` §11.1 records what is built;
 this file records what is next. Each item names its decision state and where its
-design lives. Last revised 2026-10-25.
+design lives. Last revised 2026-10-28.
 
 ## Done since the last revision
+
+- **Subject knowledge analysis: the plan, the template load and the measurement**
+  (2026-10-28; [`SKA.md`](SKA.md)). `SKA.md` maps Afonin's two SKA articles onto Avon:
+  templates are its recovered functions and the load-time matcher its compile-time jet
+  matching, and a formal at a template body's head is the one indirect call left.
+  - *The template load.* It was the matcher hashing every program node with SHA-256.
+    `av_jets_match` now matches by trees alone, against a dictionary of the jets'
+    terms the arena keeps (DESIGN §6.5). front0's source runs in 2.4 s against 5.1, the
+    fixed point in 11.3 s against 14.4, every output the same. No cache was needed.
+  - *The measurement.* `--jet-stats` counts template instances by their body's head
+    and what a formal there held. On the fixed point 97% of instances call a formal:
+    58% of those a case, 33% an unevaluated application, 3% a known function, and the
+    head completes only 266,162 such calls. Specialization on known functions (`SKA.md`
+    §5) is not taken.
 
 - **Stage 8's prelude gap** (2026-10-28; SKIjack #39). front1 installs `natDiv`,
   `natRem` and the list operations as the expander's prelude does; the expander no
@@ -26,8 +40,8 @@ design lives. Last revised 2026-10-25.
   equality run natively where a program's function is front1's term, pinned and
   admitted by running, reading only operands that are values already. front1's fixed
   point: 633,573,940 contractions to 411,048,920, 53 s to 47 s, every hash the same.
-  `--jet-stats` counts each template's fires and each constructor's dispatches. Open:
-  the template load, 4.3 s of a 5.5 s run on front0's source.
+  `--jet-stats` counts each template's fires and each constructor's dispatches. The
+  template load, then 4.3 s of a 5.5 s run on front0's source, is done above.
 
 - **Drivers, and SKIlark's I/O through them** (2026-10-27; avon #78, SKIjack #33 and
   #34, SKIlark #30 and #31). `avon run --kernel` runs a kernel as a program, performing
@@ -267,10 +281,17 @@ design lives. Last revised 2026-10-25.
 
 ## Next
 
-1. **The template load** (item 3): loading front1's templates is 4.3 s of a 5.5 s run
-   on front0's source, mostly SHA-256 and hash-consing, paid again by every run a check
-   makes. A cache of templates already verified would keep the proof, the check of each
-   template against its key, while skipping its repetition.
+1. **Subject knowledge analysis** ([`SKA.md`](SKA.md)): steps 1 and 2 done, step 3
+   (specialization) measured and not taken. Open, undecided, in what the measurement
+   found on front1:
+   - the unevaluated applications a formal holds, 32 to 33% of formal heads: item 1,
+     strictness;
+   - the formals a template cases on along every path, taken as fields directly
+     (`SKA.md` §6), since cases are 51 to 58% of formal heads;
+   - `forceAll`'s chain of partial applications, one site of 3,817,563 instances on the
+     fixed point: a candidate supercombinator or data jet;
+   - discovering templates by running, for programs no compiler hands them for, or
+     front1 emitting its own for the pill (`SKA.md` §6).
 
 ## Done: the order agreed 2026-10-05
 
