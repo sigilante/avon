@@ -10,7 +10,7 @@
  *  input's constructors as SKIT files; a line `name TAB hash` per name, or
  *  `RErr`, and the contractions on stderr. */
 int front0_main(int argc, char **argv) {
-    const char *dir = NULL, *source = NULL, *profile = NULL, *templates = NULL;
+    const char *dir = NULL, *source = NULL, *profile = NULL, *templates = NULL, *emit = NULL;
     bool data = false, fix = false;
     char *dicts[16], *namefiles[64];
     int nd = 0, nn = 0;
@@ -26,6 +26,7 @@ int front0_main(int argc, char **argv) {
         else if (strncmp(s, "--ctors=", 8) == 0 && number(s + 8, &v) && v) ctors = v;
         else if (strncmp(s, "--templates=", 12) == 0 && s[12]) templates = s + 12;
         else if (strcmp(s, "--discover") == 0) templates = "";      /* found in the term */
+        else if (strncmp(s, "--emit=", 7) == 0 && s[7]) emit = s + 7;
         else if (strcmp(s, "--data") == 0) data = true;
         else if (strcmp(s, "--fix") == 0) fix = true;
         else if (strcmp(s, "--memory") == 0) fix = o.fix_shared = true;
@@ -111,8 +112,11 @@ int front0_main(int argc, char **argv) {
     uint64_t steps = 0;
     const char *err = NULL;
     av_result tally = { 0 };
-    int rc = av_front0_read(a, t, &o, stdout, &steps, &tally, &err);
+    long emitted = 0;
+    int rc = av_front0_read_emit(a, t, &o, stdout, emit, &emitted, &steps, &tally, &err);
     fprintf(stderr, "contractions %llu\n", (unsigned long long)steps);
+    if (emit && rc == 0)
+        fprintf(stderr, "emitted: %ld templates, and every name's term, into %s\n", emitted, emit);
     if (templates)
         fprintf(stderr, "templates: %ld accepted, %ld refused, %ld skipped, %ld unbound; "
                 "%llu instantiations among the contractions\n", tc[0], tc[1], tc[2], tc[3],

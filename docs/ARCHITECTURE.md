@@ -84,7 +84,7 @@ through the walk before the run goes live.
 | `interp.c` | the interpreter jet: a generated interpreter's fuel loop, run natively |
 | `compiler.c` | the compiler jet: bracket abstraction run natively, checked against its term |
 | `install.c` | install: an encoded term becomes the live term it encodes; the unquoter's jet |
-| `front0.c` | running the SKIjack-0 front end, and reading its output by probing |
+| `front0.c` | running the SKIjack-0 front end, and reading its output by probing; with `--emit`, writing front1's own templates and terms as files |
 | `probe.c` | reading values by applying terms to marker atoms |
 | `scry.c` | the fact store, its resolver, and the resume loop |
 | `kernel.c` | the kernel door: boot, poke, peek, load |

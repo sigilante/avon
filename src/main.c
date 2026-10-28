@@ -164,6 +164,7 @@ int usage(void) {
         "       avon selfhost [--jets] [--jet-check=N] [--every=N] DIR CALLS\n"
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
         "                   [--templates=DIR|--discover [--data] [--fix] [--memory] [--no-defer]]\n"
+        "                   [--emit=OUT]\n"
         "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
         "       avon enum N [--start=K] [--count=M]      (N from 1 to 20)\n"
         "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"
