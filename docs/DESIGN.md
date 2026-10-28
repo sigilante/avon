@@ -1426,7 +1426,8 @@ With `M = S I I` and `Q = S (S (K S) K) (K M)`, `Y g` reduces to
 well; neither of the two reduces to the other. So:
 
 - a normal form `--fix` reaches is SKI's, byte for byte (by Church-Rosser,
-  since the rewrite stays within conversion), and a term without one still
+  since the rewrite stays within conversion; proved, `lean/Fix.lean`'s
+  `fix_normal`, 2026-10-29), and a term without one still
   stops at FUEL (`Y K`, `Y I`, `Y (S I I)`, `tests/test_fix.c`);
 - that `--fix` reaches every normal form SKI's reduction reaches is shown
   by tests (`tests/test_fix.c`, `make front0-check`, the Reduceron ports),
@@ -1457,8 +1458,10 @@ rewrote `Y g` to the cycle `n = g n`, and a cycle is what Avon cannot keep:
 The one-step rewrite writes a cell that points backward, so a witness row
 for it could fit the write-once memory as it stands: at a loaded Y address with
 a C cell, one cell `App(g, r)`, `r` the `App(Y, g)` the stack holds. Its
-licence would be a simulation theorem relating the run to the plain one
-by `Tr`, owed in lean-ski; not built.
+licence is a simulation theorem relating the run to the plain one by
+`Tr`: proved in `lean/Fix.lean` with Y a jet at the compiler's recursion
+sites (`fix_simulation`, 2026-10-29; `LEAN-JETS.md` §7). The row is not
+built.
 
 **Results, 2026-09-30** (avon `fix-jet`; `docs/BENCHMARK.md`, "Y unfolded
 in one step"). The steps fall almost as far as the cycle's -- PermSort
@@ -3387,8 +3390,8 @@ allowed. It is the last tier and has the largest payoff.
   fewer rows, not the same count.
 - §6.11: Y's one-step unfolding would be a row writing one backward cell,
   `App(g, r)`, licensed by a simulation theorem up to lean-ski's `Tr`
-  (owed); a witnessed recursive call now pays Y's plumbing in S, K and I
-  rows.
+  (`lean/Fix.lean`, `fix_simulation`, Y a jet); a witnessed recursive call
+  now pays Y's plumbing in S, K and I rows.
 - §6.6: testing stays the admission rule for `share` mode. In `witness`
   mode a jet is admitted only when its tier's theorem is proved: 18.1
   once, 18.2 per jet, 18.3 once.

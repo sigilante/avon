@@ -6,6 +6,16 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **Y in one step, proved in Lean** (2026-10-29; `LEAN-JETS.md` §7). Step 4 is done.
+  `lean/Fix.lean` proves that a run mixing `--fix`'s rewrite with weak steps stays
+  convertible with the plain run, so a normal form it reaches is SKI's (`fix_normal`,
+  which DESIGN §6.11 had only argued), and Y's simulation up to lean-ski's `Tr`
+  with Y a jet at the compiler's recursion sites (`fix_simulation`), decided for
+  lean-ski's compiled `sum` and `loop`. Under Avon's tree identity the simulation's
+  proof does not go through for a closure that happens to compile to Y
+  (`closure_spells_Y`), so B takes Y as a jet, as approved. `make fix-lean-check` runs it, and weekly. Next: the
+  interpreter jet's adequacy theorem (step 5).
+
 - **Templates, proved in Lean** (2026-10-29; `LEAN-JETS.md` §6). Step 3 is done.
   `lean/Templates.lean` models `tmpl.c`'s load check and `tmpl_instance`, proves the
   check is lean-ski's bracket abstraction and an accepted template's fire a reduct

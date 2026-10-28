@@ -1,6 +1,6 @@
 # Lean proofs for Avon's C jets: a plan
 
-Written 2026-10-29. Steps 1 to 3 are done (§4 to §6; 2026-10-29). A jet is native code that stands for a term (`DESIGN.md` §6);
+Written 2026-10-29. Steps 1 to 4 are done (§4 to §7; 2026-10-29). A jet is native code that stands for a term (`DESIGN.md` §6);
 today most of Avon's jets are licensed by testing. This note plans their proofs in
 Lean, jet by jet, and records what each proof covers and what stays trusted.
 
@@ -40,21 +40,21 @@ contractions (§6.5), so none of these theorems says anything about steps.
 | numeral words: `add` `sub` `mul` `ifeq` `ifle` `div` `rem` (§6.10) | done: `add_spec` .. `rem_spec` | done: `fireC_num`, `fireC_arg` | nothing; a witness still needs word cells |
 | list words: `len` `at` `app` `take` `drop` | done: `len_spec` .. `drop_spec` | done: `listFireC_sound`; the cell walks are glue | nothing |
 | bit strings: `beq` `bget` `ideq` | done: `beq_spec`, `bget_spec`, `ideq_spec` | done: `beq_fire`, `bget_fire`, `ideq_fire`, over a view of `ctor_at` | nothing |
-| Y in one step (`--fix`, §6.11) | owed, and not a reduction (below) | trivial | step 4 |
+| Y in one step (`--fix`, §6.11) | done, not a reduction (below): convertible for every term (`fix_join`), and Y's simulation up to `Tr`, Y a jet (`fix_simulation`) | trivial: one node written | nothing; a witness row is not built |
 | the interpreter jet (§7) | owed: the tower's adequacy theorem | a copy-mode loop | step 5 |
 
 **Y is not a weak reduction.** Curry's Y does not reduce `Y g` to `g (Y g)`: it
 reduces to `X X`, with `X = S (S (K S) K) (K (S I I)) g`, and `X X` reduces to
 `g (X X)`. `Y g` and `g (Y g)` are convertible, not one a reduct of the other, so
 `--fix`'s rewrite needs the simulation theorem up to lean-ski's `Tr` that §6.11
-and §18.4 name as owed, not an `Implements` lemma.
+and §18.4 name as owed, not an `Implements` lemma (§7).
 
 ## 3. Order
 
 1. **Numeral words**, by `P2Prog.lean`'s pattern (§4).
 2. **List words, then bit strings**, on the same scaffolding (§5).
 3. **Templates**: the load check and the instance (§6).
-4. **Y's simulation theorem.**
+4. **Y's simulation theorem** (§7).
 5. **The interpreter jet's adequacy theorem.**
 
 `reduce.c`'s glue stays trusted unless a verified reducer becomes a goal of its
@@ -210,3 +210,42 @@ step 3.
 node standing for its constant; and the reducer's other paths for a template, a
 constructor's dispatch and a case's join, which act as the instance would and are
 tested, not proved.
+
+## 7. Step 4: Y in one step
+
+**Done, 2026-10-29.** `lean/Fix.lean` proves what `--fix`'s rewrite, `Y g` to
+`g (Y g)`, keeps. It has two parts, both approved before they were built.
+
+- **A. Any term.** A run that mixes weak steps with the rewrite, at any position
+  and in any order, stays convertible with the plain run: whatever it reaches has a
+  common reduct with its start (`fix_join`, from lean-ski's `church_rosser`). So a
+  normal form `--fix` reaches is the one SKI's reduction reaches (`fix_normal`).
+  DESIGN §6.11 had claimed this "by Church-Rosser"; now it is proved. A licenses
+  `--fix` in share mode.
+- **B. Y's simulation up to `Tr`, Y a jet.** Here Y is a constant with one rule,
+  never looked inside, placed where the compiler ties recursion. `compJ` is
+  lean-ski's compiler with each recursive equation's `Ycomb` the jet, and `TrJ` is
+  lean-ski's `Tr` over it. Every source step of a compiled program is matched by a
+  run with the jet, a recursive call being the jet's one step (`simulationJ`).
+  Read back, Y as `Ycomb`, the jet program is lean-ski's compiled program
+  (`fixed_of_fixedJ`), and every jet state a compiled form of its source state by
+  lean-ski's own `Tr` (`tr_of_trJ`, `fix_simulation`). B is not vacuous: the
+  kernel decides it for lean-ski's compiled `sum` and `loop` programs, four
+  recursive equations each, and their read-back is lean-ski's own environment
+  (`sum_fixedJ`, `loop_fixedJ`, `sum_fix_simulation`). B is the licence §18.4
+  names for a witness row; the row is not built.
+
+**Why B takes Y as a jet.** As first stated, B said the run that always uses the
+rewrite and never S-reduces a Y redex matches every source step through `Tr`. That
+is false under Avon's tree identity. The closure `λx. S I I (S (K x) (S I I))`
+compiles to `Ycomb` exactly (`closure_spells_Y`). Applied to `N`, the source takes a
+β-step, which lean-ski's simulation matches by S-reducing that very redex; a run that
+never S-reduces Y rewrites it to `N (Y N)` instead, so the proof does not go
+through, and the statement was not shown. Part A still covers that program, since
+the two are convertible. B over a jet was approved on 2026-10-29.
+
+**What stays trusted.** That Avon's rewrite is `FixStep.fix` and `JStep.fix`
+(`src/reduce.c` writes the redex root as `App(g, y)`, `y` a fresh `App(Y, g)`);
+`--memory`'s sharing, which keeps the same terms under one node; and the reducer's
+strategy, which takes one of the runs these theorems allow. That `--fix` reaches
+every normal form the plain run reaches is still shown by tests, not proved.
