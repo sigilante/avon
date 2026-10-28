@@ -6,6 +6,15 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **Templates, proved in Lean** (2026-10-29; `LEAN-JETS.md` §6). Step 3 is done.
+  `lean/Templates.lean` models `tmpl.c`'s load check and `tmpl_instance`, proves the
+  check is lean-ski's bracket abstraction and an accepted template's fire a reduct
+  of its redex (`template_fire`), and replays the loader with SHA-256 digests in
+  Lean: `make templates-lean-check` requires its counts to be Avon's on the five
+  shipped sets and eight changed copies. The plan's "replace the check in C" was
+  dropped: discovery makes templates at run time, so the check stays in C, now
+  proved. Next: Y's simulation theorem (step 4).
+
 - **Lists and bit strings, proved in Lean** (2026-10-29; `LEAN-JETS.md` §5). Step 2
   is done. `lean/Words.lean` now proves all fifteen word operations' terms (numerals,
   `len` .. `drop`, `beq`, `bget`, `ideq`) and models `list_fire` and `bits_walk`,

@@ -1143,7 +1143,10 @@ before, and `copy` counts stay the paper's (§1.1).
   too.
 - *The instance is weak reduction.* The body over the arguments is a weak
   reduct of the key applied to them (lean-ski's `absN_beta_close`), so
-  the value and every normal form are the unjetted ones.
+  the value and every normal form are the unjetted ones. `lean/Templates.lean`
+  proves the C's side of this (2026-10-29, `LEAN-JETS.md` §6): the check
+  is lean-ski's abstraction, and what `tmpl_instance` builds for an
+  accepted template is a reduct of its redex (`template_fire`).
 
 **What a fire does.** It pops the key's arity of arguments, writes the
 body's open part -- its maximal closed subterms are globals, built once
