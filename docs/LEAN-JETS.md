@@ -191,7 +191,9 @@ before it uses a template, and the fire that follows.
 check in C", with lean-ski's `rootOKB`. That was the wrong design. Avon cannot run
 Lean at load; discovery makes templates at run time, with no file for Lean to
 read; and `rootOKB` licenses a witness heap's roots, not a share-mode table. The
-check stays in C and is now proved, and the replay checks the model against the C.
+check stays in C and is now proved, and the replay checks the model against the C. The
+change was approved on 2026-10-29: this, not a check in Lean replacing the C, is
+step 3.
 
 **What the proofs settled.**
 
