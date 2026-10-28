@@ -33,8 +33,13 @@
 #include "jets.h"
 #include "word_pins.h"
 
-static const char SUC_TEXT[] = "S (K K) (S (K (S I)) K)";
-static const char CONS_TEXT[] = "S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) (S (K (S I)) K)))) (K K))";
+/*  Every term this file pins, the operations' and the constructors' they
+ *  read, is printed by lean/Words.lean as src/word_pins.h, which proves
+ *  each operation computes its function on every input and the reducer's
+ *  fires sound (docs/LEAN-JETS.md). */
+
+static const char SUC_TEXT[] = AV_PIN_SUC;
+static const char CONS_TEXT[] = AV_PIN_CONS;
 
 void av_fix_on(av_arena *a) {
     a->fix_on = true;
@@ -238,38 +243,13 @@ static uint32_t plain_numeral(av_arena *a, uint32_t n) {
  *  natDiv and natRem, over its prelude's suc and zero), pinned: a words.tsv
  *  row is admitted only if its term is this one, node for node, so a row
  *  cannot bring an operation of its own; word_admit's test on small
- *  numerals runs as well.  The numeral operations' terms are printed by
- *  lean/Words.lean (src/word_pins.h), which proves each computes its
- *  operation on every pair of numerals.  Then the list operations, skijack's listLength
+ *  numerals runs as well.  Then the list operations, skijack's listLength
  *  .. listDrop (expand.py, over its prelude's nil and cons), on small
  *  lists.  Index AV_WOP_ADD .. AV_WOP_DROP. */
 static const char *const PINNED[] = {
     NULL,
     AV_PIN_ADD, AV_PIN_SUB, AV_PIN_MUL, AV_PIN_IFEQ, AV_PIN_IFLE, AV_PIN_DIV, AV_PIN_REM,
-    /* len */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S I (K K)))) (S (K"
-        " K) (S (K K) (S (K (S (K K) (S (K (S I)) K)))))))",
-    /* at */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K K) S"
-        ")))) (S (K K) (S (K (S (S (K S) (S (K K) (S (K S) (S (K (S (K S))) (S "
-        "(K K)))))))) (S (K K) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K S) ("
-        "S (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S (K S))))) (K (K K)))))"
-        ") (K K)))))))",
-    /* app */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S S)) (S (K K) (S (K "
-        "(S (K (S (S (K S) (S (K K) (S (K (S (K K))) (S (S (K S) (S (K K) (S (K"
-        " S) (S (K (S I)) K)))) (K K))))))))) (S (K (S (K K))) (S (S (K S) (S ("
-        "K K) S)) (K K))))))",
-    /* take */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (K (S (S I (K K))))"
-        ")) (S (K (S (K K))) (S (K (S (S (K S) (S (K K) (S I (K K)))))) (S (K K"
-        ") (S (K (S (K (S (S (K S) (S (K K) (S (K (S (K K))) (S (S (K S) (S (K "
-        "K) (S (K S) (S (K (S I)) K)))) (K K))))))))) (S (K (S (K K))) (S (S (K"
-        " S) (S (K K) S)) (K K))))))))",
-    /* drop */
-        "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S I"
-        ")) K)))) (S (K (S (K K))) (S (K (S (S (K S) (S (K K) (S I (K K)))))) ("
-        "S (K K) (S (K (S (K K))) (S (S (K S) (S (K K) S)) (K K)))))))",
+    AV_PIN_LEN, AV_PIN_AT, AV_PIN_APP, AV_PIN_TAKE, AV_PIN_DROP,
 };
 
 const char *av_word_pinned(unsigned op) {
@@ -405,26 +385,10 @@ bool word_admit(av_arena *a, uint32_t term, unsigned op) {
  *  for node, has it run natively; bits_admit runs the term on small bit
  *  strings, tries and names first.  The pins are skijack front1's `eqB`,
  *  `rvGet` (its `cmGet`, `sHasB` and `ndGet` the same term) and `eqId`. */
-static const char BEQ_TEXT[] =
-    "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (S (K S) (S (K (S (K S))) (S (K (S (S (K S)"
-    " (S (S (K S) K) (K (S (S (S I (K K)) (K (K (K I)))) (K (K (K I))))))))) (S (K K) (S (S"
-    " (K S) (S (K (S (K S))) (S (K (S (S (K S) (S (K K) (S I (K (K I))))))) (S (K K) I))))"
-    " (K (K (K (K (K I)))))))))) (S (K K) (S (K (S (S (K S) (S (K K) (S (S I (K (K I))) (K"
-    " (K (K I)))))))) (S (K K) I))))";
-static const char BGET_TEXT[] =
-    "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (K (S (S I (K (K I))))))) (S (K (S (K"
-    " K))) (S (K (S (K (S I)))) (S (K (S (K K))) (S (S (K S) (S (K (S (K S))) (S (K (S (K (S"
-    " (K S))))) (S (K (S (K (S (K (S (K S))))))) (S (K (S (K (S (K (S (K K))))))) (S (K (S (S"
-    " (K S) (S (K (S (K S))) (S (K K)))))) (S (K K) (S (K K) (S (S (K S) (S (K K) S)) (K"
-    " K)))))))))) (S (K K) (S (K K) (S (K K) (S (S (K S) (S (K K) S)) (K K))))))))))";
+static const char BEQ_TEXT[] = AV_PIN_BEQ;
+static const char BGET_TEXT[] = AV_PIN_BGET;
 
-static const char IDEQ_TEXT[] =
-    "S (S (K S) (S (K K) (S (K (S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (S (K S) (S (K (S"
-    " (K S))) (S (K (S (S (K S) (S (S (K S) K) (K (S (S (S I (K K)) (K (K (K I)))) (K (K (K"
-    " I))))))))) (S (K K) (S (S (K S) (S (K (S (K S))) (S (K (S (S (K S) (S (K K) (S I (K (K"
-    " I))))))) (S (K K) I)))) (K (K (K (K (K I)))))))))) (S (K K) (S (K (S (S (K S) (S (K K)"
-    " (S (S I (K (K I))) (K (K (K I)))))))) (S (K K) I)))))) (S (S I (K (K (S (K K) K)))) (K"
-    " I))))) (K (S (S I (K (K (S (K K) K)))) (K I)))";
+static const char IDEQ_TEXT[] = AV_PIN_IDEQ;
 
 const char *av_bits_pinned(unsigned op) {
     return op == AV_WOP_BEQ ? BEQ_TEXT : op == AV_WOP_BGET ? BGET_TEXT
@@ -432,15 +396,13 @@ const char *av_bits_pinned(unsigned op) {
 }
 
 /*  The constructors' terms, plain. */
-static const char BN_TEXT[] = "S (K K) K";
-static const char BZ_TEXT[] = "S (K K) (S (K (S (K K))) (S (K (S I)) K))";
-static const char BO_TEXT[] = "S (K K) (S (K K) (S (K (S I)) K))";
-static const char NDT_TEXT[] = "S (K K) (S (K (S I)) K)";
-static const char IDRAW_TEXT[] = "S (K (S (K K))) (S (K (S I)) K)";
-static const char ID_TEXT[] = "S (K K) (S (K (S I)) K)";
-static const char NDB_TEXT[] =
-    "S (S (K S) (S (K (S (K S))) (S (K (S (K K))) (S (K (S (K S))) (S (S (K S) (S (K K) (S (K"
-    " S) (S (K (S I)) K)))) (K K)))))) (K (K K))";
+static const char BN_TEXT[] = AV_PIN_BN;
+static const char BZ_TEXT[] = AV_PIN_BZ;
+static const char BO_TEXT[] = AV_PIN_BO;
+static const char NDT_TEXT[] = AV_PIN_NDT;
+static const char IDRAW_TEXT[] = AV_PIN_IDRAW;
+static const char ID_TEXT[] = AV_PIN_ID;
+static const char NDB_TEXT[] = AV_PIN_NDB;
 
 static uint32_t parse_text(av_arena *a, const char *s) {
     av_parse_error pe;

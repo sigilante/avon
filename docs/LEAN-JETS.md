@@ -1,6 +1,6 @@
 # Lean proofs for Avon's C jets: a plan
 
-Written 2026-10-29. Step 1 is done (§4, 2026-10-29). A jet is native code that stands for a term (`DESIGN.md` §6);
+Written 2026-10-29. Steps 1 and 2 are done (§4, §5; 2026-10-29). A jet is native code that stands for a term (`DESIGN.md` §6);
 today most of Avon's jets are licensed by testing. This note plans their proofs in
 Lean, jet by jet, and records what each proof covers and what stays trusted.
 
@@ -38,8 +38,8 @@ contractions (§6.5), so none of these theorems says anything about steps.
 | Scott constructors (§6.8) | done: they compile through `ctorO` | trusted | as templates |
 | Poseidon2 (`--p2`, §6.12) | done: `poseidon2_respects`, P proved in lean-ski | done: `AvonP2.permuteC` | nothing |
 | numeral words: `add` `sub` `mul` `ifeq` `ifle` `div` `rem` (§6.10) | done: `add_spec` .. `rem_spec` | done: `fireC_num`, `fireC_arg` | nothing; a witness still needs word cells |
-| list words: `len` `at` `app` `take` `drop` | owed, over Scott lists of terms | pointer walks: glue | step 2 |
-| bit strings: `beq` `bget` `ideq` | owed; `bget` needs the trie as Lean data | glue | step 2 |
+| list words: `len` `at` `app` `take` `drop` | done: `len_spec` .. `drop_spec` | done: `listFireC_sound`; the cell walks are glue | nothing |
+| bit strings: `beq` `bget` `ideq` | done: `beq_spec`, `bget_spec`, `ideq_spec` | done: `beq_fire`, `bget_fire`, `ideq_fire`, over a view of `ctor_at` | nothing |
 | Y in one step (`--fix`, §6.11) | owed, and not a reduction (below) | trivial | step 4 |
 | the interpreter jet (§7) | owed: the tower's adequacy theorem | a copy-mode loop | step 5 |
 
@@ -52,8 +52,7 @@ and §18.4 name as owed, not an `Implements` lemma.
 ## 3. Order
 
 1. **Numeral words**, by `P2Prog.lean`'s pattern (§4).
-2. **List words, then bit strings**, on the same scaffolding; their C stays in
-   the glue.
+2. **List words, then bit strings**, on the same scaffolding (§5).
 3. **Templates checked by Lean** at load, with lean-ski's `rootOKB`, replacing
    the check in C.
 4. **Y's simulation theorem.**
@@ -135,3 +134,35 @@ pin. What the proofs found:
 
 What stays trusted: that `fireC` reads as `word_fire` does, the printer, and
 the glue of §1.
+
+## 5. Step 2: lists and bit strings
+
+**Done, 2026-10-29.** `lean/Words.lean` grows from the numerals to all fifteen word
+operations, by the same method, and prints every pin `words.c` holds: the fifteen
+operations' terms and the nine constructors it reads. Lean's print equals the old
+pins byte for byte.
+
+- **Lists.** `len`, `at`, `app`, `take` and `drop` compute `length`, `getD`, `++`,
+  `take` and `drop` on Scott lists whose elements are any terms (`len_spec` ..
+  `drop_spec`). `listFireC`, `list_fire`'s result line for line, is a reduct of the
+  redex whenever it fires (`listFireC_sound`).
+- **Bit strings.** `beq` decides equality, `bget` looks a key up in a trie, `No`
+  where it holds nothing, and `ideq` compares two names' bits (`beq_spec`,
+  `bget_spec`, `ideq_spec`). The C's walk is modelled over a `View`, what `ctor_at`
+  reads of a node, and proved sound level by level (`beq_fire`, `bget_fire`,
+  `ideq_fire`).
+- **The constructors.** Each term `ctor_at` stands for is lean-ski's compiled
+  constructor of the shape it reads (`ctors_compiled`): `Bz` is `ctorO 1 1 3`, `Nd0`
+  is `K`, `No` is `K I`, and so on.
+
+**What the proofs found.** When `bits_walk` meets a field not yet a value, it leaves
+the operation applied to the fields it reached (`BITS_AGAIN`). `DESIGN.md` and
+`reduce.c` called that a weak reduct of the redex. It is not. The redex reduces
+through `Ycomb ⬝ G` to the knot over those fields, and so does the term the fire
+leaves, but Curry's Y reaches its knot only one way: the two are convertible, with a
+common reduct. That is enough: by lean-ski's `church_rosser` they share every normal
+form. Both comments now say so.
+
+**What stays trusted.** The models (`listFireC` and the walks) as readings of the C;
+`View.OK`, that `ctor_at` reads a constructor template's node over its fields, or `K`
+and `K I`, as that constructor; and the glue of §1, which builds and reads the cells.

@@ -117,7 +117,7 @@ Outside `src/`
 | path | what it holds |
 |---|---|
 | `lean/P2Prog.lean` | the Lean program printed as `src/p2_prog.h`, with its proof against the specification |
-| `lean/Words.lean` | the numeral operations' terms, printed as `src/word_pins.h`, each proved to compute its operation, and `word_fire`'s arithmetic proved to agree (`LEAN-JETS.md`) |
+| `lean/Words.lean` | the word operations' terms and the constructors they read, printed as `src/word_pins.h`, each operation proved to compute its function, and the C's fires, modelled, proved sound (`LEAN-JETS.md`) |
 | `jets/` | the bird and Joy jet dictionaries and the scripts that write them |
 | `tests/test_*.c`, `tests/test.h` | the unit suites (`TESTING.md`) |
 | `tests/*_check.sh`, `tests/pins.sh` | the checks against other repositories, and their pins |
