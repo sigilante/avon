@@ -22,6 +22,18 @@ normal form, that form is a weak reduct of the plain run's
 theorem (*Lambda-Calculus and Combinators*, 2008, Theorem 3.22), for head
 runs, with a bound.
 
+**Jets compose** (`jets_join`, `jets_normal`).  For any set of jets each of
+whose fires leaves a term convertible with its redex, a run mixing weak
+steps with fires of any of them, at any position and in any order, stays
+convertible with the plain run, and a normal form it reaches is the one
+SKI's reduction reaches.  Every jet `docs/LEAN-JETS.md` §2 marks proved is
+in such a set: a fire
+that is a reduct is convertible (`Conv.ofWSteps`); a bit-string fire's
+`BITS_AGAIN` is convertible (`lean/Words.lean`, `beq_fire`); and `--fix`'s
+rewrite is (`fix_conv`).  `lean/Fix.lean`'s `fix_join` is the case of
+`--fix` alone.  The membership is read from each file's theorem; the
+files do not import one another.
+
 **Which fires are head-first.**  A pin `Ycomb ⬝ G` with its arguments
 head-contracts at `Ycomb`'s `S`, and two more steps reach `G`'s knot
 (`ycomb_head`), so every theorem proved through the knot, as each word,
@@ -183,8 +195,88 @@ theorem head_of_knot {G r : Term} (as : List Term) (h : WSteps (apps (knot G) as
     HeadFirst (apps (Ycomb ⬝ G) as) r :=
   ⟨_, Step.apps as (ycomb_head G).1, (WSteps.apps as (ycomb_head G).2).trans h⟩
 
+-- ---------------------------------------------------------------------------
+-- Jets together: any fires convertible with their redexes
+-- ---------------------------------------------------------------------------
+
+/-- Two terms are convertible: they have a common weak reduct. -/
+def Conv (t u : Term) : Prop := ∃ w, WSteps t w ∧ WSteps u w
+
+/-- A fire of any jet in a set `J`, at any position. -/
+inductive JFire (J : Term → Term → Prop) : Term → Term → Prop
+  | fire {t u : Term} : J t u → JFire J t u
+  | left {f f' : Term} (x : Term) : JFire J f f' → JFire J (f ⬝ x) (f' ⬝ x)
+  | right (f : Term) {x x' : Term} : JFire J x x' → JFire J (f ⬝ x) (f ⬝ x')
+
+/-- A run with the jets of `J`: weak steps and fires, in any order. -/
+inductive JRun (J : Term → Term → Prop) : Term → Term → Prop
+  | refl (t : Term) : JRun J t t
+  | weak {t t' u : Term} : WStep t t' → JRun J t' u → JRun J t u
+  | fire {t t' u : Term} : JFire J t t' → JRun J t' u → JRun J t u
+
+theorem JFire.conv {J : Term → Term → Prop} (hJ : ∀ {t u}, J t u → Conv t u)
+    {t u : Term} (h : JFire J t u) : Conv t u := by
+  induction h with
+  | fire h => exact hJ h
+  | left x _ ih =>
+    obtain ⟨w, h1, h2⟩ := ih
+    exact ⟨w ⬝ x, h1.left x, h2.left x⟩
+  | right f _ ih =>
+    obtain ⟨w, h1, h2⟩ := ih
+    exact ⟨f ⬝ w, WSteps.right f h1, WSteps.right f h2⟩
+
+/-- **Jets compose.**  If every jet in `J` leaves a term convertible with
+    its redex, a run mixing weak steps with fires of any of them, at any
+    position and in any order, stays convertible with its start: whatever
+    it reaches has a common reduct with the plain run (lean-ski's
+    `church_rosser`).  `lean/Fix.lean`'s `fix_join` is the case of `--fix`
+    alone. -/
+theorem jets_join {J : Term → Term → Prop} (hJ : ∀ {t u}, J t u → Conv t u)
+    {t u : Term} (h : JRun J t u) : Conv t u := by
+  induction h with
+  | refl t => exact ⟨t, .refl t, .refl t⟩
+  | @weak t t1 u s _ ih =>
+    obtain ⟨w2, h12, hu2⟩ := ih
+    obtain ⟨w3, h13, h23⟩ := church_rosser (WSteps.refl t1) h12
+    exact ⟨w3, (WSteps.single s).trans h13, hu2.trans h23⟩
+  | @fire t t1 u f _ ih =>
+    obtain ⟨w2, h12, hu2⟩ := ih
+    obtain ⟨w1, h01, h11⟩ := f.conv hJ
+    obtain ⟨w3, h13, h23⟩ := church_rosser h11 h12
+    exact ⟨w3, h01.trans h13, hu2.trans h23⟩
+
+/-- **A normal form a jetted run reaches is SKI's.**  If the run reaches a
+    term no weak step applies to, the plain run reaches that same term. -/
+theorem jets_normal {J : Term → Term → Prop} (hJ : ∀ {t u}, J t u → Conv t u)
+    {t n : Term} (h : JRun J t n) (hn : ∀ u, ¬ WStep n u) : WSteps t n := by
+  obtain ⟨w, htw, hnw⟩ := jets_join hJ h
+  cases hnw with
+  | refl => exact htw
+  | step s _ => exact absurd s (hn _)
+
+/-- A fire that is a reduct is convertible. -/
+theorem Conv.ofWSteps {t u : Term} (h : WSteps t u) : Conv t u := ⟨u, h, .refl u⟩
+
+/-- `--fix`'s rewrite, `Ycomb ⬝ g` to `g ⬝ (Ycomb ⬝ g)`, is convertible:
+    both reach `g` over the knot.  So `--fix` joins the other jets in one
+    `J`. -/
+theorem fix_conv (g : Term) : Conv (Ycomb ⬝ g) (g ⬝ (Ycomb ⬝ g)) := by
+  have hk : WSteps (Ycomb ⬝ g) (knot g) :=
+    .step (ycomb_head g).1.weak (ycomb_head g).2
+  have hu : WSteps (knot g) (g ⬝ knot g) := by
+    unfold knot knotX
+    exact .step (.left _ (.S _ _ _)) (.step (.left _ (.left _ (.S _ _ _)))
+      (.step (.left _ (.left _ (.left _ (.K _ _)))) (.step (.S _ _ _)
+      (.step (.left _ (.K _ _)) (.step (.right _ (.left _ (.K _ _)))
+      (.step (.right _ (.S _ _ _)) (.step (.right _ (.left _ (.I _)))
+      (.single (.right _ (.right _ (.I _)))))))))))
+  exact ⟨g ⬝ knot g, hk.trans hu, WSteps.right g hk⟩
+
 end AvonJets
 
 #print axioms AvonJets.jrun_le
 #print axioms AvonJets.jrun_whnf
 #print axioms AvonJets.head_of_knot
+#print axioms AvonJets.jets_join
+#print axioms AvonJets.jets_normal
+#print axioms AvonJets.fix_conv

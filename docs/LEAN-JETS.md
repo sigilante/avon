@@ -30,10 +30,23 @@ circuit table (§18.2's word cells). The second and third matter for trusting a
 **A jet's theorem licenses its value, not its count.** Every jet below skips
 contractions (§6.5), so none of these theorems says anything about steps.
 
-**Each jet is proved alone.** No theorem states a share-mode run with several
-jets firing. That such a run stays convertible with the plain run follows from
-the pieces, each rewrite convertible, and by lean-ski's `church_rosser` their
-normal forms agree; Lean does not state the composite.
+**Jets compose** (`lean/Jets.lean`, 2026-10-29). For any set of jets whose fires
+each leave a term convertible with the redex, a run mixing weak steps with fires
+of any of them, at any position and in any order, stays convertible with the plain
+run, and a normal form it reaches is SKI's (`jets_join`, `jets_normal`). Every jet
+§2 marks proved is in such a set: a reduct is convertible, `BITS_AGAIN` is (`beq_fire`), and
+so is `--fix`'s rewrite (`fix_conv`). Which theorem puts each jet in the set is read
+from its file; the files do not import one another. §9 adds that such a run ends
+where the plain one does, for the fires that are head-first.
+
+**What composing does not give.** Convertibility relates values, not states. A
+simulation of a source program, or a witness row, needs more: a calculus in which
+each jet is an atom with its own rules, as `lean/Fix.lean`'s B makes Y. Hindley and
+Seldin prove one such extension confluent, numeral atoms with an iteration atom `Z`,
+because a `Z`-redex contains no other redex (*Lambda-Calculus and Combinators*,
+2008, Theorem A2.15). Their extension adds rules; Avon's word nodes add
+none, since each stands for its own Scott numeral, so the calculus stays pure SKI.
+A calculus of all of Avon's jets as atoms is not built.
 
 ## 2. The jets
 

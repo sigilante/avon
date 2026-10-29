@@ -4,7 +4,11 @@
 # the plain head run to a weak head normal form, so it ends, and that where
 # it ends in one, that form is a weak reduct of the plain run's
 # (AvonJets.jrun_le, jrun_whnf); and that a pin over Curry's Y fires
-# head-first whenever its theorem goes through the knot (head_of_knot).
+# head-first whenever its theorem goes through the knot (head_of_knot);
+# and that a run mixing weak steps with fires of any jets, each convertible
+# with its redex, at any position and in any order, stays convertible with
+# the plain run, so a normal form it reaches is SKI's (jets_join,
+# jets_normal), --fix's rewrite among them (fix_conv).
 # Every printed theorem must rest on Lean's axioms alone, never sorryAx.
 #
 # Run from the repository root.  LEAN_SKI defaults to ~/Code/ski/lean-ski.
@@ -21,7 +25,7 @@ mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 ROOT=$(pwd)
 
-THEOREMS="jrun_le jrun_whnf head_of_knot"
+THEOREMS="jrun_le jrun_whnf head_of_knot jets_join jets_normal fix_conv"
 axioms_ok() {
     local t
     for t in $THEOREMS; do
