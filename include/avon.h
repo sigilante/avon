@@ -493,7 +493,9 @@ bool av_read_nat(av_arena *a, uint32_t t, size_t max_depth, const av_opts *o,
  *  Air.stepG, run literally over its own append-only heap of the circuit's
  *  cells.  Its contraction count equals copy mode's, and its table is the
  *  one Ski/AirCheck.lean decides and bench/plonky3 proves.  Weak head normal
- *  form only.  Terms with atoms are refused for now.
+ *  form only.  A term's atoms are lean-ski's open-term variables, numbered
+ *  by first occurrence (Mach.obuild; Ski/AirCheckOpen.lean decides such a
+ *  table); a jetted or probed witness refuses them.
  */
 
 /*  Cell tags, numbered as the Plonky3 tables' mem bus numbers them. */
@@ -517,11 +519,13 @@ typedef struct {
                                    cells: POP's and INSTW's rows */
     uint64_t  p2calls;          /* Poseidon2 jet steps: P2's rows, and 496
                                    rows each of P2IN and P2OUT */
+    ski_leaf *atoms;            /* atom i's leaf id, i by first occurrence */
+    size_t    natoms;
 } av_witness;
 
 /*  Load t and run it to weak head normal form.  AV_WHNF on success;
  *  AV_SIZE, with *err, if it needs more than max_rows rows or max_cells
- *  cells, or holds atoms or jets.  A diverging term stops at max_rows.
+ *  cells, or holds jets.  A diverging term stops at max_rows.
  */
 av_status av_witness_run(const av_arena *a, uint32_t t, size_t max_rows,
                          size_t max_cells, av_witness *w, const char **err);
