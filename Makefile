@@ -8,8 +8,9 @@
 # `make p2-witness-check` runs tests/p2_witness_check.sh,
 # `make words-lean-check` runs tests/words_lean_check.sh,
 # `make templates-lean-check` runs tests/templates_lean_check.sh,
-# `make fix-lean-check` runs tests/fix_lean_check.sh (the last eight need a
-# lean-ski checkout), `make selfhost-check` runs
+# `make fix-lean-check` runs tests/fix_lean_check.sh,
+# `make interp-lean-check` runs tests/interp_lean_check.sh (the last nine
+# need a lean-ski checkout), `make selfhost-check` runs
 # tests/selfhost_check.sh, `make front0-check` runs tests/front0_check.sh
 # and `make front1-check` runs tests/front1_check.sh (the three need a
 # skijack checkout), `make fixtures-check` runs tests/fixtures_check.sh
@@ -42,7 +43,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h src/cli/*.h tests/*.h)
 
-.PHONY: all check smoke clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check words-lean-check templates-lean-check fix-lean-check \
+.PHONY: all check smoke clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check words-lean-check templates-lean-check fix-lean-check interp-lean-check \
 	selfhost-check front0-check front1-check fixtures-check hider-check
 .SECONDARY:
 
@@ -116,6 +117,9 @@ templates-lean-check: $(BUILD)/avon
 
 fix-lean-check:
 	tests/fix_lean_check.sh
+
+interp-lean-check:
+	tests/interp_lean_check.sh
 
 selfhost-check: $(BUILD)/avon
 	tests/selfhost_check.sh

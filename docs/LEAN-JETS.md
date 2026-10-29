@@ -1,6 +1,6 @@
 # Lean proofs for Avon's C jets: a plan
 
-Written 2026-10-29. Steps 1 to 4 are done (§4 to §7; 2026-10-29). A jet is native code that stands for a term (`DESIGN.md` §6);
+Written 2026-10-29. Every step is done (§4 to §8; 2026-10-29). A jet is native code that stands for a term (`DESIGN.md` §6);
 today most of Avon's jets are licensed by testing. This note plans their proofs in
 Lean, jet by jet, and records what each proof covers and what stays trusted.
 
@@ -41,7 +41,7 @@ contractions (§6.5), so none of these theorems says anything about steps.
 | list words: `len` `at` `app` `take` `drop` | done: `len_spec` .. `drop_spec` | done: `listFireC_sound`; the cell walks are glue | nothing |
 | bit strings: `beq` `bget` `ideq` | done: `beq_spec`, `bget_spec`, `ideq_spec` | done: `beq_fire`, `bget_fire`, `ideq_fire`, over a view of `ctor_at` | nothing |
 | Y in one step (`--fix`, §6.11) | done, not a reduction (below): convertible for every term (`fix_join`), and Y's simulation up to `Tr`, Y a jet (`fix_simulation`) | trivial: one node written | nothing; a witness row is not built |
-| the interpreter jet (§7) | owed: the tower's adequacy theorem | a copy-mode loop | step 5 |
+| the interpreter jet (§7) | done for `whnfF`: the paper's fuel adequacy (`whnfF_adequate`) | a copy-mode loop: trusted as `evalF`, tested | the cores `wf5Abs`, `wf5Omg`, `wfQ`, `wfN` |
 
 **Y is not a weak reduction.** Curry's Y does not reduce `Y g` to `g (Y g)`: it
 reduces to `X X`, with `X = S (S (K S) K) (K (S I I)) g`, and `X X` reduces to
@@ -55,7 +55,7 @@ and §18.4 name as owed, not an `Implements` lemma (§7).
 2. **List words, then bit strings**, on the same scaffolding (§5).
 3. **Templates**: the load check and the instance (§6).
 4. **Y's simulation theorem** (§7).
-5. **The interpreter jet's adequacy theorem.**
+5. **The interpreter jet's adequacy theorem** (§8).
 
 `reduce.c`'s glue stays trusted unless a verified reducer becomes a goal of its
 own.
@@ -249,3 +249,35 @@ that program, since the two are convertible. B over a jet was approved on 2026-1
 `--memory`'s sharing, which keeps the same terms under one node; and the reducer's
 strategy, which takes one of the runs these theorems allow. That `--fix` reaches
 every normal form the plain run reaches is still shown by tests, not proved.
+
+## 8. Step 5: the interpreter jet
+
+**Done, 2026-10-29, for `whnfF`.** `lean/Interp.lean` proves the tower's adequacy
+theorem for the 618-atom self-interpreter the jet serves. The ski-in-ski paper
+states it as Lemma `lem:step` and Theorem `thm:fuel` and proves it on paper; now it
+is checked by the kernel, for the exact term.
+
+- **Fuel adequacy** (`whnfF_adequate`). Given fuel `k` and an encoded term `M`,
+  `whnfF ⟨k⟩ ⟨M⟩` reduces to the encoding of lean-ski's `evalF k M`: `Just` the weak
+  head normal form `M` reaches within `k` step-attempts, `Nothing` otherwise. That is
+  the outcome the jet produces, so the jet's answer is a reduct of the
+  interpreter's.
+- **Step adequacy** (`step_spec`). `step ⟨M⟩` reduces to `Nothing` in weak head
+  normal form and to `Just ⟨M'⟩` when `M` contracts its head redex to `M'`, as
+  lean-ski's `step?` says. Under it are the spine walker (`sp_spec`), the rebuilder
+  (`rb_spec`) and the three arms, each by kernel-checked symbolic runs.
+- **The pins.** The generators reassemble the dictionary's 618 atoms exactly
+  (`whnf_pin`), and the object type's constructors are lean-ski's `quoteT`
+  (`pins_compiled`). `make interp-lean-check` requires Lean's print of `whnfF` and
+  its constructors to be the conformance dictionary's terms, byte for byte, and
+  `interpreters.tsv`'s `whnfF` core to be keyed by that term.
+
+**Scope, approved 2026-10-29.** The jet serves five cores; the plan's theorem is
+`whnfF`'s. `wf5Abs` and `wf5Omg` add a leaf whose arm errs or diverges, and `wfQ` and
+`wfN` a `Scry` leaf answered from a fact store; their adequacy is not proved.
+
+**What stays trusted.** That the jet's copy-mode run computes `evalF`: `reduce.c`'s
+copy mode as lean-ski's `step?`, one fuel unit per step-attempt, which
+`tests/test_interp.c` and the conformance fuel cases test; the datum's decoding and
+the outcome's encoding; and residual jets inside the object run keeping copy-mode
+counts (§6.5).

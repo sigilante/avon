@@ -3382,7 +3382,10 @@ VM boundary.
 §7's jet collapses a tower level. As a precompile its licence is the
 tower's adequacy theorem: the self-interpreter, on an encoded term,
 computes the encoding of the term's value. It reads encoded data, which is
-allowed. It is the last tier and has the largest payoff.
+allowed. It is the last tier and has the largest payoff. For `whnfF` it is
+proved (`lean/Interp.lean`, `whnfF_adequate`, 2026-10-29; `LEAN-JETS.md`
+§8): `whnfF ⟨k⟩ ⟨M⟩` reduces to the encoding of lean-ski's `evalF k M`,
+the paper's fuel adequacy, for the 618-atom term the dictionary pins.
 
 ### 18.4 What changes elsewhere
 
