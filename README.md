@@ -98,6 +98,7 @@ Start at [`docs/README.md`](docs/README.md), the index.  In brief:
 - [`docs/TESTING.md`](docs/TESTING.md): every check, and the outside checkouts some of them need.
 - [`docs/DESIGN.md`](docs/DESIGN.md): the design, its reasons and its history.
 - [`docs/SKA.md`](docs/SKA.md): how Avon recovers a program's functions, after Afonin's subject knowledge analysis.
+- [`docs/LEAN-JETS.md`](docs/LEAN-JETS.md): which jets are proved in Lean, and what each proof covers.
 
 ## Checks that need other repositories
 
@@ -108,13 +109,14 @@ Start at [`docs/README.md`](docs/README.md), the index.  In brief:
 | `selfhost-check`, `front0-check`, `front1-check` | [SKIjack](https://github.com/sigilante/SKIjack) and [aviary](https://github.com/sigilante/aviary)'s `aviary_kernel` |
 | `fixtures-check` | SKIjack, [SKIlark](https://github.com/sigilante/SKIlark) and aviary |
 | `witness-check` and the other four `*-witness-check`s | [lean-ski](https://github.com/sigilante/lean-ski) |
+| `words-lean-check`, `templates-lean-check`, `fix-lean-check`, `interp-lean-check` | lean-ski |
 | `hider-check` | the pure-S paper's scripts, not yet public |
 
 `docs/TESTING.md` gives each check's variable, default path and running time.
 
 ## Status
 
-Avon is a research proof of concept.  Built: the three strategies, jets, templates (from Python's front end, from front1 itself, or discovered with no front end), data jets, scry, kernels on a durable pier, the persistent arena, drivers in memory and in a pier (`avon run --kernel`, `avon boot --drivers`), and the SKIjack front end through its sixth milestone, which checks a program as Python's Stage A and Stage B do and compiles every corpus program to Python's terms.  Open: the proof-side items in `docs/DESIGN.md` §11.1.  The structural hash keeps 128 bits of SHA-256.  A jet fires only where its own term stands, so a collision cannot merge two jets.
+Avon is a research proof of concept.  Built: the three strategies, jets, templates (from Python's front end, from front1 itself, or discovered with no front end), data jets, scry, kernels on a durable pier, the persistent arena, drivers in memory and in a pier (`avon run --kernel`, `avon boot --drivers`), and the SKIjack front end through its sixth milestone, which checks a program as Python's Stage A and Stage B do and compiles every corpus program to Python's terms.  Proved in Lean against lean-ski: the word operations' terms, and Lean models of the C's fires and of the template check and instance, read against the C; `--fix`'s rewrite, convertible for every term; and the interpreter jet's `whnfF` (`docs/LEAN-JETS.md`, which lists what stays trusted).  Open: the proof-side items in `docs/DESIGN.md` §11.1.  The structural hash keeps 128 bits of SHA-256.  A jet fires only where its own term stands, so a collision cannot merge two jets.
 
 ## References
 

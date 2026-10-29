@@ -35,12 +35,28 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > to at least `2^9` rows (#31). The figures in §1 and §9 are the
 > fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
 > `paper-v9`, `fb65141`.
+>
+> **What "sound" and "zero knowledge" mean here (audit, 2026-10-29,
+> against lean-ski `fb65141`).** The soundness theorems
+> (`compJExport_sound`, `predJExport_sound`, `p2preExport_sound`) assume
+> tables the AIRs accept (`AcceptedP`): constraints met, LogUp sums
+> balanced, heights two-adic. That an accepted ski-air proof gives such
+> tables rests on FRI's and the PCS's soundness, Merkle binding and
+> Fiat–Shamir, assumed (`DESIGN.md` §11.1). Zero knowledge
+> (`compJ_transcript`, `compP_transcript`) is honest-verifier, over
+> uniform challenges, with the PCS's hiding a hypothesis (`PCSCloseN`;
+> `compJ_transcriptG_fri` and `compP_transcriptG_fri` simulate FRI's view
+> instead). No theorem at the pin carries it through Fiat–Shamir for the
+> circuits with jets or Poseidon2; lean-ski has that for its Sudoku,
+> hidden-term and composed circuits only. The heights below are
+> corrected to the pin: each free height in `[9, 20]` (`logOK`), the
+> witness table `2^9` rows, padding to at least `2^9` (`padCopiesMin`).
 
 ## 1. Why
 
-**Hidden computation costs every contraction as a row.** lean-ski proves
-statements in zero knowledge only without jets, so a verifier runs as
-plain SKI reduction:
+**Hidden computation costs every contraction as a row.** When this design
+began, lean-ski proved statements in zero knowledge only without jets, so a
+verifier ran as plain SKI reduction:
 
 | statement (lean-ski `release/skilark`) | rows | memory cells | heights | prove |
 |---|---:|---:|---|---:|
@@ -127,12 +143,12 @@ hidden term runs unjetted.
 - CPU, with a restart kind for segments and two blinding messages;
 - memory, with one blinding message;
 - program, preprocessed from the blank heap;
-- witness, fixed at `2^8` rows, whose bit mode constrains each bit cell
+- witness, fixed at `2^9` rows, whose bit mode constrains each bit cell
   to `K` or `K I` and whose region cells are well formed;
 - segments, whose multiplicities are fixed by the statement
   (`segs_honest`).
 
-Its heights are the statement's (`log R M`, each in `[8, 20]`). It is
+Its heights are the statement's (`log R M`, each in `[9, 20]`). It is
 proved:
 - sound, `compExportG_sound`, and complete, `comp_completeG_log`, for
   any evaluation statement;
@@ -185,7 +201,7 @@ for three tables. The design extends those answers to the five jet tables.
 | CPU | `2^R` | the AIR | every column; restart and `INST` kinds, blinding |
 | memory | `2^M` | | every column |
 | program | from the blank heap | rows, multiplicity | |
-| witness | `2^8` | rows (addresses, bit mode) | cells, blinding |
+| witness | `2^9` | rows (addresses, bit mode) | cells, blinding |
 | segments | from the roots | rows; multiplicities (`segs_honest`) | |
 | ROOTS, HDR, TMPL | from the jet table | rows | multiplicities, blinding |
 | POP | `2^Lp` | | every column |
@@ -212,7 +228,7 @@ place in the one-hot sum (`Ski/Circuit/CompJAir.lean`, `cpuAirCJ`).
 **The statement** is lean-ski's `CStmt` (a formula or a predicate), the
 region size, the heights, and the jet table:
 
-- `log R M Lp Li`: CPU, memory, POP and INSTW heights, each in `[8, 20]`.
+- `log R M Lp Li`: CPU, memory, POP and INSTW heights, each in `[9, 20]`.
   POP and INSTW heights are public budgets, like the others (`DESIGN.md`
   §17.2): chosen before the run, never from it.
 - The jet table, in the file format `jets emit` writes and `jets
@@ -262,8 +278,8 @@ private columns, and `inst_sound_g` substitutes them as arguments.
   `uses = 0` and `instwCons` forces every operand flag to 0, so a zero row
   sends nothing on any bus (`JetAir.lean`, `popCons`, `instwCons`).
 - **The provider tables:** copies of the first row with multiplicity 0,
-  as today (`pad_copies`), but to at least `2^8` rows rather than `2^4`,
-  as the hiding PCS commits no table shorter (`padCopies8`). A copy is a
+  as before, but to at least `2^9` rows rather than `2^4`, as the hiding
+  PCS commits no table shorter (`padCopiesMin`). A copy is a
   genuine row, so a multiplicity on it provides only a genuine tuple.
 
 **Height bound.** `HeightsOK` weighs each table's rows by its
@@ -392,7 +408,7 @@ It proves under `HidingFriPcs` with the composed prover's configuration.
 Its verifier:
 - pins every height to the statement's. *Built (milestones 4 and 7):*
   all four free heights come from the statement's `log R M Lp Li`, each in
-  `[8, 20]` (lean-ski's `ComposedText.statementOfTextJ`, `lake exe composed
+  `[9, 20]` (lean-ski's `ComposedText.statementOfTextJ`, `lake exe composed
   statement-jets`; `composed budget` writes it from a composed statement).
   A composed statement and one with jets are each refused by the other's
   check. Soundness does not depend on the budgets (Plonky3 bounds the
@@ -598,7 +614,8 @@ compression).
    `compj-verify`, and refuses a changed byte, the plain statement,
    another budget and the jet table without the closure rule; with Avon
    nowhere on the verifier's side. *Remade 2026-10-11* (lean-ski #22)
-   without jets at bare combinators: `log 17 18 14 14` and `log 17 18 15 16`. Avon
+   without jets at bare combinators: `log 17 18 14 14` and `log 17 18 15 16`
+   (csplit8 remade again on 2026-10-20 at `log 18 19 15 16`; see the status). Avon
    (`e2905bb`) wrote each witness table, byte for byte ski-air's.
    `split8` takes 11,167 CPU rows, 1,520 instantiations, 7,154 pops and
    11,931 written cells. `csplit8` takes 118,222 rows, 4,968
@@ -635,5 +652,6 @@ compression).
 - **The jet table grows the statement.** Its check is Lean's recomputation,
   as for the corpus, from the SKIjack source's templates
   (`JetTable.fileTemplates`, as `jets check-src` uses them).
-- **Probes and data jets are not in this design's circuit.** A hidden
-  computation with a public output, or a real commitment, waits for §8.
+- **Probes and data jets are not in this design's circuit.** §8 records
+  the Poseidon2 jet and `p2commit`, built in their own circuits; probes
+  and the other data jets wait.

@@ -1,9 +1,9 @@
 /*  The word operations' pinned terms and the constructors they read,
  *  printed by lean/Words.lean, which proves each operation computes its
  *  function on every input (AvonWords.add_spec .. rem_spec, len_spec ..
- *  drop_spec, beq_spec, bget_spec, ideq_spec) and the C's fires sound
- *  (fireC_num, fireC_arg, listFireC_sound, beq_fire, bget_fire,
- *  ideq_fire).  Generated; do not edit. */
+ *  drop_spec, beq_spec, bget_spec, ideq_spec) and its models of the C's
+ *  fires sound (fireC_num, fireC_arg, listFireC_sound, beq_fire,
+ *  bget_fire, ideq_fire).  Generated; do not edit. */
 
 #define AV_PIN_ADD \
     "S (K (S I I)) (S (S (K S) K) (K (S I I))) (S (K (S (S (K S) (S (K (S I))" \

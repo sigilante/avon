@@ -423,9 +423,10 @@ static int list_fire(R *r, unsigned op, unsigned k, uint32_t *curp);
  *  term's own order of cases, so where it meets an operand not yet a
  *  value, the same operation applied to what it has reached is what the
  *  fire leaves: convertible with the redex, both reducing to the
- *  operation's recursion over those fields, though not a reduct of it
- *  (lean/Words.lean, beq_fire and bget_fire); at the first level the fire
- *  declines, and the term runs, forcing the operand. */
+ *  operation's recursion over those fields (lean/Words.lean, beq_fire
+ *  and bget_fire; whether it is also a reduct is not proved); at the
+ *  first level the fire declines, and the term runs, forcing the
+ *  operand. */
 
 /*  x's constructor index if x is a value of a type of `count`
  *  constructors with `fields` fields, its fields into field; else -1. */

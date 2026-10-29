@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Templates, proved: lean/Templates.lean, checked against lean-ski, proves
-# that tmpl.c's load check computes lean-ski's bracket abstraction
+# that a model of tmpl.c's load check computes lean-ski's bracket abstraction
 # (AvonTemplates.absC_eq) and that a template it accepts fires soundly: its
 # key over the arguments weakly reduces to what tmpl_instance builds
 # (AvonTemplates.template_fire), on Lean's axioms only.  Its replay of the
 # loader, the model with the file's digests (SHA-256, in Lean), must count
 # what Avon counts on every template set the tests ship, and on copies of
-# one changed to reach each refusal: a key that is not the body's, an open
-# body, wrong formals, an arity past the cap, a duplicate, an η-template,
-# text after the body, a bare combinator.
+# one changed to reach each refusal but a digest collision: a key that is
+# not the body's, an open body, wrong formals, an arity past the cap, a
+# duplicate, an η-template (K K applied to its formal, which without the η
+# check would be refused for its key), text after the body, a bare
+# combinator.  The counts are totals, not template by template.
 #
 # Run from the repository root after `make`.  LEAN_SKI defaults to
 # ~/Code/ski/lean-ski.
@@ -53,7 +55,7 @@ mutant open "$key${tab}m${tab}open${tab}3${tab}0,1,2${tab}\`\`v2 v0 v5"
 mutant formals "$key${tab}m${tab}formals${tab}3${tab}0,1${tab}\`\`v2 v0 v1"
 mutant wide "$key${tab}m${tab}wide${tab}65${tab}0${tab}v0"
 mutant duplicate "$first"
-mutant eta "$key${tab}m${tab}eta${tab}1${tab}0${tab}\`K v0"
+mutant eta "$key${tab}m${tab}eta${tab}1${tab}0${tab}\`\`K K v0"
 mutant trailing "$first x"
 mutant leaf "$key${tab}m${tab}leaf${tab}1${tab}0${tab}v0"
 

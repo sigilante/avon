@@ -34,9 +34,10 @@
 #include "word_pins.h"
 
 /*  Every term this file pins, the operations' and the constructors' they
- *  read, is printed by lean/Words.lean as src/word_pins.h, which proves
- *  each operation computes its function on every input and the reducer's
- *  fires sound (docs/LEAN-JETS.md). */
+ *  read, is printed by lean/Words.lean as src/word_pins.h.  Lean proves
+ *  each operation computes its function on every input, and its models
+ *  of the reducer's fires sound; the models are read against the C, not
+ *  checked against it (docs/LEAN-JETS.md). */
 
 static const char SUC_TEXT[] = AV_PIN_SUC;
 static const char CONS_TEXT[] = AV_PIN_CONS;
