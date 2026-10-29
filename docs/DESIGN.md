@@ -4,6 +4,7 @@
 >
 > - **Built:** stages 0 to 7 and 9 of §11. Stage 8 has the compiler's core, the SKIjack-0 front end, and the full language's front end through M6: it checks a program as Python's Stage A and Stage B do, and compiles every corpus program in Avon to Python's terms (§11.1, §20.3).
 > - **Beyond the stages:** share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof. Its templates come from Python's expander, from front1 itself, or from the term with no front end, by inverting bracket abstraction (§6.9, `SKA.md`). Jets under hiding are built (`ZK-JETS.md`). Frame traces and the defect count serve the pure-S paper's hider census (§22). The structural hash is `skijack-2`, 128 bits (§5), and a dashboard entry is its term, not its digest (§6.5).
+> - **Proved in Lean** (`LEAN-JETS.md`, 2026-10-29): the fifteen word operations' terms and the C's fires, the template load check and instance, `--fix`'s rewrite (convertible for every term; Y's simulation up to lean-ski's `Tr`, Y a jet), and the interpreter jet's `whnfF` (the paper's fuel adequacy).
 > - **Open:** what the proofs do not yet cover, and the unbuilt stage work, are listed in §11.1, "Open". `WORKLIST.md` orders what is next.
 >
 > **How to read this note.** It began on 2026-09-16 as the build plan, before any code existed, and grew as the stages were built. §0 to §4 and §10 to §16 are the plan and its decisions; §11.1 is the record of what was built, with figures as measured at the time; §5 to §9 and §17 to §22 are the current design. `RUNTIME.md` is the user's reference, `ARCHITECTURE.md` the map of the source. Where this note and the compiler differ, the compiler (SKIjack's `python/skijack`) and its tests are authoritative. Paths that begin `avon/bench/` are in the [SKIjack repository](https://github.com/sigilante/SKIjack/tree/master/avon/bench), where this note was first written; `RUNTIME-DESIGN.md` and `SPEC.md` are SKIjack's too.
@@ -2901,9 +2902,8 @@ reduction option it would ignore.
 
 **Open.**
 
-- *Stage 8:* the full language's checkers, M5 (Stage A: refusal parity,
-  errors with a class) and M6 (Stage B: Hindley--Milner type checking).
-  The front end through M4 is built.
+- *Stage 8:* the full language's front end is built through M6 (Stage A
+  and Stage B); what the stage still lacks is in `WORKLIST.md`.
 - *Proofs* (to lean-ski): witnesses refuse terms with atoms (§17.3); scry
   proves only a resume loop's final run; zero knowledge survives
   Fiat–Shamir in the programmable random-oracle model for the Sudoku,
@@ -2911,8 +2911,12 @@ reduction option it would ignore.
   Poseidon2; Fiat–Shamir soundness past the counting step (`logup_fs`)
   and ChaCha20's pseudorandomness are assumed (one 128-bit prover seed
   per proof, `ZK-JETS.md` §7); data jets
-  and the one-step Y have no witness rows, and the Y row's simulation
-  theorem (`Tr`) is owed (§6.11, `ZK-JETS.md` §8).
+  and the one-step Y have no witness rows; the Y row's simulation
+  theorem up to `Tr` is proved with Y a jet (`lean/Fix.lean`, §6.11).
+- *Lean proofs of the C jets* (`LEAN-JETS.md`): the word operations, the
+  template check and instance, `--fix` and the interpreter jet's `whnfF`
+  are proved; the jet's other four cores (`wf5Abs`, `wf5Omg`, `wfQ`,
+  `wfN`) are not, and the reducer's glue stays trusted and tested.
 - *Speed:* a case on a known value joined to its instance and the
   spine cells instances write are built (§6.10, §6.13); the join is not
   yet retried on top of deferred roots. The sharing a safe cycle would
@@ -3363,7 +3367,9 @@ cell's value in the clear, its term the numeral, and its operations are
 admitted by identity, each term pinned to skijack's and checked on 36
 pairs, which is all share mode needs. A proof needs more:
 share mode's word is a jet node over its numeral term, which the witness
-has no cell for, and its operations are trusted, not proved.
+has no cell for. Its operations' terms are proved, each computing its
+function on every input (`lean/Words.lean`, 2026-10-29), but no table
+proves them in a witness.
 
 A proof needs a word cell `W n`: an inert leaf with a
 field-element payload, whose meaning is a term, `⟦W n⟧` being the numeral
@@ -3375,7 +3381,9 @@ The licence is per jet: a Lean theorem that the jet's term, applied to
 composition theorem for that word (`composition`, with the three-valued
 contract proved for the kit's eliminator and owed per table). It is the
 paper's jet contract, and the word type is the representation ABI at the
-VM boundary.
+VM boundary. For the fifteen word operations Avon runs, the terms' side
+of that licence is proved (`lean/Words.lean`, `add_spec` … `ideq_spec`);
+the word cells and their tables are not built.
 
 ### 18.3 The interpreter jet
 
