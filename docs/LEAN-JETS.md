@@ -259,9 +259,9 @@ is checked by the kernel, for the exact term.
 
 - **Fuel adequacy** (`whnfF_adequate`). Given fuel `k` and an encoded term `M`,
   `whnfF ⟨k⟩ ⟨M⟩` reduces to the encoding of lean-ski's `evalF k M`: `Just` the weak
-  head normal form `M` reaches within `k` step-attempts, `Nothing` otherwise. That is
-  the outcome the jet produces, so the jet's answer is a reduct of the
-  interpreter's.
+  head normal form `M` reaches within `k` step-attempts, `Nothing` otherwise. The
+  jet fires only on those encodings, read by structure, and is trusted to compute
+  `evalF` (below), so its answer is a reduct of the interpreter's.
 - **Step adequacy** (`step_spec`). `step ⟨M⟩` reduces to `Nothing` in weak head
   normal form and to `Just ⟨M'⟩` when `M` contracts its head redex to `M'`, as
   lean-ski's `step?` says. Under it are the spine walker (`sp_spec`), the rebuilder
@@ -269,15 +269,26 @@ is checked by the kernel, for the exact term.
 - **The pins.** The generators reassemble the dictionary's 618 atoms exactly
   (`whnf_pin`), and the object type's constructors are lean-ski's `quoteT`
   (`pins_compiled`). `make interp-lean-check` requires Lean's print of `whnfF` and
-  its constructors to be the conformance dictionary's terms, byte for byte, and
-  `interpreters.tsv`'s `whnfF` core to be keyed by that term.
+  its constructors to be the conformance dictionary's terms, byte for byte;
+  `interpreters.tsv`'s `whnfF` core to be keyed by that term, over those object and
+  result constructors; and its `nat` line to be `encNat`'s `Zero` and `Suc`.
 
 **Scope, approved 2026-10-29.** The jet serves five cores; the plan's theorem is
 `whnfF`'s. `wf5Abs` and `wf5Omg` add a leaf whose arm errs or diverges, and `wfQ` and
 `wfN` a `Scry` leaf answered from a fact store; their adequacy is not proved.
 
+**The audit's finding (2026-10-29).** The jet read its datum by probing, so it
+fired on a term that only behaves as an encoding. At fuel 1, `S (K ⟨S⟩) I` probes
+as `⟨S⟩`: the interpreter answers `Just` the datum itself, and the jet answered
+`Just ⟨S⟩`, a different normal form, which `--jet-check`, decoding both by probing,
+missed. The theorem never covered such data. The jet now reads the datum and the
+fuel by structure only, and declines anything else; `test_interp` keeps that case.
+The corpus pays for it: the conformance run fires the jet 66 times, against 86
+before; the other 20 data are not yet constructors by structure, and the
+interpreter runs them.
+
 **What stays trusted.** That the jet's copy-mode run computes `evalF`: `reduce.c`'s
 copy mode as lean-ski's `step?`, one fuel unit per step-attempt, which
-`tests/test_interp.c` and the conformance fuel cases test; the datum's decoding and
-the outcome's encoding; and residual jets inside the object run keeping copy-mode
-counts (§6.5).
+`tests/test_interp.c` and the conformance fuel cases test; the datum's reading by
+structure and the outcome's encoding; and residual jets inside the object run
+keeping copy-mode counts (§6.5).

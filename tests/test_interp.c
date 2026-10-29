@@ -5,7 +5,8 @@
  *  object terms and fuel, the jet gives the unjetted interpreter's
  *  outcome---constructor and decoded payload---for whnfF, wf5Abs (an error
  *  arm) and wf5Omg (a diverging arm, where the jet declines and both run
- *  out of host fuel).  tests/test_conformance.c runs the corpus, scry
+ *  out of host fuel); and a datum that only behaves as an encoding makes
+ *  the jet decline.  tests/test_conformance.c runs the corpus, scry
  *  tables and fuel boundaries included, jets on.  Run from the repository
  *  root.
  */
@@ -145,7 +146,7 @@ static uint32_t next(void) {
 }
 
 /*  One node in five wrapped in I: the same value, but no longer the
- *  constructor by structure, so the jet must probe it. */
+ *  constructor by structure, so the jet declines and the interpreter runs. */
 static uint32_t disguise(av_arena *a, uint32_t t) {
     return next() % 5 == 0 ? av_app(a, AV_NODE_I, t) : t;
 }
@@ -252,6 +253,54 @@ TEST(a_diverging_arm_declines_and_diverges) {
     differential(wf5omg, true, getenv("AVON_FUZZ") ? atoi(getenv("AVON_FUZZ")) / 4 + 1 : 30, "wf5Omg");
 }
 
+/*  whnfF over fuel 1, jetted and not; the outcome's full normal form, and
+ *  the fires.  The full normal forms must be equal: a jet's outcome is a
+ *  reduct of the interpreter's. */
+static uint32_t whnff_nf(av_arena *a, uint32_t prog, bool jets, uint64_t *fires) {
+    av_opts o = av_opts_default();
+    o.strategy = AV_COPY;
+    o.whnf_only = true;
+    o.interp_jets = jets;
+    o.max_steps = 3000000;
+    o.no_collect = true;
+    av_result r = av_reduce(a, prog, &o);
+    CHECK_EQ(r.status, AV_WHNF);
+    CHECK(!r.jet_fault);
+    *fires = r.interp_calls;
+    if (r.status != AV_WHNF) return AV_NONE;
+    o.whnf_only = false;
+    o.interp_jets = false;
+    av_result n = av_reduce(a, r.term, &o);
+    CHECK_EQ(n.status, AV_NORMAL);
+    return n.term;
+}
+
+/*  A datum that only behaves as an encoding: S (K S') I, for the object
+ *  S', probes as S'.  Unjetted, whnfF at fuel 1 answers Just the datum
+ *  itself; the jet must decline rather than answer Just S', a different
+ *  normal form.  The encoding itself fires. */
+TEST(a_look_alike_datum_declines) {
+    av_arena *a = loaded();
+    const av_interp *p = whnff(a);
+    REQUIRE(p != NULL);
+    uint32_t loop = a->jets[p->jet].fallback;
+    uint32_t suc = av_parse(a, SUC, strlen(SUC), NULL);
+    uint32_t one = av_app(a, suc, AV_NODE_K);
+    uint32_t sobj = p->octor[0];
+    uint32_t alike = av_app(a, av_app(a, AV_NODE_S, av_app(a, AV_NODE_K, sobj)), AV_NODE_I);
+    uint32_t data[2] = { alike, sobj };
+    for (int i = 0; i < 2; i++) {
+        uint32_t prog = av_jets_match(a, av_app(a, av_app(a, loop, one), data[i]));
+        uint64_t off_fires, on_fires;
+        uint32_t off = whnff_nf(a, prog, false, &off_fires);
+        uint32_t on = whnff_nf(a, prog, true, &on_fires);
+        CHECK_EQ(off_fires, 0);
+        CHECK_EQ(on_fires, i == 0 ? 0 : 1);
+        CHECK(off != AV_NONE && on != AV_NONE && av_equal(a, on, off, 10000000) == 1);
+    }
+    av_arena_free(a);
+}
+
 /*  A dictionary row is used only if its term has the row's hash: the
  *  numeral Zero's row given S for its K refuses the load. */
 TEST(a_dictionary_row_must_be_its_hash) {
@@ -293,5 +342,6 @@ TEST_MAIN(
     TEST_CASE(whnff_agrees_with_its_interpreter),
     TEST_CASE(an_error_arm_agrees),
     TEST_CASE(a_diverging_arm_declines_and_diverges),
+    TEST_CASE(a_look_alike_datum_declines),
     TEST_CASE(a_dictionary_row_must_be_its_hash),
 )

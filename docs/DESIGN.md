@@ -1921,8 +1921,9 @@ nothing to serve, which is Vere's rule for Nock 12 outside `+mock` and the
 language's rule (`DESIDERATA.md` item 6).
 
 **Re-encoding is not quoting on behalf of the term.** The jet encodes a
-live result, but the datum it produces is the one the unjetted interpreter
-computes from data. The running program receives nothing it could not
+live result from data it reads by structure, and for `whnfF` the datum it
+produces is a reduct of the unjetted interpreter's (`whnfF_adequate`,
+`LEAN-JETS.md` §8); for the other cores that is tested. The running program receives nothing it could not
 compute without the jet, so §12's rule holds.
 
 **Fuel is exact.** The jet implements the paper's fuel semantics: fuel `k`
@@ -1966,12 +1967,16 @@ jet must reproduce it.
   or blocks with the path; a diverging arm makes the jet decline, and the
   unjetted interpreter diverges as it would. The outcome is encoded with
   the program's own constructors.
-- **Reading by structure first.** A datum node that is one of the object
+- **Reading by structure only.** A datum node must be one of the object
   type's constructor terms, or its application constructor over two
-  fields, decodes at once; so does a fuel numeral in an encoding the
-  export names. Anything else is probed, as `run.decode` probes. The
-  runtime may recognize structure (§3 of `RUNTIME-DESIGN.md`), and a node
-  that is a constructor applied to its fields behaves as one.
+  fields, and the fuel a numeral in an encoding the export names, level by
+  level. Anything else makes the jet decline, and the interpreter runs.
+  Probing would read a datum by how it behaves, and the jet would then
+  answer for that behaviour, not for the datum: `whnfF ⟨1⟩ (S (K ⟨S⟩) I)`
+  is `Just` the datum itself unjetted, and a probing jet answered
+  `Just ⟨S⟩`, a different normal form. `lean/Interp.lean` proves the
+  interpreter adequate on the encodings themselves, so the jet reads only
+  those.
 - **Nested reductions.** A fire's object run, and the probes and resolver
   runs inside it, are reductions nested in the one that fired. Each
   reduction registers its roots with the arena, and a collection
@@ -2782,7 +2787,7 @@ than a fault, and guarded the instance buffer against re-entry.
   reduces; that is the case for §8's native lookup.
 - **Random object terms** for `whnfF`, `wf5Abs` and `wf5Omg`, at random
   fuel, with one datum node or numeral level in five disguised as `I x`
-  so that probing is exercised too: the jet gives the unjetted
+  so that declining is exercised too: the jet gives the unjetted
   interpreter's constructor and decoded payload in copy and share mode,
   and `wf5Omg`'s Err terms run out of host fuel both ways. 4,501 cases
   under ASan and UBSan.
