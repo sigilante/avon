@@ -34,22 +34,26 @@ between a file and the reducer.  This file proves the check and the fire
 template directory with `loadC` for `load_one`, and with the two checks
 the model leaves to the file and the table: the key's digest against the
 file's (SHA-256, written here, `digest_of`'s first 16 bytes) and a key
-already accepted.  `tests/templates_lean_check.sh` requires its counts to
-be Avon's on every set the tests ship and on copies changed to reach each
-refusal.  The replay is not proved; it checks that the model reads as the
-C does.  It reads numbers as the compilers write them, digits only, where
-the C's `strtoul` would also take leading blanks and a sign, and it has no
-depth limit where `parse_body` stops at 100,000 levels: inputs no
-shipped file holds.
+already accepted.  `tests/templates_lean_check.sh` requires its counts,
+accepted, refused and skipped, to be Avon's on every set the tests ship
+and on copies changed to reach each refusal but a digest collision.  The
+replay is not proved; it checks by those totals that the check's model
+reads as the C does, and it runs neither `compile` nor `instC`.  It reads
+numbers as the compilers write them, digits only, where the C's `strtoul`
+would also take leading blanks and a sign; it refuses a formals list with
+a trailing comma, and text after the body behind a tab, which the C
+accepts; and it has no depth limit where `parse_body` stops at 100,000
+levels: inputs no shipped file holds.
 
 **What stays trusted:** that `absC`, `loadC`, `compile` and `instC` read as
-the C does (the replay tests it); that a key's canonical node is the term
+the C does (the replay tests the first two by its counts); that a key's canonical node is the term
 it stands for (`hc_canon`, `hc_app`), and that a referenced term holds no
 formal's marker (both parsers refuse a leaf name beginning `@`); the
 globals, the constants' nodes with inner templates wrapped, each a jet
 node standing for its term; and the reducer's other paths for a
-template, a constructor's dispatch and a case's join, which act as the
-instance would and are tested, not proved.  The theorems are about
+template, a constructor's dispatch, a case's join, a successor built as a
+word (`sucop`), a deferred root (`tmpl_defer`) and the root written in
+place, which act as the instance would and are tested, not proved.  The theorems are about
 values; a jet's count is not the term's (`docs/DESIGN.md` §6.5).
 
 Run from lean-ski, which supplies `Ski.Abs`:

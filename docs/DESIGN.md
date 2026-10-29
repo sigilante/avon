@@ -4,7 +4,7 @@
 >
 > - **Built:** stages 0 to 7 and 9 of §11. Stage 8 has the compiler's core, the SKIjack-0 front end, and the full language's front end through M6: it checks a program as Python's Stage A and Stage B do, and compiles every corpus program in Avon to Python's terms (§11.1, §20.3).
 > - **Beyond the stages:** share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof. Its templates come from Python's expander, from front1 itself, or from the term with no front end, by inverting bracket abstraction (§6.9, `SKA.md`). Jets under hiding are built (`ZK-JETS.md`). Frame traces and the defect count serve the pure-S paper's hider census (§22). The structural hash is `skijack-2`, 128 bits (§5), and a dashboard entry is its term, not its digest (§6.5).
-> - **Proved in Lean** (`LEAN-JETS.md`, 2026-10-29): the fifteen word operations' terms and the C's fires, the template load check and instance, `--fix`'s rewrite (convertible for every term; Y's simulation up to lean-ski's `Tr`, Y a jet), and the interpreter jet's `whnfF` (the paper's fuel adequacy).
+> - **Proved in Lean** (`LEAN-JETS.md`, 2026-10-29): the fifteen word operations' terms and Lean models of the C's fires, a model of the template load check and instance, `--fix`'s rewrite (convertible for every term; Y's simulation up to lean-ski's `Tr`, Y a jet at the compiler's recursion sites), and the interpreter jet's `whnfF` (the paper's fuel adequacy).
 > - **Open:** what the proofs do not yet cover, and the unbuilt stage work, are listed in §11.1, "Open". `WORKLIST.md` orders what is next.
 >
 > **How to read this note.** It began on 2026-09-16 as the build plan, before any code existed, and grew as the stages were built. §0 to §4 and §10 to §16 are the plan and its decisions; §11.1 is the record of what was built, with figures as measured at the time; §5 to §9 and §17 to §22 are the current design. `RUNTIME.md` is the user's reference, `ARCHITECTURE.md` the map of the source. Where this note and the compiler differ, the compiler (SKIjack's `python/skijack`) and its tests are authoritative. Paths that begin `avon/bench/` are in the [SKIjack repository](https://github.com/sigilante/SKIjack/tree/master/avon/bench), where this note was first written; `RUNTIME-DESIGN.md` and `SPEC.md` are SKIjack's too.
@@ -1130,7 +1130,7 @@ byte for byte; the templates are a separate file. Avon without
 `--templates`, or in `copy` mode, which refuses it, runs exactly as
 before, and `copy` counts stay the paper's (§1.1).
 
-**Nothing is trusted, not even the hash.**
+**A template is checked, and its hash only finds candidates.**
 
 - *A template proves itself.* Avon abstracts its body over its formals,
   the last first, and keeps it only if the result is its key; a body that
@@ -1145,9 +1145,11 @@ before, and `copy` counts stay the paper's (§1.1).
 - *The instance is weak reduction.* The body over the arguments is a weak
   reduct of the key applied to them (lean-ski's `absN_beta_close`), so
   the value and every normal form are the unjetted ones. `lean/Templates.lean`
-  proves the C's side of this (2026-10-29, `LEAN-JETS.md` §6): the check
-  is lean-ski's abstraction, and what `tmpl_instance` builds for an
-  accepted template is a reduct of its redex (`template_fire`).
+  proves a model of the C's side of this (2026-10-29, `LEAN-JETS.md` §6):
+  the check is lean-ski's abstraction, and what `tmpl_instance` builds for
+  an accepted template, whose referenced terms hold no formal, is a reduct
+  of its redex (`template_fire`). `LEAN-JETS.md` §6 lists what stays
+  trusted.
 
 **What a fire does.** It pops the key's arity of arguments, writes the
 body's open part -- its maximal closed subterms are globals, built once
@@ -1286,9 +1288,9 @@ Reduceron's primitive-redex speculation fires only on evaluated
 operands; otherwise its node runs its term, kept for the next call. So an
 operation forces nothing its term would not: `natAdd ⊥ 1` is a successor.
 One that would build more than 2^20 nodes runs its term too, which builds
-its result lazily. A word's value fits the 28 bits of a jet node's id
-field, so a numeral past 2^28 - 1 stays SKI, and jet ids, sharing the
-field, are capped at 2^28.
+its result lazily. A word's value fits the 27 bits of a jet node's id
+field below the list flag (`AV_WORD_MAX = 2^27 - 1`), so a numeral past
+2^27 - 1 stays SKI, and jet ids, sharing the field, are capped at 2^28.
 
 **What was not built.** The plan (2026-09-29) also made a constructor
 value reduced on its own a node that keeps its dispatch, a DATA node. In
@@ -1366,10 +1368,9 @@ Three of those functions now run natively, as the numeral operations do.
   or `K` and `K I`. The walk takes the term's cases in its order. Where it
   meets a field not yet a value, the fire leaves the operation applied to
   what it has reached, headed by the redex's own jet node. That term is
-  convertible with the redex, not a reduct of it: both reduce to the
-  operation's recursion over those fields, and Curry's Y reduces to that
-  recursion only one way (`lean/Words.lean`, `beq_fire`; `LEAN-JETS.md`
-  §5). An operand not yet a value at the top
+  convertible with the redex: both reduce to the operation's recursion
+  over those fields (`lean/Words.lean`, `beq_fire`; `LEAN-JETS.md` §5).
+  Whether it is also a reduct is not proved. An operand not yet a value at the top
   declines the fire; the term runs, a template instantiating, and forces
   it. So an operation forces nothing its term would not. `eqId` fires
   only where it can decide. A fire walks 4,096 levels at most, so a step
@@ -1424,7 +1425,8 @@ one node, no indirection, and every pointer still points backward.
 **It is convertible, not a reduct, so it keeps values, not states.**
 With `M = S I I` and `Q = S (S (K S) K) (K M)`, `Y g` reduces to
 `g (M (Q g))` and on to `g (g (M (Q g)))`, which `g (Y g)` reduces to as
-well; neither of the two reduces to the other. So:
+well; in general neither of the two reduces to the other (a standard
+fact; Lean proves the convertibility, `fix_join`, not this). So:
 
 - a normal form `--fix` reaches is SKI's, byte for byte (by Church-Rosser,
   since the rewrite stays within conversion; proved, `lean/Fix.lean`'s
@@ -1461,8 +1463,10 @@ for it could fit the write-once memory as it stands: at a loaded Y address with
 a C cell, one cell `App(g, r)`, `r` the `App(Y, g)` the stack holds. Its
 licence is a simulation theorem relating the run to the plain one by
 `Tr`: proved in `lean/Fix.lean` with Y a jet at the compiler's recursion
-sites (`fix_simulation`, 2026-10-29; `LEAN-JETS.md` §7). The row is not
-built.
+sites (`fix_simulation`, 2026-10-29; `LEAN-JETS.md` §7). Avon marks Y by
+tree identity, so the row must fire only at those sites, or each program
+must pass the check that the two markings agree, decided for lean-ski's
+`sum` and `loop`. The row is not built.
 
 **Results, 2026-09-30** (avon `fix-jet`; `docs/BENCHMARK.md`, "Y unfolded
 in one step"). The steps fall almost as far as the cycle's -- PermSort
@@ -1546,8 +1550,9 @@ parts:
   into `permute` (`run_prog`).
 - **C computes the program exactly.** A bound on every subexpression
   stays below 2^64, so no `uint64_t` sum or product wraps; every variable
-  is one of the sixteen elements; and every layer's results stay below
-  2^31 (`bnd`, `fits`, `prog_ok`, checked by the kernel). The printed
+  is one of the sixteen elements; and every layer's results stay at most
+  2^32 - 1, so the `uint32_t` stores are exact (`bnd`, `fits`, `prog_ok`,
+  checked by the kernel). The printed
   S-box, reducing its input and then each of its four products modulo p,
   gives `x^7 mod p` (`sboxC_eq`).
 
@@ -1805,7 +1810,7 @@ already):
 User time for `200 200 *` fell from 0.25 s to 0.07 s. Division remains a
 loop of native subtractions, since skijack has no `natDiv` or `natRem`;
 adding them to the prelude, with Avon's words, is the third change. Two
-limits stay. A word holds 28 bits, so a SKIlark integer past 2^28 - 1
+limits stay. A word holds 27 bits, so a SKIlark integer past 2^27 - 1
 computes in SKI, correctly and slowly. And a reader that prints a
 result's normal form builds its unary numeral: `200 200 * 200 *` takes
 1.67 billion steps either way, which a level-1 question (SKIlark's
@@ -2908,11 +2913,12 @@ reduction option it would ignore.
   proves only a resume loop's final run; zero knowledge survives
   Fiat–Shamir in the programmable random-oracle model for the Sudoku,
   hidden-term and composed circuits, not yet for those with jets or
-  Poseidon2; Fiat–Shamir soundness past the counting step (`logup_fs`)
-  and ChaCha20's pseudorandomness are assumed (one 128-bit prover seed
-  per proof, `ZK-JETS.md` §7); data jets
-  and the one-step Y have no witness rows; the Y row's simulation
-  theorem up to `Tr` is proved with Y a jet (`lean/Fix.lean`, §6.11).
+  Poseidon2; Fiat–Shamir soundness past the counting step (`logup_fs`),
+  the hiding of every commitment but the first, and ChaCha20's
+  pseudorandomness are assumed (one 128-bit prover seed per proof,
+  `ZK-JETS.md` §7); data jets and the one-step Y have no witness rows;
+  the Y row's simulation theorem up to `Tr` is proved with Y a jet at the
+  compiler's recursion sites (`lean/Fix.lean`, §6.11).
 - *Lean proofs of the C jets* (`LEAN-JETS.md`): the word operations, the
   template check and instance, `--fix` and the interpreter jet's `whnfF`
   are proved; the jet's other four cores (`wf5Abs`, `wf5Omg`, `wfQ`,

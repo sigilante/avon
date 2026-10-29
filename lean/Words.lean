@@ -36,8 +36,8 @@ the pins (`docs/LEAN-JETS.md`).
   - `beqWalk`, `bgetWalk` and `ideqWalk` are `bits_walk`'s, over a `View`
     of the reducer's nodes: what `ctor_at` reads of each.  `BITS_TO` and
     `BITS_KI` are reducts of the redex; `BITS_AGAIN`, the operation over
-    the fields the walk reached, is convertible with it, not a reduct
-    (`beq_fire`, `bget_fire`), and `ideq` never leaves itself on
+    the fields the walk reached, is convertible with it, the two sharing
+    a reduct (`beq_fire`, `bget_fire`), and `ideq` never leaves itself on
     (`ideq_fire`).
 * **The pins are Lean's.**  `header` prints `src/word_pins.h`: the
   fifteen terms `src/words.c` matches and the constructors it reads, so
@@ -1125,8 +1125,8 @@ def BOut.Fire {α : Type} (V : View α) (op t : Term) : BOut α → Prop
 /-- **The C walks the bit-string operations soundly.**  At `beq`'s and
     `bget`'s redexes `BITS_TO` and `BITS_KI` are reducts, and `BITS_AGAIN`,
     the operation over the nodes the walk reached, is convertible with the
-    redex: both reduce to the knot over those nodes.  It is not a reduct,
-    since `Ycomb ⬝ G` and its knot are convertible only. -/
+    redex: both reduce to the knot over those nodes.  Whether it is also a
+    reduct is not proved; convertible is what a fire needs. -/
 theorem beq_fire {α : Type} {V : View α} (hV : V.OK) (p q : α) :
     (beqWalk V bitsLevels true p q).Fire V beqT (beqT ⬝ V.mean p ⬝ V.mean q) := by
   have c := BOut.Claim.pre (((ycomb_knot (beqG.close env0)).left (V.mean p)).left (V.mean q))
@@ -1207,9 +1207,9 @@ def header : String :=
   "/*  The word operations' pinned terms and the constructors they read,\n" ++
   " *  printed by lean/Words.lean, which proves each operation computes its\n" ++
   " *  function on every input (AvonWords.add_spec .. rem_spec, len_spec ..\n" ++
-  " *  drop_spec, beq_spec, bget_spec, ideq_spec) and the C's fires sound\n" ++
-  " *  (fireC_num, fireC_arg, listFireC_sound, beq_fire, bget_fire,\n" ++
-  " *  ideq_fire).  Generated; do not edit. */\n\n" ++
+  " *  drop_spec, beq_spec, bget_spec, ideq_spec) and its models of the C's\n" ++
+  " *  fires sound (fireC_num, fireC_arg, listFireC_sound, beq_fire,\n" ++
+  " *  bget_fire, ideq_fire).  Generated; do not edit. */\n\n" ++
   pin "ADD" addT ++ pin "SUB" subT ++ pin "MUL" mulT ++ pin "IFEQ" ifeqT ++
   pin "IFLE" ifleT ++ pin "DIV" divT ++ pin "REM" remT ++
   pin "LEN" lenT ++ pin "AT" atT ++ pin "APP" appT ++ pin "TAKE" takeT ++ pin "DROP" dropT ++
@@ -1228,6 +1228,22 @@ end AvonWords
 #print axioms AvonWords.ideq_spec
 #print axioms AvonWords.bget_spec
 #print axioms AvonWords.ctors_compiled
+#print axioms AvonWords.add_spec
+#print axioms AvonWords.sub_spec
+#print axioms AvonWords.mul_spec
+#print axioms AvonWords.ifeq_spec
+#print axioms AvonWords.ifle_spec
+#print axioms AvonWords.div_spec
+#print axioms AvonWords.rem_spec
+#print axioms AvonWords.len_spec
+#print axioms AvonWords.at_spec
+#print axioms AvonWords.app_spec
+#print axioms AvonWords.take_spec
+#print axioms AvonWords.drop_spec
+#print axioms AvonWords.beq_spec
+#print axioms AvonWords.beqWalk_sound
+#print axioms AvonWords.bgetWalk_sound
+#print axioms AvonWords.ideqBits_sound
 
 def main (args : List String) : IO UInt32 := do
   match args with

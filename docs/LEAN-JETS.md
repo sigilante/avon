@@ -10,8 +10,8 @@ Each C jet carries three obligations.
 
 1. **The term computes the function.** A Lean theorem that the jet's pinned term,
    applied to the encodings of its arguments, weakly reduces to the encoding of
-   the result. lean-ski states this shape as `Implements` (`Ski/DataJet.lean`), and
-   `DESIGN.md` §18.2 lists one as owed per operation.
+   the result. lean-ski states this shape as `Implements` (`Ski/DataJet.lean`);
+   Avon's theorems have that shape, without building `Implements` values.
 2. **The C computes the function.** Avon has done this once: `lean/P2Prog.lean`
    proves a program equal to Poseidon2's specification under C's `uint64_t`
    arithmetic and prints `src/p2_prog.h`, which a check compares byte for byte.
@@ -30,22 +30,33 @@ circuit table (§18.2's word cells). The second and third matter for trusting a
 **A jet's theorem licenses its value, not its count.** Every jet below skips
 contractions (§6.5), so none of these theorems says anything about steps.
 
+**Each jet is proved alone.** No theorem states a share-mode run with several
+jets firing. That such a run stays convertible with the plain run follows from
+the pieces, each rewrite convertible, and by lean-ski's `church_rosser` their
+normal forms agree; Lean does not state the composite.
+
 ## 2. The jets
+
+Every entry in the third column is a Lean model of the C, read against it by
+inspection; only Poseidon2's is printed into the C. The last column leaves out
+the glue of §1 and each step's "What stays trusted".
 
 | jet | the term computes the function | the C computes the function | left |
 |---|---|---|---|
-| supercombinator templates (`tmpl.c`) | done for all at once: lean-ski's `absN_beta_subst` | done: the load check (`absC_eq`, `loadC_accept`) and the instance (`template_fire`), modelled and replayed against the loader | nothing |
+| supercombinator templates (`tmpl.c`) | done for all at once: lean-ski's `absN_beta_subst` | done: the load check (`absC_eq`, `loadC_accept`) and the instance (`template_fire`), modelled; the replay compares the load counts with the loader's | nothing |
 | Scott constructors (§6.8) | done: they compile through `ctorO` | done as templates; the dispatch that fires them is glue | nothing |
-| Poseidon2 (`--p2`, §6.12) | done: `poseidon2_respects`, P proved in lean-ski | done: `AvonP2.permuteC` | nothing |
+| Poseidon2 (`--p2`, §6.12) | done: lean-ski's `P_specN`, P on every state of sixteen values below 2^31 | done: `AvonP2.permuteC`, printed into `src/p2_prog.h`; reading and building the state is glue | nothing |
 | numeral words: `add` `sub` `mul` `ifeq` `ifle` `div` `rem` (§6.10) | done: `add_spec` .. `rem_spec` | done: `fireC_num`, `fireC_arg` | nothing; a witness still needs word cells |
 | list words: `len` `at` `app` `take` `drop` | done: `len_spec` .. `drop_spec` | done: `listFireC_sound`; the cell walks are glue | nothing |
-| bit strings: `beq` `bget` `ideq` | done: `beq_spec`, `bget_spec`, `ideq_spec` | done: `beq_fire`, `bget_fire`, `ideq_fire`, over a view of `ctor_at` | nothing |
-| Y in one step (`--fix`, §6.11) | done, not a reduction (below): convertible for every term (`fix_join`), and Y's simulation up to `Tr`, Y a jet (`fix_simulation`) | trivial: one node written | nothing; a witness row is not built |
+| bit strings: `beq` `bget` `ideq` | done: `beq_spec`, `bget_spec`, `ideq_spec` | done: `beq_fire`, `bget_fire`, `ideq_fire`, over a view of `ctor_at` (`View.OK`, trusted) | nothing |
+| Y in one step (`--fix`, §6.11) | done, not a reduction (below): convertible for every term (`fix_join`), and Y's simulation up to `Tr`, Y a jet (`fix_simulation`) | one node written; `--memory`'s memo is trusted | the simulation for Avon's Y, marked by tree identity, beyond `sum` and `loop` (§7); a witness row is not built |
 | the interpreter jet (§7) | done for `whnfF`: the paper's fuel adequacy (`whnfF_adequate`) | a copy-mode loop: trusted as `evalF`, tested | the cores `wf5Abs`, `wf5Omg`, `wfQ`, `wfN` |
+| the unquoter (`install_fire`), the compiler jet (`compile_fire`), residual jets (§6.5), data-jet dispatch and deferral | not covered | tested | both columns |
 
 **Y is not a weak reduction.** Curry's Y does not reduce `Y g` to `g (Y g)`: it
 reduces to `X X`, with `X = S (S (K S) K) (K (S I I)) g`, and `X X` reduces to
-`g (X X)`. `Y g` and `g (Y g)` are convertible, not one a reduct of the other, so
+`g (X X)`. `Y g` and `g (Y g)` are convertible (`fix_join`), and in general neither
+is a reduct of the other, a standard fact Lean does not restate, so
 `--fix`'s rewrite needs the simulation theorem up to lean-ski's `Tr` that §6.11
 and §18.4 name as owed, not an `Implements` lemma (§7).
 
@@ -105,8 +116,10 @@ Induction on the recursed operand closes the variables; `div` and `rem` take
 strong induction on `m`.
 
 **The C.** `word_fire` computes `m + n`, `m · n`, `m / n` and `m % n` in
-`uint64_t` from two 28-bit word values and declines any result over
-`AV_WORD_MAX`; `sub` walks predecessors, and the comparisons choose an operand.
+`uint64_t` from two word values, each at most `AV_WORD_MAX = 2^27 - 1`, and
+declines any result over `AV_WORD_MAX` or one that would build more than
+`WORD_BUILD_MAX` nodes; `sub` walks predecessors, and the comparisons choose an
+operand.
 A Lean model of that arithmetic, over `UInt64` and `UInt32`, is proved to agree
 with the specification wherever the C fires, as `sboxC` models `av_p2_sbox`. The
 loops that build the result word are glue.
@@ -118,9 +131,8 @@ lean-ski's pin, every theorem checked by the kernel, and finds
 
 **Done, 2026-10-29.** `lean/Words.lean` proves the seven operations' terms
 (`add_spec` .. `rem_spec`) and `word_fire`'s arithmetic (`fireC_num`,
-`fireC_arg`), each on lean-ski's axioms only (`propext`, `Quot.sound`), and
-elaborates in about 2 s. Lean's print equals the pins `words.c` held, byte for
-byte, so no term changed. The files it imports are unchanged since lean-ski's
+`fireC_arg`), each on lean-ski's axioms only (`propext`, `Quot.sound`). Lean's
+print equals the pins `words.c` held, byte for byte, so no term changed. The files it imports are unchanged since lean-ski's
 pin. What the proofs found:
 
 - every generator is one plain recursion: `sub` takes the predecessor as
@@ -156,15 +168,18 @@ pins byte for byte.
 
 **What the proofs found.** When `bits_walk` meets a field not yet a value, it leaves
 the operation applied to the fields it reached (`BITS_AGAIN`). `DESIGN.md` and
-`reduce.c` called that a weak reduct of the redex. It is not. The redex reduces
-through `Ycomb ⬝ G` to the knot over those fields, and so does the term the fire
-leaves, but Curry's Y reaches its knot only one way: the two are convertible, with a
-common reduct. That is enough: by lean-ski's `church_rosser` they share every normal
-form. Both comments now say so.
+`reduce.c` called that a weak reduct of the redex. The proof shows only that the
+two are convertible: the redex reduces through `Ycomb ⬝ G` to the knot over those
+fields, and so does the term the fire leaves, so they share a reduct. Whether the
+term is also a reduct of the redex is not proved. Convertible is enough: by
+lean-ski's `church_rosser` the two share every normal form. Both comments now say
+convertible.
 
 **What stays trusted.** The models (`listFireC` and the walks) as readings of the C;
 `View.OK`, that `ctor_at` reads a constructor template's node over its fields, or `K`
-and `K I`, as that constructor; and the glue of §1, which builds and reads the cells.
+and `K I`, as that constructor, which rests on the loader's shape tag naming the
+template's term (`ctors_compiled` ties the shape to the term, not the tag to the
+template); and the glue of §1, which builds and reads the cells.
 
 ## 6. Step 3: templates
 
@@ -177,15 +192,20 @@ before it uses a template, and the fire that follows.
   (`loadC_accept`).
 - **The fire is a reduct.** `compile` is `load_one`'s compile into instructions,
   constants and arguments; `instC` is `tmpl_instance`'s run of them. For an accepted
-  template and any arguments, the key applied to them weakly reduces to what
-  `tmpl_instance` builds (`template_fire`, from lean-ski's `absN_beta_subst`). The
+  template whose referenced terms hold no formal, and exactly as many arguments as
+  formals, the key applied to them weakly reduces to what `tmpl_instance` builds
+  (`template_fire`, from lean-ski's `absN_beta_subst`). The
   proof covers every producer, since Python's files, front1's and discovery's
   templates all pass the same `load_one`.
-- **The replay.** `Replay.replay` runs `av_templates_load`'s loop with the model,
-  the file's digests (SHA-256, written in Lean) and the duplicate check.
-  `make templates-lean-check` requires its counts to be Avon's on the five sets the
-  tests ship (137 accepted, 56 skipped) and on eight copies changed to reach each
-  refusal. A model with η removed disagrees at once (nats: 4 accepted, 26 refused).
+- **The replay.** `Replay.replay` runs `av_templates_load`'s loop with the model of
+  the check, the file's digests (SHA-256, written in Lean) and the duplicate check.
+  `make templates-lean-check` requires its counts, accepted, refused and skipped, to
+  be Avon's on the five sets the tests ship (137 accepted, 56 skipped) and on eight
+  copies, each changed to reach one refusal path. It compares totals, not template
+  by template, and runs neither `compile` nor `instC`, which are read against
+  `tmpl_instance` by inspection. No copy reaches a digest collision
+  (`jet_collision`). The η copy's body, `K K` applied to its formal, is skipped as
+  an η-template and refused without that check, so the replay tells them apart.
 
 **The plan changed.** §3 said Lean would check the loaded table "replacing the
 check in C", with lean-ski's `rootOKB`. That was the wrong design. Avon cannot run
@@ -205,11 +225,13 @@ step 3.
   constant. Both parsers refuse a leaf name beginning `@`, the markers' prefix, so
   a referenced term cannot hold one; `template_fire` takes it as a hypothesis.
 
-**What stays trusted.** The models as readings of the C (the replay tests them);
-`hc_canon`, that a canonical node is the term it stands for; the globals, each a jet
-node standing for its constant; and the reducer's other paths for a template, a
-constructor's dispatch and a case's join, which act as the instance would and are
-tested, not proved.
+**What stays trusted.** The models as readings of the C (the replay tests the
+check's by its counts); `hc_canon`, that a canonical node is the term it stands
+for; the globals, each a jet node standing for its constant; the parsers' refusal
+of `@` names, which gives `template_fire`'s hypothesis; and the reducer's other
+paths for a template, which act as the instance would and are tested, not proved:
+a constructor's dispatch, a case's join, a successor built as a word (`sucop`), a
+deferred root (`tmpl_defer`) and the root written in place.
 
 ## 7. Step 4: Y in one step
 
@@ -230,10 +252,17 @@ tested, not proved.
   Read back, Y as `Ycomb`, the jet program is lean-ski's compiled program
   (`fixed_of_fixedJ`), and every jet state a compiled form of its source state by
   lean-ski's own `Tr` (`tr_of_trJ`, `fix_simulation`). B is not vacuous: the
-  kernel decides it for lean-ski's compiled `sum` and `loop` programs, four
-  recursive equations each, and their read-back is lean-ski's own environment
-  (`sum_fixedJ`, `loop_fixedJ`, `sum_fix_simulation`). B is the licence §18.4
-  names for a witness row; the row is not built.
+  kernel decides the jet program's `FixedJ` for lean-ski's compiled `sum` and
+  `loop`, four recursive equations each, with each `Ycomb` of the compiled program
+  the jet (`jetify`), and their read-back is lean-ski's own environment
+  (`sum_fixedJ`, `loop_fixedJ`); `sum_fix_simulation` is the simulation for `sum`.
+- **What B covers of Avon.** Avon marks Y by tree identity, every `Ycomb` in the
+  term and the globals (`tmpl.c`), not only where the compiler ties recursion. B
+  speaks of Avon's runs where the two markings agree: checked for `sum` and `loop`,
+  not for lean-ski's `kernel` or `corpus`, and false for the program below. A
+  witness row licensed by B must fire only at the compiler's recursion sites, or
+  each program must pass that check; the row is not built. No theorem reads a run
+  with the jet back as a run of A's.
 
 **Why B takes Y as a jet.** As first stated, B said the run that always uses the
 rewrite and never S-reduces a Y redex matches every source step through `Tr`. That
@@ -246,7 +275,8 @@ that program, since the two are convertible. B over a jet was approved on 2026-1
 
 **What stays trusted.** That Avon's rewrite is `FixStep.fix` and `JStep.fix`
 (`src/reduce.c` writes the redex root as `App(g, y)`, `y` a fresh `App(Y, g)`);
-`--memory`'s sharing, which keeps the same terms under one node; and the reducer's
+`--memory`'s memo (`ymemo`), which points a later `Y g` at the node an earlier one
+unfolded to, perhaps reduced since, a run A covers but not one rewrite; and the reducer's
 strategy, which takes one of the runs these theorems allow. That `--fix` reaches
 every normal form the plain run reaches is still shown by tests, not proved.
 

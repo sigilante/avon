@@ -519,8 +519,9 @@ together or `word` split.
 
 - Witnesses for terms with atoms (§17.3).
 - Scry beyond a resume loop's final run.
-- Witness rows for the numeral and constructor jets and the one-step Y, with the
-  `Tr` simulation theorem (§6.11). Poseidon2 has them (`ZK-JETS.md` §8).
+- Witness rows for the numeral and constructor jets and the one-step Y. The Y row's
+  `Tr` simulation is proved with Y a jet at the compiler's recursion sites
+  (`lean/Fix.lean`, §6.11). Poseidon2 has them (`ZK-JETS.md` §8).
 - Fiat–Shamir's zero knowledge for the circuits with jets and with Poseidon2: lean-ski
   proves it in the programmable random-oracle model for its Sudoku, hidden-term and
   composed circuits (`*_fs_open4`), not yet for these two.
