@@ -20,6 +20,7 @@
 void av_witness_free(av_witness *w) {
     free(w->mem);
     free(w->rows);
+    free(w->atoms);
     memset(w, 0, sizeof *w);
 }
 
@@ -48,7 +49,9 @@ static bool put_row(av_witness *w, uint32_t hd, uint32_t stk, uint32_t ctr) {
 }
 
 /*  Mach.build: children first, the function before the argument, a fresh
- *  cell for every leaf.  The arena term is unfolded as a tree. */
+ *  cell for every leaf.  The arena term is unfolded as a tree.  An atom is
+ *  Mach.obuild's variable: the atom cell of its number, the atoms numbered
+ *  by first occurrence (w->atoms). */
 static const char *build(const av_arena *a, uint32_t t, av_witness *w,
                          size_t max_cells, uint32_t *root) {
     typedef struct { uint32_t node; bool done; } item;
@@ -87,8 +90,19 @@ static const char *build(const av_arena *a, uint32_t t, av_witness *w,
         if (av_tag(a, n) != AV_LEAF) { msg = "a jet node in a witnessed term"; goto done; }
         ski_leaf id = av_right(a, n);
         if (!ski_is_comb(id)) {
-            msg = "a witness of a term with atoms is not supported yet";
-            goto done;
+            /* the atom numbered by first occurrence, left to right: the
+             * variable Mach.obuild loads as that atom cell */
+            uint32_t k = 0;
+            while (k < w->natoms && w->atoms[k] != id) k++;
+            if (k == w->natoms) {
+                ski_leaf *q = realloc(w->atoms, (w->natoms + 1) * sizeof *q);
+                if (!q) { msg = "out of memory"; goto done; }
+                w->atoms = q;
+                w->atoms[w->natoms++] = id;
+            }
+            if (!put_cell(w, AV_CELL_ATOM, k, 0)) { msg = "out of memory"; goto done; }
+            out[nout++] = (uint32_t)(w->nmem - 1);
+            continue;
         }
         uint32_t tag = id == SKI_S ? AV_CELL_S : id == SKI_K ? AV_CELL_K : AV_CELL_I;
         if (!put_cell(w, tag, 0, 0)) { msg = "out of memory"; goto done; }
@@ -383,11 +397,13 @@ halted:
 
 /*  Mach.load, and the jet table's roots over the loaded heap. */
 static const char *load_jetted(const av_arena *a, uint32_t t, const av_jettable *jt,
-                               size_t max_cells, av_witness *w, uint32_t **root_of,
-                               uint32_t **ps) {
+                               bool atoms_ok, size_t max_cells, av_witness *w,
+                               uint32_t **root_of, uint32_t **ps) {
     uint32_t hd;
     const char *msg = build(a, t, w, max_cells, &hd);
     if (msg) return msg;
+    if (w->natoms && !atoms_ok)
+        return "a witness of a term with atoms takes no jet table and no plan";
     uint32_t stk = (uint32_t)w->nmem;
     if (!put_cell(w, AV_CELL_NIL, 0, 0)) return "out of memory";
     w->loaded = w->nmem;
@@ -416,7 +432,7 @@ av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *
     uint32_t *root_of = NULL;   /* jet + 1 at each root of the loaded heap */
     uint32_t *ps = NULL;        /* the argument pointers an instantiation pops */
     av_status st = AV_SIZE;
-    const char *msg = load_jetted(a, t, jt, max_cells, w, &root_of, &ps);
+    const char *msg = load_jetted(a, t, jt, jt == NULL, max_cells, w, &root_of, &ps);
     uint32_t hd = w->hd0, stk = w->stk0;
     if (!msg && run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, NULL, &msg))
         st = AV_WHNF;
@@ -533,7 +549,7 @@ av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable 
     pr->field_off = calloc(plan->n + 1, sizeof *pr->field_off);
     if (!pr->starts || !pr->fields || !pr->field_off) { msg = "out of memory"; goto out; }
     pr->n = plan->n;
-    msg = load_jetted(a, t, jt, max_cells, w, &root_of, &ps);
+    msg = load_jetted(a, t, jt, false, max_cells, w, &root_of, &ps);
     if (msg) goto out;
     uint32_t hd = w->hd0, stk = w->stk0;
     for (size_t j = 0; j < plan->n; j++) {
@@ -691,11 +707,51 @@ bool av_prefix(const av_arena *a, uint32_t t, size_t budget, av_buf *out) {
     return ok;
 }
 
+/*  The loaded term in prefix form, read off the loaded cells from the
+ *  first row's head: `Xi` for the atom i, as lean-ski's aircheck reads it. */
+static bool loaded_prefix(const av_witness *w, av_buf *out) {
+    size_t cap = 256, top = 0;
+    uint32_t *stk = malloc(cap * sizeof *stk);
+    bool ok = stk != NULL;
+    if (ok) stk[top++] = w->hd0;
+    while (ok && top) {
+        uint32_t i = stk[--top];
+        if (i >= w->loaded) { ok = false; break; }
+        const av_cell *c = &w->mem[i];
+        char num[16];
+        int n;
+        switch (c->tag) {
+        case AV_CELL_APP:
+            if (top + 2 > cap) {
+                uint32_t *q = realloc(stk, (cap *= 2) * sizeof *q);
+                if (!q) { ok = false; break; }
+                stk = q;
+            }
+            ok = out_str(out, "`", 1);
+            stk[top++] = c->b;
+            stk[top++] = c->a;
+            break;
+        case AV_CELL_S: ok = out_str(out, "S", 1); break;
+        case AV_CELL_K: ok = out_str(out, "K", 1); break;
+        case AV_CELL_I: ok = out_str(out, "I", 1); break;
+        case AV_CELL_ATOM:
+            n = snprintf(num, sizeof num, "X%u", c->a);
+            ok = out_str(out, num, (size_t)n);
+            break;
+        default: ok = false;
+        }
+    }
+    free(stk);
+    return ok;
+}
+
 bool av_witness_table(const av_arena *a, uint32_t t, const av_witness *w,
                       unsigned min_log, av_buf *out) {
     char line[64];
     if (w->nrows == 0 || w->loaded == 0) return false;   /* no run to show */
-    if (!av_prefix(a, t, w->loaded, out) || !out_str(out, "\n", 1)) return false;
+    if (!(w->natoms ? loaded_prefix(w, out) : av_prefix(a, t, w->loaded, out)) ||
+        !out_str(out, "\n", 1))
+        return false;
 
     size_t msize = pow2_at_least(w->nmem, min_log);
     int n = snprintf(line, sizeof line, "%zu\n", msize);

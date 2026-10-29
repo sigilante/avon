@@ -517,7 +517,7 @@ together or `word` split.
 
 ### 5. The proof gaps (`DESIGN.md` §11.1, "Open")
 
-- Witnesses for terms with atoms (§17.3).
+- Witnesses for terms with atoms (§17.3): plain witnesses built (lean-ski #64, Avon #109), awaiting the pin past #64; jetted and probed ones still refuse atoms.
 - Scry beyond a resume loop's final run.
 - Witness rows for the numeral and constructor jets and the one-step Y. The Y row's
   `Tr` simulation is proved with Y a jet at the compiler's recursion sites
