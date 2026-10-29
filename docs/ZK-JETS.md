@@ -47,8 +47,19 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > uniform challenges, with the PCS's hiding a hypothesis (`PCSCloseN`;
 > `compJ_transcriptG_fri` and `compP_transcriptG_fri` simulate FRI's view
 > instead). No theorem at the pin carries it through Fiat–Shamir for the
-> circuits with jets or Poseidon2; lean-ski has that for its Sudoku,
-> hidden-term and composed circuits only. The heights below are
+> circuits with jets or Poseidon2. lean-ski#63, past the pin, does, by the
+> composed circuit's route: `compJ_fs_open4` and `compJ_fs_open4ROMMC_fri`
+> over a concrete hiding PCS (`compJ_pcs`, so no `PCSCloseN` hypothesis),
+> and `compP_fs_open4` and `compP_fs_open4ROMMC_fri`, whose P2OUT and
+> Poseidon2 tables have degree 3 and eight quotient chunks
+> (`tabsHonest_bbD`). Their assumptions are the composed circuit's, the
+> hiding of every commitment but the first included, plus a size bound
+> on the provider tables (`hprov24`, `2^24` rows) and, for Poseidon2, one
+> jet call per run (`hcalls`, met by `p2pre` and the hand-off). Neither
+> has a satisfiability witness yet. lean-ski#62 makes `compj-verify` check
+> a statement's meaning on the bytes it verifies (`… split K X` or
+> `… csplit K M SEED X C`); the four-argument form this repository's
+> tests use checks only that the statement is one with jets. The heights below are
 > corrected to the pin: each free height in `[9, 20]` (`logOK`), the
 > witness table `2^9` rows, padding to at least `2^9` (`padCopiesMin`).
 
@@ -588,9 +599,10 @@ compression).
    meet the hypotheses. The statement carries POP's and INSTW's budgets
    (`log R M Lp Li`), and `compj-prove`, `-verify` and `-tamper` read them
    from it. The model is honest-verifier zero knowledge over uniform
-   challenges, with the simulator fixed by the statement; Fiat–Shamir is
-   the random-oracle step, and `PCSCloseN` carries the committed traces'
-   hiding.
+   challenges, with the simulator fixed by the statement; `PCSCloseN`
+   carries the committed traces' hiding. lean-ski#63 discharges it
+   (`compJ_pcs`) and carries the transcript through Fiat–Shamir
+   (`compJ_fs_open4ROMMC_fri`), past the pin.
 8. **Avon.** *Done, 2026-09-30.* `avon witness --statement=PUBLIC
    --jet-table=JETS WITNESS` (`av_cstmt_read`, `av_witness_run_composed`,
    `av_composed_table`): the statement's heap with the witness's bits and

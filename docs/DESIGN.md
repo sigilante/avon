@@ -2919,8 +2919,9 @@ reduction option it would ignore.
 - *Proofs* (to lean-ski): witnesses refuse terms with atoms (§17.3); scry
   proves only a resume loop's final run; zero knowledge survives
   Fiat–Shamir in the programmable random-oracle model for the Sudoku,
-  hidden-term and composed circuits, not yet for those with jets or
-  Poseidon2; Fiat–Shamir soundness past the counting step (`logup_fs`),
+  hidden-term and composed circuits at the pin, and for those with jets
+  and Poseidon2 in lean-ski#63, not yet at the pin (no satisfiability
+  witness for those two yet); Fiat–Shamir soundness past the counting step (`logup_fs`),
   the hiding of every commitment but the first, and ChaCha20's
   pseudorandomness are assumed (one 128-bit prover seed per proof,
   `ZK-JETS.md` §7); data jets and the one-step Y have no witness rows;
@@ -3175,8 +3176,11 @@ run would publish the run's size.
   and takes ζ and α_b of full degree as hypotheses. Zero knowledge
   survives Fiat–Shamir in the programmable random-oracle model for the
   Sudoku, hidden-term and composed circuits (`*_fs_open4`), with only the
-  first commitment's hiding derived (`*_fs_open4ROMMC_fri`); not yet for
-  the circuits with jets or Poseidon2. Jets under hiding are
+  first commitment's hiding derived (`*_fs_open4ROMMC_fri`). For the
+  circuits with jets and with Poseidon2, lean-ski#63 proves the same by
+  the composed circuit's route (`compJ_fs_open4`, `compJ_fs_open4ROMMC_fri`,
+  `compP_fs_open4`, `compP_fs_open4ROMMC_fri`), past the pin `fb65141`
+  and without a satisfiability witness yet. Jets under hiding are
   designed in `ZK-JETS.md`. The prover draws all of a proof's hiding
   randomness from one fresh 128-bit seed, expanded by ChaCha20 with one
   stream each for blinding tuples, leaf salts and masking codewords;
