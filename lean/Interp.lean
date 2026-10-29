@@ -437,7 +437,8 @@ def pr : Term → String
 /-- The pins, one per line, by the dictionary's names for them. -/
 def pins : String :=
   String.join ([("whnfF", whnfPin), ("S", sPin), ("K", kPin), ("I", iPin), ("App", appPin),
-    ("Just", justPin), ("cons", consPin)].map fun (n, t) => n ++ "\t" ++ pr t ++ "\n")
+    ("Just", justPin), ("Nothing", encOpt none), ("cons", consPin),
+    ("Zero", encNat 0), ("Suc", Scott.Suc)].map fun (n, t) => n ++ "\t" ++ pr t ++ "\n")
 
 end AvonInterp
 

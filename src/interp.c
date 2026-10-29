@@ -214,9 +214,12 @@ static bool same(const av_arena *a, uint32_t x, uint32_t y) {
     return av_equal(a, x, y, 100000) == 1;
 }
 
-/*  A fuel numeral: a known encoding read by structure, level by level, and
- *  probing from the first level that is not one. */
-static bool read_fuel(av_arena *a, uint32_t t, const av_opts *o, uint64_t *k) {
+/*  A fuel numeral, read by structure, level by level: Zero, or Suc over a
+ *  fuel numeral, of one of the known encodings.  Anything else, a term
+ *  that only behaves as a numeral included, is refused, and the jet
+ *  declines: lean/Interp.lean proves whnfF adequate on the encodings
+ *  themselves. */
+static bool read_fuel(av_arena *a, uint32_t t, uint64_t *k) {
     uint64_t n = 0;
     for (;;) {
         uint32_t x = av_view(a, t);
@@ -230,17 +233,13 @@ static bool read_fuel(av_arena *a, uint32_t t, const av_opts *o, uint64_t *k) {
                 break;
             }
         }
-        if (step) continue;
-        uint64_t rest;
-        if (!av_read_nat(a, t, 64 * 1024 * 1024, o, &rest, NULL)) return false;
-        *k = n + rest;
-        return true;
+        if (!step) return false;
     }
 }
 
 /*  The constructor a datum node is by structure, and its fields: the
  *  object type's leaf constructors, or its application constructor over
- *  two fields.  False if the node is neither; then it is probed. */
+ *  two fields.  False if the node is neither. */
 static bool read_ctor(const av_arena *a, const av_interp *in, uint32_t node,
                       unsigned *ctor, uint32_t *f0, uint32_t *f1) {
     uint32_t x = av_view(a, node);
@@ -259,13 +258,16 @@ static bool read_ctor(const av_arena *a, const av_interp *in, uint32_t node,
     return false;
 }
 
-/*  A quoted datum to a live object term: probing as av_decode does, each
- *  leaf constructor its live leaf.  Probes never collect, so the memo's
- *  keys hold; nothing here reduces otherwise. */
-static uint32_t decode_live(av_arena *a, const av_interp *in, uint32_t datum,
-                            const av_opts *o) {
+/*  A quoted datum to a live object term, each leaf constructor its live
+ *  leaf.  Every node must be a constructor by structure (read_ctor): a
+ *  datum that only behaves as an encoding, such as S (K S') I for the
+ *  object S' or an unreduced thunk, is refused, and the jet declines.
+ *  Probing it would answer for the term the datum behaves as, not for the
+ *  datum: the unjetted interpreter keeps the datum's own subterms, and the
+ *  two answers need not be convertible.  Nothing here reduces. */
+static uint32_t decode_live(av_arena *a, const av_interp *in, uint32_t datum) {
     typedef struct { uint32_t node; bool done; } item;
-    size_t cap = 256, top = 0, nb = 0, bcap = 256, probes = 0;
+    size_t cap = 256, top = 0, nb = 0, bcap = 256;
     item *todo = malloc(cap * sizeof *todo);
     uint32_t *built = malloc(bcap * sizeof *built), out = AV_NONE;
     nmap m = { 0 };
@@ -289,14 +291,10 @@ static uint32_t decode_live(av_arena *a, const av_interp *in, uint32_t datum,
         if (nmap_get(&m, it.node, &v)) { built[nb++] = (uint32_t)v; continue; }
         av_peeled p;
         uint32_t f0 = AV_NONE, f1 = AV_NONE;
-        if (read_ctor(a, in, it.node, &p.ctor, &f0, &f1)) {
-            p.nfields = in->orole[p.ctor] == AV_OROLE_APP ? 2 : 0;
-            p.field[0] = f0;
-            p.field[1] = f1;
-        } else {
-            if (++probes > 50000000) goto done;
-            if (!av_peel(a, it.node, in->nobj, o, &p, NULL)) goto done;
-        }
+        if (!read_ctor(a, in, it.node, &p.ctor, &f0, &f1)) goto done;
+        p.nfields = in->orole[p.ctor] == AV_OROLE_APP ? 2 : 0;
+        p.field[0] = f0;
+        p.field[1] = f1;
         if (in->orole[p.ctor] == AV_OROLE_APP) {
             if (p.nfields != 2) goto done;
             if (top + 3 > cap) {
@@ -463,8 +461,8 @@ int interp_fire(av_arena *a, uint32_t id, const uint32_t *argv,
     po.interrupt = o->interrupt;
 
 #define SPENT() (objsteps + (a->probe_steps - probe0))
-    if (!read_fuel(a, loc[in->nparams], &po, &k)) goto out;
-    t = decode_live(a, in, loc[in->nparams + 1], &po);
+    if (!read_fuel(a, loc[in->nparams], &k)) goto out;
+    t = decode_live(a, in, loc[in->nparams + 1]);
     if (t == AV_NONE) goto out;
     t = av_jets_match(a, t);
     if (t == AV_NONE) goto out;
@@ -537,7 +535,7 @@ int interp_fire(av_arena *a, uint32_t id, const uint32_t *argv,
             if (ar == AV_AROLE_NOTYET) { res = av_app(a, in->rctor[in->aarg[ans.ctor]], pd); break; }
         }
         if (ans.nfields != 1) goto out;
-        uint32_t v = decode_live(a, in, ans.field[0], &po);
+        uint32_t v = decode_live(a, in, ans.field[0]);
         if (v == AV_NONE) goto out;
         for (unsigned i = n - 1; i-- > 0;)             /* v applied to the rest */
             if ((v = av_app(a, v, spine[i])) == AV_NONE) goto out;
