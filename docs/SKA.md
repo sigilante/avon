@@ -243,6 +243,16 @@ so a body `b` with `[x] b = t` is `x` for `I`, `M` for `K M`, and for `S P Q` th
 of `P` and `Q` applied, when the forward rules take that application back to `S P Q`;
 otherwise `t x`, which is `t` by η and no formal at all.
 
+These are Hindley and Seldin's abstraction, clauses (b), (a), (c) and (f) of their
+Definition 2.18 (*Lambda-Calculus and Combinators*, 2008), lean-ski's `abs` clause for
+clause. The η clause (c) is what makes inversion ambiguous: without it, Curry's
+weak abstraction `[ ]w` (their Definition 9.20) would give every key one body, at the
+cost of longer keys (their Remark 2.23). Curry's `[ ]β` admits (c) only where the term
+it returns is functional, `S X Y`, `S X`, `K X`, `S`, `K` or `I` (their Definition
+9.6), and so inverts the translation to λ exactly (their Remark 9.27). Avon keeps the
+compilers' `[ ]η`, since a key must be the term the compiler emitted, and resolves
+the ambiguity as below.
+
 - *Every S or K application of the program is a candidate key.* Peeling formals until
   only η is left gives its arity and body. The memos are per formal and shared by every
   candidate, over the hash-consed program, so a subterm is inverted once per formal.

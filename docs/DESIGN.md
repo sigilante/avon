@@ -2944,7 +2944,9 @@ Inherited from `RUNTIME-DESIGN.md` §5, still binding:
   turns a live value into data for a program to inspect, because the
   language promises that cannot happen, and Proposition 3.1 is why the
   promise is keepable. Install (§20.2) runs the other way, from data to a
-  live term, and stays inside this rule.
+  live term, and stays inside this rule. A related fact is textbook: no
+  combinator tells an atom from an application (Hindley and Seldin,
+  *Lambda-Calculus and Combinators*, 2008, Exercise 2.34(b)).
 
 Three more this plan adds:
 
@@ -3346,7 +3348,9 @@ recomputation licenses them.
   lean-ski stopped licensing jets at bare combinators (`ZK-JETS.md` §1).
 - **η-templates are never roots.** `λ xs. G xs`, with `G` closed,
   compiles to `G` itself; instantiating it rewrites `G xs` to `G xs`, and
-  a run jetted there loops.
+  a run jetted there loops. Every formal falls to the η clause, at which
+  Hindley and Seldin's reduction of an abstraction contracts nothing
+  (their Theorem 2.21), so the fire is not head-first (`LEAN-JETS.md` §9).
 
 On the interpreted rows jets do not pay. Each instantiation there is
 short, and the POP rows it adds outnumber the CPU rows it saves: 110–112%

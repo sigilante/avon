@@ -309,7 +309,11 @@ is checked by the kernel, for the exact term.
 - **Step adequacy** (`step_spec`). `step ⟨M⟩` reduces to `Nothing` in weak head
   normal form and to `Just ⟨M'⟩` when `M` contracts its head redex to `M'`, as
   lean-ski's `step?` says. Under it are the spine walker (`sp_spec`), the rebuilder
-  (`rb_spec`) and the three arms, each by kernel-checked symbolic runs.
+  (`rb_spec`) and the three arms, each by kernel-checked symbolic runs. The weak head
+  normal forms `step` answers `Nothing` on are Hindley and Seldin's functional terms,
+  `S X Y`, `S X`, `K X`, `S`, `K` and `I` (*Lambda-Calculus and Combinators*, 2008,
+  Definition 9.6), and a reduct of one is one (their Lemma 9.7(b); lean-ski's
+  `Par.whnf`).
 - **The pins.** The generators reassemble the dictionary's 618 atoms exactly
   (`whnf_pin`), and the object type's constructors are lean-ski's `quoteT`
   (`pins_compiled`). `make interp-lean-check` requires Lean's print of `whnfF` and
