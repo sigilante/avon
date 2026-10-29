@@ -30,10 +30,23 @@ circuit table (§18.2's word cells). The second and third matter for trusting a
 **A jet's theorem licenses its value, not its count.** Every jet below skips
 contractions (§6.5), so none of these theorems says anything about steps.
 
-**Each jet is proved alone.** No theorem states a share-mode run with several
-jets firing. That such a run stays convertible with the plain run follows from
-the pieces, each rewrite convertible, and by lean-ski's `church_rosser` their
-normal forms agree; Lean does not state the composite.
+**Jets compose** (`lean/Jets.lean`, 2026-10-29). For any set of jets whose fires
+each leave a term convertible with the redex, a run mixing weak steps with fires
+of any of them, at any position and in any order, stays convertible with the plain
+run, and a normal form it reaches is SKI's (`jets_join`, `jets_normal`). Every jet
+§2 marks proved is in such a set: a reduct is convertible, `BITS_AGAIN` is (`beq_fire`), and
+so is `--fix`'s rewrite (`fix_conv`). Which theorem puts each jet in the set is read
+from its file; the files do not import one another. §9 adds that such a run ends
+where the plain one does, for the fires that are head-first.
+
+**What composing does not give.** Convertibility relates values, not states. A
+simulation of a source program, or a witness row, needs more: a calculus in which
+each jet is an atom with its own rules, as `lean/Fix.lean`'s B makes Y. Hindley and
+Seldin prove one such extension confluent, numeral atoms with an iteration atom `Z`,
+because a `Z`-redex contains no other redex (*Lambda-Calculus and Combinators*,
+2008, Theorem A2.15). Their extension adds rules; Avon's word nodes add
+none, since each stands for its own Scott numeral, so the calculus stays pure SKI.
+A calculus of all of Avon's jets as atoms is not built.
 
 ## 2. The jets
 
@@ -273,12 +286,27 @@ rewrites every `Ycomb` redex and never S-reduces one reaches from `Ycomb ⬝ K` 
 wrapped around it. So the statement is false (`first_B_false`). Part A still covers
 that program, since the two are convertible. B over a jet was approved on 2026-10-29.
 
+**A design option: Turing's Θ** (`lean/Jets.lean`, 2026-10-29; not adopted). Parts A
+and B, and `first_B_false`, exist because skijack compiles recursion with Curry's Y,
+whose unfolding is only a conversion. Turing's Θ = U U, `U = [u, x]. x (u u x)` =
+`S (K (S I)) (S I I)` by lean-ski's own abstraction (`turingU_abs`), unfolds by
+reduction: `Θ ⬝ g` reduces to `g ⬝ (Θ ⬝ g)` in 7 contractions, the first its head
+redex (`theta_head_first`; Hindley and Seldin, *Lambda-Calculus and Combinators*,
+2008, Theorem 3.3(b)). Compiled with Θ, `--fix`'s rewrite would be a reduct: licensed
+as the word operations are, head-first, so §9's argument would reach it, and marking
+Θ by tree identity would be harmless. The cost: every compiled recursive term,
+hash, dictionary entry, pin and witness changes; lean-ski's compiler and its `Tr`
+simulation are stated over `Ycomb` and would be re-proved; and Θ alone is a redex
+that never normalizes (`avon reduce` on `Θ` runs out of fuel growing
+`S I (S I …)`), where Curry's Y alone is a normal form.
+
 **What stays trusted.** That Avon's rewrite is `FixStep.fix` and `JStep.fix`
 (`src/reduce.c` writes the redex root as `App(g, y)`, `y` a fresh `App(Y, g)`);
 `--memory`'s memo (`ymemo`), which points a later `Y g` at the node an earlier one
 unfolded to, perhaps reduced since, a run A covers but not one rewrite; and the reducer's
 strategy, which takes one of the runs these theorems allow. That `--fix` reaches
-every normal form the plain run reaches is still shown by tests, not proved.
+every normal form the plain run reaches is still shown by tests, not proved: the
+rewrite is not a reduct, so §9's argument does not reach it.
 
 ## 8. Step 5: the interpreter jet
 
@@ -295,7 +323,11 @@ is checked by the kernel, for the exact term.
 - **Step adequacy** (`step_spec`). `step ⟨M⟩` reduces to `Nothing` in weak head
   normal form and to `Just ⟨M'⟩` when `M` contracts its head redex to `M'`, as
   lean-ski's `step?` says. Under it are the spine walker (`sp_spec`), the rebuilder
-  (`rb_spec`) and the three arms, each by kernel-checked symbolic runs.
+  (`rb_spec`) and the three arms, each by kernel-checked symbolic runs. The weak head
+  normal forms `step` answers `Nothing` on are Hindley and Seldin's functional terms,
+  `S X Y`, `S X`, `K X`, `S`, `K` and `I` (*Lambda-Calculus and Combinators*, 2008,
+  Definition 9.6), and a reduct of one is one (their Lemma 9.7(b); lean-ski's
+  `Par.whnf`).
 - **The pins.** The generators reassemble the dictionary's 618 atoms exactly
   (`whnf_pin`), and the object type's constructors are lean-ski's `quoteT`
   (`pins_compiled`). `make interp-lean-check` requires Lean's print of `whnfF` and
@@ -317,8 +349,67 @@ The corpus pays for it: the conformance run fires the jet 66 times, against 86
 before; the other 20 data are not yet constructors by structure, and the
 interpreter runs them.
 
+**Why probing was the wrong licence.** A probe applies a datum to fresh marker
+atoms and reads which marker comes back. Two terms that agree on fresh atoms are
+extensionally equal (Hindley and Seldin, *Lambda-Calculus and Combinators*, 2008,
+Chapter 8), not weakly equal, and a jet's licence is weak equality. The look-alike
+is `⟨S⟩`'s η-expansion: applied to any term it reduces to `⟨S⟩` applied to that
+term (`lookalike_probes_as_S`), so no probe tells them apart. Yet `Just` of each
+has a different normal form, so the two answers have no common reduct
+(`lookalike_answers_apart`, by `church_rosser`). Probing is sound up to
+extensional equality, and reading by structure keeps the jet within weak
+equality, the relation `whnfF_adequate` proves. `make interp-lean-check` checks
+both theorems.
+
 **What stays trusted.** That the jet's copy-mode run computes `evalF`: `reduce.c`'s
 copy mode as lean-ski's `step?`, one fuel unit per step-attempt, which
 `tests/test_interp.c` and the conformance fuel cases test; the datum's reading by
 structure and the outcome's encoding; and residual jets inside the object run
 keeping copy-mode counts (§6.5).
+
+## 9. Jets in a run: the run ends where the plain one does
+
+§2's theorems license each fire alone. A run fires many, and the question a
+proof of each leaves open is whether the jetted run still ends: a fire could
+trade a term with a normal form for one the run then never finishes. It cannot,
+for the jets whose fire is a reduct reached through a head step.
+
+**Head runs, proved** (`lean/Jets.lean`, 2026-10-29). Call a fire *head-first* if
+a head contraction of the redex, then weak steps, reach its result (`HeadFirst`).
+A head run of head steps and head-first fires, from a term whose head run reaches a
+weak head normal form in `n` steps, has at most `n` steps (`jrun_le`): a weak
+reduct normalizes in no more head steps, and after a head step in strictly fewer
+(lean-ski's `par_step_le`, through `StepsN.wtail_lt`). So a jetted run to weak
+head normal form ends, never later than the plain one, and the form it ends at is a
+weak reduct of the plain run's (`jrun_whnf`). `make jets-lean-check` checks both.
+
+**Which fires are head-first, proved.** A pin `Ycomb ⬝ G` with its arguments
+head-contracts at `Ycomb`'s `S`, and three weak steps reach `G`'s knot
+(`ycomb_head`), so every theorem proved through the knot gives a head-first fire:
+the fourteen word, list and bit-string operations over Curry's Y
+(`fires_head_first`, `lean/Words.lean`) and `whnfF` (`whnfF_head_first`,
+`lean/Interp.lean`).
+
+**Which are, on paper.** A template's key is lean-ski's `absN`, which is Hindley
+and Seldin's abstraction (*Lambda-Calculus and Combinators*, 2008, Definition 2.18)
+clause for clause. Their Theorem 2.21's reduction of `([x].M) N` contracts at the
+head at every clause but the η clause (c), which changes no term. So `key ⬝ U₁ …
+Uₙ` head-contracts first at the first formal whose clause is not (c). Every
+formal falls to (c) only if the body is a closed head applied to the formals in
+order: an η-template, which the loader refuses. Poseidon2's `P` is one abstraction
+of a body that is not its formal's η-form, so its fire is head-first too. Neither
+argument is in Lean.
+
+**Which are not.** `--fix`'s rewrite with Curry's Y and a bit-string fire's
+`BITS_AGAIN` leave terms convertible with the redex, not reducts of it; `ideq` is not
+over `Ycomb` and is not stated. For these, ending is tested, not proved.
+
+**Normal forms, on paper.** Avon reduces in normal order: a spine to weak head
+normal form, then each argument, left to right (`reduce.c`'s `run_share`,
+`copy.c`'s `run_copy`), and a jet fires at the head of the spine being reduced,
+where the leftmost maximal redex is. A head-first fire there begins with a leftmost
+maximal contraction, so the run with each fire written out as its reduction is
+quasi-leftmost, and Hindley and Seldin's Theorem 3.22 applies: if the term has a
+weak normal form, the run is finite and ends at it. This holds for terms; share
+mode's graph is read as the term it unravels to, as §1 trusts.
+

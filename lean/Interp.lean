@@ -37,11 +37,16 @@ proves it on paper (`docs/LEAN-JETS.md` §8).
   reached within `k` step-attempts and `Nothing` otherwise.  That is the
   paper's Theorem `thm:fuel`, both cases at once, and the outcome the jet
   produces.
+* **Why the jet reads by structure** (`lookalike_probes_as_S`,
+  `lookalike_answers_apart`): `S (K ⟨S⟩) I` behaves as `⟨S⟩` on every
+  argument, so a probe reads it as `S`, but `Just` of each has a different
+  normal form.  Probing is sound up to extensional equality only, and the
+  theorem above is about the encodings themselves.
 
 **What stays trusted:** that the jet's copy-mode run computes `evalF`:
 `reduce.c`'s copy mode as `step?`, one fuel unit per step-attempt
 (`tests/test_interp.c` and the conformance fuel cases test it); the
-decoding of the datum and the encoding of the outcome; and residual jets
+reading of the datum by structure and the encoding of the outcome; and residual jets
 inside the object run keeping copy-mode counts (§6.5).  The four other
 cores the jet serves, `wf5Abs`, `wf5Omg`, `wfQ` and `wfN`, are not
 proved.
@@ -425,6 +430,88 @@ theorem whnfF_adequate (k : Nat) (M : Term) :
   rw [whnf_pin]
   exact (((ycomb_knot _).left _).left _).trans (loop_spec k M)
 
+/-- **`whnfF`'s answer follows a head step of its redex**: `Ycomb`'s `S`,
+    then weak steps to the knot and the loop (`lean/Jets.lean`'s
+    `HeadFirst`, whose `jrun_le` bounds a run of such fires by the plain
+    run's length). -/
+theorem whnfF_head_first (k : Nat) (M : Term) :
+    ∃ t1, Step (whnfPin ⬝ encNat k ⬝ quoteT M) t1 ∧ WSteps t1 (encOpt (evalF k M)) := by
+  rw [whnf_pin]
+  exact ⟨_, .left _ (.left _ (.S _ _ _)),
+    (((WSteps.step (.left _ (.K _ _)) (.step (.S _ _ _) (.step (.left _ (.I _))
+      (.single (.right _ (.I _)))))).left _).left _).trans (loop_spec k M)⟩
+
+-- ---------------------------------------------------------------------------
+-- Why the jet reads by structure: a look-alike the probes cannot tell
+-- ---------------------------------------------------------------------------
+
+/-- A weak redex at the root. -/
+def isRedex : Term → Bool
+  | .app (.app (.app .S _) _) _ => true
+  | .app (.app .K _) _ => true
+  | .app .I _ => true
+  | _ => false
+
+/-- A weak normal form: no redex anywhere. -/
+def wnormal : Term → Bool
+  | .app f x => !isRedex (.app f x) && wnormal f && wnormal x
+  | _ => true
+
+theorem wnormal_no_step {t u : Term} (h : WStep t u) : wnormal t = false := by
+  induction h with
+  | S f g x => simp [wnormal, isRedex]
+  | K x y => simp [wnormal, isRedex]
+  | I x => simp [wnormal, isRedex]
+  | left x _ ih => simp [wnormal, ih]
+  | right f _ ih => simp [wnormal, ih]
+
+/-- A weak normal form reduces only to itself (Hindley and Seldin,
+    Exercise 2.34(c)). -/
+theorem wnormal_steps {t u : Term} (hn : wnormal t = true) (h : WSteps t u) : u = t := by
+  cases h with
+  | refl => rfl
+  | step s _ => exact absurd (wnormal_no_step s) (by simp [hn])
+
+/-- Distinct weak normal forms are not convertible: they have no common
+    reduct (Church–Rosser; Hindley and Seldin, Corollary 2.32.3). -/
+theorem wnormal_apart {a b : Term} (ha : wnormal a = true) (hb : wnormal b = true)
+    (hab : a ≠ b) : ¬ ∃ w, WSteps a w ∧ WSteps b w := by
+  rintro ⟨w, haw, hbw⟩
+  exact hab ((wnormal_steps ha haw).symm.trans (wnormal_steps hb hbw))
+
+/-- The look-alike datum `S (K ⟨S⟩) I`: the η-expansion of the object
+    `S` constructor. -/
+def lookalike : Term := S ⬝ (K ⬝ sPin) ⬝ I
+
+/-- **The probes cannot tell it from `⟨S⟩`.**  Applied to any term it
+    reduces to `⟨S⟩` applied to that term, so on fresh atoms, the markers
+    a probe applies, it behaves as `⟨S⟩` does: the two are extensionally
+    equal (Hindley and Seldin, Chapter 8).  A decoder that probes reads it
+    as `S`. -/
+theorem lookalike_probes_as_S (x : Term) : WSteps (lookalike ⬝ x) (sPin ⬝ x) :=
+  .step (.S _ _ _) (.step (.left _ (.K _ _)) (.single (.right _ (.I _))))
+
+/-- `Just`, on any term, reduces to its normal form `K (S I (K x))`. -/
+theorem just_nf (x : Term) : WSteps (justPin ⬝ x) (K ⬝ (S ⬝ I ⬝ (K ⬝ x))) :=
+  run (n := 20) (t := justPin.toO ⬝ₒ .var 1) (u := .K ⬝ₒ (.S ⬝ₒ .I ⬝ₒ (.K ⬝ₒ .var 1)))
+    (by decide) (sig [K, x])
+
+/-- **But the answers differ.**  `Just` the look-alike, which the unjetted
+    interpreter answers at fuel 1 (`tests/test_interp.c`), and `Just ⟨S⟩`,
+    which a probing jet answered, are not convertible: their normal forms
+    differ.  So a jet's licence, weak equality, does not follow from a
+    probe's reading, extensional equality; the jet reads its datum by
+    structure (`docs/LEAN-JETS.md` §8). -/
+theorem lookalike_answers_apart :
+    ¬ ∃ w, WSteps (justPin ⬝ lookalike) w ∧ WSteps (justPin ⬝ sPin) w := by
+  rintro ⟨w, h1, h2⟩
+  obtain ⟨v1, hv1, hw1⟩ := church_rosser (just_nf lookalike) h1
+  obtain ⟨v2, hv2, hw2⟩ := church_rosser (just_nf sPin) h2
+  obtain ⟨v, hv1', hv2'⟩ := church_rosser hw1 hw2
+  have n1 : wnormal (K ⬝ (S ⬝ I ⬝ (K ⬝ lookalike))) = true := by decide
+  have n2 : wnormal (K ⬝ (S ⬝ I ⬝ (K ⬝ sPin))) = true := by decide
+  exact wnormal_apart n1 n2 (by decide) ⟨v, hv1.trans hv1', hv2.trans hv2'⟩
+
 -- ---------------------------------------------------------------------------
 -- The printer
 -- ---------------------------------------------------------------------------
@@ -446,6 +533,9 @@ end AvonInterp
 #print axioms AvonInterp.step_spec
 #print axioms AvonInterp.whnf_pin
 #print axioms AvonInterp.pins_compiled
+#print axioms AvonInterp.lookalike_probes_as_S
+#print axioms AvonInterp.lookalike_answers_apart
+#print axioms AvonInterp.whnfF_head_first
 
 def main (args : List String) : IO UInt32 := do
   match args with
