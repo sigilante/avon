@@ -125,6 +125,52 @@ and how much is Lean is not measured. `split8` keeps its CPU budget at
 `csplit8`'s budgets fall one height each, and it proves in 26 s against
 42 (milestone 4).
 
+**Figures at the pin (2026-10-29, lean-ski `fb65141`).**
+`tests/paper_a_figures.sh` measures the figures above again, from
+statements lean-ski's own tools emit. The release's witnesses are secret,
+so the script fixes its own witness:
+- **split8:** `a = b = 100`, `x = 200`;
+- **csplit8:** `r = 165` and seed 1;
+- **heights:** the release's.
+
+Avon writes every jetted and Poseidon2 table, and ski-air proves and
+verifies them on an Apple M4 Max, one job at a time, each capped at 4 GB
+of resident memory.
+
+| statement | circuit | rows | memory cells | prove | proof | verify | prover peak |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `split8` | plain | 114,857 | 196,484 | 10.06 s | 815,677 B | 2.19 s | 1,616 MB |
+| `split8` | jets: 1,328 instantiations | 9,823 | 70,874 | 11.66 s | 1,112,988 B | 2.68 s | 1,952 MB |
+| `csplit8` | plain | | | over 4 GB | | | |
+| `csplit8` | jets | 43,848 | 201,001 | over 4 GB | | | |
+| `p2pre`, vectors 0–2 | Poseidon2 jet, one call | 1,303–1,327 | 9,480–9,492 | 1.40–1.42 s | 1.20–1.21 MB | 3.66–3.69 s | 692–693 MB |
+| hand-off, stage 1 | Poseidon2 jet, one call | 13,991 | 37,232 | 2.35 s | 1,260,798 B | | 694 MB |
+| hand-off, stage 2 | Poseidon2 jet, one call | 13,156 | 34,842 | 2.36 s | 1,261,630 B | | 694 MB |
+
+What changed since the figures above:
+- **Rows.** `split8`'s jetted run is 9,823 rows against 114,857 plain:
+  8.6%, as on 2026-10-11. Both counts belong to this witness, and the
+  heights hold every witness (`scripts/split_sweep.py`).
+- **Proving.** Jets no longer save time on `split8`: 11.66 s against
+  10.06 s, and the gap held over three runs. Its CPU budget stays at `2^17`, and the jet circuit has ten
+  tables to the plain one's five.
+- **Verification.** It fell from 12.6 s and 23.0 s to 2.19 s and 2.68 s,
+  Lean's checks included. ski-air's own figure for its `verify` step
+  covers Lean's comparison of the AIRs and the proof: 1.19 s for `split8`
+  with jets, and 1.83–1.84 s for `p2pre`. The proof's check alone is
+  still not timed.
+- **`csplit8`.** Neither of its proofs ran: each passed the 4 GB cap,
+  plain at `2^20 2^20` and jetted at `2^18 2^19 2^15 2^16`. Its figures
+  above (26 s against 42) stand unconfirmed at the pin.
+- **The Poseidon2 statements** match the figures in §8 row for row and
+  cell for cell. Proving takes 1.40–1.42 s, against 1.35–1.41 s before.
+- **A wrong preimage.** Vector 0 with its first bit flipped runs 250,010
+  rows and 138,342 memory cells before ski-air stops it at the heights.
+- **Poseidon2 in SKI, without the jet.** Avon's graph reduction takes
+  968,992,246, 962,192,547 and 980,820,715 contractions on the three
+  vectors, in 16.6–17.0 s and under 70 MB. The 10.4 s recorded before
+  is not reproduced at the pin.
+
 **The goal.** A proof, in zero knowledge, that a public verifier accepts
 hidden literal bits (lean-ski's predicate statement, `Ski/Predicate.lean`)
 or a hidden term (a formula's atom), in which the verifier's run
