@@ -11,7 +11,12 @@
 #   3. Avon's table must be byte-identical to ski-air's;
 #   4. lean-ski's `lake exe aircheck` must ACCEPT Avon's table: it decides
 #      the AIR's constraints (Air.checkA_iff), so an accepted table proves
-#      the evaluation it ends on (Air.air_sound_eval).
+#      the evaluation it ends on (Air.air_sound_eval);
+#   5. for terms with atoms, open terms Avon loads with each atom a
+#      variable, aircheck must ACCEPT Avon's table too: it decides the
+#      constraints from the open load (Air.checkOA_iff), so an accepted
+#      table proves the open head reduction it ends on, whatever the atoms
+#      stand for (Air.checkOA_close).
 #
 # Targets stopped by host fuel diverge and have no witness.  Run from the
 # repository root after `make`.  LEAN_SKI defaults to ~/Code/ski/lean-ski.
@@ -87,8 +92,25 @@ accepted=$(grep -c '^ACCEPT' "$OUT/aircheck.log" || true)
 echo "$accepted of $count accepted"
 [ "$accepted" = "$count" ] || fail=1
 
+echo "--- terms with atoms"
+mkdir -p "$OUT/open"
+nopen=0
+for t in 'S X Z X' 'S (K X) I Z' 'K X Z' 'S I I X' 'S (S K K) (K Z) X'; do
+    nopen=$((nopen + 1))
+    printf '%s\n' "$t" > "$OUT/open/$nopen.ski"
+    "$AVON" witness "$OUT/open/$nopen.ski" > "$OUT/open/$nopen.txt" 2> "$OUT/open/$nopen.err" \
+        || { echo "FAIL: open term $t: $(cat "$OUT/open/$nopen.err")"; fail=1; }
+done
+if ! (cd "$LEAN_SKI" && lake exe aircheck "$ROOT/$OUT"/open/*.txt) | tee "$OUT/open/aircheck.log"; then
+    echo "FAIL: aircheck rejected an open term's table"
+    fail=1
+fi
+oaccepted=$(grep -c '^ACCEPT' "$OUT/open/aircheck.log" || true)
+echo "$oaccepted of $nopen open terms accepted"
+[ "$oaccepted" = "$nopen" ] || fail=1
+
 if [ "$fail" != 0 ]; then
     echo "WITNESS CHECK FAILED"
     exit 1
 fi
-echo "witness check passed: $count witnesses proved, verified, identical, accepted"
+echo "witness check passed: $count witnesses proved, verified, identical, accepted; $nopen open terms accepted"

@@ -34,7 +34,8 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > at `2^17 2^18` and `2^17 2^18 2^14 2^14`. Every hiding table is padded
 > to at least `2^9` rows (#31). The figures in §1 and §9 are the
 > fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
-> `paper-v9`, `fb65141`.
+> `c4cd2f2`: `paper-v9` (`fb65141`) with witnesses for terms with atoms
+> (#64) and two jet calls in one statement (#65).
 >
 > **What "sound" and "zero knowledge" mean here (audit, 2026-10-29,
 > against lean-ski `fb65141`).** The soundness theorems

@@ -234,6 +234,11 @@ design lives. Last revised 2026-10-29.
   re-recorded. DESIGN §6.7 adds the rerun and §6.8's jetstat table takes the new
   workloads: all three dictionaries absorb 40.0% of SKIlark's, up from 37.5%.
 
+- **lean-ski at `c4cd2f2`** (2026-10-30). `tests/pins.sh` moves past `paper-v9` by
+  lean-ski #64 (witnesses for terms with atoms) and #65 (`p2chain`, two jet calls).
+  `witness-check` now runs five open terms through `aircheck`, and `p2-witness-check`
+  runs `p2chain`.
+
 - **lean-ski at `paper-v9`, now public** (2026-10-23). `tests/pins.sh` moves to `fb65141`:
   lean-ski's public release, past `paper-v8` by its satisfiability witnesses for the
   hidden-term and composed Merkle-committed bounds and its CI. The five checks the pin
@@ -518,7 +523,7 @@ together or `word` split.
 
 ### 5. The proof gaps (`DESIGN.md` §11.1, "Open")
 
-- Witnesses for terms with atoms (§17.3): plain witnesses built (lean-ski #64, Avon #109), awaiting the pin past #64; jetted and probed ones still refuse atoms.
+- Witnesses for terms with atoms (§17.3): plain witnesses built and checked at the pin (lean-ski #64, Avon #109); jetted and probed ones still refuse atoms.
 - Scry beyond a resume loop's final run.
 - Witness rows for the numeral and constructor jets and the one-step Y. The Y row's
   `Tr` simulation is proved with Y a jet at the compiler's recursion sites
