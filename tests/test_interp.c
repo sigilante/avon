@@ -297,6 +297,14 @@ TEST(a_look_alike_datum_declines) {
         CHECK_EQ(off_fires, 0);
         CHECK_EQ(on_fires, i == 0 ? 0 : 1);
         CHECK(off != AV_NONE && on != AV_NONE && av_equal(a, on, off, 10000000) == 1);
+        /* the interpreter answers Just the datum itself, its own subterm */
+        av_opts o = av_opts_default();
+        o.strategy = AV_COPY;
+        o.no_collect = true;
+        o.max_steps = 1000;
+        av_result j = av_reduce(a, av_app(a, p->rctor[p->value], data[i]), &o);
+        CHECK_EQ(j.status, AV_NORMAL);
+        CHECK(off != AV_NONE && av_equal(a, j.term, off, 10000000) == 1);
     }
     av_arena_free(a);
 }

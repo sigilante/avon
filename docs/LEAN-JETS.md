@@ -317,6 +317,18 @@ The corpus pays for it: the conformance run fires the jet 66 times, against 86
 before; the other 20 data are not yet constructors by structure, and the
 interpreter runs them.
 
+**Why probing was the wrong licence.** A probe applies a datum to fresh marker
+atoms and reads which marker comes back. Two terms that agree on fresh atoms are
+extensionally equal (Hindley and Seldin, *Lambda-Calculus and Combinators*, 2008,
+Chapter 8), not weakly equal, and a jet's licence is weak equality. The look-alike
+is `⟨S⟩`'s η-expansion: applied to any term it reduces to `⟨S⟩` applied to that
+term (`lookalike_probes_as_S`), so no probe tells them apart. Yet `Just` of each
+has a different normal form, so the two answers have no common reduct
+(`lookalike_answers_apart`, by `church_rosser`). Probing is sound up to
+extensional equality, and reading by structure keeps the jet within weak
+equality, the relation `whnfF_adequate` proves. `make interp-lean-check` checks
+both theorems.
+
 **What stays trusted.** That the jet's copy-mode run computes `evalF`: `reduce.c`'s
 copy mode as lean-ski's `step?`, one fuel unit per step-attempt, which
 `tests/test_interp.c` and the conformance fuel cases test; the datum's reading by
