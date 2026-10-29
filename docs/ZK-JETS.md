@@ -135,14 +135,15 @@ so the script fixes its own witness:
 
 Avon writes every jetted and Poseidon2 table, and ski-air proves and
 verifies them on an Apple M4 Max, one job at a time, each capped at 4 GB
-of resident memory.
+of resident memory. `csplit8`'s rows come from a run on 2026-10-30 capped at
+16 GB.
 
 | statement | circuit | rows | memory cells | prove | proof | verify | prover peak |
 |---|---|---:|---:|---:|---:|---:|---:|
 | `split8` | plain | 114,857 | 196,484 | 10.06 s | 815,677 B | 2.19 s | 1,616 MB |
 | `split8` | jets: 1,328 instantiations | 9,823 | 70,874 | 11.66 s | 1,112,988 B | 2.68 s | 1,952 MB |
-| `csplit8` | plain | | | over 4 GB | | | |
-| `csplit8` | jets | 43,848 | 201,001 | over 4 GB | | | |
+| `csplit8` | plain | 354,799 | 572,975 | 60.99 s | 944,999 B | 3.92 s | 6,684 MB |
+| `csplit8` | jets: 3,646 instantiations | 43,848 | 201,001 | 71.16 s | 1,222,022 B | 4.79 s | 7,915 MB |
 | `p2pre`, vectors 0–2 | Poseidon2 jet, one call | 1,303–1,327 | 9,480–9,492 | 1.40–1.42 s | 1.20–1.21 MB | 3.66–3.69 s | 692–693 MB |
 | hand-off, stage 1 | Poseidon2 jet, one call | 13,991 | 37,232 | 2.35 s | 1,260,798 B | | 694 MB |
 | hand-off, stage 2 | Poseidon2 jet, one call | 13,156 | 34,842 | 2.36 s | 1,261,630 B | | 694 MB |
@@ -159,9 +160,14 @@ What changed since the figures above:
   covers Lean's comparison of the AIRs and the proof: 1.19 s for `split8`
   with jets, and 1.83–1.84 s for `p2pre`. The proof's check alone is
   still not timed.
-- **`csplit8`.** Neither of its proofs ran: each passed the 4 GB cap,
-  plain at `2^20 2^20` and jetted at `2^18 2^19 2^15 2^16`. Its figures
-  above (26 s against 42) stand unconfirmed at the pin.
+- **`csplit8`.** Its jetted run is 43,848 rows against 354,799 plain
+  (12.4%), and jets cost time here too: 71.16 s against 60.99 s, where
+  the figures above had 26 s against 42. The jetted prover peaks at
+  7.9 GB, the plain at 6.7 GB, at heights `2^18 2^19 2^15 2^16` and
+  `2^20 2^20`. Verification takes 4.79 s and 3.92 s; ski-air's own figure
+  for the jetted proof is 3.09 s. The same run measured `split8` at 10.80 s
+  plain and 12.45 s jetted, 7% over the day before: the run-to-run spread
+  is about that size.
 - **The Poseidon2 statements** match the figures in §8 row for row and
   cell for cell. Proving takes 1.40–1.42 s, against 1.35–1.41 s before.
 - **A wrong preimage.** Vector 0 with its first bit flipped runs 250,010
