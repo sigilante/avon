@@ -26,7 +26,7 @@ ROOT=$(pwd)
 C=tests/conformance
 fail=0
 
-THEOREMS="whnfF_adequate step_spec whnf_pin pins_compiled lookalike_probes_as_S lookalike_answers_apart"
+THEOREMS="whnfF_adequate step_spec whnf_pin pins_compiled lookalike_probes_as_S lookalike_answers_apart whnfF_head_first"
 axioms_ok() {
     local t
     for t in $THEOREMS; do

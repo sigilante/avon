@@ -430,6 +430,17 @@ theorem whnfF_adequate (k : Nat) (M : Term) :
   rw [whnf_pin]
   exact (((ycomb_knot _).left _).left _).trans (loop_spec k M)
 
+/-- **`whnfF`'s answer follows a head step of its redex**: `Ycomb`'s `S`,
+    then weak steps to the knot and the loop (`lean/Jets.lean`'s
+    `HeadFirst`, whose `jrun_le` bounds a run of such fires by the plain
+    run's length). -/
+theorem whnfF_head_first (k : Nat) (M : Term) :
+    ∃ t1, Step (whnfPin ⬝ encNat k ⬝ quoteT M) t1 ∧ WSteps t1 (encOpt (evalF k M)) := by
+  rw [whnf_pin]
+  exact ⟨_, .left _ (.left _ (.S _ _ _)),
+    (((WSteps.step (.left _ (.K _ _)) (.step (.S _ _ _) (.step (.left _ (.I _))
+      (.single (.right _ (.I _)))))).left _).left _).trans (loop_spec k M)⟩
+
 -- ---------------------------------------------------------------------------
 -- Why the jet reads by structure: a look-alike the probes cannot tell
 -- ---------------------------------------------------------------------------
@@ -524,6 +535,7 @@ end AvonInterp
 #print axioms AvonInterp.pins_compiled
 #print axioms AvonInterp.lookalike_probes_as_S
 #print axioms AvonInterp.lookalike_answers_apart
+#print axioms AvonInterp.whnfF_head_first
 
 def main (args : List String) : IO UInt32 := do
   match args with

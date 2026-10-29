@@ -278,7 +278,8 @@ that program, since the two are convertible. B over a jet was approved on 2026-1
 `--memory`'s memo (`ymemo`), which points a later `Y g` at the node an earlier one
 unfolded to, perhaps reduced since, a run A covers but not one rewrite; and the reducer's
 strategy, which takes one of the runs these theorems allow. That `--fix` reaches
-every normal form the plain run reaches is still shown by tests, not proved.
+every normal form the plain run reaches is still shown by tests, not proved: the
+rewrite is not a reduct, so §9's argument does not reach it.
 
 ## 8. Step 5: the interpreter jet
 
@@ -334,3 +335,50 @@ copy mode as lean-ski's `step?`, one fuel unit per step-attempt, which
 `tests/test_interp.c` and the conformance fuel cases test; the datum's reading by
 structure and the outcome's encoding; and residual jets inside the object run
 keeping copy-mode counts (§6.5).
+
+## 9. Jets in a run: the run ends where the plain one does
+
+§2's theorems license each fire alone. A run fires many, and the question a
+proof of each leaves open is whether the jetted run still ends: a fire could
+trade a term with a normal form for one the run then never finishes. It cannot,
+for the jets whose fire is a reduct reached through a head step.
+
+**Head runs, proved** (`lean/Jets.lean`, 2026-10-29). Call a fire *head-first* if
+a head contraction of the redex, then weak steps, reach its result (`HeadFirst`).
+A head run of head steps and head-first fires, from a term whose head run reaches a
+weak head normal form in `n` steps, has at most `n` steps (`jrun_le`): a weak
+reduct normalizes in no more head steps, and after a head step in strictly fewer
+(lean-ski's `par_step_le`, through `StepsN.wtail_lt`). So a jetted run to weak
+head normal form ends, never later than the plain one, and the form it ends at is a
+weak reduct of the plain run's (`jrun_whnf`). `make jets-lean-check` checks both.
+
+**Which fires are head-first, proved.** A pin `Ycomb ⬝ G` with its arguments
+head-contracts at `Ycomb`'s `S`, and three weak steps reach `G`'s knot
+(`ycomb_head`), so every theorem proved through the knot gives a head-first fire:
+the fourteen word, list and bit-string operations over Curry's Y
+(`fires_head_first`, `lean/Words.lean`) and `whnfF` (`whnfF_head_first`,
+`lean/Interp.lean`).
+
+**Which are, on paper.** A template's key is lean-ski's `absN`, which is Hindley
+and Seldin's abstraction (*Lambda-Calculus and Combinators*, 2008, Definition 2.18)
+clause for clause. Their Theorem 2.21's reduction of `([x].M) N` contracts at the
+head at every clause but the η clause (c), which changes no term. So `key ⬝ U₁ …
+Uₙ` head-contracts first at the first formal whose clause is not (c). Every
+formal falls to (c) only if the body is a closed head applied to the formals in
+order: an η-template, which the loader refuses. Poseidon2's `P` is one abstraction
+of a body that is not its formal's η-form, so its fire is head-first too. Neither
+argument is in Lean.
+
+**Which are not.** `--fix`'s rewrite with Curry's Y and a bit-string fire's
+`BITS_AGAIN` leave terms convertible with the redex, not reducts of it; `ideq` is not
+over `Ycomb` and is not stated. For these, ending is tested, not proved.
+
+**Normal forms, on paper.** Avon reduces in normal order: a spine to weak head
+normal form, then each argument, left to right (`reduce.c`'s `run_share`,
+`copy.c`'s `run_copy`), and a jet fires at the head of the spine being reduced,
+where the leftmost maximal redex is. A head-first fire there begins with a leftmost
+maximal contraction, so the run with each fire written out as its reduction is
+quasi-leftmost, and Hindley and Seldin's Theorem 3.22 applies: if the term has a
+weak normal form, the run is finite and ends at it. This holds for terms; share
+mode's graph is read as the term it unravels to, as §1 trusts.
+

@@ -711,6 +711,66 @@ theorem ideq_spec (x y : Name) :
   rw [hx, hy]; exact beq_spec _ _
 
 -- ---------------------------------------------------------------------------
+-- Head-first: each operation's result follows a head step of its redex
+-- ---------------------------------------------------------------------------
+
+/-- A head step, then weak steps (`lean/Jets.lean`'s `HeadFirst`, whose
+    `jrun_le` bounds a run of such fires by the plain run's length). -/
+def HeadFirst (t u : Term) : Prop := ∃ t1, Step t t1 ∧ WSteps t1 u
+
+/-- `Ycomb ⬝ G`'s head step is `Ycomb`'s `S`, and three weak steps then
+    reach the knot. -/
+theorem ycomb_head (G : Term) :
+    Step (Ycomb ⬝ G) (K ⬝ (S ⬝ I ⬝ I) ⬝ G ⬝ knotX G) ∧
+    WSteps (K ⬝ (S ⬝ I ⬝ I) ⬝ G ⬝ knotX G) (knot G) :=
+  ⟨.S _ _ _,
+   .step (.left _ (.K _ _)) (.step (.S _ _ _) (.step (.left _ (.I _)) (.single (.right _ (.I _)))))⟩
+
+theorem head1 {G a r : Term} (h : WSteps (knot G ⬝ a) r) : HeadFirst (Ycomb ⬝ G ⬝ a) r :=
+  ⟨_, .left a (ycomb_head G).1, ((ycomb_head G).2.left a).trans h⟩
+
+theorem head2 {G a b r : Term} (h : WSteps (knot G ⬝ a ⬝ b) r) : HeadFirst (Ycomb ⬝ G ⬝ a ⬝ b) r :=
+  ⟨_, .left b (.left a (ycomb_head G).1), (((ycomb_head G).2.left a).left b).trans h⟩
+
+theorem head3 {G a b c r : Term} (h : WSteps (knot G ⬝ a ⬝ b ⬝ c) r) :
+    HeadFirst (Ycomb ⬝ G ⬝ a ⬝ b ⬝ c) r :=
+  ⟨_, .left c (.left b (.left a (ycomb_head G).1)),
+   ((((ycomb_head G).2.left a).left b).left c).trans h⟩
+
+theorem head4 {G a b c d r : Term} (h : WSteps (knot G ⬝ a ⬝ b ⬝ c ⬝ d) r) :
+    HeadFirst (Ycomb ⬝ G ⬝ a ⬝ b ⬝ c ⬝ d) r :=
+  ⟨_, .left d (.left c (.left b (.left a (ycomb_head G).1))),
+   (((((ycomb_head G).2.left a).left b).left c).left d).trans h⟩
+
+/-- **Every operation over Curry's Y fires head-first.**  Each result
+    above is reached from its redex by `Ycomb`'s head step and then weak
+    steps, so a run of head steps and these fires is never longer than the
+    plain run (`lean/Jets.lean`, `jrun_le`).  `ideq` is not over `Ycomb`
+    and is left out. -/
+theorem fires_head_first :
+    (∀ m n, HeadFirst (addT ⬝ encNat m ⬝ encNat n) (encNat (m + n))) ∧
+    (∀ m n, HeadFirst (subT ⬝ encNat m ⬝ encNat n) (encNat (m - n))) ∧
+    (∀ m n, HeadFirst (mulT ⬝ encNat m ⬝ encNat n) (encNat (m * n))) ∧
+    (∀ m n a b, HeadFirst (ifeqT ⬝ encNat m ⬝ encNat n ⬝ a ⬝ b) (if m = n then a else b)) ∧
+    (∀ m n a b, HeadFirst (ifleT ⬝ encNat m ⬝ encNat n ⬝ a ⬝ b) (if m ≤ n then a else b)) ∧
+    (∀ m n, HeadFirst (divT ⬝ encNat m ⬝ encNat n) (encNat (m / n))) ∧
+    (∀ m n, HeadFirst (remT ⬝ encNat m ⬝ encNat n) (encNat (m % n))) ∧
+    (∀ xs, HeadFirst (lenT ⬝ encList xs) (encNat xs.length)) ∧
+    (∀ xs i d, HeadFirst (atT ⬝ encList xs ⬝ encNat i ⬝ d) (xs.getD i d)) ∧
+    (∀ xs ys, HeadFirst (appT ⬝ encList xs ⬝ encList ys) (encList (xs ++ ys))) ∧
+    (∀ xs i, HeadFirst (takeT ⬝ encList xs ⬝ encNat i) (encList (xs.take i))) ∧
+    (∀ xs i, HeadFirst (dropT ⬝ encList xs ⬝ encNat i) (encList (xs.drop i))) ∧
+    (∀ a b, HeadFirst (beqT ⬝ encBits a ⬝ encBits b) (Compose.boolT (a == b))) ∧
+    (∀ k t, HeadFirst (bgetT ⬝ encBits k ⬝ Trie.enc t) (t.get k)) :=
+  ⟨fun m n => head2 (add_knot m n), fun m n => head2 (sub_knot n m),
+   fun m n => head2 (mul_knot m n), fun m n a b => head4 (ifeq_knot a b m n),
+   fun m n a b => head4 (ifle_knot a b m n), fun m n => head2 (div_knot n m),
+   fun m n => head2 (rem_knot n m), fun xs => head1 (len_knot xs),
+   fun xs i d => head3 (at_knot d xs i), fun xs ys => head2 (app_knot ys xs),
+   fun xs i => head2 (take_knot xs i), fun xs i => head2 (drop_knot xs i),
+   fun a b => head2 (beq_knot a b), fun k t => head2 (bget_knot k t)⟩
+
+-- ---------------------------------------------------------------------------
 -- The C: word_fire's values
 -- ---------------------------------------------------------------------------
 
@@ -1244,6 +1304,7 @@ end AvonWords
 #print axioms AvonWords.beqWalk_sound
 #print axioms AvonWords.bgetWalk_sound
 #print axioms AvonWords.ideqBits_sound
+#print axioms AvonWords.fires_head_first
 
 def main (args : List String) : IO UInt32 := do
   match args with

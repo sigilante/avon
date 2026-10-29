@@ -24,7 +24,7 @@ fail=0
 # own axioms alone: propext and Quot.sound, never sorryAx or
 # Lean.ofReduceBool.
 THEOREMS="fireC_num fireC_arg listFireC_sound beq_fire bget_fire ideq_fire ideq_spec bget_spec ctors_compiled
-    add_spec sub_spec mul_spec ifeq_spec ifle_spec div_spec rem_spec len_spec at_spec app_spec take_spec drop_spec beq_spec beqWalk_sound bgetWalk_sound ideqBits_sound"
+    add_spec sub_spec mul_spec ifeq_spec ifle_spec div_spec rem_spec len_spec at_spec app_spec take_spec drop_spec beq_spec beqWalk_sound bgetWalk_sound ideqBits_sound fires_head_first"
 axioms_ok() {
     local t
     for t in $THEOREMS; do
