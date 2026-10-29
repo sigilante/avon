@@ -478,8 +478,11 @@ composed statements, from the statement's public file and a witness:
 - with `--jet-table=JETS`, a statement with jets: the witness's bits and
   region in the statement's heap, one jetted segment per root, padded to
   the statement's heights (`docs/ZK-JETS.md`);
-- without it, a `p2pre` or `p2commit` statement: the machine with the
-  Poseidon2 jet, its table as bench/plonky3's `compp-prove` writes it.
+- without it, a `p2pre`, `p2chain` or `p2commit` statement: the machine
+  with the Poseidon2 jet, its table as bench/plonky3's `compp-prove` writes
+  it. The jet fires at the header's atom `J` on the comb, and at `J + 1` on
+  the stack, where `p2chain`'s second call finds the first call's 496
+  outputs in consecutive cells.
 `make zk-jet-witness-check` and `make p2-witness-check` run both against
 ski-air.
 

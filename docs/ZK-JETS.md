@@ -560,6 +560,18 @@ commitment; ski-air proves Avon's two tables and verifies them as a chain
 meets both patterns, or the two proofs' tables encode a collision of the
 compression).
 
+*Built (in the clear): two jet calls in one statement.* lean-ski's
+`p2chain h` ("sixteen 31-bit values whose permutation, permuted again,
+begins with `h`") calls the jet on the comb at the atom `J`, then on the
+first call's outputs, on the stack, at `J + 1` (lean-ski's
+`P2Jet.p2RowS`). The second call's 496 inputs must lie in consecutive stack
+cells, each a pointer to the `K` slot or the `K I` slot, as a call pushes
+them. Avon writes its table byte for byte ski-air's: 1,317 rows, 2 calls,
+9,985 memory cells, proved in 1.44–1.48 s and verified in 1.89 s
+(`Circuit.p2chainExport_sound`: an accepted proof's memory holds such
+values). lean-ski has not yet proved that its runs call the jet exactly
+twice; ski-air counts the calls and refuses any other number.
+
 ## 9. Milestones
 
 1. **Measure.** *Done, 2026-09-29* (§1): 11,483 rows jetted against

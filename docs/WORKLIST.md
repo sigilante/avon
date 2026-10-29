@@ -392,8 +392,9 @@ Collected 2026-10-04: proof sizes and verify times (`ZK-JETS.md` §1), Poseidon2
 all three vectors, and the interpreter jet's wall clock (`BENCHMARK.md`, "The
 interpreter jet's wall clock"). Measuring the last found `av_equal` allocating on
 every call; keeping its first stack and set on the C stack took T2 with the jet
-from 0.95 ms to 0.41 ms. Open, with lean-ski:
-- a statement with several jet calls;
+from 0.95 ms to 0.41 ms. A statement with two jet calls, lean-ski's `p2chain h`,
+measures 1,317 rows, proved in 1.44–1.48 s and verified in 1.89 s (lean-ski #65; Avon's
+table byte for byte ski-air's). Open, with lean-ski:
 - ski-air timing the proof's check apart from Lean's statement checks, since jets
   make verification slower (`split8` 23.0 s against 12.6) and the split is not
   measured.

@@ -248,13 +248,15 @@ static uint32_t resolve(av_jop op, uint32_t c, const uint32_t *ps) {
 }
 
 /*  The Poseidon2 jet's step at (hd, stk), counter c (lean-ski's
- *  P2Jet.p2Row, bench/plonky3's p2_step): 1 taken, 0 not applicable, -1 on
+ *  P2Jet.p2Row, or P2Jet.p2RowS on the stack at J + 1; bench/plonky3's p2_step):
+ *  1 taken, 0 not applicable, -1 on
  *  the cell budget. */
 #define AV_P2_BITS 496u
 static int p2_step(av_witness *w, const av_cstmt *s, uint32_t hd, uint32_t stk, uint32_t c,
                    size_t max_cells, uint32_t *nhd, uint32_t *nstk, const char **msg) {
     const av_cell *h = get(w, hd);
-    if (!h || h->tag != AV_CELL_ATOM || h->a != s->p2_j) return 0;
+    if (!h || h->tag != AV_CELL_ATOM || (h->a != s->p2_j && h->a != s->p2_j + 1)) return 0;
+    bool on_stack = h->a == s->p2_j + 1;        /* P2Jet.p2RowS: the inputs on the stack */
     if (w->nmem < 3 + AV_P2_BITS) return 0;
     const av_cell *m = w->mem;
     if (m[0].tag != AV_CELL_K || m[1].tag != AV_CELL_I ||
@@ -262,17 +264,32 @@ static int p2_step(av_witness *w, const av_cstmt *s, uint32_t hd, uint32_t stk, 
         return 0;
     const av_cell *s1 = cons_at(w, stk);
     if (!s1) return 0;
-    const av_cell *s2 = cons_at(w, s1->b);
-    if (!s2 || s2->a != s->p2_root) return 0;
-    uint32_t k = s1->a, rest = s2->b;
+    uint32_t k = s1->a, rest;
     uint32_t st[16] = { 0 };
-    for (uint32_t l = 0; l < AV_P2_BITS; l++) {
-        const av_cell *x = &m[3 + l];
-        uint32_t bit;
-        if (x->tag == AV_CELL_K) bit = 1;
-        else if (x->tag == AV_CELL_APP && x->a == 0 && x->b == 1) bit = 0;
-        else return 0;
-        st[l / 31] |= bit << (l % 31);
+    if (on_stack) {
+        /* 496 consecutive stack cells from s₁ down, each pointing at the K
+         * slot (true) or the K I slot (false), as a call pushed them */
+        uint32_t sp = s1->b;
+        for (uint32_t l = 0; l < AV_P2_BITS; l++) {
+            const av_cell *x = cons_at(w, sp);
+            if (!x || (x->a != 0 && x->a != 2)) return 0;
+            if (l + 1 < AV_P2_BITS && x->b + 1 != sp) return 0;
+            st[l / 31] |= (uint32_t)(x->a == 0) << (l % 31);
+            sp = x->b;
+        }
+        rest = sp;
+    } else {
+        const av_cell *s2 = cons_at(w, s1->b);
+        if (!s2 || s2->a != s->p2_root) return 0;
+        rest = s2->b;
+        for (uint32_t l = 0; l < AV_P2_BITS; l++) {
+            const av_cell *x = &m[3 + l];
+            uint32_t bit;
+            if (x->tag == AV_CELL_K) bit = 1;
+            else if (x->tag == AV_CELL_APP && x->a == 0 && x->b == 1) bit = 0;
+            else return 0;
+            st[l / 31] |= bit << (l % 31);
+        }
     }
     av_p2_permute(st);
     if (w->nmem + AV_P2_BITS > max_cells) { *msg = "the run exceeds the cell budget"; return -1; }
@@ -939,15 +956,17 @@ bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err) {
     const char *msg = "a truncated statement";
     if (!next_line(&L, &l, &n)) goto fail;
     bool pre = n >= 6 && memcmp(l, "p2pre ", 6) == 0;
+    bool chain = n >= 8 && memcmp(l, "p2chain ", 8) == 0;
     bool commit = n >= 9 && memcmp(l, "p2commit ", 9) == 0;
-    s->p2 = pre || commit;
+    s->p2 = pre || chain || commit;
     if (!((n >= 8 && memcmp(l, "formula ", 8) == 0) || (n >= 10 && memcmp(l, "predicate ", 10) == 0) || s->p2)) {
-        msg = "expected `formula …`, `predicate …`, `p2pre …` or `p2commit …`";
+        msg = "expected `formula …`, `predicate …`, `p2pre …`, `p2chain …` or `p2commit …`";
         goto fail;
     }
-    if (pre) {
-        /* `p2pre h J ROOT` */
-        if (!nums_line(l, n, "p2pre", v, 3, &k) || k != 3) { msg = "a malformed header"; goto fail; }
+    if (pre || chain) {
+        /* `p2pre h J ROOT`, `p2chain h J ROOT` */
+        if (!nums_line(l, n, pre ? "p2pre" : "p2chain", v, 3, &k) || k != 3) { msg = "a malformed header"; goto fail; }
+        if (v[1] == UINT32_MAX) { msg = "a malformed header"; goto fail; }
         s->p2_j = v[1];
         s->p2_root = v[2];
     } else if (commit) {
