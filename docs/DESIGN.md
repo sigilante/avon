@@ -3400,7 +3400,11 @@ contract proved for the kit's eliminator and owed per table). It is the
 paper's jet contract, and the word type is the representation ABI at the
 VM boundary. For the fifteen word operations Avon runs, the terms' side
 of that licence is proved (`lean/Words.lean`, `add_spec` … `ideq_spec`);
-the word cells and their tables are not built.
+the word cells and their tables are not built. `ZK-WORDS.md` designs
+them. It also measures them: on lean-ski's split statements no operation
+fires (2026-10-29). csplit8's knapsack sum is a chain of pending
+additions, and its comparison is not a pinned operation, so word cells
+pay only alongside the evaluation of pending arithmetic over words.
 
 ### 18.3 The interpreter jet
 

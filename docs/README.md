@@ -9,6 +9,7 @@
 | [`DESIGN.md`](DESIGN.md) | Why is Avon built this way?  The design, its decisions, and what was built when. |
 | [`BENCHMARK.md`](BENCHMARK.md) | How fast is it?  Every measurement, with the commit it was taken at. |
 | [`ZK-JETS.md`](ZK-JETS.md) | How do jets enter a zero-knowledge proof?  Statements, tables and their checks. |
+| [`ZK-WORDS.md`](ZK-WORDS.md) | What would word cells buy a proof, and what must come with them?  A design, measured, not built. |
 | [`WORKLIST.md`](WORKLIST.md) | What has been done lately, and what is next? |
 | [`LEAN-JETS.md`](LEAN-JETS.md) | Which of Avon's C jets are proved in Lean, what each proof covers, and what is next? |
 | [`SKA.md`](SKA.md) | What does subject knowledge analysis offer an SKI runtime, and what did Avon take from it? |
