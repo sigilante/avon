@@ -8,7 +8,9 @@
 # and that a run mixing weak steps with fires of any jets, each convertible
 # with its redex, at any position and in any order, stays convertible with
 # the plain run, so a normal form it reaches is SKI's (jets_join,
-# jets_normal), --fix's rewrite among them (fix_conv).
+# jets_normal), --fix's rewrite among them (fix_conv); and that Turing's
+# fixed-point combinator, by lean-ski's abstraction, unfolds by reduction,
+# head-first (turingU_abs, theta_head_first).
 # Every printed theorem must rest on Lean's axioms alone, never sorryAx.
 #
 # Run from the repository root.  LEAN_SKI defaults to ~/Code/ski/lean-ski.
@@ -25,7 +27,7 @@ mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 ROOT=$(pwd)
 
-THEOREMS="jrun_le jrun_whnf head_of_knot jets_join jets_normal fix_conv"
+THEOREMS="jrun_le jrun_whnf head_of_knot jets_join jets_normal fix_conv turingU_abs theta_head_first"
 axioms_ok() {
     local t
     for t in $THEOREMS; do

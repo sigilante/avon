@@ -34,6 +34,10 @@ rewrite is (`fix_conv`).  `lean/Fix.lean`'s `fix_join` is the case of
 `--fix` alone.  The membership is read from each file's theorem; the
 files do not import one another.
 
+**Turing's Θ** (`theta_head_first`).  `Θ ⬝ g` reduces to `g ⬝ (Θ ⬝ g)`,
+head-first, where Curry's Y gives only a conversion: compiled with Θ,
+`--fix`'s rewrite would be a reduct (`docs/LEAN-JETS.md` §7).
+
 **Which fires are head-first.**  A pin `Ycomb ⬝ G` with its arguments
 head-contracts at `Ycomb`'s `S`, and two more steps reach `G`'s knot
 (`ycomb_head`), so every theorem proved through the knot, as each word,
@@ -272,6 +276,34 @@ theorem fix_conv (g : Term) : Conv (Ycomb ⬝ g) (g ⬝ (Ycomb ⬝ g)) := by
       (.single (.right _ (.right _ (.I _)))))))))))
   exact ⟨g ⬝ knot g, hk.trans hu, WSteps.right g hk⟩
 
+-- ---------------------------------------------------------------------------
+-- Turing's fixed-point combinator: an unfolding that is a reduct
+-- ---------------------------------------------------------------------------
+
+/-- Turing's `U = [u, x]. x (u u x)`, by lean-ski's abstraction. -/
+def turingU : Term := S ⬝ (K ⬝ (S ⬝ I)) ⬝ (S ⬝ I ⬝ I)
+
+/-- Turing's fixed-point combinator `Θ = U U` (Hindley and Seldin, Theorem
+    3.3). -/
+def theta : Term := turingU ⬝ turingU
+
+/-- `U` is lean-ski's bracket abstraction of `x (u u x)` over `u` then `x`:
+    the compiler's own abstraction gives it. -/
+theorem turingU_abs :
+    turingU = toTerm (absN [0, 1] (.var 1 ⬝ₒ (.var 0 ⬝ₒ .var 0 ⬝ₒ .var 1))) := by decide
+
+/-- **Turing's Θ unfolds by reduction, head-first.**  `Θ ⬝ g` reduces to
+    `g ⬝ (Θ ⬝ g)`, starting with its head redex, so an unfolding rewrite
+    `Θ g ↦ g (Θ g)` would be a head-first fire, a reduct, where Curry's `Y`
+    gives only a conversion (`fix_conv`).  Hindley and Seldin, Theorem
+    3.3(b), for weak reduction in CL. -/
+theorem theta_head_first (g : Term) : HeadFirst (theta ⬝ g) (g ⬝ (theta ⬝ g)) := by
+  unfold theta turingU
+  refine ⟨_, .left _ (.S _ _ _), ?_⟩
+  exact .step (.left _ (.left _ (.K _ _))) (.step (.S _ _ _) (.step (.left _ (.I _))
+    (.step (.right _ (.left _ (.S _ _ _))) (.step (.right _ (.left _ (.left _ (.I _))))
+    (.single (.right _ (.left _ (.right _ (.I _)))))))))
+
 end AvonJets
 
 #print axioms AvonJets.jrun_le
@@ -280,3 +312,5 @@ end AvonJets
 #print axioms AvonJets.jets_join
 #print axioms AvonJets.jets_normal
 #print axioms AvonJets.fix_conv
+#print axioms AvonJets.turingU_abs
+#print axioms AvonJets.theta_head_first

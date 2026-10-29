@@ -286,6 +286,20 @@ rewrites every `Ycomb` redex and never S-reduces one reaches from `Ycomb ⬝ K` 
 wrapped around it. So the statement is false (`first_B_false`). Part A still covers
 that program, since the two are convertible. B over a jet was approved on 2026-10-29.
 
+**A design option: Turing's Θ** (`lean/Jets.lean`, 2026-10-29; not adopted). Parts A
+and B, and `first_B_false`, exist because skijack compiles recursion with Curry's Y,
+whose unfolding is only a conversion. Turing's Θ = U U, `U = [u, x]. x (u u x)` =
+`S (K (S I)) (S I I)` by lean-ski's own abstraction (`turingU_abs`), unfolds by
+reduction: `Θ ⬝ g` reduces to `g ⬝ (Θ ⬝ g)` in 7 contractions, the first its head
+redex (`theta_head_first`; Hindley and Seldin, *Lambda-Calculus and Combinators*,
+2008, Theorem 3.3(b)). Compiled with Θ, `--fix`'s rewrite would be a reduct: licensed
+as the word operations are, head-first, so §9's argument would reach it, and marking
+Θ by tree identity would be harmless. The cost: every compiled recursive term,
+hash, dictionary entry, pin and witness changes; lean-ski's compiler and its `Tr`
+simulation are stated over `Ycomb` and would be re-proved; and Θ alone is a redex
+that never normalizes (`avon reduce` on `Θ` runs out of fuel growing
+`S I (S I …)`), where Curry's Y alone is a normal form.
+
 **What stays trusted.** That Avon's rewrite is `FixStep.fix` and `JStep.fix`
 (`src/reduce.c` writes the redex root as `App(g, y)`, `y` a fresh `App(Y, g)`);
 `--memory`'s memo (`ymemo`), which points a later `Y g` at the node an earlier one
