@@ -238,10 +238,9 @@ design lives. Last revised 2026-10-29.
   lean-ski #66: `p2chain` calls the jet exactly twice (`runP_calls_two`,
   `p2chain_twice`), and the Poseidon2 circuit's Fiat–Shamir theorems take the call
   count, so they hold for it. Lean proofs and documentation only; ski-air is unchanged
-  but for a comment. `jet-witness-check`, `probe-witness-check`,
-  `zk-jet-witness-check`, `p2-witness-check` and the five `*-lean-check`s pass at the
-  pin. `witness-check`'s corpus proofs were stopped at a 4 GB memory cap, as nothing
-  they exercise changed.
+  but for a comment. `witness-check` (43 witnesses, 5 open terms; its corpus proofs need
+  more than 4 GB), `jet-witness-check`, `probe-witness-check`, `zk-jet-witness-check`,
+  `p2-witness-check` and the five `*-lean-check`s pass at the pin.
 
 - **lean-ski at `c4cd2f2`** (2026-10-30). `tests/pins.sh` moves past `paper-v9` by
   lean-ski #64 (witnesses for terms with atoms) and #65 (`p2chain`, two jet calls).
