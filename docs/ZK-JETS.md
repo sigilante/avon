@@ -34,10 +34,10 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > at `2^17 2^18` and `2^17 2^18 2^14 2^14`. Every hiding table is padded
 > to at least `2^9` rows (#31). The figures in §1 and §9 are the
 > fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
-> `c4cd2f2`: `paper-v9` (`fb65141`) with `compj-verify`'s meaning check
+> `b4ba210`: `paper-v9` (`fb65141`) with `compj-verify`'s meaning check
 > (#62), Fiat–Shamir for the circuits with jets and Poseidon2 (#63),
-> witnesses for terms with atoms (#64) and two jet calls in one statement
-> (#65).
+> witnesses for terms with atoms (#64), two jet calls in one statement
+> (#65) and the proof that it calls the jet exactly twice (#66).
 >
 > **What "sound" and "zero knowledge" mean here (audit, 2026-10-29,
 > against lean-ski `fb65141`).** The soundness theorems
@@ -57,10 +57,9 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > (`tabsHonest_bbD`). Their assumptions are the composed circuit's, the
 > hiding of every commitment but the first included, plus a size bound
 > on the provider tables (`hprov24`, `2^24` rows) and, for Poseidon2, the
-> statement's number of jet calls per run (`hcalls`). At the pin that
-> number is one, met by `p2pre` and the hand-off; lean-ski#66 (`b4ba210`,
-> past the pin) makes it a parameter, met at two by `p2chain`
-> (`runP_calls_two`). Neither circuit's bound has a satisfiability
+> statement's number of jet calls per run (`hcalls`): one, met by `p2pre`
+> and the hand-off, or two, met by `p2chain` (`runP_calls_two`,
+> lean-ski#66). Neither circuit's bound has a satisfiability
 > witness yet. lean-ski#62 makes `compj-verify` check
 > a statement's meaning on the bytes it verifies (`… split K X` or
 > `… csplit K M SEED X C`); the four-argument form this repository's
@@ -592,7 +591,7 @@ them. Avon writes its table byte for byte ski-air's: 1,317 rows, 2 calls,
 9,985 memory cells, proved in 1.44–1.48 s and verified in 1.89 s
 (`Circuit.p2chainExport_sound`: an accepted proof's memory holds such
 values). ski-air counts the calls and refuses any other number.
-lean-ski#66 (`b4ba210`, past the pin) proves the count: an honest run
+lean-ski#66, at the pin, proves the count: an honest run
 calls the jet exactly twice (`Circuit.runP_calls_two`), every accepted
 proof has exactly two jet rows (`Circuit.p2chain_twice`, the analog of
 `p2pre_once`), and the Poseidon2 circuit's Fiat–Shamir theorems hold at
