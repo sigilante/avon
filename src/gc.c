@@ -1,9 +1,12 @@
 /**  gc.c
  *
- *  Stop-and-copy collection.  Cheney's scan over a fresh to-space, keeping
- *  forwarding in a side array rather than being written into from-space.
- *  Indirections are short-circuited: an evacuated IND becomes the copy of
- *  what it points at.
+ *  Stop-and-copy collection.  Cheney's scan over a fresh to-space.  A node
+ *  evacuated is overwritten in from-space with its forwarding: an IND whose
+ *  r is AV_NONE, l the to-space index.  The reducer writes every IND with
+ *  r = 0, so the two cannot be confused.  Indirections are
+ *  short-circuited: an evacuated IND becomes the copy of what it points at.
+ *  A persistent arena's from-space is its mapping, copy-on-write, so the
+ *  forwarding never reaches the image: the copy back marks it all dirty.
  */
 
 #include <stdlib.h>
@@ -13,26 +16,36 @@
 #include "sstats.h"
 
 struct av_gc {
-    const av_node *from;
-    av_node       *to;
-    uint32_t      *fwd;         /* from-index -> to-index, or AV_NONE */
-    uint32_t       top;
+    av_node  *from;             /* evacuated nodes hold their forwarding */
+    av_node  *to;
+    uint32_t  top;
 };
 
+#define FWD_R AV_NONE           /* r of a forwarding IND */
+
+#ifdef AV_STRICT_STATS
+static inline bool forwarded(const av_node *n) {
+    return (n->l >> AV_TAG_SHIFT) == AV_IND && n->r == FWD_R;
+}
+#endif
+
 uint32_t av_gc_evac(av_gc *g, uint32_t i) {
-    while ((g->from[i].l >> AV_TAG_SHIFT) == AV_IND)
+    while ((g->from[i].l >> AV_TAG_SHIFT) == AV_IND) {
+        if (g->from[i].r == FWD_R) return g->from[i].l & AV_PAYLOAD;
         i = g->from[i].l & AV_PAYLOAD;
-    if (g->fwd[i] != AV_NONE) return g->fwd[i];
+    }
     uint32_t j = g->top++;
     g->to[j] = g->from[i];
-    g->fwd[i] = j;
+    g->from[i] = (av_node){ (AV_IND << AV_TAG_SHIFT) | j, FWD_R };
     return j;
 }
 
 uint32_t av_gc_forwarded(const av_gc *g, uint32_t i) {
-    while ((g->from[i].l >> AV_TAG_SHIFT) == AV_IND)
+    while ((g->from[i].l >> AV_TAG_SHIFT) == AV_IND) {
+        if (g->from[i].r == FWD_R) return g->from[i].l & AV_PAYLOAD;
         i = g->from[i].l & AV_PAYLOAD;
-    return g->fwd[i];
+    }
+    return AV_NONE;
 }
 
 /*  A root may hold AV_NONE: a result slot rooted before it is filled. */
@@ -45,13 +58,7 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
     av_gc g;
     g.from = a->nodes;
     g.to = malloc((size_t)a->cap * sizeof *g.to);
-    g.fwd = malloc((size_t)a->used * sizeof *g.fwd);
-    if (!g.to || !g.fwd) {
-        free(g.to);
-        free(g.fwd);
-        return false;
-    }
-    for (uint32_t i = 0; i < a->used; i++) g.fwd[i] = AV_NONE;
+    if (!g.to) return false;
     g.top = 0;
 
     /* Leaves first, in id order, so S, K, I stay at 0, 1, 2. */
@@ -107,9 +114,15 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
     for (av_active *r = a->active; r; r = r->next)
         if (r->after) r->after(&g, r->ctx);
 #ifdef AV_STRICT_STATS
-    sstats_collect(a, g.fwd, a->used, g.top);
+    {                                   /* the side array the counts read */
+        uint32_t *fwd = malloc((size_t)a->used * sizeof *fwd);
+        if (!fwd) { fprintf(stderr, "sstats: out of memory\n"); abort(); }
+        for (uint32_t i = 0; i < a->used; i++)
+            fwd[i] = forwarded(&g.from[i]) ? g.from[i].l & AV_PAYLOAD : AV_NONE;
+        sstats_collect(a, fwd, a->used, g.top);
+        free(fwd);
+    }
 #endif
-    free(g.fwd);
     if (a->pma) {                       /* back into the mapping: all of it dirty */
         pma_collected(a, g.to, g.top);
         free(g.to);
@@ -120,10 +133,12 @@ bool av_collect(av_arena *a, uint32_t need, av_roots_fn roots,
     a->used = g.top;
     a->collections++;
 
-    /* Keep the live set at most half the arena, and `need` free. */
+    /* Keep the live set at most half the arena (a quarter growing early),
+     * and `need` free. */
     uint64_t want = a->cap;
+    unsigned shift = a->grow_early ? 2 : 1;
     while (want < AV_MAX_NODES &&
-           (a->used > want / 2 || want - a->used < need))
+           (a->used > want >> shift || want - a->used < need))
         want *= 2;
     if (want > AV_MAX_NODES) want = AV_MAX_NODES;
     if (want > a->cap) {

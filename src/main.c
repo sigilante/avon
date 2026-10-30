@@ -79,7 +79,7 @@
  *                                     against Python's by hash
  *      avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]
  *                  [--templates=DIR|--discover [--data] [--fix] [--memory] [--no-defer]] [--names=FILE]... [--fuel=N]
- *                  [--max-nodes=N] DIR SOURCE
+ *                  [--max-nodes=N] [--aggressive-heap] DIR SOURCE
  *                                     the SKIjack-0 front end on SOURCE:
  *                                     DIR/front.skit and the input's
  *                                     constructors; each name and its term's
@@ -94,6 +94,8 @@
  *  A FILE may be in the printed form, a SKIT container, or the prefix
  *  form, told apart by a magic or a leading `.  Options:
  *  --strategy=copy|share (default share), --whnf, --fuel=N, --max-nodes=N,
+ *  --aggressive-heap (grow the arena while the live set passes a quarter
+ *  of it, not half: fewer collections for more memory),
  *  --budget=N (nodes printed or jammed; default 1000000),
  *  --allow-bird-atoms (admit atoms named as the Python oracle's bird
  *  combinators are), --jets=DICT (a dictionary.tsv export: register it
@@ -131,7 +133,7 @@
 int usage(void) {
     fprintf(stderr,
         "usage: avon reduce [--strategy=copy|share] [--whnf] [--fuel=N]\n"
-        "                   [--max-nodes=N] [--budget=N] [--dag] [FILE]\n"
+        "                   [--max-nodes=N] [--aggressive-heap] [--budget=N] [--dag] [FILE]\n"
         "       avon batch  [same options]\n"
         "       avon jam    [--budget=N] [FILE]\n"
         "       avon cue    [--budget=N] [FILE]\n"
@@ -165,7 +167,8 @@ int usage(void) {
         "       avon front0 [--profile=NAMES] [--jets=DICT]... [--ctors[=N]] [--jet-stats[=N]]\n"
         "                   [--templates=DIR|--discover [--data] [--fix] [--memory] [--no-defer]]\n"
         "                   [--emit=OUT]\n"
-        "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] DIR SOURCE\n"
+        "                   [--names=FILE]... [--fuel=N] [--max-nodes=N] [--aggressive-heap]\n"
+        "                   DIR SOURCE\n"
         "       avon enum N [--start=K] [--count=M]      (N from 1 to 20)\n"
         "       avon enum --base=FILE --shape=sxy,ssaq,hide\n"
         "       (reduce and batch accept --trace-frame[=summary] --passenger=NAME\n"

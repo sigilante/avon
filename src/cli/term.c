@@ -12,17 +12,18 @@
 enum {
     O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES, O_DISCOVER,
     O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_INTERP, O_JET_TABLE, O_PLAN,
-    O_STATEMENT, O_JET_FLOOR, O_JET_CHECK, O_FUEL, O_MAX_NODES, O_BUDGET, O_ROWS,
+    O_STATEMENT, O_JET_FLOOR, O_JET_CHECK, O_FUEL, O_MAX_NODES, O_AGGRESSIVE_HEAP, O_BUDGET, O_ROWS,
     O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_DEFECT, O_DAG, O_FILE, O_COUNT
 };
 static const char *const option_name[O_COUNT] = {
     "--strategy", "--whnf", "--allow-bird-atoms", "--jets", "--ctors", "--no-jets",
     "--profile", "--templates", "--discover", "--data", "--fix", "--memory", "--no-defer", "--p2",
     "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
-    "--fuel", "--max-nodes", "--budget", "--rows", "--cells", "--trace-frame",
+    "--fuel", "--max-nodes", "--aggressive-heap", "--budget", "--rows", "--cells", "--trace-frame",
     "--passenger", "--records", "--frame-dump", "--defect", "--dag", "a FILE",
 };
-#define OPT(o) (1u << (o))
+#define OPT(o) (1ull << (o))
+_Static_assert(O_COUNT <= 64, "an option is a bit of a uint64_t");
 
 /*  The O_ of an argument parse_args accepted: its name up to any '='. */
 static int option_of(const char *s) {
@@ -62,7 +63,7 @@ typedef struct {
     uint64_t    dump_steps[64];   /* --frame-dump steps */
     size_t      ndump;
     bool        dump_records, dump_halt, dump_restart, dump_census;
-    uint32_t    given;            /* OPT(O_...) of each option given */
+    uint64_t    given;            /* OPT(O_...) of each option given */
 } args;
 
 static bool parse_args(int argc, char **argv, args *g) {
@@ -139,6 +140,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strncmp(s, "--max-nodes=", 12) == 0 && number(s + 12, &v)
                  && v <= AV_MAX_NODES)
             g->o.max_nodes = (uint32_t)v;
+        else if (strcmp(s, "--aggressive-heap") == 0) g->o.aggressive_heap = true;
         else if (strncmp(s, "--budget=", 9) == 0 && number(s + 9, &v))
             g->budget = (size_t)v;
         else if (strncmp(s, "--rows=", 7) == 0 && number(s + 7, &v)
@@ -196,16 +198,16 @@ static bool parse_args(int argc, char **argv, args *g) {
  *  witness reads its budgets and lean-ski's files, and with --statement
  *  only the statement, the jet table and a witness. */
 static bool options_fit(const args *g, const char *cmd) {
-    const uint32_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP) | OPT(O_DEFECT);
-    const uint32_t untraced = OPT(O_TEMPLATES) | OPT(O_DISCOVER) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
+    const uint64_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP) | OPT(O_DEFECT);
+    const uint64_t untraced = OPT(O_TEMPLATES) | OPT(O_DISCOVER) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
                               OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_PROFILE) | OPT(O_JETS) |
                               OPT(O_CTORS) | OPT(O_INTERP) |
                               OPT(O_JET_FLOOR) | OPT(O_JET_CHECK) | OPT(O_BUDGET) |
-                              OPT(O_DAG);
-    const uint32_t reducing = (OPT(O_FILE) - 1) & ~(OPT(O_JET_TABLE) | OPT(O_PLAN) |
+                              OPT(O_DAG) | OPT(O_AGGRESSIVE_HEAP);
+    const uint64_t reducing = (OPT(O_FILE) - 1) & ~(OPT(O_JET_TABLE) | OPT(O_PLAN) |
                               OPT(O_STATEMENT) | OPT(O_ROWS) | OPT(O_CELLS));
     bool reduce = strcmp(cmd, "reduce") == 0, batch = strcmp(cmd, "batch") == 0;
-    uint32_t takes, moded = 0;          /* moded: refused for the mode, not the command */
+    uint64_t takes, moded = 0;          /* moded: refused for the mode, not the command */
     const char *mode = "";
     if (reduce || batch) {
         takes = reducing | (reduce ? OPT(O_FILE) : 0);
@@ -225,7 +227,7 @@ static bool options_fit(const args *g, const char *cmd) {
     } else {
         return true;                    /* run_main answers with the usage */
     }
-    uint32_t idle = g->given & ~takes;
+    uint64_t idle = g->given & ~takes;
     const char *name = NULL;
     if (idle) {
         int o = 0;

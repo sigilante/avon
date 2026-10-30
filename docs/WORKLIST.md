@@ -247,6 +247,13 @@ design lives. Last revised 2026-10-29.
   31 to 49 ns a node; without the collector every port runs 57 to 62 million
   contractions a second (BENCHMARK, "Plain SKI at half rate"). A nursery would copy
   long-lived nodes once; not started.
+- **The collector forwards in from-space; `--aggressive-heap`** (2026-10-30). A
+  collection writes each node's forwarding over it in from-space, an IND whose r is
+  `AV_NONE`, so it reads one array and allocates only its to-space. `--aggressive-heap`
+  (`reduce`, `batch`, `front0`) grows the arena while the live set passes a quarter of
+  it: OrdList's plain SKI collects 27 times, not 59, at 3.5 GB against 2.0. Every count
+  and state is the same (`an_aggressive_heap_collects_less_and_agrees`). Its timings
+  wait for a quiet machine.
 
 - **lean-ski at `b4ba210`** (2026-10-30). `tests/pins.sh` moves past `c4cd2f2` by
   lean-ski #66: `p2chain` calls the jet exactly twice (`runP_calls_two`,

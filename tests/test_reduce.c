@@ -170,6 +170,35 @@ TEST(a_tiny_arena_collects_and_agrees) {
     free(src);
 }
 
+TEST(an_aggressive_heap_collects_less_and_agrees) {
+    char *src = church_power(4, "K");  /* K^65536 X: a growing live set */
+    for (int st = 0; st < 2; st++) {
+        av_arena *half = av_arena_new(64), *quarter = av_arena_new(64);
+        uint32_t th = av_parse(half, src, strlen(src), NULL);
+        uint32_t tq = av_parse(quarter, src, strlen(src), NULL);
+        av_opts o = av_opts_default();
+        o.strategy = st ? AV_SHARE : AV_COPY;
+        av_result rh = av_reduce(half, th, &o);
+        o.aggressive_heap = true;
+        av_result rq = av_reduce(quarter, tq, &o);
+        CHECK_EQ(rh.status, AV_NORMAL);
+        CHECK_EQ(rq.status, AV_NORMAL);
+        CHECK_EQ(rh.steps, rq.steps);
+        CHECK(quarter->collections > 0);
+        CHECK(quarter->collections < half->collections);
+        CHECK(quarter->cap >= half->cap);
+        av_buf bh = { 0 }, bq = { 0 };
+        CHECK(av_print(half, rh.term, 200000, &bh));
+        CHECK(av_print(quarter, rq.term, 200000, &bq));
+        CHECK(strcmp(bh.s, bq.s) == 0);
+        av_buf_free(&bh);
+        av_buf_free(&bq);
+        av_arena_free(half);
+        av_arena_free(quarter);
+    }
+    free(src);
+}
+
 TEST(caller_roots_survive_collection) {
     av_arena *a = av_arena_new(64);
     const char *keep_src = "X (A Z) (K N)";
@@ -322,6 +351,7 @@ TEST_MAIN(
     TEST_CASE(sharing_contracts_a_duplicated_redex_once),
     TEST_CASE(the_interrupt_flag_stops_the_run),
     TEST_CASE(a_tiny_arena_collects_and_agrees),
+    TEST_CASE(an_aggressive_heap_collects_less_and_agrees),
     TEST_CASE(caller_roots_survive_collection),
     TEST_CASE(the_node_cap_reports_size),
     TEST_CASE(a_stopped_state_too_large_to_rebuild_is_size),

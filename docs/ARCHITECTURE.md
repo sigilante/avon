@@ -73,7 +73,7 @@ through the walk before the run goes live.
 | `print.c` | the printed form and the DAG form, written without recursion under a node budget |
 | `wire.c` | terms at rest: the SKIT container, Tromp's bitstring with a third leaf, the atom-name hygiene check |
 | `sha256.c` | SHA-256 (FIPS 180-4), for snapshot checksums and the structural hash |
-| `gc.c` | stop-and-copy collection, Cheney's scan with forwarding in a side array |
+| `gc.c` | stop-and-copy collection, Cheney's scan with forwarding written into from-space |
 | `machine.h` | the state both machines run on, and their shared helpers |
 | `copy.c` | the copy machine: `aviary_kernel.reduce`'s algorithm on nodes |
 | `reduce.c` | the share machine, jet and template dispatch, and the `av_reduce` driver |

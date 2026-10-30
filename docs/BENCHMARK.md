@@ -422,7 +422,8 @@ million nodes, beyond the caches, and copying a node then costs 31 to 49
 ns against about 3 ns for the other ports. Without the collector every
 port steps 57 to 62 million contractions a second.
 
-Avon `8839645` with the collector timed (a scratch build, not committed),
+Avon `8839645` with the collector timed (a scratch build, not committed;
+its forwarding is now Avon's),
 the ports compiled at skijack `935683f` without inlining, `reduce --whnf`
 in share mode, one run each under `/usr/bin/time -l`:
 
@@ -438,14 +439,24 @@ in share mode, one run each under `/usr/bin/time -l`:
   184 to 201 instructions a contraction. OrdList and Taut retire 1.6 to
   1.75 a cycle, the others 2.8.
 - **The cost is in copying.** Cheney's scan reaches a large live set in an
-  order unrelated to memory, about one cache miss a node. Writing the
-  forwarding into from-space, so a copy reads one array and not two, took
-  OrdList's collecting from 14.65 s to 13.56 and Taut's from 13.67 to
-  13.43. Page reclaims (180,663 on OrdList) cost under a second.
-- **A larger arena trades memory for it.** Keeping the live set at most a
-  quarter of the arena, not half, took OrdList to 20.47 s (collecting
-  2.85) at 3.5 GB resident against 2.1, and Taut to 27.21 s (collecting
-  10.48) at 2.0 GB against 1.0.
+  order unrelated to memory, about one cache miss a node. Page reclaims
+  (180,663 on OrdList) cost under a second.
+- **Forwarding is written into from-space** (since 2026-10-30; it was a side
+  array), so a copy reads one array, not two, and a collection allocates
+  only its to-space. In the scratch build above it took OrdList's
+  collecting from 14.65 s to 13.56 and Taut's from 13.67 to 13.43. With
+  templates, data jets and `--fix` the five inlined ports take the same
+  steps and, best of five interleaved against `793337f`, 0.98 to 1.005
+  times the time.
+- **`--aggressive-heap` trades memory for collections:** the arena grows
+  while the live set passes a quarter of it, not half. OrdList collects 27
+  times, not 59, copying 121 million nodes, not 300; Taut 101 times, not
+  237, copying 175 million, not 442. Every step and answer is the same.
+  Peak memory: OrdList 3.5 GB against 2.0, Taut 1.5 GB against 0.8. In the
+  scratch build, on a quiet machine, OrdList took 20.47 s (collecting 2.85)
+  against 32.70, and Taut 27.21 s (collecting 10.48) against 30.77. The
+  built flag's timings wait for a quiet machine: under a load average of 6
+  the same binary's runs spread from 36 to 104 s.
 - **What would remove it** is copying long-lived nodes once: a nursery
   collected alone, its survivors promoted. OrdList copies its live set
   about 14 times over (300 million copies, a largest live set of 21

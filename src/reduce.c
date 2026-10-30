@@ -110,6 +110,7 @@ bool ensure_slow(R *r, size_t k) {
     if (r->o->no_collect || r->o->census)   /* a census keys on node identity */
         return av_reserve(a, (uint32_t)k) && a->used <= r->o->max_nodes;
     /* every active reduction's roots, this one's among them */
+    a->grow_early = r->o->aggressive_heap;
     if (!av_collect(a, (uint32_t)k, NULL, NULL, NULL)) return false;
     return a->used <= r->o->max_nodes;
 }

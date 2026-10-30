@@ -90,7 +90,8 @@ cycles, is retained.
     `av_opts_default`.
     - `--max-nodes` defaults to 2^30 nodes and fuel to unbounded.
     - Each collection allocates a to-space of the full capacity plus a forwarding
-      array, about 2.5 times the arena.
+      array, about 2.5 times the arena. Since 2026-10-30 the forwarding is written
+      into from-space, so about twice.
     - Fix: size to-space by `used`, and choose a smaller default.
 12. **Reservation invariants are `assert`s only.** `reduce.c:582, 722, 725, 1301`,
     `jets.h:147`. Release builds drop them, so a wrong reservation count would be a

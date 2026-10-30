@@ -278,6 +278,11 @@ but sampled at different moments, so the size cap is a resource guard,
 never a conformance target, and conformance runs set it out of reach (the
 harness uses 10⁹ today). The collector grows the arena whenever the live
 set passes half of it, so memory stays within about twice the live set.
+`--aggressive-heap` grows it past a quarter instead: fewer collections for
+up to twice the memory, every count and state the same. A collection writes
+each node's forwarding into from-space, so it allocates only the to-space.
+The witness strategy never collects, so §17's write-once memory is
+untouched.
 
 ### 3.4 Status
 
