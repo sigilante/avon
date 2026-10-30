@@ -34,8 +34,10 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > at `2^17 2^18` and `2^17 2^18 2^14 2^14`. Every hiding table is padded
 > to at least `2^9` rows (#31). The figures in §1 and §9 are the
 > fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
-> `c4cd2f2`: `paper-v9` (`fb65141`) with witnesses for terms with atoms
-> (#64) and two jet calls in one statement (#65).
+> `b4ba210`: `paper-v9` (`fb65141`) with Fiat–Shamir for the circuits
+> with jets and with Poseidon2 (#63), witnesses for terms with atoms
+> (#64), two jet calls in one statement (#65), and the theorem that it
+> makes exactly two (#66).
 >
 > **What "sound" and "zero knowledge" mean here (audit, 2026-10-29,
 > against lean-ski `fb65141`).** The soundness theorems
@@ -47,10 +49,12 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > (`compJ_transcript`, `compP_transcript`) is honest-verifier, over
 > uniform challenges, with the PCS's hiding a hypothesis (`PCSCloseN`;
 > `compJ_transcriptG_fri` and `compP_transcriptG_fri` simulate FRI's view
-> instead). No theorem at the pin carries it through Fiat–Shamir for the
-> circuits with jets or Poseidon2; lean-ski has that for its Sudoku,
-> hidden-term and composed circuits only. The heights below are
-> corrected to the pin: each free height in `[9, 20]` (`logOK`), the
+> instead). At `fb65141` no theorem carried it through Fiat–Shamir for
+> the circuits with jets or Poseidon2. The pin does: lean-ski #63 proves
+> `compJ_fs_open4` and `compP_fs_open4` with their `A`, `ROMMC` and
+> `ROMMC_fri` forms, and #66 lets the Poseidon2 ones take any public call
+> count. Neither bound has a satisfiability witness yet. The heights below
+> are corrected to the pin: each free height in `[9, 20]` (`logOK`), the
 > witness table `2^9` rows, padding to at least `2^9` (`padCopiesMin`).
 
 ## 1. Why
@@ -576,8 +580,11 @@ cells, each a pointer to the `K` slot or the `K I` slot, as a call pushes
 them. Avon writes its table byte for byte ski-air's: 1,317 rows, 2 calls,
 9,985 memory cells, proved in 1.44–1.48 s and verified in 1.89 s
 (`Circuit.p2chainExport_sound`: an accepted proof's memory holds such
-values). lean-ski has not yet proved that its runs call the jet exactly
-twice; ski-air counts the calls and refuses any other number.
+values). Its runs call the jet exactly twice: every accepted proof has
+two jet rows (`Circuit.p2chain_twice`) and an honest run counts two
+(`Circuit.runP_calls_two`, lean-ski #66). ski-air refuses a run with
+any other count, so the count published in the level table is the
+statement's.
 
 ## 9. Milestones
 

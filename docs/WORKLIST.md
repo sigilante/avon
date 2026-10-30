@@ -234,6 +234,13 @@ design lives. Last revised 2026-10-29.
   re-recorded. DESIGN §6.7 adds the rerun and §6.8's jetstat table takes the new
   workloads: all three dictionaries absorb 40.0% of SKIlark's, up from 37.5%.
 
+- **lean-ski at `b4ba210`** (2026-10-30). `tests/pins.sh` moves by lean-ski #66:
+  `p2chain` calls the Poseidon2 jet exactly twice (`Circuit.p2chain_twice`,
+  `Circuit.runP_calls_two`), and the Poseidon2 circuit's Fiat–Shamir theorems take any
+  public call count. ski-air changes only in comments. ZK-JETS and DESIGN now record
+  #63's Fiat–Shamir theorems for the circuits with jets and with Poseidon2, which the
+  previous bump left listed as open.
+
 - **lean-ski at `c4cd2f2`** (2026-10-30). `tests/pins.sh` moves past `paper-v9` by
   lean-ski #64 (witnesses for terms with atoms) and #65 (`p2chain`, two jet calls).
   `witness-check` now runs five open terms through `aircheck`, and `p2-witness-check`
@@ -528,9 +535,11 @@ together or `word` split.
 - Witness rows for the numeral and constructor jets and the one-step Y. The Y row's
   `Tr` simulation is proved with Y a jet at the compiler's recursion sites
   (`lean/Fix.lean`, §6.11). Poseidon2 has them (`ZK-JETS.md` §8).
-- Fiat–Shamir's zero knowledge for the circuits with jets and with Poseidon2: lean-ski
-  proves it in the programmable random-oracle model for its Sudoku, hidden-term and
-  composed circuits (`*_fs_open4`), not yet for these two.
+- Satisfiability witnesses for the Fiat–Shamir bounds of the circuits with jets and
+  with Poseidon2 (`compJ_fs_open4ROMMC_fri`, `compP_fs_open4ROMMC_fri`, lean-ski #63
+  and #66), as `comp_fs_open4ROMMC_fri_sat` is for the composed bound.
+- The completeness of `p2chain`'s verifier, as lean-ski's `P2Complete` proves it for
+  `p2pre` and `p2commit`.
 - Assumed: Fiat–Shamir soundness past the counting step (`logup_fs`), the hiding of
   every commitment but the first, and ChaCha20's pseudorandomness (`ZK-JETS.md` §7).
 
