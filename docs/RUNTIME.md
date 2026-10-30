@@ -133,6 +133,7 @@ malformed number or a missing argument prints the usage alone.
 | `--whnf` | stop at weak head normal form; otherwise reduce to normal form |
 | `--fuel=N` | at most N contractions; a jet fire or template instantiation is charged as §6.5 and §6.9 say |
 | `--max-nodes=N` | live nodes allowed after a collection before `SIZE`; by default physical memory over 64 bytes (between 2^20 and 2^30), so that a run's collections stay within the host's memory |
+| `--aggressive-heap` | grow the arena while the live set passes a quarter of it, not half: fewer collections for up to twice the memory; every count and state is the same. On plain SKI it halves OrdList's collections at 3.5 GB against 2.0 (`BENCHMARK.md`, "Plain SKI at half rate"). `reduce`, `batch` and `front0`; not with `--trace-frame`, which never collects |
 | `--budget=N` | nodes read or printed (default 1,000,000) |
 | `--dag` | print the term reached in the DAG form, sharing kept |
 | `--allow-bird-atoms` | accept atoms named like aviary birds |
@@ -301,8 +302,9 @@ PYTHONPATH=. python3 -m skijack.selfhost.run0 --avon ~/avon/build/avon --profile
 
 `front0` also takes `--templates=DIR`, `--discover`, `--data`, `--fix`, `--memory`,
 `--no-defer`, `--profile=NAMES`, `--jets=DICT`, `--ctors[=N]`,
-`--jet-stats[=N]`, `--names=FILE`, `--fuel=N`, `--max-nodes=N` and
-`--emit=OUT`. `--memory` and `--no-defer` mean what they mean to `reduce`.
+`--jet-stats[=N]`, `--names=FILE`, `--fuel=N`, `--max-nodes=N`,
+`--aggressive-heap` and `--emit=OUT`. `--memory`, `--no-defer` and
+`--aggressive-heap` mean what they mean to `reduce`.
 - `--emit=OUT` writes the templates the front end itself gives, as front1's
   `ROk outs tpls` carries them, into `OUT/templates.tsv` and
   `OUT/template_terms.tsv`, which `--templates=OUT` reads, each key and each

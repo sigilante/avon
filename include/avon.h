@@ -97,6 +97,9 @@ typedef struct {
     uint32_t   n_roots, root_cap;
 
     uint64_t   collections;
+    bool       grow_early;  /* a collection keeps the live set at most a
+                               quarter of the arena, not half: fewer
+                               collections for more memory           */
     bool       allow_bird_atoms;   /* off unless asked for */
 
     struct av_jet *jets;        /* the dashboard: its terms are roots */
@@ -354,6 +357,10 @@ typedef struct {
     uint64_t    max_steps;      /* fuel, checked before each attempt    */
     uint32_t    max_nodes;      /* live nodes after a collection; by default
                                    av_default_max_nodes() */
+    bool        aggressive_heap;    /* grow the arena while the live set
+                                   passes a quarter of it, not half: fewer
+                                   collections for more memory; every
+                                   count and state is the same           */
     volatile sig_atomic_t *interrupt;   /* polled with fuel; may be NULL */
     bool        no_collect;     /* grow instead of collecting, so every
                                    index the caller holds stays valid */

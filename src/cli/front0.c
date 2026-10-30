@@ -5,7 +5,7 @@
 
 #include "cli.h"
 
-/*  avon front0 [--profile=NAMES] [--fuel=N] [--max-nodes=N] DIR SOURCE:
+/*  avon front0 [--profile=NAMES] [--fuel=N] [--max-nodes=N] [--aggressive-heap] DIR SOURCE:
  *  the SKIjack-0 front end on SOURCE, DIR holding its term and the
  *  input's constructors as SKIT files; a line `name TAB hash` per name, or
  *  `RErr`, and the contractions on stderr. */
@@ -37,6 +37,7 @@ int front0_main(int argc, char **argv) {
         else if (strncmp(s, "--fuel=", 7) == 0 && number(s + 7, &v)) o.max_steps = v;
         else if (strncmp(s, "--max-nodes=", 12) == 0 && number(s + 12, &v) && v <= AV_MAX_NODES)
             o.max_nodes = (uint32_t)v;
+        else if (strcmp(s, "--aggressive-heap") == 0) o.aggressive_heap = true;
         else if (s[0] != '-' && !dir) dir = s;
         else if (s[0] != '-' && !source) source = s;
         else return usage();
