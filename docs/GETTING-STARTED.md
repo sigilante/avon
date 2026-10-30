@@ -160,11 +160,11 @@ is a small program with its templates; it reduces to the atom `Ff`:
 
 ```sh
 D=tests/data/nats
-build/avon reduce --whnf $D/main.txt                                  # WHNF 58140
-build/avon reduce --whnf --templates=$D $D/main.txt                   # WHNF 7789
+build/avon reduce --whnf $D/main.txt                                  # WHNF 58360
+build/avon reduce --whnf --templates=$D $D/main.txt                   # WHNF 7840
 build/avon reduce --whnf --templates=$D --data $D/main.txt            # WHNF 5986
 build/avon reduce --whnf --templates=$D --data --fix $D/main.txt      # WHNF 4201
-build/avon reduce --whnf --discover $D/main.txt                       # WHNF 8170
+build/avon reduce --whnf --discover $D/main.txt                       # WHNF 8205
 ```
 
 The templates come from the compiler, which knew the program's functions.

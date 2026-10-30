@@ -213,7 +213,7 @@ before it uses a template, and the fire that follows.
 - **The replay.** `Replay.replay` runs `av_templates_load`'s loop with the model of
   the check, the file's digests (SHA-256, written in Lean) and the duplicate check.
   `make templates-lean-check` requires its counts, accepted, refused and skipped, to
-  be Avon's on the five sets the tests ship (137 accepted, 56 skipped) and on eight
+  be Avon's on the five sets the tests ship (144 accepted, 78 skipped) and on eight
   copies, each changed to reach one refusal path. It compares totals, not template
   by template, and runs neither `compile` nor `instC`, which are read against
   `tmpl_instance` by inspection. No copy reaches a digest collision

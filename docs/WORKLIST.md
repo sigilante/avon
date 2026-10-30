@@ -234,6 +234,20 @@ design lives. Last revised 2026-10-29.
   re-recorded. DESIGN §6.7 adds the rerun and §6.8's jetstat table takes the new
   workloads: all three dictionaries absorb 40.0% of SKIlark's, up from 37.5%.
 
+- **Inlining by default in Avon's exports** (2026-10-30). The Reduceron ports' `run.py`
+  and the exporters of `tests/fixtures/`, `tests/data/`, `tests/kernel/` and
+  `tests/drivers/` compile with skijack's inlining pass; `--no-inline` writes what they
+  wrote before. The ports' counts with data jets are BENCHMARK "Inlining"'s inlined ones,
+  1.12 times faster by geometric mean. Eighteen fixtures regenerate; `test_wire`'s corpus
+  is 283 terms (285), `templates-lean-check`'s sets 144 accepted and 78 skipped (137 and
+  56), and five smoke rows are re-recorded. `tests/selfhost/` and `tests/zkwords/` keep
+  the pass off. skijack's own default, front1 and lean-ski's statements are unchanged.
+- **Plain SKI at half rate on OrdList and Taut: the collector** (2026-10-30). They
+  collect for 44 to 45% of their time, copying live sets of 21 and 11 million nodes at
+  31 to 49 ns a node; without the collector every port runs 57 to 62 million
+  contractions a second (BENCHMARK, "Plain SKI at half rate"). A nursery would copy
+  long-lived nodes once; not started.
+
 - **lean-ski at `c4cd2f2`** (2026-10-30). `tests/pins.sh` moves past `paper-v9` by
   lean-ski #64 (witnesses for terms with atoms) and #65 (`p2chain`, two jet calls).
   `witness-check` now runs five open terms through `aircheck`, and `p2-witness-check`

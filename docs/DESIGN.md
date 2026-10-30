@@ -2693,8 +2693,8 @@ allocations in the reducer's hot paths (now asserted in the debug build).
 (§4.3), and snapshots:
 
 - `print(parse(s)) = s` and `cue(jam(t)) = t`, with `jam` canonical, on all
-  285 distinct corpus terms (18 programs; 4 fail skijack's Stage A) and on
-  459 reduced states of them, each term run 200 steps in both strategies
+  283 distinct corpus terms (18 programs, compiled with skijack's inlining;
+  4 fail skijack's Stage A) and on 461 reduced states of them, each term run 200 steps in both strategies
   and kept when its tree prints within 200,000 nodes (`tests/test_wire.c`,
   `tests/fixtures/corpus.tsv`).
 - The `cue` fuzzer: 2,000,000 hostile inputs, mutated containers and noise
