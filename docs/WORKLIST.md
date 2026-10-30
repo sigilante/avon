@@ -255,6 +255,14 @@ design lives. Last revised 2026-10-29.
   and state is the same (`an_aggressive_heap_collects_less_and_agrees`). Its timings
   wait for a quiet machine.
 
+- **lean-ski at `ab92b47`** (2026-10-31). `tests/pins.sh` moves past `b4ba210` by
+  lean-ski #67 (`compPChain_complete_log`: the Poseidon2 circuit is complete for
+  `p2chain`) and #69 (`compJ_fs_open4ROMMC_fri_sat`, `compP_fs_open4ROMMC_fri_sat`:
+  every hypothesis of the jet and Poseidon2 Fiat–Shamir bounds met at once, with salt
+  commitments that hide and bind nothing). Lean proofs and documentation only; ski-air
+  and every table format are unchanged. The worklist's open Fiat–Shamir item for these
+  two circuits is closed: lean-ski#63 proved it.
+
 - **lean-ski at `b4ba210`** (2026-10-30). `tests/pins.sh` moves past `c4cd2f2` by
   lean-ski #66: `p2chain` calls the jet exactly twice (`runP_calls_two`,
   `p2chain_twice`), and the Poseidon2 circuit's Fiat–Shamir theorems take the call
@@ -557,9 +565,6 @@ together or `word` split.
 - Witness rows for the numeral and constructor jets and the one-step Y. The Y row's
   `Tr` simulation is proved with Y a jet at the compiler's recursion sites
   (`lean/Fix.lean`, §6.11). Poseidon2 has them (`ZK-JETS.md` §8).
-- Fiat–Shamir's zero knowledge for the circuits with jets and with Poseidon2: lean-ski
-  proves it in the programmable random-oracle model for its Sudoku, hidden-term and
-  composed circuits (`*_fs_open4`), not yet for these two.
 - Assumed: Fiat–Shamir soundness past the counting step (`logup_fs`), the hiding of
   every commitment but the first, and ChaCha20's pseudorandomness (`ZK-JETS.md` §7).
 

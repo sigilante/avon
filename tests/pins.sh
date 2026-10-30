@@ -10,7 +10,7 @@
 SKIJACK_PIN=935683f5757fe0184a46db176c1306f4c083a213
 SKILARK_PIN=1025e3646a1fefd5b5cca7f38a3694f8e28feeb6     # sigilante/SKIlark, public
 AVIARY_PIN=ec4b418c527408c3a513bee2735e6b0f862accda      # sigilante/aviary, public
-LEAN_SKI_PIN=b4ba210b14e5266c15ab2757aeaac1411a452445    # sigilante/lean-ski, public: #66 (p2chain calls twice)
+LEAN_SKI_PIN=ab92b472834c59333108422f5b262ff8c4e2c9c6    # sigilante/lean-ski, public: #69 (jet and Poseidon2 FS bounds met)
 STARLINGS_PIN=0b2779ed732ed37d1eea4751ed897015e12d4cdc   # sigilante/starlings, private
 
 # not_docs: the file names on stdin that are not documentation.

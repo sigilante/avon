@@ -34,10 +34,12 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > at `2^17 2^18` and `2^17 2^18 2^14 2^14`. Every hiding table is padded
 > to at least `2^9` rows (#31). The figures in §1 and §9 are the
 > fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
-> `b4ba210`: `paper-v9` (`fb65141`) with `compj-verify`'s meaning check
+> `ab92b47`: `paper-v9` (`fb65141`) with `compj-verify`'s meaning check
 > (#62), Fiat–Shamir for the circuits with jets and Poseidon2 (#63),
 > witnesses for terms with atoms (#64), two jet calls in one statement
-> (#65) and the proof that it calls the jet exactly twice (#66).
+> (#65), the proof that it calls the jet exactly twice (#66), the
+> circuit's completeness for it (#67) and satisfiability witnesses for
+> the jet and Poseidon2 Fiat–Shamir bounds (#69).
 >
 > **What "sound" and "zero knowledge" mean here (audit, 2026-10-29,
 > against lean-ski `fb65141`).** The soundness theorems
@@ -59,8 +61,15 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > on the provider tables (`hprov24`, `2^24` rows) and, for Poseidon2, the
 > statement's number of jet calls per run (`hcalls`): one, met by `p2pre`
 > and the hand-off, or two, met by `p2chain` (`runP_calls_two`,
-> lean-ski#66). Neither circuit's bound has a satisfiability
-> witness yet. lean-ski#62 makes `compj-verify` check
+> lean-ski#66). lean-ski#69 meets every hypothesis of both bounds at
+> once (`compJ_fs_open4ROMMC_fri_sat`, `compP_fs_open4ROMMC_fri_sat`, the
+> latter at any call count), as the composed circuit's witness does: with
+> jets the tallest group has `bl ≤ 24` and the Merkle term is below
+> `NSl / 2^34`, with Poseidon2 `bl ≤ 20`. Its salt commitments hide and
+> bind nothing and one salt stands in for Plonky3's per-matrix salts, so
+> the witnesses show the hypotheses consistent, not that Plonky3 meets
+> them. lean-ski#67 proves the circuit complete for `p2chain`
+> (`compPChain_complete_log`). lean-ski#62 makes `compj-verify` check
 > a statement's meaning on the bytes it verifies (`… split K X` or
 > `… csplit K M SEED X C`); the four-argument form this repository's
 > tests use checks only that the statement is one with jets. The heights below are
