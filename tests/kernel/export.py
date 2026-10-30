@@ -1,6 +1,6 @@
 """Kernel fixtures for tests/test_kernel.c.
 
-    PYTHONPATH=~/skijack/python python3 tests/kernel/export.py
+    PYTHONPATH=~/skijack/python python3 tests/kernel/export.py [--no-inline]
 
 Runs skijack's reference loop over two kernels and writes what it saw, so
 tests/test_kernel.c can do the same with Avon and compare:
@@ -40,6 +40,7 @@ from skijack.probe import Prober
 from skijack.run import peel, run_level0
 
 HERE = pathlib.Path(__file__).resolve().parent
+INLINE = "--no-inline" not in sys.argv[1:]   # skijack's inlining pass; --no-inline turns it off
 POKE, PEEK, LOAD, STATE = 4, 10, 11, 3
 MAX = 200_000
 
@@ -85,7 +86,7 @@ def main() -> int:
 
     # the events kernel, as skijack's test runs it
     src = (corpus.DIR / "kernel-events.ascii.ski").read_text()
-    e = skijack.compile(src, lexicon="ascii")
+    e = skijack.compile(src, lexicon="ascii", inline=INLINE)
     L = Loop(e, src)
     k0 = e.terms["kernel"]
     poke5 = App(e.terms["Poke"], L.pr.nat(5))
@@ -106,7 +107,7 @@ def main() -> int:
 
     # the install kernel
     isrc = (HERE / "install.ascii.ski").read_text()
-    ie = skijack.compile(isrc, lexicon="ascii", check=False)
+    ie = skijack.compile(isrc, lexicon="ascii", check=False, inline=INLINE)
     IL = Loop(ie, isrc)
     j0 = ie.terms["kernel"]
     run2 = App(ie.terms["Run"], ie.terms["qdouble"])

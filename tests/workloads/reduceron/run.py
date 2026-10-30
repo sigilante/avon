@@ -8,8 +8,8 @@ share mode four ways---as SKI, with ``--templates``, with ``--templates
 --data`` (data jets), and with ``--templates --data --fix`` (Y unfolded in
 one step)---best of ``--reps`` user CPU, interleaved.  Every count is its
 own column: contractions and the instantiations, dispatches, numeral
-operations and unfoldings among them.  With
-``--inline`` the ports are compiled with skijack's inlining pass.  Every port's
+operations and unfoldings among them.  The ports compile with skijack's
+inlining pass; ``--no-inline`` compiles them without it.  Every port's
 main is a check that returns True, the second constructor of ``bool``, so
 the expected answer is ``Ff``.
 """
@@ -64,8 +64,8 @@ def main() -> int:
     ap.add_argument("--skijack", type=pathlib.Path, default=pathlib.Path.home() / "skijack")
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--only", default=",".join(PROGS))
-    ap.add_argument("--inline", action="store_true",
-                    help="compile with skijack's inlining pass (skijack RUNTIME-DESIGN.md §10)")
+    ap.add_argument("--no-inline", dest="inline", action="store_false",
+                    help="compile without skijack's inlining pass (skijack RUNTIME-DESIGN.md §10)")
     a = ap.parse_args()
     progs = a.only.split(",")
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="reduceron-"))

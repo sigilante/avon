@@ -1,6 +1,6 @@
 """The entropy kernel's fixtures.
 
-    PYTHONPATH=~/skijack/python python3 tests/kernel/entropy_export.py
+    PYTHONPATH=~/skijack/python python3 tests/kernel/entropy_export.py [--no-inline]
 
 Compiles entropy.ascii.ski and writes, as SKIT, its pill (`K kernel`),
 the events [1 5] (ask once), [2 7] (ask twice), [3 0] (turn greedy), [0
@@ -21,11 +21,12 @@ from skijack.export import jam
 from skijack.probe import Prober
 
 HERE = pathlib.Path(__file__).resolve().parent
+INLINE = "--no-inline" not in sys.argv[1:]   # skijack's inlining pass; --no-inline turns it off
 
 
 def main() -> int:
     src = (HERE / "entropy.ascii.ski").read_text()
-    e = skijack.compile(src, lexicon="ascii", check=False)
+    e = skijack.compile(src, lexicon="ascii", check=False, inline=INLINE)
     pr = Prober(e)
     pair = e.terms["pair"]
 

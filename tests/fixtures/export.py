@@ -14,9 +14,10 @@ not written: their tree unfoldings run past 85 million characters.
 Also writes corpus.tsv: every distinct term skijack compiles from its corpus,
 one per line as "program<TAB>name<TAB>printed term", first name wins when
 several name one term.  Programs that fail Stage A are skipped and
-listed.
+listed.  The corpus compiles with skijack's inlining pass unless
+--no-inline is given.
 
-    python3 tests/fixtures/export.py
+    python3 tests/fixtures/export.py [--no-inline]
 
 Requires aviary-kernel, tower_harness.py from artifact-metacircular-ski
 (SKIJACK_ARTIFACT_DIR, default ~/skijack/python/tests/artifact), and the
@@ -62,7 +63,8 @@ def main():
     stems = sorted({p.name.split(".")[0] for p in corpus.DIR.glob("*.ascii.ski")})
     for stem in stems:
         try:
-            e = skijack.compile(corpus.read(stem, "ascii"), lexicon="ascii")
+            e = skijack.compile(corpus.read(stem, "ascii"), lexicon="ascii",
+                                inline="--no-inline" not in sys.argv[1:])
         except Exception as ex:                     # Stage A refusals
             skipped.append(f"{stem} ({type(ex).__name__})")
             continue

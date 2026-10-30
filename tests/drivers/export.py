@@ -1,6 +1,6 @@
 """The drivers' fixtures: kernels, worlds, and what the reference host does.
 
-    PYTHONPATH=~/skijack/python python3 tests/drivers/export.py
+    PYTHONPATH=~/skijack/python python3 tests/drivers/export.py [--no-inline]
 
 Compiles each NAME.ascii.ski here with checking off (a card list holds
 cells of different types, which skijack's Stage B has no type for) and
@@ -31,6 +31,7 @@ from skijack.drivers import World, run_kernel
 from skijack.export import jam
 
 HERE = pathlib.Path(__file__).resolve().parent
+INLINE = "--no-inline" not in sys.argv[1:]   # skijack's inlining pass; --no-inline turns it off
 
 #: case, kernel, strategies, world
 CASES = [
@@ -56,7 +57,7 @@ def main() -> int:
     kernels = {}
     for src in sorted(HERE.glob("*.ascii.ski")):
         name = src.name.split(".")[0]
-        e = skijack.compile(src.read_text(), lexicon="ascii", check=False)
+        e = skijack.compile(src.read_text(), lexicon="ascii", check=False, inline=INLINE)
         kernels[name] = e.terms["kernel"]
         (HERE / f"{name}.skit").write_bytes(jam(kernels[name]))
     lines = []
