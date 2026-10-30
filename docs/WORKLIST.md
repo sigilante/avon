@@ -234,6 +234,14 @@ design lives. Last revised 2026-10-29.
   re-recorded. DESIGN §6.7 adds the rerun and §6.8's jetstat table takes the new
   workloads: all three dictionaries absorb 40.0% of SKIlark's, up from 37.5%.
 
+- **lean-ski at `b4ba210`** (2026-10-30). `tests/pins.sh` moves past `c4cd2f2` by
+  lean-ski #66: `p2chain` calls the jet exactly twice (`runP_calls_two`,
+  `p2chain_twice`), and the Poseidon2 circuit's Fiat–Shamir theorems take the call
+  count, so they hold for it. Lean proofs and documentation only; ski-air is unchanged
+  but for a comment. `witness-check` (43 witnesses, 5 open terms; its corpus proofs need
+  more than 4 GB), `jet-witness-check`, `probe-witness-check`, `zk-jet-witness-check`,
+  `p2-witness-check` and the five `*-lean-check`s pass at the pin.
+
 - **lean-ski at `c4cd2f2`** (2026-10-30). `tests/pins.sh` moves past `paper-v9` by
   lean-ski #64 (witnesses for terms with atoms) and #65 (`p2chain`, two jet calls).
   `witness-check` now runs five open terms through `aircheck`, and `p2-witness-check`

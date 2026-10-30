@@ -34,8 +34,10 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > at `2^17 2^18` and `2^17 2^18 2^14 2^14`. Every hiding table is padded
 > to at least `2^9` rows (#31). The figures in §1 and §9 are the
 > fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
-> `c4cd2f2`: `paper-v9` (`fb65141`) with witnesses for terms with atoms
-> (#64) and two jet calls in one statement (#65).
+> `b4ba210`: `paper-v9` (`fb65141`) with `compj-verify`'s meaning check
+> (#62), Fiat–Shamir for the circuits with jets and Poseidon2 (#63),
+> witnesses for terms with atoms (#64), two jet calls in one statement
+> (#65) and the proof that it calls the jet exactly twice (#66).
 >
 > **What "sound" and "zero knowledge" mean here (audit, 2026-10-29,
 > against lean-ski `fb65141`).** The soundness theorems
@@ -47,9 +49,21 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > (`compJ_transcript`, `compP_transcript`) is honest-verifier, over
 > uniform challenges, with the PCS's hiding a hypothesis (`PCSCloseN`;
 > `compJ_transcriptG_fri` and `compP_transcriptG_fri` simulate FRI's view
-> instead). No theorem at the pin carries it through Fiat–Shamir for the
-> circuits with jets or Poseidon2; lean-ski has that for its Sudoku,
-> hidden-term and composed circuits only. The heights below are
+> instead). At the pin, lean-ski#63 carries it through Fiat–Shamir for the
+> circuits with jets and Poseidon2, by the composed circuit's route: `compJ_fs_open4` and `compJ_fs_open4ROMMC_fri`
+> over a concrete hiding PCS (`compJ_pcs`, so no `PCSCloseN` hypothesis),
+> and `compP_fs_open4` and `compP_fs_open4ROMMC_fri`, whose P2OUT and
+> Poseidon2 tables have degree 3 and eight quotient chunks
+> (`tabsHonest_bbD`). Their assumptions are the composed circuit's, the
+> hiding of every commitment but the first included, plus a size bound
+> on the provider tables (`hprov24`, `2^24` rows) and, for Poseidon2, the
+> statement's number of jet calls per run (`hcalls`): one, met by `p2pre`
+> and the hand-off, or two, met by `p2chain` (`runP_calls_two`,
+> lean-ski#66). Neither circuit's bound has a satisfiability
+> witness yet. lean-ski#62 makes `compj-verify` check
+> a statement's meaning on the bytes it verifies (`… split K X` or
+> `… csplit K M SEED X C`); the four-argument form this repository's
+> tests use checks only that the statement is one with jets. The heights below are
 > corrected to the pin: each free height in `[9, 20]` (`logOK`), the
 > witness table `2^9` rows, padding to at least `2^9` (`padCopiesMin`).
 
@@ -576,8 +590,12 @@ cells, each a pointer to the `K` slot or the `K I` slot, as a call pushes
 them. Avon writes its table byte for byte ski-air's: 1,317 rows, 2 calls,
 9,985 memory cells, proved in 1.44–1.48 s and verified in 1.89 s
 (`Circuit.p2chainExport_sound`: an accepted proof's memory holds such
-values). lean-ski has not yet proved that its runs call the jet exactly
-twice; ski-air counts the calls and refuses any other number.
+values). ski-air counts the calls and refuses any other number.
+lean-ski#66, at the pin, proves the count: an honest run
+calls the jet exactly twice (`Circuit.runP_calls_two`), every accepted
+proof has exactly two jet rows (`Circuit.p2chain_twice`, the analog of
+`p2pre_once`), and the Poseidon2 circuit's Fiat–Shamir theorems hold at
+two calls. Its verifier's completeness is still open.
 
 ## 9. Milestones
 
@@ -653,9 +671,10 @@ twice; ski-air counts the calls and refuses any other number.
    meet the hypotheses. The statement carries POP's and INSTW's budgets
    (`log R M Lp Li`), and `compj-prove`, `-verify` and `-tamper` read them
    from it. The model is honest-verifier zero knowledge over uniform
-   challenges, with the simulator fixed by the statement; Fiat–Shamir is
-   the random-oracle step, and `PCSCloseN` carries the committed traces'
-   hiding.
+   challenges, with the simulator fixed by the statement; `PCSCloseN`
+   carries the committed traces' hiding. lean-ski#63, at the pin,
+   discharges it (`compJ_pcs`) and carries the transcript through
+   Fiat–Shamir (`compJ_fs_open4ROMMC_fri`).
 8. **Avon.** *Done, 2026-09-30.* `avon witness --statement=PUBLIC
    --jet-table=JETS WITNESS` (`av_cstmt_read`, `av_witness_run_composed`,
    `av_composed_table`): the statement's heap with the witness's bits and
