@@ -234,6 +234,11 @@ design lives. Last revised 2026-10-29.
   re-recorded. DESIGN §6.7 adds the rerun and §6.8's jetstat table takes the new
   workloads: all three dictionaries absorb 40.0% of SKIlark's, up from 37.5%.
 
+- **lean-ski at `c4cd2f2`** (2026-10-30). `tests/pins.sh` moves past `paper-v9` by
+  lean-ski #64 (witnesses for terms with atoms) and #65 (`p2chain`, two jet calls).
+  `witness-check` now runs five open terms through `aircheck`, and `p2-witness-check`
+  runs `p2chain`.
+
 - **lean-ski at `paper-v9`, now public** (2026-10-23). `tests/pins.sh` moves to `fb65141`:
   lean-ski's public release, past `paper-v8` by its satisfiability witnesses for the
   hidden-term and composed Merkle-committed bounds and its CI. The five checks the pin
@@ -392,8 +397,9 @@ Collected 2026-10-04: proof sizes and verify times (`ZK-JETS.md` §1), Poseidon2
 all three vectors, and the interpreter jet's wall clock (`BENCHMARK.md`, "The
 interpreter jet's wall clock"). Measuring the last found `av_equal` allocating on
 every call; keeping its first stack and set on the C stack took T2 with the jet
-from 0.95 ms to 0.41 ms. Open, with lean-ski:
-- a statement with several jet calls;
+from 0.95 ms to 0.41 ms. A statement with two jet calls, lean-ski's `p2chain h`,
+measures 1,317 rows, proved in 1.44–1.48 s and verified in 1.89 s (lean-ski #65; Avon's
+table byte for byte ski-air's). Open, with lean-ski:
 - ski-air timing the proof's check apart from Lean's statement checks, since jets
   make verification slower (`split8` 23.0 s against 12.6) and the split is not
   measured.
@@ -517,7 +523,7 @@ together or `word` split.
 
 ### 5. The proof gaps (`DESIGN.md` §11.1, "Open")
 
-- Witnesses for terms with atoms (§17.3).
+- Witnesses for terms with atoms (§17.3): plain witnesses built and checked at the pin (lean-ski #64, Avon #109); jetted and probed ones still refuse atoms.
 - Scry beyond a resume loop's final run.
 - Witness rows for the numeral and constructor jets and the one-step Y. The Y row's
   `Tr` simulation is proved with Y a jet at the compiler's recursion sites

@@ -1,7 +1,8 @@
 /**  test_witness.c
  *
  *  The witness strategy: its tables for I K and S K K S are lean-ski's,
- *  byte for byte; atoms and over-budget runs are refused; and on random
+ *  byte for byte; an open term's atoms are numbered as Mach.obuild numbers
+ *  them; over-budget runs are refused; and on random
  *  closed terms it halts with copy mode's count on the term copy mode
  *  reaches, read back from its heap as Mach.decode does.
  *  tests/witness_check.sh checks the corpus against lean-ski itself.
@@ -60,17 +61,37 @@ TEST(s_k_k_s_writes_three_cells_per_s) {
     av_arena_free(a);
 }
 
-TEST(atoms_and_budgets_are_refused) {
+/*  An open term: its atoms are lean-ski's variables, numbered by first
+ *  occurrence (Mach.obuild), and the table's term line writes atom i as
+ *  `Xi`, as lean-ski's aircheck and ski-air read it. */
+TEST(atoms_are_open_term_variables) {
     av_arena *a = av_arena_new(0);
-    uint32_t t = av_parse(a, "I X", 3, NULL);
+    uint32_t t = av_parse(a, "S X Z X", 7, NULL);
     av_witness w;
     const char *err = NULL;
-    CHECK_EQ(av_witness_run(a, t, 100, 100, &w, &err), AV_SIZE);
-    CHECK(err && strstr(err, "atoms"));
+    CHECK_EQ(av_witness_run(a, t, 100, 100, &w, &err), AV_WHNF);
+    CHECK_EQ(w.natoms, 2);
+    CHECK(strcmp(av_leaf_name(a, w.atoms[0]), "X") == 0);
+    CHECK(strcmp(av_leaf_name(a, w.atoms[1]), "Z") == 0);
+    /* S, X 0, A 0 1, X 1, A 2 3, X 0, A 4 5, N */
+    CHECK(w.mem[1].tag == AV_CELL_ATOM && w.mem[1].a == 0);
+    CHECK(w.mem[3].tag == AV_CELL_ATOM && w.mem[3].a == 1);
+    CHECK(w.mem[5].tag == AV_CELL_ATOM && w.mem[5].a == 0);
+    CHECK_EQ(w.loaded, 8);
+    CHECK_EQ(w.contractions, 1);                  /* S X Z X -> X X (Z X), an atom at the head */
+    av_buf b = { 0 };
+    CHECK(av_witness_table(a, t, &w, 4, &b));
+    CHECK(strncmp(b.s, "```SX0X1X0\n", 11) == 0);
+    av_buf_free(&b);
     av_witness_free(&w);
+    av_arena_free(a);
+}
 
-    t = av_parse(a, "S I I (S I I)", 13, NULL);    /* diverges */
-    err = NULL;
+TEST(budgets_are_refused) {
+    av_arena *a = av_arena_new(0);
+    av_witness w;
+    const char *err = NULL;
+    uint32_t t = av_parse(a, "S I I (S I I)", 13, NULL);    /* diverges */
     CHECK_EQ(av_witness_run(a, t, 1000, 1u << 20, &w, &err), AV_SIZE);
     CHECK(err && strstr(err, "row budget"));
     CHECK_EQ(w.nrows, 1000);
@@ -461,7 +482,8 @@ TEST(a_malformed_statement_is_refused) {
 TEST_MAIN(
     TEST_CASE(i_k_is_lean_skis_table),
     TEST_CASE(s_k_k_s_writes_three_cells_per_s),
-    TEST_CASE(atoms_and_budgets_are_refused),
+    TEST_CASE(atoms_are_open_term_variables),
+    TEST_CASE(budgets_are_refused),
     TEST_CASE(a_table_needs_a_run),
     TEST_CASE(prefix_form_round_trips),
     TEST_CASE(the_witness_halts_where_copy_mode_does),

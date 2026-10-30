@@ -760,6 +760,12 @@ int term_main(int argc, char **argv) {
                     fprintf(stderr, "contractions %llu rows %zu cells %zu loaded %zu insts %llu\n",
                             (unsigned long long)w.contractions, w.nrows, w.nmem, w.loaded,
                             (unsigned long long)insts);
+                    if (w.natoms) {                     /* the open term's variables */
+                        fprintf(stderr, "atoms");
+                        for (size_t i = 0; i < w.natoms; i++)
+                            fprintf(stderr, " X%zu=%s", i, av_leaf_name(a, w.atoms[i]));
+                        fprintf(stderr, "\n");
+                    }
                     rc = 0;
                 }
                 av_witness_free(&w);

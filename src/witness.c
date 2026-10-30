@@ -20,6 +20,7 @@
 void av_witness_free(av_witness *w) {
     free(w->mem);
     free(w->rows);
+    free(w->atoms);
     memset(w, 0, sizeof *w);
 }
 
@@ -48,7 +49,9 @@ static bool put_row(av_witness *w, uint32_t hd, uint32_t stk, uint32_t ctr) {
 }
 
 /*  Mach.build: children first, the function before the argument, a fresh
- *  cell for every leaf.  The arena term is unfolded as a tree. */
+ *  cell for every leaf.  The arena term is unfolded as a tree.  An atom is
+ *  Mach.obuild's variable: the atom cell of its number, the atoms numbered
+ *  by first occurrence (w->atoms). */
 static const char *build(const av_arena *a, uint32_t t, av_witness *w,
                          size_t max_cells, uint32_t *root) {
     typedef struct { uint32_t node; bool done; } item;
@@ -87,8 +90,19 @@ static const char *build(const av_arena *a, uint32_t t, av_witness *w,
         if (av_tag(a, n) != AV_LEAF) { msg = "a jet node in a witnessed term"; goto done; }
         ski_leaf id = av_right(a, n);
         if (!ski_is_comb(id)) {
-            msg = "a witness of a term with atoms is not supported yet";
-            goto done;
+            /* the atom numbered by first occurrence, left to right: the
+             * variable Mach.obuild loads as that atom cell */
+            uint32_t k = 0;
+            while (k < w->natoms && w->atoms[k] != id) k++;
+            if (k == w->natoms) {
+                ski_leaf *q = realloc(w->atoms, (w->natoms + 1) * sizeof *q);
+                if (!q) { msg = "out of memory"; goto done; }
+                w->atoms = q;
+                w->atoms[w->natoms++] = id;
+            }
+            if (!put_cell(w, AV_CELL_ATOM, k, 0)) { msg = "out of memory"; goto done; }
+            out[nout++] = (uint32_t)(w->nmem - 1);
+            continue;
         }
         uint32_t tag = id == SKI_S ? AV_CELL_S : id == SKI_K ? AV_CELL_K : AV_CELL_I;
         if (!put_cell(w, tag, 0, 0)) { msg = "out of memory"; goto done; }
@@ -234,13 +248,15 @@ static uint32_t resolve(av_jop op, uint32_t c, const uint32_t *ps) {
 }
 
 /*  The Poseidon2 jet's step at (hd, stk), counter c (lean-ski's
- *  P2Jet.p2Row, bench/plonky3's p2_step): 1 taken, 0 not applicable, -1 on
+ *  P2Jet.p2Row, or P2Jet.p2RowS on the stack at J + 1; bench/plonky3's p2_step):
+ *  1 taken, 0 not applicable, -1 on
  *  the cell budget. */
 #define AV_P2_BITS 496u
 static int p2_step(av_witness *w, const av_cstmt *s, uint32_t hd, uint32_t stk, uint32_t c,
                    size_t max_cells, uint32_t *nhd, uint32_t *nstk, const char **msg) {
     const av_cell *h = get(w, hd);
-    if (!h || h->tag != AV_CELL_ATOM || h->a != s->p2_j) return 0;
+    if (!h || h->tag != AV_CELL_ATOM || (h->a != s->p2_j && h->a != s->p2_j + 1)) return 0;
+    bool on_stack = h->a == s->p2_j + 1;        /* P2Jet.p2RowS: the inputs on the stack */
     if (w->nmem < 3 + AV_P2_BITS) return 0;
     const av_cell *m = w->mem;
     if (m[0].tag != AV_CELL_K || m[1].tag != AV_CELL_I ||
@@ -248,17 +264,32 @@ static int p2_step(av_witness *w, const av_cstmt *s, uint32_t hd, uint32_t stk, 
         return 0;
     const av_cell *s1 = cons_at(w, stk);
     if (!s1) return 0;
-    const av_cell *s2 = cons_at(w, s1->b);
-    if (!s2 || s2->a != s->p2_root) return 0;
-    uint32_t k = s1->a, rest = s2->b;
+    uint32_t k = s1->a, rest;
     uint32_t st[16] = { 0 };
-    for (uint32_t l = 0; l < AV_P2_BITS; l++) {
-        const av_cell *x = &m[3 + l];
-        uint32_t bit;
-        if (x->tag == AV_CELL_K) bit = 1;
-        else if (x->tag == AV_CELL_APP && x->a == 0 && x->b == 1) bit = 0;
-        else return 0;
-        st[l / 31] |= bit << (l % 31);
+    if (on_stack) {
+        /* 496 consecutive stack cells from s₁ down, each pointing at the K
+         * slot (true) or the K I slot (false), as a call pushed them */
+        uint32_t sp = s1->b;
+        for (uint32_t l = 0; l < AV_P2_BITS; l++) {
+            const av_cell *x = cons_at(w, sp);
+            if (!x || (x->a != 0 && x->a != 2)) return 0;
+            if (l + 1 < AV_P2_BITS && x->b + 1 != sp) return 0;
+            st[l / 31] |= (uint32_t)(x->a == 0) << (l % 31);
+            sp = x->b;
+        }
+        rest = sp;
+    } else {
+        const av_cell *s2 = cons_at(w, s1->b);
+        if (!s2 || s2->a != s->p2_root) return 0;
+        rest = s2->b;
+        for (uint32_t l = 0; l < AV_P2_BITS; l++) {
+            const av_cell *x = &m[3 + l];
+            uint32_t bit;
+            if (x->tag == AV_CELL_K) bit = 1;
+            else if (x->tag == AV_CELL_APP && x->a == 0 && x->b == 1) bit = 0;
+            else return 0;
+            st[l / 31] |= bit << (l % 31);
+        }
     }
     av_p2_permute(st);
     if (w->nmem + AV_P2_BITS > max_cells) { *msg = "the run exceeds the cell budget"; return -1; }
@@ -383,11 +414,13 @@ halted:
 
 /*  Mach.load, and the jet table's roots over the loaded heap. */
 static const char *load_jetted(const av_arena *a, uint32_t t, const av_jettable *jt,
-                               size_t max_cells, av_witness *w, uint32_t **root_of,
-                               uint32_t **ps) {
+                               bool atoms_ok, size_t max_cells, av_witness *w,
+                               uint32_t **root_of, uint32_t **ps) {
     uint32_t hd;
     const char *msg = build(a, t, w, max_cells, &hd);
     if (msg) return msg;
+    if (w->natoms && !atoms_ok)
+        return "a witness of a term with atoms takes no jet table and no plan";
     uint32_t stk = (uint32_t)w->nmem;
     if (!put_cell(w, AV_CELL_NIL, 0, 0)) return "out of memory";
     w->loaded = w->nmem;
@@ -416,7 +449,7 @@ av_status av_witness_run_jets(const av_arena *a, uint32_t t, const av_jettable *
     uint32_t *root_of = NULL;   /* jet + 1 at each root of the loaded heap */
     uint32_t *ps = NULL;        /* the argument pointers an instantiation pops */
     av_status st = AV_SIZE;
-    const char *msg = load_jetted(a, t, jt, max_cells, w, &root_of, &ps);
+    const char *msg = load_jetted(a, t, jt, jt == NULL, max_cells, w, &root_of, &ps);
     uint32_t hd = w->hd0, stk = w->stk0;
     if (!msg && run_to_halt(w, jt, root_of, ps, &hd, &stk, max_rows, max_cells, insts, NULL, &msg))
         st = AV_WHNF;
@@ -533,7 +566,7 @@ av_status av_witness_run_probe(const av_arena *a, uint32_t t, const av_jettable 
     pr->field_off = calloc(plan->n + 1, sizeof *pr->field_off);
     if (!pr->starts || !pr->fields || !pr->field_off) { msg = "out of memory"; goto out; }
     pr->n = plan->n;
-    msg = load_jetted(a, t, jt, max_cells, w, &root_of, &ps);
+    msg = load_jetted(a, t, jt, false, max_cells, w, &root_of, &ps);
     if (msg) goto out;
     uint32_t hd = w->hd0, stk = w->stk0;
     for (size_t j = 0; j < plan->n; j++) {
@@ -691,11 +724,51 @@ bool av_prefix(const av_arena *a, uint32_t t, size_t budget, av_buf *out) {
     return ok;
 }
 
+/*  The loaded term in prefix form, read off the loaded cells from the
+ *  first row's head: `Xi` for the atom i, as lean-ski's aircheck reads it. */
+static bool loaded_prefix(const av_witness *w, av_buf *out) {
+    size_t cap = 256, top = 0;
+    uint32_t *stk = malloc(cap * sizeof *stk);
+    bool ok = stk != NULL;
+    if (ok) stk[top++] = w->hd0;
+    while (ok && top) {
+        uint32_t i = stk[--top];
+        if (i >= w->loaded) { ok = false; break; }
+        const av_cell *c = &w->mem[i];
+        char num[16];
+        int n;
+        switch (c->tag) {
+        case AV_CELL_APP:
+            if (top + 2 > cap) {
+                uint32_t *q = realloc(stk, (cap *= 2) * sizeof *q);
+                if (!q) { ok = false; break; }
+                stk = q;
+            }
+            ok = out_str(out, "`", 1);
+            stk[top++] = c->b;
+            stk[top++] = c->a;
+            break;
+        case AV_CELL_S: ok = out_str(out, "S", 1); break;
+        case AV_CELL_K: ok = out_str(out, "K", 1); break;
+        case AV_CELL_I: ok = out_str(out, "I", 1); break;
+        case AV_CELL_ATOM:
+            n = snprintf(num, sizeof num, "X%u", c->a);
+            ok = out_str(out, num, (size_t)n);
+            break;
+        default: ok = false;
+        }
+    }
+    free(stk);
+    return ok;
+}
+
 bool av_witness_table(const av_arena *a, uint32_t t, const av_witness *w,
                       unsigned min_log, av_buf *out) {
     char line[64];
     if (w->nrows == 0 || w->loaded == 0) return false;   /* no run to show */
-    if (!av_prefix(a, t, w->loaded, out) || !out_str(out, "\n", 1)) return false;
+    if (!(w->natoms ? loaded_prefix(w, out) : av_prefix(a, t, w->loaded, out)) ||
+        !out_str(out, "\n", 1))
+        return false;
 
     size_t msize = pow2_at_least(w->nmem, min_log);
     int n = snprintf(line, sizeof line, "%zu\n", msize);
@@ -883,15 +956,17 @@ bool av_cstmt_read(const char *src, size_t len, av_cstmt *s, const char **err) {
     const char *msg = "a truncated statement";
     if (!next_line(&L, &l, &n)) goto fail;
     bool pre = n >= 6 && memcmp(l, "p2pre ", 6) == 0;
+    bool chain = n >= 8 && memcmp(l, "p2chain ", 8) == 0;
     bool commit = n >= 9 && memcmp(l, "p2commit ", 9) == 0;
-    s->p2 = pre || commit;
+    s->p2 = pre || chain || commit;
     if (!((n >= 8 && memcmp(l, "formula ", 8) == 0) || (n >= 10 && memcmp(l, "predicate ", 10) == 0) || s->p2)) {
-        msg = "expected `formula …`, `predicate …`, `p2pre …` or `p2commit …`";
+        msg = "expected `formula …`, `predicate …`, `p2pre …`, `p2chain …` or `p2commit …`";
         goto fail;
     }
-    if (pre) {
-        /* `p2pre h J ROOT` */
-        if (!nums_line(l, n, "p2pre", v, 3, &k) || k != 3) { msg = "a malformed header"; goto fail; }
+    if (pre || chain) {
+        /* `p2pre h J ROOT`, `p2chain h J ROOT` */
+        if (!nums_line(l, n, pre ? "p2pre" : "p2chain", v, 3, &k) || k != 3) { msg = "a malformed header"; goto fail; }
+        if (v[1] == UINT32_MAX) { msg = "a malformed header"; goto fail; }
         s->p2_j = v[1];
         s->p2_root = v[2];
     } else if (commit) {

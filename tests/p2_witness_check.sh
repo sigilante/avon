@@ -22,14 +22,20 @@
 #      verifies the two proofs as a chain (lean-ski's
 #      Circuit.p2commit_chainB); a header with a 495-entry pattern is
 #      refused;
-#   7. the native Poseidon2 jet: for each test vector x,
+#   7. two jet calls in one statement, from lean-ski #65 on (`lake exe composed emit-p2chain`):
+#      for `p2chain h`, "the permutation of the permutation of my values
+#      begins with h", Avon's table, with the jet on the comb at J and on
+#      the first call's outputs, on the stack, at J+1, is byte-identical to
+#      ski-air's, and `compp-prove-table` and `compp-verify` prove and check
+#      it (lean-ski's Circuit.p2chainExport_sound); a flipped bit is refused;
+#   8. the native Poseidon2 jet: for each test vector x,
 #      `avon reduce --p2=P.dag` on lean-ski's `P ⬝ stateN x` (`lake exe
 #      p2run`) reaches `stateN (permute x)`, Plonky3's output, in one step,
 #      one permutation run natively (lean-ski's P_specN licenses it); and
 #      the chain P (P (P x)) of test vector 1, one shared P (`p2run chain`),
 #      reaches `stateN (permute^3 x)` in three steps, three run natively,
 #      none declined;
-#   8. the permutation itself: lean/P2Prog.lean, checked against lean-ski,
+#   9. the permutation itself: lean/P2Prog.lean, checked against lean-ski,
 #      proves its program equal to the specification with C's arithmetic
 #      (AvonP2.permuteC, on lean-ski's axioms only) and prints it; the print
 #      must be src/p2_prog.h, byte for byte.
@@ -124,6 +130,38 @@ if "$AVON" witness --statement="$OUT/stmt/short.public.txt" "$OUT/stmt/handoff.w
     fail=1
 else
     echo "avon refuses a malformed p2commit header: $(cat "$OUT/avon/short.err")"
+fi
+
+echo "--- two jet calls: the statement p2chain h"
+# lean-ski has p2chain from #65 on; at an earlier pin the section says so.
+if ! grep -q 'emit-p2chain' "$LEAN_SKI/bench/Composed.lean"; then
+    echo "SKIP: lean-ski at $(git -C "$LEAN_SKI" rev-parse --short HEAD) predates p2chain (lean-ski #65)"
+else
+    (cd "$LEAN_SKI" && lake exe composed emit-p2chain "$OUT/stmt" > /dev/null)
+    cs="$OUT/stmt/p2chain.public.txt"
+    cw="$OUT/stmt/p2chain.witness.txt"
+    if "$AVON" witness --statement="$cs" "$cw" > "$OUT/avon/chain.txt" 2> "$OUT/avon/chain.err"; then
+        echo "avon (p2chain): $(cat "$OUT/avon/chain.err")"
+        "$SKI_AIR" compp-prove "$cs" "$cw" "$OUT/proofs/chain.ski-air.proof" --table="$OUT/ski-air/chain.txt" > /dev/null
+        if cmp -s "$OUT/avon/chain.txt" "$OUT/ski-air/chain.txt"; then
+            echo "p2chain: byte-identical to ski-air's table"
+        else
+            echo "FAIL: p2chain: Avon's table differs from ski-air's"
+            fail=1
+        fi
+        "$SKI_AIR" compp-prove-table "$cs" "$OUT/avon/chain.txt" "$OUT/proofs/chain.proof" | tail -n 1 | cut -c1-100 || fail=1
+        "$SKI_AIR" compp-verify "$cs" "$OUT/proofs/chain.proof" || fail=1
+    else
+        echo "FAIL: Avon (p2chain): $(cat "$OUT/avon/chain.err")"
+        fail=1
+    fi
+    awk 'NR == 1 { $0 = ($0 == "1") ? "0" : "1" } { print }' "$cw" > "$OUT/stmt/chain-bad.witness.txt"
+    if "$AVON" witness --statement="$cs" "$OUT/stmt/chain-bad.witness.txt" > /dev/null 2> "$OUT/avon/chain-bad.err"; then
+        echo "FAIL: Avon wrote a p2chain table for a witness that does not satisfy it"
+        fail=1
+    else
+        echo "avon refuses (p2chain): $(cat "$OUT/avon/chain-bad.err")"
+    fi
 fi
 
 echo "--- the native jet"

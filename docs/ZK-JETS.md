@@ -34,7 +34,8 @@ The proof system is [lean-ski](https://github.com/sigilante/lean-ski). The lean-
 > at `2^17 2^18` and `2^17 2^18 2^14 2^14`. Every hiding table is padded
 > to at least `2^9` rows (#31). The figures in §1 and §9 are the
 > fixed-witness runs of 2026-09-29 to 2026-10-02. Avon pins lean-ski
-> `paper-v9`, `fb65141`.
+> `c4cd2f2`: `paper-v9` (`fb65141`) with witnesses for terms with atoms
+> (#64) and two jet calls in one statement (#65).
 >
 > **What "sound" and "zero knowledge" mean here (audit, 2026-10-29,
 > against lean-ski `fb65141`).** The soundness theorems
@@ -135,6 +136,58 @@ and how much is Lean is not measured. `split8` keeps its CPU budget at
 `2^17` with jets, so its prove time barely moves (12.3 s against 13 s);
 `csplit8`'s budgets fall one height each, and it proves in 26 s against
 42 (milestone 4).
+
+**Figures at the pin (2026-10-29, lean-ski `fb65141`).**
+`tests/paper_a_figures.sh` measures the figures above again, from
+statements lean-ski's own tools emit. The release's witnesses are secret,
+so the script fixes its own witness:
+- **split8:** `a = b = 100`, `x = 200`;
+- **csplit8:** `r = 165` and seed 1;
+- **heights:** the release's.
+
+Avon writes every jetted and Poseidon2 table, and ski-air proves and
+verifies them on an Apple M4 Max, one job at a time, each capped at 4 GB
+of resident memory. `csplit8`'s rows come from a run on 2026-10-30 capped at
+16 GB.
+
+| statement | circuit | rows | memory cells | prove | proof | verify | prover peak |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `split8` | plain | 114,857 | 196,484 | 10.06 s | 815,677 B | 2.19 s | 1,616 MB |
+| `split8` | jets: 1,328 instantiations | 9,823 | 70,874 | 11.66 s | 1,112,988 B | 2.68 s | 1,952 MB |
+| `csplit8` | plain | 354,799 | 572,975 | 60.99 s | 944,999 B | 3.92 s | 6,684 MB |
+| `csplit8` | jets: 3,646 instantiations | 43,848 | 201,001 | 71.16 s | 1,222,022 B | 4.79 s | 7,915 MB |
+| `p2pre`, vectors 0–2 | Poseidon2 jet, one call | 1,303–1,327 | 9,480–9,492 | 1.40–1.42 s | 1.20–1.21 MB | 3.66–3.69 s | 692–693 MB |
+| hand-off, stage 1 | Poseidon2 jet, one call | 13,991 | 37,232 | 2.35 s | 1,260,798 B | | 694 MB |
+| hand-off, stage 2 | Poseidon2 jet, one call | 13,156 | 34,842 | 2.36 s | 1,261,630 B | | 694 MB |
+
+What changed since the figures above:
+- **Rows.** `split8`'s jetted run is 9,823 rows against 114,857 plain:
+  8.6%, as on 2026-10-11. Both counts belong to this witness, and the
+  heights hold every witness (`scripts/split_sweep.py`).
+- **Proving.** Jets no longer save time on `split8`: 11.66 s against
+  10.06 s, and the gap held over three runs. Its CPU budget stays at `2^17`, and the jet circuit has ten
+  tables to the plain one's five.
+- **Verification.** It fell from 12.6 s and 23.0 s to 2.19 s and 2.68 s,
+  Lean's checks included. ski-air's own figure for its `verify` step
+  covers Lean's comparison of the AIRs and the proof: 1.19 s for `split8`
+  with jets, and 1.83–1.84 s for `p2pre`. The proof's check alone is
+  still not timed.
+- **`csplit8`.** Its jetted run is 43,848 rows against 354,799 plain
+  (12.4%), and jets cost time here too: 71.16 s against 60.99 s, where
+  the figures above had 26 s against 42. The jetted prover peaks at
+  7.9 GB, the plain at 6.7 GB, at heights `2^18 2^19 2^15 2^16` and
+  `2^20 2^20`. Verification takes 4.79 s and 3.92 s; ski-air's own figure
+  for the jetted proof is 3.09 s. The same run measured `split8` at 10.80 s
+  plain and 12.45 s jetted, 7% over the day before: the run-to-run spread
+  is about that size.
+- **The Poseidon2 statements** match the figures in §8 row for row and
+  cell for cell. Proving takes 1.40–1.42 s, against 1.35–1.41 s before.
+- **A wrong preimage.** Vector 0 with its first bit flipped runs 250,010
+  rows and 138,342 memory cells before ski-air stops it at the heights.
+- **Poseidon2 in SKI, without the jet.** Avon's graph reduction takes
+  968,992,246, 962,192,547 and 980,820,715 contractions on the three
+  vectors, in 16.6–17.0 s and under 70 MB. The 10.4 s recorded before
+  is not reproduced at the pin.
 
 **The goal.** A proof, in zero knowledge, that a public verifier accepts
 hidden literal bits (lean-ski's predicate statement, `Ski/Predicate.lean`)
@@ -524,6 +577,18 @@ commitment; ski-air proves Avon's two tables and verifies them as a chain
 (`ski-air compp-chain`; lean-ski's `Circuit.p2commit_chainB`: one value
 meets both patterns, or the two proofs' tables encode a collision of the
 compression).
+
+*Built (in the clear): two jet calls in one statement.* lean-ski's
+`p2chain h` ("sixteen 31-bit values whose permutation, permuted again,
+begins with `h`") calls the jet on the comb at the atom `J`, then on the
+first call's outputs, on the stack, at `J + 1` (lean-ski's
+`P2Jet.p2RowS`). The second call's 496 inputs must lie in consecutive stack
+cells, each a pointer to the `K` slot or the `K I` slot, as a call pushes
+them. Avon writes its table byte for byte ski-air's: 1,317 rows, 2 calls,
+9,985 memory cells, proved in 1.44–1.48 s and verified in 1.89 s
+(`Circuit.p2chainExport_sound`: an accepted proof's memory holds such
+values). lean-ski has not yet proved that its runs call the jet exactly
+twice; ski-air counts the calls and refuses any other number.
 
 ## 9. Milestones
 

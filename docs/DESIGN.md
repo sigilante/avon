@@ -2731,9 +2731,15 @@ allocations in the reducer's hot paths (now asserted in the debug build).
   `CAP` targets diverge and have no witness. On 300,000 random terms the
   witness halts on copy mode's term, read back as `Mach.decode` reads it,
   after copy mode's count.
-- Witness mode refuses terms with atoms for now: lean-ski numbers atom
-  cells by its statements' variables, and `aircheck`'s parser has no atom
-  cell yet (§17.3).
+- Witness mode refused terms with atoms until 2026-10-29: lean-ski numbers
+  atom cells by its statements' variables, and `aircheck`'s parser had no
+  atom cell (§17.3). Since lean-ski #64, an atom is an open-term variable,
+  numbered by first occurrence and written `Xi` in the table's term.
+  lean-ski's `aircheck` decides such a table with `Air.checkOA`
+  (`Ski/AirCheckOpen.lean`): an accepted one ends on an open head reduct of
+  the term, for every value of its atoms (`checkOA_close`).
+  `witness-check` runs five open terms through it at the pin. A jetted or
+  probed witness still refuses atoms.
 - A durability review of the stage found the witness machine exact and
   four gaps, all fixed with regression tests: probing assumed its markers'
   leaf ids were consecutive, and nothing reserved their `@` names (the
@@ -2916,7 +2922,9 @@ reduction option it would ignore.
 
 - *Stage 8:* the full language's front end is built through M6 (Stage A
   and Stage B); what the stage still lacks is in `WORKLIST.md`.
-- *Proofs* (to lean-ski): witnesses refuse terms with atoms (§17.3); scry
+- *Proofs* (to lean-ski): jetted and probed witnesses of terms with atoms
+  still refuse them (§17.3);
+  scry
   proves only a resume loop's final run; zero knowledge survives
   Fiat–Shamir in the programmable random-oracle model for the Sudoku,
   hidden-term and composed circuits at the pin, and for those with jets
@@ -3404,7 +3412,11 @@ contract proved for the kit's eliminator and owed per table). It is the
 paper's jet contract, and the word type is the representation ABI at the
 VM boundary. For the fifteen word operations Avon runs, the terms' side
 of that licence is proved (`lean/Words.lean`, `add_spec` … `ideq_spec`);
-the word cells and their tables are not built.
+the word cells and their tables are not built. `ZK-WORDS.md` designs
+them. It also measures them: on lean-ski's split statements no operation
+fires (2026-10-29). csplit8's knapsack sum is a chain of pending
+additions, and its comparison is not a pinned operation, so word cells
+pay only alongside the evaluation of pending arithmetic over words.
 
 ### 18.3 The interpreter jet
 
