@@ -1,6 +1,6 @@
 """Fixtures for tests/test_data.c: data jets.
 
-    PYTHONPATH=~/skijack/python python3 tests/data/export.py
+    PYTHONPATH=~/skijack/python python3 tests/data/export.py [--no-inline]
 
 For each program here, NAME.ascii.ski, writes NAME/: its templates
 (templates.tsv, template_terms.tsv), its numeral operations (words.tsv,
@@ -8,7 +8,8 @@ when it names any), and each of its names main, lazy, long, out, eqB,
 trGet and eqId that it defines as NAME.txt, printed: main, lazy and long
 applied to the atoms Tt Ff (each checks itself and is True, Ff, the second
 of `False | True`), the rest bare: out for its normal form, eqB, trGet and
-eqId for the bit-string operations' terms.
+eqId for the bit-string operations' terms.  Programs compile with skijack's
+inlining pass unless --no-inline is given.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import skijack
 from skijack.templates import templates, write, write_words
 
 HERE = pathlib.Path(__file__).resolve().parent
+INLINE = "--no-inline" not in sys.argv[1:]   # skijack's inlining pass; --no-inline turns it off
 
 
 def main() -> int:
@@ -30,7 +32,7 @@ def main() -> int:
         name = src.name.split(".")[0]
         out = HERE / name
         out.mkdir(exist_ok=True)
-        exp = skijack.compile(src.read_text(), lexicon="ascii")
+        exp = skijack.compile(src.read_text(), lexicon="ascii", inline=INLINE)
         write(templates(exp), out / "templates.tsv", out / "template_terms.tsv")
         write_words(exp, out / "words.tsv")
         for nm in ("main", "lazy", "long", "out", "eqB", "trGet", "eqId"):

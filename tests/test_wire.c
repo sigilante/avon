@@ -140,7 +140,7 @@ static int jam_cue_print(av_arena *a, uint32_t t, const char *want) {
 
 TEST(every_corpus_term_round_trips) {
     corpus c = load_corpus();
-    CHECK(c.n == 285);
+    CHECK(c.n == 283);
     for (size_t i = 0; i < c.n; i++) {
         const char *s = c.line[i];
         av_arena *a = av_arena_new(0);

@@ -237,7 +237,8 @@ to 4.7.
   Reduceron spends 19 to 26 ns per hand-reduction on these five: a
   10.4 ns cycle at 0.40 to 0.54 per cycle. As SKI Avon steps 91 to 93 million contractions a second on
   Queens2, Clausify and PermSort and 45 to 48 million on OrdList and Taut;
-  why those two run at half the rate was not investigated.
+  those two spend 44 to 45% of their time collecting ("Plain SKI at half
+  rate: the collector", below).
 - Templates cut steps 8.9 to 12.3 times and time 3.8 to 10.9 times.
 
 **Reproduce** at `1e2f24f`, where the ports are as above:
@@ -413,6 +414,46 @@ between collections, growing the heap at a quarter full rather than half
 is left of a one-node fire, 190 instructions, is spread two to seven at a
 time over the loop's checks.
 
+## Plain SKI at half rate: the collector
+
+**OrdList and Taut run plain SKI at half the others' rate because they
+collect for 44 to 45% of their time.** Their live sets reach 11 and 21
+million nodes, beyond the caches, and copying a node then costs 31 to 49
+ns against about 3 ns for the other ports. Without the collector every
+port steps 57 to 62 million contractions a second.
+
+Avon `8839645` with the collector timed (a scratch build, not committed),
+the ports compiled at skijack `935683f` without inlining, `reduce --whnf`
+in share mode, one run each under `/usr/bin/time -l`:
+
+| program | contractions | user, s | collecting, s | collections | largest live set, nodes | nodes copied | ns a copy | instructions a step | instructions a cycle | without the collector, M/s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| OrdList | 1,030,065,841 | 32.70 | 14.65 | 59 | 21,383,539 | 299,542,838 | 49 | 195 | 1.59 | 57 |
+| Taut | 1,047,965,671 | 30.77 | 13.67 | 237 | 11,433,025 | 442,490,147 | 31 | 201 | 1.75 | 61 |
+| Queens2 | 979,586,993 | 16.58 | 0.89 | 1,013 | 956,535 | 273,303,914 | 3.3 | 184 | 2.77 | 62 |
+| Clausify | 1,101,162,615 | 19.17 | 1.40 | 24,663 | 28,319 | 488,662,657 | 2.9 | 193 | 2.83 | 62 |
+| PermSort | 4,000,853,681 | 71.12 | 6.35 | 7,898 | 1,455,976 | 2,254,640,633 | 2.8 | 198 | 2.87 | 62 |
+
+- **Instructions are not the difference; cycles are.** Every port retires
+  184 to 201 instructions a contraction. OrdList and Taut retire 1.6 to
+  1.75 a cycle, the others 2.8.
+- **The cost is in copying.** Cheney's scan reaches a large live set in an
+  order unrelated to memory, about one cache miss a node. Writing the
+  forwarding into from-space, so a copy reads one array and not two, took
+  OrdList's collecting from 14.65 s to 13.56 and Taut's from 13.67 to
+  13.43. Page reclaims (180,663 on OrdList) cost under a second.
+- **A larger arena trades memory for it.** Keeping the live set at most a
+  quarter of the arena, not half, took OrdList to 20.47 s (collecting
+  2.85) at 3.5 GB resident against 2.1, and Taut to 27.21 s (collecting
+  10.48) at 2.0 GB against 1.0.
+- **What would remove it** is copying long-lived nodes once: a nursery
+  collected alone, its survivors promoted. OrdList copies its live set
+  about 14 times over (300 million copies, a largest live set of 21
+  million).
+- **Templates and data jets leave little of it.** `--templates` and
+  `--fix` do not apply to plain SKI, and with them OrdList's live set is
+  2.3 million nodes (`--fix`) or 584 (`--memory`) ("Y shared", below).
+
 ## What the gap is made of
 
 **Per step Avon is at the Reduceron's pace; it takes more steps.** Avon
@@ -513,7 +554,22 @@ other, user CPU, best of five, load average about 2; every answer True.
   loading the templates the rest.
 
 **Reproduce.** `python3 tests/workloads/reduceron/run.py --avon build/avon
---skijack ~/skijack --inline`, skijack at `21cdef7` or later.
+--skijack ~/skijack` against the same with `--no-inline`, skijack at
+`21cdef7` or later.
+
+**The default since 2026-10-30.** `run.py` and the fixture exporters
+(`tests/fixtures/`, `tests/data/`, `tests/kernel/`, `tests/drivers/`)
+compile with the pass; `--no-inline` turns it off and writes what they
+wrote before. At skijack `935683f` the ports' counts with data jets are this
+table's inlined ones, step for step, and every answer is True. Every
+measurement above this section, and "Y unfolded in one step" below, was
+taken without the pass; rerun them with `--no-inline`. Two exporters keep
+it off: `tests/selfhost/` records the bracket abstractions front0 must
+reproduce, and `tests/zkwords/measure.py` measures lean-ski's statements as
+lean-ski compiles them. On `tests/data/nats`, the
+pass costs 0.4 to 0.7% more steps as SKI, with templates and with
+`--discover` (58,360, 7,840 and 8,205 against 58,140, 7,789 and 8,170)
+and none with data jets (5,986) or `--fix` (4,201).
 
 ## Y unfolded in one step
 
