@@ -452,11 +452,19 @@ in share mode, one run each under `/usr/bin/time -l`:
   while the live set passes a quarter of it, not half. OrdList collects 27
   times, not 59, copying 121 million nodes, not 300; Taut 101 times, not
   237, copying 175 million, not 442. Every step and answer is the same.
-  Peak memory: OrdList 3.5 GB against 2.0, Taut 1.5 GB against 0.8. In the
-  scratch build, on a quiet machine, OrdList took 20.47 s (collecting 2.85)
-  against 32.70, and Taut 27.21 s (collecting 10.48) against 30.77. The
-  built flag's timings wait for a quiet machine: under a load average of 6
-  the same binary's runs spread from 36 to 104 s.
+  Avon `b552988`, plain SKI, `reduce --whnf` in share mode, best of three
+  interleaved runs under `/usr/bin/time -l` (each run within 0.5% of its
+  best):
+
+  | Port | Arena grows past | Time (s) | Peak footprint (MiB) |
+  |---|---|--:|--:|
+  | OrdList | half | 29.89 | 2,044 |
+  | OrdList | quarter | 20.16 | 3,583 |
+  | Taut | half | 29.07 | 952 |
+  | Taut | quarter | 26.35 | 1,928 |
+
+  OrdList runs 1.48 times faster for 1.75 times the memory; Taut 1.10
+  times faster for 2.0 times.
 - **What would remove it** is copying long-lived nodes once: a nursery
   collected alone, its survivors promoted. OrdList copies its live set
   about 14 times over (300 million copies, a largest live set of 21

@@ -252,8 +252,8 @@ design lives. Last revised 2026-10-29.
   `AV_NONE`, so it reads one array and allocates only its to-space. `--aggressive-heap`
   (`reduce`, `batch`, `front0`) grows the arena while the live set passes a quarter of
   it: OrdList's plain SKI collects 27 times, not 59, at 3.5 GB against 2.0. Every count
-  and state is the same (`an_aggressive_heap_collects_less_and_agrees`). Its timings
-  wait for a quiet machine.
+  and state is the same (`an_aggressive_heap_collects_less_and_agrees`). Timed on
+  2026-10-31: OrdList 20.16 s against 29.89, Taut 26.35 against 29.07 (BENCHMARK).
 
 - **lean-ski at `ab92b47`** (2026-10-31). `tests/pins.sh` moves past `b4ba210` by
   lean-ski #67 (`compPChain_complete_log`: the Poseidon2 circuit is complete for
