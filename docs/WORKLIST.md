@@ -6,6 +6,12 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **Stage 8, closed** (2026-11-01; item 3, `DESIGN.md` §11.1). front1 already met the
+  stage's test: it compiles its own source in Avon to Python's terms, every name hash
+  for hash, and every corpus program to Python's. DESIGN's status, §11.1 and the README
+  say so; item 3 moves from Later to Closed. A front1 pill, a Python-free bootstrap check
+  and a smaller front1 term are not taken up.
+
 - **The stats build on list words** (2026-11-01; item 8). `build/stats/avon` stopped with
   a bus error on front1 with data jets, and on `tests/data/lists`: the counting read a
   list word, whose id field holds its length, as a jet, and indexed the jet table about
@@ -475,66 +481,6 @@ Measured 2026-10-02 with `make stats` on the five Reduceron ports and the front 
 
 ## Later
 
-### 3. Stage 8: the full language's front end (`DESIGN.md` §20.3)
-
-SKIjack-0's front end compiles itself in Avon. At scoping the rest ran only in Python:
-cores, macros, signatures, quotation, scries, namespace literals and the type checker. Most
-of the work is SKIjack programs in skijack's repository; Avon runs them and checks them
-on the corpus, hash for hash. M1 to M6 are built, and front1 installs the prelude's later operations too.
-
-Scoped 2026-10-05, against skijack `6a870ac`. The SKIjack-0 front end
-(`selfhost/front0.ascii.ski`) is 406 lines; Python's front end about 7,100. Sizes
-are estimates, in lines of SKIjack:
-
-| milestone | adds | size (estimated at scoping) | corpus programs matching (estimated) |
-|---|---|---:|---:|
-| M1 | wider lexer and parser, plain cores, hygienic macros, signatures parsed and dropped, the birds `B`, `C`, `W`, `Y`, the numeral operations | 150–250 | 5 of 17 |
-| M2 | interpreter generation (`generate.py`): step and loop equations, names built at run time | 150–250 | 10 |
-| M3 | quotation and level-1 runs: object leaves, encoding, `\|-`, fuel | 100–160 | 13 |
-| M4 | scries, path literals, namespace literals | 60–110 | all 17 |
-| M5 | Stage A (`check.py`): refusal parity, errors with a class | 250–400 | — |
-| M6 | Stage B (`typecheck.py`): Hindley–Milner over an explicit store, equirecursive unification | 400–700 | — |
-
-**M1 to M4, built 2026-10-05** (skijack `front1.ascii.ski`, `run1.py`; `make
-front1-check`; `DESIGN.md` §20.3). Every corpus program agrees, hash for hash, and the
-fixed point covers 1,009 names. Twelve edge programs aviary's environment once decided
-(binders named as defined names, a binder twice, a recursion's name rebound, a binder
-named as a later definition) agree since skijack fixed the reference on 2026-10-21: a
-binder is a binder, whatever name it spells. Open: front1's term grew from 265,145 nodes
-to 635,173, so Python compiles it in 48 seconds; the audit did not take it up.
-
-**M5, built 2026-10-27** (skijack `front1.ascii.ski` and `run1.py`; avon `front0.c`;
-`DESIGN.md` §20.3). Stage A runs over the parsed program, as Python checks before it
-expands: 166 lines of front1, comments and generated names included, against the 250 to
-400 scoped. Each refusal carries its class, `RErr n`. Its reference is Stage A over
-Python's parse, then the expander with checking off. Every corpus program, all 432 edge
-programs (97 of them M5's, each check passed and failed, and the order of the first
-problem), 991 of 1,000 random programs of the full language, 100 of a second seed and
-200 of SKIjack-0 agree; the other 9 are too heavy for front1 to finish, and the three
-measured were as heavy for front1 before M5. front1 did not install `natDiv`, `natRem` or
-the list operations, which the expander's prelude gained after M4; it has since
-2026-10-28 (SKIjack #39).
-
-**M6, built 2026-10-28: Stage B** (skijack `front1.ascii.ski` and `run1.py`; `DESIGN.md`
-§20.3). Stage B runs over the generated, macro-expanded program, its types nodes in a
-store keyed by number, the first problem ending it with class 7: 504 lines of front1,
-comments, types and generated names included, against the 400 to 700 scoped. front1
-agrees where both can witness: a Python refusal for its recursion limit is not compared.
-Every corpus program, all 472 edge programs (43 of them M6's), 1,300 random programs and
-500 typed ones agree, and the fixed point covers 1,520 names with templates and data jets
-in 2.46 GB. Since, front1 installs `natDiv`, `natRem` and the list operations
-(2026-10-28, SKIjack #39), whose Stage B accepting edges are in: all 482 edge programs and
-500 typed ones agree, and the fixed point covers 1,529 names.
-
-Checking never changes the terms, so M1 to M4 are each checked against
-`skijack.compile(..., check=False)` on the corpus as they land, with `run0.py`'s
-random and edge programs extended. The front end stays a separate program from
-`front0`, whose fixed point stays as it is; the reader `avon front0` serves both while
-the result's shape is kept. Hard parts, from the scoping: no parametric types, so
-every table is its own trie (generate them, as `tables.py` does); names built at run
-time need the intern table kept past lexing; Python's output order (compare as a
-map, or reproduce it).
-
 ### 4. Safe cycles for Y: parked 2026-10-05 (`DESIGN.md` §6.11)
 
 Measured first (`BENCHMARK.md`, "Y shared (`--memory`)" and "The ceiling for a
@@ -602,6 +548,73 @@ None of these changes a result.
 - **Noted, left as they are:**
   - `word_admit`'s 10,000,000-step cap counts a slow operation as refused;
   - SKIjack's inliner falls back silently when it hits its budget or depth.
+
+## Closed
+
+### 3. Stage 8: the full language's front end, closed 2026-11-01 (`DESIGN.md` §20.3)
+
+Closed: front1 meets the stage's test (`DESIGN.md` §11), compiling its own source in
+Avon to the terms Python produced and every corpus program to Python's terms, hash for
+hash. Not taken up: a pill holding front1, a bootstrap check with no Python in the
+loop (the hashes already equal Python's), and the size of front1's term (below).
+
+SKIjack-0's front end compiles itself in Avon. At scoping the rest ran only in Python:
+cores, macros, signatures, quotation, scries, namespace literals and the type checker. Most
+of the work is SKIjack programs in skijack's repository; Avon runs them and checks them
+on the corpus, hash for hash. M1 to M6 are built, and front1 installs the prelude's later operations too.
+
+Scoped 2026-10-05, against skijack `6a870ac`. The SKIjack-0 front end
+(`selfhost/front0.ascii.ski`) is 406 lines; Python's front end about 7,100. Sizes
+are estimates, in lines of SKIjack:
+
+| milestone | adds | size (estimated at scoping) | corpus programs matching (estimated) |
+|---|---|---:|---:|
+| M1 | wider lexer and parser, plain cores, hygienic macros, signatures parsed and dropped, the birds `B`, `C`, `W`, `Y`, the numeral operations | 150–250 | 5 of 17 |
+| M2 | interpreter generation (`generate.py`): step and loop equations, names built at run time | 150–250 | 10 |
+| M3 | quotation and level-1 runs: object leaves, encoding, `\|-`, fuel | 100–160 | 13 |
+| M4 | scries, path literals, namespace literals | 60–110 | all 17 |
+| M5 | Stage A (`check.py`): refusal parity, errors with a class | 250–400 | — |
+| M6 | Stage B (`typecheck.py`): Hindley–Milner over an explicit store, equirecursive unification | 400–700 | — |
+
+**M1 to M4, built 2026-10-05** (skijack `front1.ascii.ski`, `run1.py`; `make
+front1-check`; `DESIGN.md` §20.3). Every corpus program agrees, hash for hash, and the
+fixed point covers 1,009 names. Twelve edge programs aviary's environment once decided
+(binders named as defined names, a binder twice, a recursion's name rebound, a binder
+named as a later definition) agree since skijack fixed the reference on 2026-10-21: a
+binder is a binder, whatever name it spells. Open: front1's term grew from 265,145 nodes
+to 635,173, so Python compiles it in 48 seconds; not taken up.
+
+**M5, built 2026-10-27** (skijack `front1.ascii.ski` and `run1.py`; avon `front0.c`;
+`DESIGN.md` §20.3). Stage A runs over the parsed program, as Python checks before it
+expands: 166 lines of front1, comments and generated names included, against the 250 to
+400 scoped. Each refusal carries its class, `RErr n`. Its reference is Stage A over
+Python's parse, then the expander with checking off. Every corpus program, all 432 edge
+programs (97 of them M5's, each check passed and failed, and the order of the first
+problem), 991 of 1,000 random programs of the full language, 100 of a second seed and
+200 of SKIjack-0 agree; the other 9 are too heavy for front1 to finish, and the three
+measured were as heavy for front1 before M5. front1 did not install `natDiv`, `natRem` or
+the list operations, which the expander's prelude gained after M4; it has since
+2026-10-28 (SKIjack #39).
+
+**M6, built 2026-10-28: Stage B** (skijack `front1.ascii.ski` and `run1.py`; `DESIGN.md`
+§20.3). Stage B runs over the generated, macro-expanded program, its types nodes in a
+store keyed by number, the first problem ending it with class 7: 504 lines of front1,
+comments, types and generated names included, against the 400 to 700 scoped. front1
+agrees where both can witness: a Python refusal for its recursion limit is not compared.
+Every corpus program, all 472 edge programs (43 of them M6's), 1,300 random programs and
+500 typed ones agree, and the fixed point covers 1,520 names with templates and data jets
+in 2.46 GB. Since, front1 installs `natDiv`, `natRem` and the list operations
+(2026-10-28, SKIjack #39), whose Stage B accepting edges are in: all 482 edge programs and
+500 typed ones agree, and the fixed point covers 1,529 names.
+
+Checking never changes the terms, so M1 to M4 are each checked against
+`skijack.compile(..., check=False)` on the corpus as they land, with `run0.py`'s
+random and edge programs extended. The front end stays a separate program from
+`front0`, whose fixed point stays as it is; the reader `avon front0` serves both while
+the result's shape is kept. Hard parts, from the scoping: no parametric types, so
+every table is its own trie (generate them, as `tables.py` does); names built at run
+time need the intern table kept past lexing; Python's output order (compare as a
+map, or reproduce it).
 
 ## Parked
 
