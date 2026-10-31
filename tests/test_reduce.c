@@ -324,19 +324,34 @@ TEST(the_default_node_cap_fits_the_host) {
 }
 
 /*  An allocation past what was reserved stops the process, in release
- *  builds too, instead of writing past the arena. */
+ *  builds too, instead of writing past the arena.  The child's stderr
+ *  comes back through a pipe, so the abort names the invariant and the
+ *  log shows no message from a test that passed. */
 TEST(an_allocation_past_its_reservation_aborts) {
+    int fd[2];
+    REQUIRE(pipe(fd) == 0);
     pid_t pid = fork();
     REQUIRE(pid >= 0);
     if (pid == 0) {
+        close(fd[0]);
+        dup2(fd[1], STDERR_FILENO);
         av_arena *a = av_arena_new(0);
         a->used = a->cap;                       /* full, nothing reserved */
         arena_app_reserved(a, AV_NODE_S, AV_NODE_K);
         _exit(0);                               /* not reached */
     }
+    close(fd[1]);
+    char msg[512];
+    size_t len = 0;
+    ssize_t r;
+    while (len < sizeof msg - 1 && (r = read(fd[0], msg + len, sizeof msg - 1 - len)) > 0)
+        len += (size_t)r;
+    msg[len] = '\0';
+    close(fd[0]);
     int st = 0;
     REQUIRE(waitpid(pid, &st, 0) == pid);
     CHECK(WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT);
+    CHECK(strstr(msg, "allocation past what was reserved") != NULL);
 }
 
 TEST_MAIN(

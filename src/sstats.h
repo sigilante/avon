@@ -103,7 +103,8 @@ static inline bool sstats_is_ctor_value(const av_arena *a, uint32_t t) {
     unsigned n;
     uint32_t args[1];
     uint32_t h = sstats_head(a, t, &n, args, 0);
-    if (av_is_word(a, h)) return n == 0;
+    /* a word or a list word holds a value, not a jet id */
+    if (av_is_word(a, h) || av_is_list(a, h)) return n == 0;
     if (av_tag(a, h) != AV_JET) return false;
     const struct av_jet *j = &a->jets[AV_JET_ID(av_left(a, h))];
     return j->tmpl && av_ctor_is(a->tmpls[j->tmpl - 1].ctor) && n < a->tmpls[j->tmpl - 1].k;
