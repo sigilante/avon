@@ -133,7 +133,7 @@ malformed number or a missing argument prints the usage alone.
 | `--whnf` | stop at weak head normal form; otherwise reduce to normal form |
 | `--fuel=N` | at most N contractions; a jet fire or template instantiation is charged as §6.5 and §6.9 say |
 | `--max-nodes=N` | live nodes allowed after a collection before `SIZE`; by default physical memory over 64 bytes (between 2^20 and 2^30), so that a run's collections stay within the host's memory |
-| `--aggressive-heap` | grow the arena while the live set passes a quarter of it, not half: fewer collections for up to twice the memory; every count and state is the same. On plain SKI it halves OrdList's collections at 3.5 GB against 2.0 (`BENCHMARK.md`, "Plain SKI at half rate"). `reduce`, `batch` and `front0`; not with `--trace-frame`, which never collects |
+| `--aggressive-heap` | grow the arena while the live set passes a quarter of it, not half: fewer collections for up to twice the memory; every count and state is the same. On plain SKI it halves OrdList's collections and takes 20.2 s against 29.9, at 3.5 GB against 2.0 (`BENCHMARK.md`, "Plain SKI at half rate"). `reduce`, `batch` and `front0`; not with `--trace-frame`, which never collects |
 | `--budget=N` | nodes read or printed (default 1,000,000) |
 | `--dag` | print the term reached in the DAG form, sharing kept |
 | `--allow-bird-atoms` | accept atoms named like aviary birds |
