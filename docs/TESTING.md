@@ -21,11 +21,6 @@ run's output, error and status with the reference host's, printing
 `drivers: N of N runs agree with the reference host`.  The target exits 0
 only if every suite and every run passes; it prints no summary.
 
-One line in its output looks like a failure and is not: `avon: internal
-invariant broken at ... jets.h: allocation past what was reserved`, printed
-just before `tests/test_reduce.c` passes.  That suite checks that an
-over-allocation stops the process, in a child.
-
 A suite whose fixture is missing fails, not skips (`tests/test.h`).
 
 ## The smoke test: `make smoke`
@@ -52,10 +47,22 @@ git diff tests/smoke.tsv
 make smoke
 ```
 
+## The stats build: `make stats-check`
+
+```sh
+make stats-check  # under 1 s: stats-check: 5 programs, each as build/avon runs it, with its counts
+```
+
+`build/stats/avon` counts what becomes of template instances' cells
+(`src/sstats.h`).  The check runs it and `build/avon` on every program of
+`tests/data/` with its templates and data jets.  Each stats run must exit
+as the release run does, print the same output, and report its counts.
+`tests/data/lists` makes list words, which the counting once took for jets.
+
 ## CI
 
 `.github/workflows/check.yml` runs the release build, `make smoke`, `make
-stats` and `make check` on Linux (clang 18) for every pull request and push
+stats`, `make stats-check` and `make check` on Linux (clang 18) for every pull request and push
 to master, and on macOS too for pushes to master.  A change to
 documentation alone (Markdown, `docs/`, `img/`, `LICENSE`) runs nothing.
 `.github/workflows/pinned.yml` runs `fixtures-check`, `selfhost-check`,

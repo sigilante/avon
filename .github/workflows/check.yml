@@ -51,5 +51,7 @@ jobs:
         run: make CC=$CC smoke
       - name: stats build
         run: make -j4 CC=$CC stats
+      - name: stats check
+        run: make CC=$CC stats-check
       - name: unit tests under ASan and UBSan
         run: make -j4 CC=$CC check

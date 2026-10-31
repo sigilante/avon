@@ -382,7 +382,8 @@ static int native_lookup(av_arena *a, const av_interp *in, uint32_t resolver,
                          uint64_t *spent) {
     *spent = 0;
     const av_facts *f = a->facts;
-    if (!f || av_tag(a, resolver) != AV_JET) return -1;
+    /* a word's id field holds its value, not a jet id */
+    if (!f || av_tag(a, resolver) != AV_JET || (av_left(a, resolver) & AV_JET_WORD)) return -1;
     av_jet *J = &a->jets[AV_JET_ID(av_left(a, resolver))];
     if (!J->resolves || J->admitted == 2) return -1;
     size_t n = J->resolves - 1;

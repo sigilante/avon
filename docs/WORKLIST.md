@@ -6,6 +6,17 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **The stats build on list words** (2026-11-01; item 8). `build/stats/avon` stopped with
+  a bus error on front1 with data jets, and on `tests/data/lists`: the counting read a
+  list word, whose id field holds its length, as a jet, and indexed the jet table about
+  2^27 entries past its end. It now counts a list word as a value, as it does a word.
+  On the 22 corpus programs through front1, with data jets and with `--fix`, the stats
+  build under ASan prints what `build/avon` prints. `make stats-check`, now in CI, runs
+  the stats build on `tests/data/`. The interpreter jet's native lookup now declines a
+  word in the resolver's place, by the same reading; no run is known to reach it.
+  `test_reduce`'s abort test reads its child's stderr, so `make check` no longer prints
+  an invariant message from a passing test.
+
 - **The interpreter jet's adequacy, proved in Lean for `whnfF`** (2026-10-29;
   `LEAN-JETS.md` §8). Step 5, the plan's last, is done. `lean/Interp.lean` proves the
   ski-in-ski paper's step and fuel adequacy for the 618-atom `whnfF` the jet serves:
@@ -61,8 +72,8 @@ design lives. Last revised 2026-10-29.
   286,662 steps against 145,620: inlining a reference saves its instance. Compiled
   template bodies would keep the cost: 37.5% of the fixed point's samples write
   instances, 3.3 open applications each, and straight-line code would still write them.
-  Neither is taken. The stats build crashes on front1 runs, as it did before this arc
-  (small item 8).
+  Neither is taken. The stats build crashed on front1 runs, as it did before this arc;
+  fixed 2026-11-01 (list words, above).
 
 - **front1's own templates** (2026-10-28; avon #91, SKIjack #40; `SKA.md` §7). front1's
   `ROk` carries each rule's template as its expander abstracts it, made only when read,
@@ -576,12 +587,6 @@ When lean-ski changes a table format or the prover's inputs, Avon matches it and
 reruns `make zk-jet-witness-check`.
 
 ## Small items
-
-### 8. The stats build crashes on front1
-
-Found 2026-10-29: `make stats` builds, and `build/stats/avon front0` on front1 stops with
-a bus error even on a one-line source, as it does at `298c252`, before the SKA arc; a
-small `reduce` completes. Open, unexamined; the stats build is diagnostic only.
 
 ### 6. From the reviews of avon PR #3
 

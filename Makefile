@@ -19,7 +19,8 @@
 # runs tests/hider_check.sh (needs the pure-S paper's scripts); each runs
 # at the revisions tests/pins.sh pins.  `make stats`
 # builds build/stats/avon, which reports what becomes of template instances'
-# cells (src/sstats.h), `make clean`
+# cells (src/sstats.h), and `make stats-check` runs it on tests/data/;
+# `make clean`
 # removes build/.  Requires GNU Make 3.81+.
 
 CC      := clang
@@ -44,7 +45,7 @@ TEST_BIN := $(patsubst tests/%.c,$(BUILD)/dbg/%,$(TESTS))
 
 HDRS    := $(wildcard include/*.h src/*.h src/cli/*.h tests/*.h)
 
-.PHONY: all check smoke clean stats witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check words-lean-check templates-lean-check fix-lean-check interp-lean-check jets-lean-check \
+.PHONY: all check smoke clean stats stats-check witness-check jet-witness-check probe-witness-check zk-jet-witness-check p2-witness-check words-lean-check templates-lean-check fix-lean-check interp-lean-check jets-lean-check \
 	selfhost-check front0-check front1-check fixtures-check hider-check
 .SECONDARY:
 
@@ -63,6 +64,10 @@ $(BUILD)/dbg/avon: $(CLI_SRC) $(DBG_OBJ) $(HDRS)
 STATS_OBJ := $(patsubst src/%.c,$(BUILD)/stats/%.o,$(LIB_SRC))
 
 stats: $(BUILD)/stats/avon
+
+# The stats build on tests/data/'s programs: what build/avon prints, and the counts.
+stats-check: $(BUILD)/avon $(BUILD)/stats/avon
+	tests/stats_check.sh
 
 $(BUILD)/stats/avon: $(CLI_SRC) $(STATS_OBJ) $(HDRS)
 	@mkdir -p $(@D)

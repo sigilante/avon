@@ -23,6 +23,7 @@ make                  # build/avon, optimized
 make check            # every tests/test_*.c under ASan and UBSan; also build/dbg/avon
 make smoke            # tests/smoke.tsv's commands on build/avon, as recorded
 make stats            # build/stats/avon, which counts what becomes of template instances' cells
+make stats-check      # build/stats/avon on tests/data/'s programs: build/avon's output, and the counts
 make clean            # removes build/
 ```
 
