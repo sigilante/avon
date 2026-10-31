@@ -31,8 +31,8 @@ Avon is C11 with no dependencies.  It needs clang and GNU Make 3.81 or later.
 
 ```sh
 make            # build/avon, optimized; about 3 s on an Apple M4 Max
-make check      # 27 unit-test suites under ASan and UBSan; also build/dbg/avon; about 7.5 min
-make smoke      # the release binary against 30 recorded commands
+make check      # 28 unit-test suites under ASan and UBSan; also build/dbg/avon; about 7.5 min
+make smoke      # the release binary against 31 recorded commands
 ```
 
 The build treats every warning as an error (`-Werror`), so a compiler other than the clang the Makefile names may fail it; `make CC=clang-18` picks another clang.  There is no install step: run `build/avon` in place.
@@ -86,7 +86,7 @@ build/avon reduce --strategy=copy --whnf --jets=$J/dictionary.tsv --interp=$J/in
 #   WHNF 342
 ```
 
-`docs/GETTING-STARTED.md` continues the tour: batches, the binary form, templates and data jets, kernels on a pier, scry and frame traces.
+`docs/GETTING-STARTED.md` continues the tour: batches, the binary form, templates and data jets, kernels on a pier, scry and frame traces.  Its section 12, "Running fast", says which options to add for speed and what each costs: with templates and data jets the Reduceron's OrdList port runs in 2.1 s, against 23.1 s as plain $SKI$.
 
 ## Documentation
 
@@ -109,7 +109,7 @@ Start at [`docs/README.md`](docs/README.md), the index.  In brief:
 | `selfhost-check`, `front0-check`, `front1-check` | [SKIjack](https://github.com/sigilante/SKIjack) and [aviary](https://github.com/sigilante/aviary)'s `aviary_kernel` |
 | `fixtures-check` | SKIjack, [SKIlark](https://github.com/sigilante/SKIlark) and aviary |
 | `witness-check` and the other four `*-witness-check`s | [lean-ski](https://github.com/sigilante/lean-ski) |
-| `words-lean-check`, `templates-lean-check`, `fix-lean-check`, `interp-lean-check` | lean-ski |
+| `words-lean-check`, `templates-lean-check`, `fix-lean-check`, `interp-lean-check`, `jets-lean-check` | lean-ski |
 | `hider-check` | the pure-S paper's scripts, not yet public |
 
 `docs/TESTING.md` gives each check's variable, default path and running time.

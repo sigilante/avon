@@ -12,7 +12,7 @@ revision.
 make check        # about 7.5 min on an Apple M4 Max
 ```
 
-`make check` builds `build/dbg/avon` and each of the 27 suites
+`make check` builds `build/dbg/avon` and each of the 28 suites
 `tests/test_*.c` with AddressSanitizer and UndefinedBehaviorSanitizer, and
 runs them.  Each suite prints `tests/test_NAME.c: N/N passed`; some print a
 line of figures too.  Then `tests/drivers_check.sh` runs `build/dbg/avon run
@@ -31,10 +31,10 @@ A suite whose fixture is missing fails, not skips (`tests/test.h`).
 ## The smoke test: `make smoke`
 
 ```sh
-make smoke        # about 4 s: smoke: 30/30 commands as recorded
+make smoke        # about 4 s: smoke: 31/31 commands as recorded
 ```
 
-`tests/smoke.tsv` records, for 30 commands, the exit status and the SHA-256
+`tests/smoke.tsv` records, for 31 commands, the exit status and the SHA-256
 of stdout and stderr, taken from `build/dbg/avon` under the sanitizers.
 `make smoke` runs them on the release binary, whose `assert`s are compiled
 out, and compares.  The commands cover every subcommand but `front0`, each

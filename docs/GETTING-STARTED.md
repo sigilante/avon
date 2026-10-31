@@ -275,6 +275,30 @@ contractions 340 rows 831 cells 2369 loaded 1366 insts 0
 
 Checking and proving it needs [lean-ski](https://github.com/sigilante/lean-ski).
 
+## 12. Running fast
+
+Share mode with the compiler's templates and data jets is the fast path.
+On the Reduceron's OrdList port, plain SKI takes 23.1 s, templates 2.7 s
+and templates with data jets 2.1 s (`BENCHMARK.md`, "Against the
+Reduceron" and "Y unfolded in one step").  Add the options in this order:
+
+- **`--templates=DIR`**, or `--discover` with no files: each function
+  instantiates in one step, so the ports take 8.9 to 12.3 times fewer
+  steps.
+- **`--data`**: constructors dispatch and numerals compute as machine
+  words.
+- **`--fix`**: `Y g` unfolds in one step, 1.03 times less time than data
+  jets alone; every unfolding stays live, 244 MB at peak on OrdList.
+- **`--memory`** in place of `--fix`: the same time at a few MB (OrdList
+  4 MB against 235), for one more step per recursive call.
+- **`--aggressive-heap`** for a large live set: the arena grows at a
+  quarter full, not half.  Plain-SKI OrdList takes 20.2 s against 29.9,
+  in 3.5 GB against 2.0 (`BENCHMARK.md`, "Plain SKI at half rate").
+
+None of these runs in copy mode, which keeps the paper's counts.  Code
+jets (`--jets`) run in both modes and leave every copy-mode count as it
+is.
+
 ## Next
 
 - `RUNTIME.md`: every command, option, file and exit status.
