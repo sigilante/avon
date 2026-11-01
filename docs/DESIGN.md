@@ -1,11 +1,11 @@
 # Avon: the native runtime, planned
 
-> **Status (2026-10-29).**
+> **Status (2026-11-01).**
 >
-> - **Built:** stages 0 to 7 and 9 of §11. Stage 8 has the compiler's core, the SKIjack-0 front end, and the full language's front end through M6: it checks a program as Python's Stage A and Stage B do, and compiles every corpus program in Avon to Python's terms (§11.1, §20.3).
+> - **Built:** stages 0 to 9 of §11. Stage 8 closed on 2026-11-01: front1, the full language's front end, checks a program as Python's Stage A and Stage B do, and compiles its own source and every corpus program in Avon to Python's terms (§11.1, §20.3).
 > - **Beyond the stages:** share mode runs supercombinator templates, data jets, Y's one-step unfolding and Poseidon2 natively, and defers an instance's root (§6.9 to §6.13), all outside the proof. Its templates come from Python's expander, from front1 itself, or from the term with no front end, by inverting bracket abstraction (§6.9, `SKA.md`). Jets under hiding are built (`ZK-JETS.md`). Frame traces and the defect count serve the pure-S paper's hider census (§22). The structural hash is `skijack-2`, 128 bits (§5), and a dashboard entry is its term, not its digest (§6.5).
 > - **Proved in Lean** (`LEAN-JETS.md`, 2026-10-29): the fifteen word operations' terms and Lean models of the C's fires, a model of the template load check and instance, `--fix`'s rewrite (convertible for every term; Y's simulation up to lean-ski's `Tr`, Y a jet at the compiler's recursion sites), and the interpreter jet's `whnfF` (the paper's fuel adequacy).
-> - **Open:** what the proofs do not yet cover, and the unbuilt stage work, are listed in §11.1, "Open". `WORKLIST.md` orders what is next.
+> - **Open:** what the proofs do not yet cover is listed in §11.1, "Open". `WORKLIST.md` orders what is next.
 >
 > **How to read this note.** It began on 2026-09-16 as the build plan, before any code existed, and grew as the stages were built. §0 to §4 and §10 to §16 are the plan and its decisions; §11.1 is the record of what was built, with figures as measured at the time; §5 to §9 and §17 to §22 are the current design. `RUNTIME.md` is the user's reference, `ARCHITECTURE.md` the map of the source. Where this note and the compiler differ, the compiler (SKIjack's `python/skijack`) and its tests are authoritative. Paths that begin `avon/bench/` are in the [SKIjack repository](https://github.com/sigilante/SKIjack/tree/master/avon/bench), where this note was first written; `RUNTIME-DESIGN.md` and `SPEC.md` are SKIjack's too.
 >
@@ -2851,8 +2851,7 @@ than a fault, and guarded the instance buffer against re-entry.
   kernel, hash for hash.
 - Leak-free (`leaks`) across boot, poke with a snapshot, and peek.
 
-**Stage 8, the compiler's core done; the front end open** (§20.3, "Built
-in stage 8"):
+**Stage 8, done** (closed 2026-11-01; §20.3, "Built in stage 8"):
 
 - **The compiler term compiles its own source to the terms Python
   produced**, for the part of compilation that is bracket abstraction:
@@ -2866,9 +2865,16 @@ in stage 8"):
 - **The compiler is a term in a pill**, a kernel answering `Abs` events.
 - **The front end, for SKIjack-0, compiles its own source** (§20.3,
   "Built for SKIjack-0"): all 492 of its names, from source text, hash for
-  hash (`make front0-check`). The full language's front end is built
-  through M4 of six: every corpus program compiles in Avon to Python's
-  terms (`make front1-check`). The checkers remain.
+  hash (`make front0-check`).
+- **The full language's front end, front1, closes the bootstrap**
+  (§20.3, M1 to M6): it compiles its own source in Avon to the terms
+  Python produced, every name hash for hash, and every corpus program to
+  Python's terms, refusing the four Python refuses with the same class.
+  It checks a program as Python's Stage A and Stage B do (`make
+  front1-check`, weekly at the pin).
+- **Not built, and not part of the stage's test:** a pill holding front1
+  (the pill holds the compiler's core); a compiler jet beyond bracket
+  abstraction; the Lean theorem witness mode would need for it (§20.3).
 
 **Stage 9, done.** The persistent arena (§19.1, "Built in stage 9"):
 
@@ -2925,8 +2931,6 @@ reduction option it would ignore.
 
 **Open.**
 
-- *Stage 8:* the full language's front end is built through M6 (Stage A
-  and Stage B); what the stage still lacks is in `WORKLIST.md`.
 - *Proofs* (to lean-ski): jetted and probed witnesses of terms with atoms
   still refuse them (§17.3);
   scry
