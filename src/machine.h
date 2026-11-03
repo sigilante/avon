@@ -55,12 +55,13 @@ typedef struct {
     uint64_t       tmpl_calls;
     uint64_t       dispatches, fused, word_ops, list_ops, bit_ops, fix_calls, joins;
     uint64_t       p2_calls, p2_declines, p2_unbound, deferred;
+    uint64_t       nock_dec_calls, nock_dec_declines, nock_dec_unbound;
     uint32_t      *p2c;         /* share: a chain of P calls, its call and
                                    jet node at each level, outermost first */
     size_t         p2cap;
-    av_node        p2_seen;     /* share: the jet node last found P's, as  */
-    uint32_t       p2_node;     /* it stood, and where, before collection  */
-    uint64_t       p2_gen;      /* p2_gen - 1; 0 none                      */
+    av_node        pin_seen;    /* share: the jet node last found its      */
+    uint32_t       pin_node;    /* pinned term's, as it stood, and where,  */
+    uint64_t       pin_gen;     /* before collection pin_gen - 1; 0 none  */
     uint64_t       interp_calls;
     bool           jet_fault;
     uint32_t       jnode;       /* share: a jet node held across a

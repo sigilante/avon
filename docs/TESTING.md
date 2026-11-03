@@ -12,7 +12,7 @@ revision.
 make check        # about 7.5 min on an Apple M4 Max
 ```
 
-`make check` builds `build/dbg/avon` and each of the 28 suites
+`make check` builds `build/dbg/avon` and each of the 29 suites
 `tests/test_*.c` with AddressSanitizer and UndefinedBehaviorSanitizer, and
 runs them.  Each suite prints `tests/test_NAME.c: N/N passed`; some print a
 line of figures too.  Then `tests/drivers_check.sh` runs `build/dbg/avon run

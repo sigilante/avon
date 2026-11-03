@@ -108,7 +108,7 @@ term that runs out of fuel or room still exits 0. Exit 1 is a failure:
 - a dictionary, template directory or interpreter file that does not
   load;
 - an option missing what it needs: `--data` or `--fix` without
-  `--templates`, `--templates`, `--p2` or `--profile` in copy mode,
+  `--templates`, `--templates`, `--p2`, `--nock-dec` or `--profile` in copy mode,
   `--interp` without `--jets`;
 - `scry` finding a run off the reference, or a pier that will not open,
   boot or commit.
@@ -159,6 +159,7 @@ differently (§6).
 | `--memory` | with `--templates` or `--discover`: `--fix`, and every unfolding of a generator `g` passes on one `Y g`, never written, leading to one shared unfolding (§6.11, "Shared"): peak memory of a few MB where `--fix` holds hundreds, at about `--fix`'s time | `share` only | one step per unfolding, and one per call through the shared `Y g`, reported |
 | `--no-defer` | with `--templates` or `--discover`: every instance writes its root and spine at once, as before deferred roots (§6.13), for comparing the two | `share` only | none: every count and state is the same |
 | `--p2=FILE` | lean-ski's Poseidon2 term `P` (`lake exe p2run` writes `P.dag`): `P` applied to a state of sixteen 31-bit elements runs natively (§6.12) | `share` only; `copy` refuses | one step per permutation, reported |
+| `--nock-dec=FILE` | skinock's `jetT decF` (SKInock `terms/jetT-decF.dag`): applied to an encoded Nock stack, the transported decrement runs natively (§6.15) | `share` only; `copy` refuses | one step per decrement, reported |
 
 ```sh
 build/avon reduce --strategy=copy --jets=tests/conformance/dictionary.tsv --jet-check=1 \
@@ -247,6 +248,18 @@ state is built before it is passed on.
 (cd ~/Code/ski/lean-ski && lake exe p2run 1 /tmp/p2)
 build/avon reduce --p2=/tmp/p2/P.dag /tmp/p2/p2.dag   # NORMAL 1, then p2.expected
 ```
+
+**The Nock decrement run natively** (`--nock-dec=FILE`, §6.15) prints
+`nock-dec: 1 occurrences of jetT decF bound; 1 decrements run natively
+among the contractions, 0 declined (an argument not an encoded noun as it
+stands, or a head atom past 32 bits), 0 unbound at a call`. FILE must
+hold skinock's `jetT decF`, pinned by its 256-bit digest as `P` is. It
+fires on the encoding of a Nock stack `[n r]` as it stands, to `[n-1 r]`,
+or to `Err` on `[0 r]`, on a cell at the head and on an atom; skinock's
+`dec_transport` is the licence. A head atom past 32 bits, a `Form`, a
+non-canonical atom or a thunk runs the term, counted as a decline, so the
+normal form is SKI's. `tests/nockdec/jetT-decF.dag` is the term at
+SKInock `d89b96c`.
 
 ## Measuring
 
@@ -512,7 +525,7 @@ build/avon enum 12 | sed 's/$/ X/' | build/avon batch --trace-frame=summary --fu
 jets; a term with K, I or another atom is refused. Options it would ignore
 are refused: `--strategy=share`, `--jets`, `--ctors`, `--interp`,
 `--jet-floor`, `--jet-check`, `--templates`, `--discover`, `--data`, `--fix`,
-`--memory`, `--no-defer`, `--p2`, `--profile`, `--budget`. So are
+`--memory`, `--no-defer`, `--p2`, `--nock-dec`, `--profile`, `--budget`. So are
 `--passenger`, `--records`, `--frame-dump` and `--defect` without it. Each term gives one block:
 
 ```

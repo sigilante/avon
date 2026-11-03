@@ -395,6 +395,9 @@ typedef struct {
     bool        p2;             /* share mode: P applied to a state of
                                    sixteen 31-bit elements runs natively,
                                    one step; copy mode ignores it */
+    bool        nock_dec;       /* share mode: skinock's jetT decF applied
+                                   to an encoded stack runs natively, one
+                                   step; copy mode ignores it */
     bool        no_join;        /* with data: never join a case to its
                                    instance, for tests comparing
                                    the two; every count is the same       */
@@ -440,6 +443,15 @@ typedef struct {
                                fused                                      */
     uint64_t  list_ops;     /* list operations run on list words, one
                                step each, among steps                     */
+    uint64_t  nock_dec_calls;     /* jetT decF run natively, one step
+                                     each, among steps                    */
+    uint64_t  nock_dec_declines;  /* jetT decF met an argument not an
+                                     encoded noun as it stands, or a head
+                                     atom past 32 bits, and ran a fresh
+                                     copy of its term                     */
+    uint64_t  nock_dec_unbound;   /* jet nodes whose term was not jetT
+                                     decF's at a fire or a decline, made
+                                     indirections                         */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -721,9 +733,9 @@ bool av_p2_selftest(void);
  *  `pairT a b = S (S I (K a)) (K b)`, a bit K (1) or K I (0), each list
  *  ending in K---to `stateN (permute vs)` (P_specN).  av_p2_register makes
  *  p a dashboard entry with the p2 flag, refusing p unless its full digest
- *  (av_p2_digest: the structural hash with every digest kept whole, 256
+ *  (av_pin_digest: the structural hash with every digest kept whole, 256
  *  bits, over S, K and I) is P's, AV_P2_SHA256, pinned here; then, after
- *  av_jets_match, av_p2_bind keeps a jet node for it only where its term is
+ *  av_jets_match, av_pin_bind keeps a jet node for it only where its term is
  *  p's, node for node, and makes every other one an indirection.  With
  *  av_opts.p2, share mode rewrites P at the head with an argument that is
  *  such a state, as it stands, to the permuted state, one step; over a
@@ -734,10 +746,35 @@ bool av_p2_selftest(void);
  *  made after the bind is held to it too.  av_p2_state_read reads a state
  *  through indirections and jet nodes: false unless t is one. */
 #define AV_P2_SHA256 "391f7d9a5ad5e744711e18be27b9952a1bb802f8243672552fab4b2e870405b3"
-bool     av_p2_digest(const av_arena *a, uint32_t t, char out[65]);
+bool     av_pin_digest(const av_arena *a, uint32_t t, char out[65]);
 uint32_t av_p2_register(av_arena *a, uint32_t p, const char **err);
-long     av_p2_bind(av_arena *a, uint32_t t, uint32_t id);   /* jet nodes kept, or -1 */
+long     av_pin_bind(av_arena *a, uint32_t t, uint32_t id);  /* jet nodes kept, or -1 */
 bool     av_p2_state_read(const av_arena *a, uint32_t t, uint32_t s[16]);
+
+/*  The transported Nock decrement.  skinock's term jetT decF
+ *  (Nock2Ski/JetTransport.lean, printed by scripts/PinDec.lean) is
+ *  `λx. toCell (nockToSki decF x)`, the Λ word dec compiled from Nock and
+ *  its output copied code-free; dec_transport proves it implements the
+ *  contract of decC, lean-nock's model: on the stack [n r], n an atom
+ *  k + 1, the stack [k r]; Err (K (K (K I))) on [0 r], on a stack whose
+ *  head is a cell, and on an atom.  A noun is skinock's encoding
+ *  (Nock2Ski/Noun.lean): Atom b = S (K K) (S (K K) (S (K K) (S I (K b)))),
+ *  b the atom's bits least significant first, canonical (no trailing 0),
+ *  each list K or K (pairT bit rest), a bit K (1) or K I (0); Cell h t =
+ *  K (S (K K) (S (K K) (pairT h t))).  av_nock_dec_register pins the term
+ *  as av_p2_register pins P, by AV_NOCK_DEC_SHA256, and av_pin_bind keeps
+ *  its jet nodes.  With av_opts.nock_dec, share mode rewrites the term at
+ *  the head with an argument that is, as it stands, the encoding of a
+ *  noun---every atom canonical, no Form, nothing left to reduce---to the
+ *  contract's output, one step: [k r] shares r's nodes, the encoding being
+ *  normal and code-free already.  A head atom of more than 32 bits, and any
+ *  other argument, run a fresh copy of the term, a decline counted.
+ *  av_nock_dec_read reads such an argument: 1 a stack it fires on, *k its
+ *  head less one and *rest its tail; 2 one whose output is Err; 0 not a
+ *  noun's encoding, or a head atom past 32 bits. */
+#define AV_NOCK_DEC_SHA256 "17bcbb92ade0f0c73e0585dfeab21bbda123ce89b4965b79ba5857f47b518657"
+uint32_t av_nock_dec_register(av_arena *a, uint32_t p, const char **err);
+int      av_nock_dec_read(const av_arena *a, uint32_t t, uint32_t *k, uint32_t *rest);
 
 /*  The table in lean-ski's `composed check-cj` format, as bench/plonky3's
  *  compj-prove writes it: the header, `W w`, the memory padded with nil
@@ -866,8 +903,11 @@ typedef struct av_jet {
     bool      fix;              /* Curry's Y: Y g unfolds to g (Y g)      */
     bool      p2;               /* Poseidon2's term P: P applied to a
                                    state runs natively                    */
-    uint32_t  p2_nodes;         /* its term's distinct nodes, the bound on
-                                   comparing a jet node's term with it    */
+    bool      nock_dec;         /* skinock's jetT decF: applied to an
+                                   encoded stack, runs natively           */
+    uint32_t  pin_nodes;        /* a pinned jet's term's distinct nodes,
+                                   the bound on comparing a jet node's
+                                   term with it                           */
 } av_jet;
 
 /*  The numeral operations, skijack's natAdd .. natIfLe, natDiv and natRem:

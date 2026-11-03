@@ -115,7 +115,9 @@
  *  step), --no-defer (with --templates: every instance's root and spine
  *  written at once, not deferred, for comparing the two), --p2=FILE (share
  *  mode: FILE holds lean-ski's Poseidon2 term P, as `lake exe p2run`
- *  prints it; P applied to a state runs natively).  reduce and batch take
+ *  prints it; P applied to a state runs natively), --nock-dec=FILE (share
+ *  mode: FILE holds skinock's jetT decF, as scripts/PinDec.lean prints it;
+ *  applied to an encoded stack it runs natively).  reduce and batch take
  *  --trace-frame[=summary] (copy mode's head run observed for the hider
  *  census) with --passenger=NAME, --records[=CONF], --frame-dump=SPEC and
  *  --defect[=CONF] (the paper's defect count);
@@ -145,7 +147,7 @@ int usage(void) {
         "       (all but witness --statement accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
         "        --interp=FILE --profile=NAMES --templates=DIR --discover --data --fix --memory --no-defer\n"
-        "        --p2=FILE)\n"
+        "        --p2=FILE --nock-dec=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"

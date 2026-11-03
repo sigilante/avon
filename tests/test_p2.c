@@ -246,7 +246,7 @@ static jetrun jet_run(const char *arg, bool on, bool forge) {
         a->nodes[j] = (av_node){ (AV_JET << AV_TAG_SHIFT) | id, f };
         t = av_app(a, j, av_right(a, t));
     }
-    out.kept = av_p2_bind(a, t, id);
+    out.kept = av_pin_bind(a, t, id);
     av_opts o = av_opts_default();
     o.p2 = on;
     av_root_push(a, &t);
@@ -380,7 +380,7 @@ TEST(a_shared_node_keeps_the_jet_after_a_decline) {
     uint32_t t = av_app(a, q, av_app(a, q, x));         /* one node, twice */
     t = av_jets_match(a, t);
     CHECK(av_res(a, av_left(a, t)) == av_res(a, av_left(a, av_right(a, t))));
-    CHECK(av_p2_bind(a, t, id) == 1);
+    CHECK(av_pin_bind(a, t, id) == 1);
     av_opts o = av_opts_default();
     o.p2 = true;
     av_root_push(a, &t);
@@ -396,7 +396,7 @@ TEST(a_shared_node_keeps_the_jet_after_a_decline) {
     x = av_parse(a, text, strlen(text), NULL);
     t = av_app(a, q, av_app(a, AV_NODE_I, av_app(a, q, x)));
     t = av_jets_match(a, t);
-    CHECK(av_p2_bind(a, t, id) == 1);
+    CHECK(av_pin_bind(a, t, id) == 1);
     av_root_push(a, &t);
     r = av_reduce(a, t, &o);
     av_root_pop(a);
@@ -477,7 +477,7 @@ static chainrun chain_run(int n, bool shared, uint32_t cap, uint64_t fuel, bool 
     for (int i = 0; i < n; i++)
         t = av_app(a, shared ? q : av_parse(a, "I (S K K)", 9, NULL), t);
     t = av_jets_match(a, t);
-    CHECK(av_p2_bind(a, t, id) == (shared ? 1 : n));
+    CHECK(av_pin_bind(a, t, id) == (shared ? 1 : n));
     if (forged) {                       /* the call at depth n / 2, rewrapped */
         uint32_t c = t;
         for (int i = 0; i < n / 2; i++) c = av_res(a, av_right(a, c));

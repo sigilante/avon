@@ -173,7 +173,7 @@ static uint32_t native(av_arena *a, const av_compiler *c, uint64_t x, uint32_t t
     return r == AV_NONE ? AV_NONE : av_tm_encode(a, c, r);
 }
 
-/*  The compiler's nine terms, pinned by their full digests (av_p2_digest):
+/*  The compiler's nine terms, pinned by their full digests (av_pin_digest):
  *  abs, compiled by skijack from tests/selfhost/abstract.ascii.ski, and
  *  the constructors of its tm, ap and nat types.  Only this compiler is
  *  admitted; the samples below run as well. */
@@ -193,7 +193,7 @@ bool av_compiler_register(av_arena *a, const av_compiler *c, const char **err) {
     const uint32_t terms[9] = { c->abs, c->ts, c->tk, c->ti, c->tv, c->ta, c->ap, c->zero, c->suc };
     for (int i = 0; i < 9; i++) {
         char full[65];
-        if (!av_p2_digest(a, terms[i], full)) { if (err) *err = "out of memory"; return false; }
+        if (!av_pin_digest(a, terms[i], full)) { if (err) *err = "out of memory"; return false; }
         if (strcmp(full, PINNED[i]) != 0) {
             if (err) *err = "not skijack's compiler: a term's full digest is not the pinned one";
             return false;
