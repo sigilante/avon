@@ -6,6 +6,15 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **Hoon's `++dec`, transported** (2026-11-04; `DESIGN.md` §6.15). With
+  `--hoon-dec=FILE`, share mode runs skinock's `jetT hoonDecBodyF`, the
+  compiled body of Hoon's `++dec` arm, natively on a gate core: `[bat [n ctx]]`
+  to the atom `n-1`, `Err` on a zero sample, an atom or `[bat atom]`. It reads
+  only the core's two cells and the sample, either cell plain or carrying code,
+  and declines a cell sample, where the arm diverges. `[0 [100 [3 4]]]`:
+  169,676 steps to one. Its merge waits on skinock's proof that the output
+  depends on the sample alone, whatever the battery and context hold.
+
 - **The Nock decrement, transported** (2026-11-04; `DESIGN.md` §6.15). With
   `--nock-dec=FILE`, share mode runs skinock's `jetT decF`, licensed by its
   `dec_transport`, natively on an encoded Nock stack: `[n r]` to `[n-1 r]`,

@@ -1,12 +1,14 @@
 /**  nockdec.c
  *
- *  The transported Nock decrement: skinock's term jetT decF, pinned
- *  (pin.c), and the nouns it reads and writes in skinock's encoding
- *  (include/avon.h, "The transported Nock decrement").  skinock's
- *  dec_transport proves the term implements decC's contract on every
- *  encoded noun, so a fire is licensed exactly where the argument is one:
- *  av_nock_dec_read checks the whole argument, rest of the stack included,
- *  before the jet answers for it.
+ *  The transported Nock decrements, skinock's terms pinned (pin.c), and the
+ *  nouns they read and write in skinock's encoding (include/avon.h, "The
+ *  transported Nock decrements").  jetT decF, the Λ word: skinock's
+ *  dec_transport proves it implements decC's contract on every encoded
+ *  noun, so av_nock_dec_read checks the whole argument, rest of the stack
+ *  included, before the jet answers for it.  jetT hoonDecBodyF, Hoon's
+ *  ++dec arm: skinock's licence covers a core whatever its battery and
+ *  context hold, so av_hoon_dec_read reads only the core's two cells and
+ *  its sample.
  */
 
 #include <stdint.h>
@@ -61,6 +63,20 @@ static bool cell_read(const av_arena *a, uint32_t t, uint32_t *h, uint32_t *tl) 
     uint32_t y1, y2, p;
     return leaf_app(a, t, AV_NODE_K, &y1) && skk_app(a, y1, &y2) && skk_app(a, y2, &p) &&
            pin_pair_read(a, p, h, tl);
+}
+
+/*  Form h t k = K (K (S (K K) (S (pairT h t) (K k)))), a cell carrying
+ *  code: h and t; k, the code, is not read */
+static bool form_read(const av_arena *a, uint32_t t, uint32_t *h, uint32_t *tl) {
+    uint32_t x1, x2, z, f, kk, p, k;
+    return leaf_app(a, t, AV_NODE_K, &x1) && leaf_app(a, x1, AV_NODE_K, &x2) &&
+           skk_app(a, x2, &z) && app(a, z, &f, &kk) && leaf_app(a, f, AV_NODE_S, &p) &&
+           leaf_app(a, kk, AV_NODE_K, &k) && pin_pair_read(a, p, h, tl);
+}
+
+/*  A cell, with code or without: h and t */
+static bool any_cell_read(const av_arena *a, uint32_t t, uint32_t *h, uint32_t *tl) {
+    return cell_read(a, t, h, tl) || form_read(a, t, h, tl);
 }
 
 /*  A canonical bit list, least significant first: K, or K (pairT bit
@@ -130,13 +146,28 @@ int av_nock_dec_read(const av_arena *a, uint32_t t, uint32_t *k, uint32_t *rest)
     return 1;
 }
 
+/*  Hoon's ++dec reads the gate core [bat [sam ctx]] at axis 6, the
+ *  sample.  Either cell may carry code, as a compiled core's do, and
+ *  neither bat nor ctx is read. */
+int av_hoon_dec_read(const av_arena *a, uint32_t t, uint32_t *k) {
+    uint32_t b, bat, tl, sam, ctx, x, n;
+    size_t len;
+    if (atom_read(a, t, &b)) return bits_read(a, b, &n, &len) ? 2 : 0;   /* no sample */
+    if (!any_cell_read(a, t, &bat, &tl)) return 0;
+    if (atom_read(a, tl, &b)) return bits_read(a, b, &n, &len) ? 2 : 0;  /* [bat atom] */
+    if (!any_cell_read(a, tl, &sam, &ctx)) return 0;
+    if (any_cell_read(a, sam, &x, &x)) return 0;        /* off the domain: the arm diverges */
+    if (!atom_read(a, sam, &b) || !bits_read(a, b, &n, &len)) return 0;
+    if (len > 32) return 0;                             /* past the jet: its term */
+    if (n == 0) return 2;                               /* underflow */
+    *k = n - 1;
+    return 1;
+}
+
 /*  ------------------------------------------------------------ building */
 
-uint32_t nock_dec_build(av_arena *a, uint32_t k, uint32_t rest) {
-    uint32_t si = arena_app_reserved(a, AV_NODE_S, AV_NODE_I);
-    uint32_t kk = arena_app_reserved(a, AV_NODE_K, AV_NODE_K);
-    uint32_t ki = arena_app_reserved(a, AV_NODE_K, AV_NODE_I);
-    uint32_t skk = arena_app_reserved(a, AV_NODE_S, kk);
+/*  Atom k, k below 2^32, si = S I, ki = K I, skk = S (K K) */
+static uint32_t atom_build(av_arena *a, uint32_t si, uint32_t ki, uint32_t skk, uint32_t k) {
     int len = 0;
     while (len < 32 && k >> len) len++;
     uint32_t e = AV_NODE_K;
@@ -144,10 +175,25 @@ uint32_t nock_dec_build(av_arena *a, uint32_t k, uint32_t rest) {
         e = arena_app_reserved(a, AV_NODE_K,
                                pin_pair_build(a, si, k >> j & 1u ? AV_NODE_K : ki, e));
     uint32_t x = arena_app_reserved(a, si, arena_app_reserved(a, AV_NODE_K, e));
-    for (int i = 0; i < 3; i++) x = arena_app_reserved(a, skk, x);  /* Atom e */
-    uint32_t c = pin_pair_build(a, si, x, rest);
+    for (int i = 0; i < 3; i++) x = arena_app_reserved(a, skk, x);
+    return x;
+}
+
+uint32_t nock_dec_build(av_arena *a, uint32_t k, uint32_t rest) {
+    uint32_t si = arena_app_reserved(a, AV_NODE_S, AV_NODE_I);
+    uint32_t kk = arena_app_reserved(a, AV_NODE_K, AV_NODE_K);
+    uint32_t ki = arena_app_reserved(a, AV_NODE_K, AV_NODE_I);
+    uint32_t skk = arena_app_reserved(a, AV_NODE_S, kk);
+    uint32_t c = pin_pair_build(a, si, atom_build(a, si, ki, skk, k), rest);
     for (int i = 0; i < 2; i++) c = arena_app_reserved(a, skk, c);
-    return arena_app_reserved(a, AV_NODE_K, c);                     /* Cell x rest */
+    return arena_app_reserved(a, AV_NODE_K, c);                     /* Cell (Atom k) rest */
+}
+
+uint32_t hoon_dec_build(av_arena *a, uint32_t k) {
+    uint32_t si = arena_app_reserved(a, AV_NODE_S, AV_NODE_I);
+    uint32_t kk = arena_app_reserved(a, AV_NODE_K, AV_NODE_K);
+    uint32_t ki = arena_app_reserved(a, AV_NODE_K, AV_NODE_I);
+    return atom_build(a, si, ki, arena_app_reserved(a, AV_NODE_S, kk), k);
 }
 
 uint32_t nock_dec_err(av_arena *a) {
@@ -161,10 +207,22 @@ uint32_t av_nock_dec_register(av_arena *a, uint32_t p, const char **err) {
     uint32_t id = pin_register(a, p, AV_NOCK_DEC_SHA256,
                                "not skinock's jetT decF: its full digest is not " AV_NOCK_DEC_SHA256,
                                err);
-    if (id != AV_NONE && a->jets[id].p2) {
+    if (id != AV_NONE && (a->jets[id].p2 || a->jets[id].hoon_dec)) {
         *err = "the term's digest is already another kind of jet";
         return AV_NONE;
     }
     if (id != AV_NONE) a->jets[id].nock_dec = true;
+    return id;
+}
+
+uint32_t av_hoon_dec_register(av_arena *a, uint32_t p, const char **err) {
+    uint32_t id = pin_register(a, p, AV_HOON_DEC_SHA256,
+                               "not skinock's jetT hoonDecBodyF: its full digest is not "
+                               AV_HOON_DEC_SHA256, err);
+    if (id != AV_NONE && (a->jets[id].p2 || a->jets[id].nock_dec)) {
+        *err = "the term's digest is already another kind of jet";
+        return AV_NONE;
+    }
+    if (id != AV_NONE) a->jets[id].hoon_dec = true;
     return id;
 }

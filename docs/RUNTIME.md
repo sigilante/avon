@@ -108,7 +108,7 @@ term that runs out of fuel or room still exits 0. Exit 1 is a failure:
 - a dictionary, template directory or interpreter file that does not
   load;
 - an option missing what it needs: `--data` or `--fix` without
-  `--templates`, `--templates`, `--p2`, `--nock-dec` or `--profile` in copy mode,
+  `--templates`, `--templates`, `--p2`, `--nock-dec`, `--hoon-dec` or `--profile` in copy mode,
   `--interp` without `--jets`;
 - `scry` finding a run off the reference, or a pier that will not open,
   boot or commit.
@@ -160,6 +160,7 @@ differently (§6).
 | `--no-defer` | with `--templates` or `--discover`: every instance writes its root and spine at once, as before deferred roots (§6.13), for comparing the two | `share` only | none: every count and state is the same |
 | `--p2=FILE` | lean-ski's Poseidon2 term `P` (`lake exe p2run` writes `P.dag`): `P` applied to a state of sixteen 31-bit elements runs natively (§6.12) | `share` only; `copy` refuses | one step per permutation, reported |
 | `--nock-dec=FILE` | skinock's `jetT decF` (SKInock `terms/jetT-decF.dag`): applied to an encoded Nock stack, the transported decrement runs natively (§6.15) | `share` only; `copy` refuses | one step per decrement, reported |
+| `--hoon-dec=FILE` | skinock's `jetT hoonDecBodyF` (SKInock `terms/jetT-hoonDecBodyF.dag`), Hoon's `++dec` arm: applied to a gate core with an atom sample, it runs natively (§6.15) | `share` only; `copy` refuses | one step per decrement, reported |
 
 ```sh
 build/avon reduce --strategy=copy --jets=tests/conformance/dictionary.tsv --jet-check=1 \
@@ -260,6 +261,16 @@ or to `Err` on `[0 r]`, on a cell at the head and on an atom; skinock's
 non-canonical atom or a thunk runs the term, counted as a decline, so the
 normal form is SKI's. `tests/nockdec/jetT-decF.dag` is the term at
 SKInock `d89b96c`.
+
+**Hoon's `++dec` run natively** (`--hoon-dec=FILE`, §6.15) prints
+`hoon-dec: 1 occurrences of jetT hoonDecBodyF bound; 1 decrements run
+natively …, 0 declined (a cell sample, a sample past 32 bits, or an
+argument not a core as it stands), 0 unbound at a call`. It fires on the
+gate core `[bat [n ctx]]`, either cell plain or carrying code, to the atom
+`n-1`, or to `Err` on a zero sample, an atom and `[bat atom]`; it reads
+nothing of `bat` and `ctx`. A cell sample, where `++dec` diverges, runs the
+term. `tests/nockdec/jetT-hoonDecBodyF.dag` is the term at SKInock
+`fe3c031`.
 
 ## Measuring
 
@@ -525,7 +536,7 @@ build/avon enum 12 | sed 's/$/ X/' | build/avon batch --trace-frame=summary --fu
 jets; a term with K, I or another atom is refused. Options it would ignore
 are refused: `--strategy=share`, `--jets`, `--ctors`, `--interp`,
 `--jet-floor`, `--jet-check`, `--templates`, `--discover`, `--data`, `--fix`,
-`--memory`, `--no-defer`, `--p2`, `--nock-dec`, `--profile`, `--budget`. So are
+`--memory`, `--no-defer`, `--p2`, `--nock-dec`, `--hoon-dec`, `--profile`, `--budget`. So are
 `--passenger`, `--records`, `--frame-dump` and `--defect` without it. Each term gives one block:
 
 ```

@@ -1957,6 +1957,40 @@ from the output. `tests/test_nockdec.c` holds the jet to the term's
 normal form on every head from 0 to 64 and on the crash cases, and holds
 the declines to it too.
 
+**Hoon's own `++dec`** (`--hoon-dec=FILE`, 2026-11-04). The Λ word never
+occurs in Hoon's code, so the jet above never fires on a Hoon program.
+skinock pins a second term, `jetT hoonDecBodyF` (SKInock `fe3c031`): the
+compiled body of Hoon's `++dec` arm, the guard and the count-up loop. A
+hint over the battery compiles away or to "evaluate the clue, then the
+body", so one term serves the benchmark's `dec.nock`, the released
+programs' battery and lean-nock's `decBat`. skinock proves
+`hoon_dec_transport` from lean-nock's battery-generic `dec_body_correct`
+and `dec_body_underflow`.
+
+- **The contract.** On the gate core `[bat [n+1 ctx]]` the output is the
+  atom `n`, code-free. On `[bat [0 ctx]]`, on an atom and on `[bat atom]`
+  it is `Err`. On a core whose sample is a cell the arm diverges
+  (`hoon_dec_off_domain`), and so does the term; the jet must never answer
+  there.
+- **What it reads.** A compiled core's battery carries code, and the core
+  itself may parse as a formula, so `av_hoon_dec_read` takes either cell of
+  `[bat [sam ctx]]` as a `Cell` or a `Form` and reads nothing of `bat` and
+  `ctx`. It fires on a canonical atom sample of at most 32 bits, gives
+  `Err` where the contract does, and declines a cell sample, a longer or
+  non-canonical atom, and anything else. The output, `Atom (n-1)`, takes
+  at most 201 fresh nodes.
+- **Its licence.** As first proved, `hoon_dec_transport` covers inputs
+  that are `encNoun` of a noun, with no `Form` anywhere; on a compiled
+  core the jet would then never fire. skinock is proving the statement
+  the reader needs: the output depends on the sample alone, for any terms
+  at `bat` and `ctx` and either cell carrying code. Until it lands the jet
+  stays unmerged.
+- **Results.** Fired against unfired, normal forms equal byte for byte:
+  `[0 [7 [0 0]]]` 11,331 steps to one; `[0 [100 [3 4]]]` 169,676 to one;
+  cores with a `Form` at either cell, and with `S K` at `bat` and `ctx`,
+  the same; a cell sample declines, and the term runs out of fuel, as
+  `hoon_dec_off_domain` says.
+
 ## 7. The interpreter jet
 
 **It is Avon's level-1 interpreter, not an optimization of one.** Vere runs

@@ -23,7 +23,7 @@ them.  `DESIGN.md` gives the reasons; this page gives the places.
    data jets, the interpreter jet (`src/interp.c`), the compiler jet
    (`src/compiler.c`), the unquoter (`src/install.c`), and the pinned
    jets (`src/pin.c`): Poseidon2 (`src/p2.c`) and the transported Nock
-   decrement (`src/nockdec.c`).
+   decrements (`src/nockdec.c`).
 4. **Print.**  `src/print.c` writes the printed form under a node budget,
    or, with `--dag`, the DAG form, each node once; or `src/wire.c` jams the
    result.
@@ -97,7 +97,7 @@ through the walk before the run goes live.
 | `witness.c` | the witness strategy: lean-ski's machine, its trace written as a table; and the prefix form's reader and writer |
 | `pin.c` | pinned jets: a term fixed by its full digest, its jet nodes bound and checked at every fire |
 | `p2.c`, `p2_consts.h`, `p2_prog.h` | Poseidon2 over BabyBear and its jet; the two headers are generated from Lean |
-| `nockdec.c` | skinock's transported Nock decrement, `jetT decF`, and the nouns it reads and writes |
+| `nockdec.c` | skinock's transported Nock decrements, the Λ word's `jetT decF` and Hoon's `++dec` arm, and the nouns they read and write |
 | `census.c` | a census of the terms a run calls, for choosing jets |
 | `jetstats.c` | each jet's fires, misses, demotions and their origins; template instances by their body's head |
 | `profile.c` | which named terms a share-mode run's contractions execute |

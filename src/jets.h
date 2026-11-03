@@ -179,12 +179,14 @@ bool     pin_same(const av_arena *a, uint32_t x, uint32_t id);
 bool     pin_pair_read(const av_arena *a, uint32_t t, uint32_t *x, uint32_t *y);
 uint32_t pin_pair_build(av_arena *a, uint32_t si, uint32_t x, uint32_t y);
 
-/*  The Nock decrement's output (nockdec.c), in NOCK_DEC_NODES reserved
+/*  The Nock decrements' output (nockdec.c), in NOCK_DEC_NODES reserved
  *  nodes at most; it never collects.  nock_dec_build: Cell (Atom k) rest,
  *  k below 2^32; nock_dec_err: Err. */
 #define NOCK_DEC_NODES (17u + 32u * 6u)
 uint32_t nock_dec_build(av_arena *a, uint32_t k, uint32_t rest);
 uint32_t nock_dec_err(av_arena *a);
+/*  Hoon's ++dec's output: Atom k, k below 2^32, within NOCK_DEC_NODES. */
+uint32_t hoon_dec_build(av_arena *a, uint32_t k);
 
 /*  The census's hook (census.c): x was put in function position with
  *  `avail` arguments at the head. */
