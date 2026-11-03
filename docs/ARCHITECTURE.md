@@ -10,7 +10,7 @@ them.  `DESIGN.md` gives the reasons; this page gives the places.
    or DAG (`src/read.c`), SKIT (`src/wire.c`), prefix (`src/witness.c`).  The
    term becomes nodes in an arena (`src/arena.c`): eight bytes each,
    addressed by 32-bit index, S, K and I interned at 0, 1 and 2.
-2. **Match.**  With `--jets`, `--ctors`, `--templates` or `--p2`, the
+2. **Match.**  With `--jets`, `--ctors`, `--templates` or `--pins`, the
    matcher (`src/jets.c`) finds the subterms that are the dashboard's
    terms, tree for tree, and binds each to its jet; templates (`src/tmpl.c`) and words
    (`src/words.c`) register theirs the same way.
@@ -124,7 +124,7 @@ Outside `src/`
 | `lean/Fix.lean` | `--fix`'s rewrite: convertible with the plain run for every term, and Y's simulation up to lean-ski's `Tr` with Y a jet (`LEAN-JETS.md` §7) |
 | `lean/Templates.lean` | `tmpl.c`'s load check and `tmpl_instance`, modelled and proved sound against lean-ski's bracket abstraction, and a replay of the loader (`LEAN-JETS.md` §6) |
 | `lean/Words.lean` | the word operations' terms and the constructors they read, printed as `src/word_pins.h`, each operation proved to compute its function, and the C's fires, modelled, proved sound (`LEAN-JETS.md`) |
-| `jets/` | the bird and Joy jet dictionaries and the scripts that write them |
+| `jets/` | the bird and Joy jet dictionaries and the scripts that write them; `pins.conf` and `pins/`, the pinned jets' terms |
 | `tests/test_*.c`, `tests/test.h` | the unit suites (`TESTING.md`) |
 | `tests/*_check.sh`, `tests/pins.sh` | the checks against other repositories, and their pins |
 | `tests/smoke.sh`, `tests/smoke.tsv` | the smoke test |

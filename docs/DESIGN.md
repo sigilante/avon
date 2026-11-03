@@ -1895,8 +1895,9 @@ still needs §18.2's word cells, and a list cell beside them.
 
 ### 6.15 The Nock decrement, transported
 
-**With `--nock-dec=FILE`, share mode runs skinock's decrement natively.**
-FILE holds `jetT decF` in the DAG form, as skinock's `scripts/PinDec.lean`
+**With `--pins`, share mode runs skinock's decrement natively** (kind
+`nock-dec`; `--nock-dec=FILE` turns it on alone). The term is `jetT decF`
+in the DAG form, as skinock's `scripts/PinDec.lean`
 prints it (SKInock `terms/jetT-decF.dag`). `decF` is the Nock formula of
 the Λ word `dec`, a guarded count-up decrement on the top of a stack, and
 `jetT decF = λx. toCell (nockToSki decF x)` is its compilation to SKI with
@@ -1914,7 +1915,8 @@ atom, it is `Err`, `K (K (K I))`. A noun is skinock's encoding:
   `K (pairT bit rest)`, a bit `K` (1) or `K I` (0);
 - `Cell h t = K (S (K K) (S (K K) (pairT h t)))`.
 
-**The term is pinned as `P` is.** `av_nock_dec_register` refuses FILE
+**The term is pinned as `P` is**, and `--pins` turns both on from one
+file (`jets/pins.conf`, RUNTIME "Pinned jets"). `av_nock_dec_register` refuses FILE
 unless its full digest is `AV_NOCK_DEC_SHA256`, `av_pin_bind` keeps a jet
 node only where its term is FILE's, node for node, and every fire and
 decline checks its node again (§6.12; `src/pin.c` holds what the two
@@ -1949,7 +1951,7 @@ SKI's, byte for byte, because the contract gives it. Copy mode refuses
 `--nock-dec`.
 
 **Results, 2026-11-04.** On `[10000 0]` the term takes 13,430,171
-steps, 0.23 s and 30 MB unjetted; with `--nock-dec` it takes one step,
+steps, 0.23 s and 30 MB unjetted; jetted it takes one step,
 under 0.01 s and 2.4 MB, to the same normal form, byte for byte. The term
 costs about 1,340 steps per unit of the head, so the unjetted run cannot
 check a head near 2^32; `[2^32 - 1 0]` fires to `[2^32 - 2 0]`, read back
@@ -1957,7 +1959,7 @@ from the output. `tests/test_nockdec.c` holds the jet to the term's
 normal form on every head from 0 to 64 and on the crash cases, and holds
 the declines to it too.
 
-**Hoon's own `++dec`** (`--hoon-dec=FILE`, 2026-11-04). The Λ word never
+**Hoon's own `++dec`** (kind `hoon-dec` in `--pins`, 2026-11-04). The Λ word never
 occurs in Hoon's code, so the jet above never fires on a Hoon program.
 skinock pins a second term, `jetT hoonDecBodyF` (SKInock `fe3c031`): the
 compiled body of Hoon's `++dec` arm, the guard and the count-up loop. A
@@ -3008,7 +3010,7 @@ reduction option it would ignore.
   cycle would share it.
 - **Poseidon2 run natively** (§6.12, `--p2`): `P ⬝ stateN x` in one step,
   against 962 million steps and 10.1 s unjetted.
-- **The Nock decrement, transported** (§6.15, `--nock-dec`): skinock's
+- **The Nock decrement, transported** (§6.15, `--pins`): skinock's
   `jetT decF` on an encoded stack in one step, licensed by
   `dec_transport`; unjetted it counts up, about 1,340 steps per unit.
 - **Against the Reduceron** (`docs/BENCHMARK.md`, "Remeasured,

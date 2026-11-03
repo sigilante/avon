@@ -117,9 +117,10 @@
  *  mode: FILE holds lean-ski's Poseidon2 term P, as `lake exe p2run`
  *  prints it; P applied to a state runs natively), --nock-dec=FILE (share
  *  mode: FILE holds skinock's jetT decF, as scripts/PinDec.lean prints it;
- *  applied to an encoded stack it runs natively), --hoon-dec=FILE (share
- *  mode: FILE holds skinock's jetT hoonDecBodyF, Hoon's ++dec arm; applied
- *  to a gate core with an atom sample it runs natively).  reduce and batch take
+ *  applied to an encoded stack it runs natively), --pins[=FILE] (share
+ *  mode: the pinned jets FILE lists, `KIND TERM-FILE` a line, by default
+ *  the checkout's jets/pins.conf: Poseidon2, the Λ word dec and Hoon's
+ *  ++dec arm; --p2 and --nock-dec turn on one each).  reduce and batch take
  *  --trace-frame[=summary] (copy mode's head run observed for the hider
  *  census) with --passenger=NAME, --records[=CONF], --frame-dump=SPEC and
  *  --defect[=CONF] (the paper's defect count);
@@ -149,7 +150,7 @@ int usage(void) {
         "       (all but witness --statement accept --allow-bird-atoms; reduce and batch accept\n"
         "        --jets=DICT... --ctors[=N] --jet-floor=N --jet-check=N --no-jets\n"
         "        --interp=FILE --profile=NAMES --templates=DIR --discover --data --fix --memory --no-defer\n"
-        "        --p2=FILE --nock-dec=FILE --hoon-dec=FILE)\n"
+        "        --pins[=FILE] --p2=FILE --nock-dec=FILE)\n"
         "       avon census [--select=N] [--top=N] [--min-atoms=N] [--all]\n"
         "                   [--names=FILE]... [--emit=DICT] MANIFEST...\n"
         "       avon jetstat [--jets=DICT]... [--ctors[=N]] [--names=FILE]... [--share]\n"

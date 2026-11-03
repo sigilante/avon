@@ -2,8 +2,8 @@
  *
  *  The transported Nock decrements (src/nockdec.c) on skinock's own terms,
  *  as scripts/PinDec.lean prints them, each registering only under its
- *  pinned digest: tests/nockdec/jetT-decF.dag (SKInock d89b96c), the Λ
- *  word, and tests/nockdec/jetT-hoonDecBodyF.dag (SKInock fe3c031), Hoon's
+ *  pinned digest: jets/pins/jetT-decF.dag (SKInock d89b96c), the Λ
+ *  word, and jets/pins/jetT-hoonDecBodyF.dag (SKInock fe3c031), Hoon's
  *  ++dec arm.
  *
  *  The Λ word's digest.  On every encoded stack the jet fires in one step and reaches
@@ -31,7 +31,7 @@
 static bool hoon;                   /* the runs below: Hoon's ++dec, else the Λ word */
 
 static char *term_src(size_t *len) {
-    FILE *f = test_open(hoon ? "tests/nockdec/jetT-hoonDecBodyF.dag" : "tests/nockdec/jetT-decF.dag");
+    FILE *f = test_open(hoon ? "jets/pins/jetT-hoonDecBodyF.dag" : "jets/pins/jetT-decF.dag");
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     fseek(f, 0, SEEK_SET);

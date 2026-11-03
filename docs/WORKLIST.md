@@ -6,8 +6,11 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
-- **Hoon's `++dec`, transported** (2026-11-04; `DESIGN.md` §6.15). With
-  `--hoon-dec=FILE`, share mode runs skinock's `jetT hoonDecBodyF`, the
+- **Hoon's `++dec`, transported, and `--pins`** (2026-11-04; `DESIGN.md` §6.15,
+  RUNTIME "Pinned jets"). `--pins[=FILE]` turns on the pinned jets a file lists,
+  `KIND TERM-FILE` a line, by default `jets/pins.conf` with the terms vendored in
+  `jets/pins/`; `--p2` and `--nock-dec` remain. Kind `hoon-dec` runs skinock's
+  `jetT hoonDecBodyF`, the
   compiled body of Hoon's `++dec` arm, natively on a gate core: `[bat [n ctx]]`
   to the atom `n-1`, `Err` on a zero sample, an atom or `[bat atom]`. It reads
   only the core's two cells and the sample, either cell plain or carrying code,

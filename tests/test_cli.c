@@ -3,7 +3,9 @@
  *  The command line's exit codes, run on build/dbg/avon, which `make
  *  check` builds first.  A run's status is its line's: FUEL and SIZE exit
  *  0.  A failure of Avon's own exits 1: output that could not be written,
- *  or a term that does not parse.
+ *  or a term that does not parse.  --pins reads its file's kinds and
+ *  terms, each path relative to the file, and refuses a bad file or a
+ *  kind given twice with exit 1.
  */
 
 #include <stdbool.h>
@@ -103,7 +105,40 @@ TEST(batch_dag_answers_every_line) {
         fprintf(stderr, "  got: %s", out);
 }
 
+TEST(pins_reads_its_file_and_refuses_a_bad_one) {
+    char path[128], conf[160], cmd[1024], out[4096], cwd[512];
+    REQUIRE(getcwd(cwd, sizeof cwd) != NULL);
+    term("skk", "S K K x\n", path, sizeof path);
+    /* the checkout's jets/pins.conf: every term loads, none occurs */
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins %s 2>&1", path);
+    CHECK_EQ(run(cmd, out, sizeof out), 0);
+    CHECK(strstr(out, "pins: no pinned term occurs in the term (p2 nock-dec hoon-dec)") != NULL);
+    /* a term file relative to the file naming it */
+    snprintf(cmd, sizeof cmd, "ln -s %s/jets/pins/jetT-hoonDecBodyF.dag %s/hd.dag", cwd, dir);
+    REQUIRE(system(cmd) == 0);
+    term("one.conf", "# Hoon's ++dec only\nhoon-dec  hd.dag\n", conf, sizeof conf);
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins=%s %s 2>&1", conf, path);
+    CHECK_EQ(run(cmd, out, sizeof out), 0);
+    CHECK(strstr(out, "(hoon-dec)") != NULL);
+    term("bad.conf", "hoon-dec\n", conf, sizeof conf);
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins=%s %s 2>&1", conf, path);
+    CHECK_EQ(run(cmd, out, sizeof out), 1);
+    CHECK(strstr(out, ":1: a line is KIND and one TERM-FILE") != NULL);
+    term("kind.conf", "dec x.dag\n", conf, sizeof conf);
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins=%s %s 2>&1", conf, path);
+    CHECK_EQ(run(cmd, out, sizeof out), 1);
+    CHECK(strstr(out, "not a pinned jet's kind") != NULL);
+    term("gone.conf", "nock-dec missing.dag\n", conf, sizeof conf);
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins=%s %s 2>&1", conf, path);
+    CHECK_EQ(run(cmd, out, sizeof out), 1);
+    CHECK(strstr(out, "missing.dag: cannot open") != NULL);
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins --p2=x %s 2>&1", path);
+    CHECK_EQ(run(cmd, out, sizeof out), 1);
+    CHECK(strstr(out, "p2 given twice") != NULL);
+}
+
 TEST_MAIN(
+    TEST_CASE(pins_reads_its_file_and_refuses_a_bad_one),
     TEST_CASE(a_status_is_the_line_s_and_exits_0),
     TEST_CASE(output_that_cannot_be_written_exits_1),
     TEST_CASE(a_term_that_does_not_parse_exits_1),
