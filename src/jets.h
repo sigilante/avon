@@ -162,10 +162,29 @@ bool compile_check(av_arena *a, uint32_t node, const uint32_t *argv, uint32_t ou
 #define P2_STATE_NODES (2u + 16u * 32u * 5u)
 uint32_t p2_state_build(av_arena *a, const uint32_t s[16]);
 /*  P's registration without the digest pin, for tests with a stand-in
- *  term; and whether x is jet id's term, node for node, within eight
- *  pairs per node of it (false past them, or out of memory). */
+ *  term. */
 uint32_t p2_register(av_arena *a, uint32_t p, bool pin, const char **err);
-bool     p2_same(const av_arena *a, uint32_t x, uint32_t id);
+
+/*  Pinned jets (pin.c).  pin_register makes p a dashboard entry, its
+ *  pin_nodes set, refusing it unless its full digest is sha256 (none when
+ *  NULL), with `refusal` as the message; the caller refuses an entry of the
+ *  other pinned kind, and sets its own: registering a term again is a no-op.
+ *  pin_same: whether x is jet id's term, node for node, within eight pairs
+ *  per node of it (false past them, or out of memory).  pairT x y =
+ *  S (S I (K x)) (K y), read through views and built from reserved nodes,
+ *  si the node S I. */
+uint32_t pin_register(av_arena *a, uint32_t p, const char *sha256, const char *refusal,
+                      const char **err);
+bool     pin_same(const av_arena *a, uint32_t x, uint32_t id);
+bool     pin_pair_read(const av_arena *a, uint32_t t, uint32_t *x, uint32_t *y);
+uint32_t pin_pair_build(av_arena *a, uint32_t si, uint32_t x, uint32_t y);
+
+/*  The Nock decrement's output (nockdec.c), in NOCK_DEC_NODES reserved
+ *  nodes at most; it never collects.  nock_dec_build: Cell (Atom k) rest,
+ *  k below 2^32; nock_dec_err: Err. */
+#define NOCK_DEC_NODES (17u + 32u * 6u)
+uint32_t nock_dec_build(av_arena *a, uint32_t k, uint32_t rest);
+uint32_t nock_dec_err(av_arena *a);
 
 /*  The census's hook (census.c): x was put in function position with
  *  `avail` arguments at the head. */

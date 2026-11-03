@@ -6,6 +6,16 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **The Nock decrement, transported** (2026-11-04; `DESIGN.md` §6.15). With
+  `--nock-dec=FILE`, share mode runs skinock's `jetT decF`, licensed by its
+  `dec_transport`, natively on an encoded Nock stack: `[n r]` to `[n-1 r]`,
+  `Err` on `[0 r]`, a cell at the head or an atom, one step. The term is
+  pinned by its full digest, as Poseidon2's `P` is; `src/pin.c` now holds what
+  the two pinned jets share. The jet reads the whole argument and fires only on
+  an encoded noun with a head of at most 32 bits; anything else runs the term.
+  `[10000 0]`: 13,430,171 steps and 0.23 s unjetted, one step jetted, the same
+  normal form. `tests/test_nockdec.c` runs SKInock `d89b96c`'s term.
+
 - **Stage 8, closed** (2026-11-01; item 3, `DESIGN.md` §11.1). front1 already met the
   stage's test: it compiles its own source in Avon to Python's terms, every name hash
   for hash, and every corpus program to Python's. DESIGN's status, §11.1 and the README

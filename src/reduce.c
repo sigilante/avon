@@ -678,24 +678,25 @@ static int list_fire(R *r, unsigned op, unsigned k, uint32_t *curp) {
     return 1;
 }
 
-/*  Whether jet node jn of Poseidon2 jet id has P's term: checked against
- *  the registered term, node for node, unless jn was found so since the
- *  last collection and stands as it stood then.  A node found otherwise is
- *  unbound, an indirection to its own term.  A jet node's term is written
- *  only to a reduct, so a term once found P's stays convertible to it. */
-static bool p2_ok(R *r, uint32_t jn, uint32_t id) {
+/*  Whether jet node jn of pinned jet id (pin.c) has its term: checked
+ *  against the registered term, node for node, unless jn was found so
+ *  since the last collection and stands as it stood then.  A node found
+ *  otherwise is unbound, an indirection to its own term, counted in
+ *  *unbound.  A jet node's term is written only to a reduct, so a term once
+ *  found the pinned one stays convertible to it. */
+static bool pin_ok(R *r, uint32_t jn, uint32_t id, uint64_t *unbound) {
     av_arena *a = r->a;
     av_node v = a->nodes[jn];
-    if (r->p2_gen == a->collections + 1 && r->p2_node == jn && r->p2_seen.l == v.l && r->p2_seen.r == v.r)
+    if (r->pin_gen == a->collections + 1 && r->pin_node == jn && r->pin_seen.l == v.l && r->pin_seen.r == v.r)
         return true;
-    if (!p2_same(a, v.r, id)) {
+    if (!pin_same(a, v.r, id)) {
         arena_set(a, jn, (av_node){ (AV_IND << AV_TAG_SHIFT) | v.r, 0 });
-        r->p2_unbound++;
+        (*unbound)++;
         return false;
     }
-    r->p2_seen = v;
-    r->p2_node = jn;
-    r->p2_gen = a->collections + 1;
+    r->pin_seen = v;
+    r->pin_node = jn;
+    r->pin_gen = a->collections + 1;
     return true;
 }
 
@@ -751,7 +752,7 @@ static int p2_chain(R *r, uint32_t *curp) {
         if (k > room) k = room;
         for (size_t i = m; i-- > m - k;) {
             uint32_t c = r->p2c[2 * i], jn = r->p2c[2 * i + 1];
-            if (!p2_ok(r, jn, AV_JET_ID(av_left(a, jn)))) return 1;
+            if (!pin_ok(r, jn, AV_JET_ID(av_left(a, jn)), &r->p2_unbound)) return 1;
             av_p2_permute(s);                   /* the next call's argument, built */
             uint32_t x = p2_state_build(a, s);
             if (r->o->profile) profile_rewrote(r->o->profile, c);
@@ -775,10 +776,10 @@ static int p2_fire(R *r, uint32_t id, uint32_t *curp) {
     av_arena *a = r->a;
     uint32_t s[16];
     /* the term checked first, at every fire and every decline: a jet node
-     * may have been made after av_p2_bind, in a copy of another jet's
+     * may have been made after av_pin_bind, in a copy of another jet's
      * term; a decline runs the registered term, not the node's; and a
      * chain is fired only under a P */
-    if (!p2_ok(r, *curp, id)) return 2;
+    if (!pin_ok(r, *curp, id, &r->p2_unbound)) return 2;
     if (!av_p2_state_read(a, av_right(a, r->stk[r->top - 1]), s)) {
         int pc = p2_chain(r, curp);
         if (pc) return pc < 0 ? -1 : 3;
@@ -795,6 +796,38 @@ static int p2_fire(R *r, uint32_t id, uint32_t *curp) {
     *curp = nd;
     r->steps++;
     r->p2_calls++;
+    return 1;
+}
+
+/*  The Nock decrement jet, its jet node *curp, of jet id, at the head with
+ *  its argument: 1 fired, the redex root now the contract's output; 0
+ *  declined, the argument not a noun's encoding as it stands or its head
+ *  atom past 32 bits, to run the term; 2 unbound, the node's term not
+ *  jetT decF's, the node now an indirection to it; -1 SIZE.  skinock's
+ *  dec_transport is the licence: jetT decF applied to the encoding of a
+ *  stack reduces to the encoding of decC's outcome on it. */
+static int nock_dec_fire(R *r, uint32_t id, uint32_t *curp) {
+    av_arena *a = r->a;
+    uint32_t k, rest;
+    if (!pin_ok(r, *curp, id, &r->nock_dec_unbound)) return 2;
+    int c = av_nock_dec_read(a, av_right(a, r->stk[r->top - 1]), &k, &rest);
+    if (!c) {
+        r->nock_dec_declines++;
+        return 0;
+    }
+    uint64_t gen = a->collections;
+    if (!ensure(r, NOCK_DEC_NODES)) return -1;
+    if (c == 1 && a->collections != gen)            /* rest moved: read it again */
+        c = av_nock_dec_read(a, av_right(a, r->stk[r->top - 1]), &k, &rest);
+    if (c == 0) return -1;              /* a collection keeps the shape: out of memory */
+    uint32_t x = c == 1 ? nock_dec_build(a, k, rest) : nock_dec_err(a);
+    uint32_t nd = r->stk[r->top - 1];               /* the redex root, reread */
+    if (r->o->profile) profile_rewrote(r->o->profile, nd);
+    arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
+    r->top -= 1;
+    *curp = nd;
+    r->steps++;
+    r->nock_dec_calls++;
     return 1;
 }
 
@@ -1096,7 +1129,28 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                     int pf = p2_fire(r, id, &cur);
                     if (pf < 0) return stop(r, bottom, cur, AV_SIZE);
                     if (pf > 0) continue;       /* fired, or unbound */
-                } else if (!p2_ok(r, cur, id)) {
+                } else if (!pin_ok(r, cur, id, &r->p2_unbound)) {
+                    continue;                   /* bare, as a normal form reaches it: its own term */
+                }
+                r->jnode = cur;
+                if (!ensure(r, a->jets[id].term_nodes + r->nvirt))
+                    return stop(r, bottom, r->jnode, AV_SIZE);
+                r->jnode = AV_NONE;
+                cur = jet_term_copy(a, id);
+                AV_ALWAYS(cur != AV_NONE, "allocation past what ensure() reserved");
+                if (cur == AV_NONE) return AV_SIZE;
+                continue;
+            }
+            if (o->nock_dec && a->jets[id].nock_dec) {
+                /* the Nock decrement: natively on an encoded stack as it
+                 * stands; else a fresh copy of its term, so the node's own
+                 * term is never written */
+                if (r->top - bottom >= 1) {
+                    if (!materialize(r, bottom, &cur)) return stop(r, bottom, cur, AV_SIZE);
+                    int nf = nock_dec_fire(r, id, &cur);
+                    if (nf < 0) return stop(r, bottom, cur, AV_SIZE);
+                    if (nf > 0) continue;       /* fired, or unbound */
+                } else if (!pin_ok(r, cur, id, &r->nock_dec_unbound)) {
                     continue;                   /* bare, as a normal form reaches it: its own term */
                 }
                 r->jnode = cur;
@@ -1391,6 +1445,7 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
     av_result res = { term, r.steps, s, r.jet_calls, r.interp_calls,
                       r.jet_steps, r.jet_fault, r.tmpl_calls,
                       r.dispatches, r.fused, r.word_ops, r.bit_ops, r.fix_calls, r.joins,
-                      r.p2_calls, r.p2_declines, r.p2_unbound, r.deferred, r.list_ops };
+                      r.p2_calls, r.p2_declines, r.p2_unbound, r.deferred, r.list_ops,
+                      r.nock_dec_calls, r.nock_dec_declines, r.nock_dec_unbound };
     return res;
 }

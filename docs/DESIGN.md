@@ -1587,7 +1587,7 @@ Registration also refuses a digest that another jet already holds under
 another role or another term.
 
 `av_jets_match` wraps each occurrence of `P` in the program, which may be
-hostile. `av_p2_bind` compares each wrapped term with FILE's, node for
+hostile. `av_pin_bind` compares each wrapped term with FILE's, node for
 node (`av_equal`), unbinding any that differs. Every fire and every
 decline checks its jet node's term again, so a jet node made after the
 bind is held to the same rule; such nodes arise in a copy of another
@@ -1892,6 +1892,70 @@ node, and `tests/test_data.c`'s parity at every fuel. (5) The proofs:
 each operation's licence is a Lean theorem, proved for share mode
 (`lean/Words.lean`, 2026-10-29; `LEAN-JETS.md` §4 and §5); a witness
 still needs §18.2's word cells, and a list cell beside them.
+
+### 6.15 The Nock decrement, transported
+
+**With `--nock-dec=FILE`, share mode runs skinock's decrement natively.**
+FILE holds `jetT decF` in the DAG form, as skinock's `scripts/PinDec.lean`
+prints it (SKInock `terms/jetT-decF.dag`). `decF` is the Nock formula of
+the Λ word `dec`, a guarded count-up decrement on the top of a stack, and
+`jetT decF = λx. toCell (nockToSki decF x)` is its compilation to SKI with
+the output copied code-free. skinock proves `dec_transport : Implements
+(nounContract decC) (jetT decF)`: on the encoding of every noun the term
+reduces to the encoding of `decC`'s outcome, lean-nock's model of the
+word. That theorem is the licence, as `P_specN` is Poseidon2's (§6.12).
+
+**The contract.** On a stack `[n r]` with `n` the atom k + 1, the
+output is `[k r]`. On `[0 r]`, on a stack whose head is a cell, and on an
+atom, it is `Err`, `K (K (K I))`. A noun is skinock's encoding:
+
+- `Atom b = S (K K) (S (K K) (S (K K) (S I (K b))))`, `b` the bits least
+  significant first, canonical (the last bit 1), each list `K` or
+  `K (pairT bit rest)`, a bit `K` (1) or `K I` (0);
+- `Cell h t = K (S (K K) (S (K K) (pairT h t)))`.
+
+**The term is pinned as `P` is.** `av_nock_dec_register` refuses FILE
+unless its full digest is `AV_NOCK_DEC_SHA256`, `av_pin_bind` keeps a jet
+node only where its term is FILE's, node for node, and every fire and
+decline checks its node again (§6.12; `src/pin.c` holds what the two
+pinned jets share).
+
+**The jet fires only where the licence holds.** At the head with an
+argument, `av_nock_dec_read` reads the whole argument through
+indirections and jet nodes, the rest of the stack included, and requires
+the encoding of a noun: every atom canonical, no `Form` (a cell carrying
+code, which `encNoun` never makes), nothing left to reduce. A node shared
+within it is read once. Then the redex root becomes the output in one
+step, at most 209 fresh nodes: `Cell (Atom k) r` shares `r`'s nodes,
+since an encoding is normal and code-free already and `toCell` leaves it
+as it is. A head atom of more than 32 bits declines, as skinock's circuit
+does, and so does every other argument: a thunk, a `Form`, bits with a
+trailing 0. A decline runs a fresh copy of the term, so the normal form
+is the term's in every case. The term counts up, so a head atom past 32
+bits, or a non-canonical one, which no count meets, is out of the term's
+reach as well; the jet leaves that to the term too.
+
+**The check costs the argument's size, at every call.** The read walks
+the whole stack, so a loop of N decrements over a stack of size m spends
+O(N m) in checking, and an argument that then declines is walked for
+nothing. No memo is kept across calls; skinock's programs so far pass
+short stacks. A call whose argument is itself a call, `dec (dec n)`,
+declines the outer call to the term, which forces the inner one, and
+that one fires; there is no chain as Poseidon2 has.
+
+**Counts change, as for the other share-mode jets.** A fire is one step,
+reported as `nock-dec: … decrements run natively`. The normal form is
+SKI's, byte for byte, because the contract gives it. Copy mode refuses
+`--nock-dec`.
+
+**Results, 2026-11-04.** On `[10000 0]` the term takes 13,430,171
+steps, 0.23 s and 30 MB unjetted; with `--nock-dec` it takes one step,
+under 0.01 s and 2.4 MB, to the same normal form, byte for byte. The term
+costs about 1,340 steps per unit of the head, so the unjetted run cannot
+check a head near 2^32; `[2^32 - 1 0]` fires to `[2^32 - 2 0]`, read back
+from the output. `tests/test_nockdec.c` holds the jet to the term's
+normal form on every head from 0 to 64 and on the crash cases, and holds
+the declines to it too.
 
 ## 7. The interpreter jet
 
@@ -2910,6 +2974,9 @@ reduction option it would ignore.
   cycle would share it.
 - **Poseidon2 run natively** (§6.12, `--p2`): `P ⬝ stateN x` in one step,
   against 962 million steps and 10.1 s unjetted.
+- **The Nock decrement, transported** (§6.15, `--nock-dec`): skinock's
+  `jetT decF` on an encoded stack in one step, licensed by
+  `dec_transport`; unjetted it counts up, about 1,340 steps per unit.
 - **Against the Reduceron** (`docs/BENCHMARK.md`, "Remeasured,
   2026-10-04"): with data jets, `--fix` and deferred roots Avon takes 1.47
   to 2.67 times its time on the five ports, 2.08 by geometric mean, and

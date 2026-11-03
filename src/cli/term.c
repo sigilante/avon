@@ -11,14 +11,14 @@
  *  refuse one the command would ignore. */
 enum {
     O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES, O_DISCOVER,
-    O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_INTERP, O_JET_TABLE, O_PLAN,
+    O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_NOCK_DEC, O_INTERP, O_JET_TABLE, O_PLAN,
     O_STATEMENT, O_JET_FLOOR, O_JET_CHECK, O_FUEL, O_MAX_NODES, O_AGGRESSIVE_HEAP, O_BUDGET, O_ROWS,
     O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_DEFECT, O_DAG, O_FILE, O_COUNT
 };
 static const char *const option_name[O_COUNT] = {
     "--strategy", "--whnf", "--allow-bird-atoms", "--jets", "--ctors", "--no-jets",
     "--profile", "--templates", "--discover", "--data", "--fix", "--memory", "--no-defer", "--p2",
-    "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
+    "--nock-dec", "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
     "--fuel", "--max-nodes", "--aggressive-heap", "--budget", "--rows", "--cells", "--trace-frame",
     "--passenger", "--records", "--frame-dump", "--defect", "--dag", "a FILE",
 };
@@ -53,6 +53,7 @@ typedef struct {
     bool        data;             /* --data: data jets */
     bool        fix;              /* --fix: Y unfolded in one step */
     const char *p2;               /* --p2: P's term, a file, or NULL */
+    const char *nock_dec;         /* --nock-dec: jetT decF's term, a file, or NULL */
     const char *file;
     bool        dag;              /* --dag: print the term reached in the DAG form */
     /* frame traces */
@@ -78,6 +79,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->data = false;
     g->fix = false;
     g->p2 = NULL;
+    g->nock_dec = NULL;
     g->jet_table = NULL;
     g->plan = NULL;
     g->statement = NULL;
@@ -124,6 +126,7 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--memory") == 0)         g->fix = g->o.fix_shared = true;
         else if (strcmp(s, "--no-defer") == 0)       g->o.no_defer = true;
         else if (strncmp(s, "--p2=", 5) == 0 && s[5])  g->p2 = s + 5;
+        else if (strncmp(s, "--nock-dec=", 11) == 0 && s[11]) g->nock_dec = s + 11;
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
             g->o.interp_jets = true;
@@ -200,7 +203,7 @@ static bool parse_args(int argc, char **argv, args *g) {
 static bool options_fit(const args *g, const char *cmd) {
     const uint64_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP) | OPT(O_DEFECT);
     const uint64_t untraced = OPT(O_TEMPLATES) | OPT(O_DISCOVER) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
-                              OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_PROFILE) | OPT(O_JETS) |
+                              OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_NOCK_DEC) | OPT(O_PROFILE) | OPT(O_JETS) |
                               OPT(O_CTORS) | OPT(O_INTERP) |
                               OPT(O_JET_FLOOR) | OPT(O_JET_CHECK) | OPT(O_BUDGET) |
                               OPT(O_DAG) | OPT(O_AGGRESSIVE_HEAP);
@@ -339,9 +342,10 @@ bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
     return ok;
 }
 
-/*  The Poseidon2 jet: P's term from path, registered.  Its id, or
- *  AV_NONE with a message. */
-static uint32_t use_p2(av_arena *a, const char *path) {
+/*  A pinned jet's term from path, registered by reg: Poseidon2's P or
+ *  jetT decF.  Its id, or AV_NONE with a message. */
+static uint32_t use_pinned(av_arena *a, const char *path,
+                           uint32_t (*reg)(av_arena *, uint32_t, const char **)) {
     FILE *f = fopen(path, "rb");
     if (!f) {
         fprintf(stderr, "avon: %s: cannot open\n", path);
@@ -358,7 +362,7 @@ static uint32_t use_p2(av_arena *a, const char *path) {
     free(src);
     if (p == AV_NONE) return AV_NONE;
     const char *err = NULL;
-    uint32_t id = av_p2_register(a, p, &err);
+    uint32_t id = reg(a, p, &err);
     if (id == AV_NONE) fprintf(stderr, "avon: %s: %s\n", path, err);
     return id;
 }
@@ -508,25 +512,32 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_arena_free(a);
         return 1;
     }
-    if (g->p2 && g->o.strategy != AV_SHARE) {
-        fprintf(stderr, "avon: --p2 runs in share mode only\n");
+    if ((g->p2 || g->nock_dec) && g->o.strategy != AV_SHARE) {
+        fprintf(stderr, "avon: %s runs in share mode only\n", g->p2 ? "--p2" : "--nock-dec");
         av_arena_free(a);
         return 1;
     }
-    uint32_t p2id = AV_NONE;
+    uint32_t p2id = AV_NONE, ndid = AV_NONE;
     if (t != AV_NONE && g->p2) {
         av_root_push(a, &t);
-        p2id = use_p2(a, g->p2);
+        p2id = use_pinned(a, g->p2, av_p2_register);
         av_root_pop(a);
         if (p2id == AV_NONE) t = AV_NONE;
     }
+    if (t != AV_NONE && g->nock_dec) {
+        av_root_push(a, &t);
+        ndid = use_pinned(a, g->nock_dec, av_nock_dec_register);
+        av_root_pop(a);
+        if (ndid == AV_NONE) t = AV_NONE;
+    }
     if (t != AV_NONE && g->templates) {
         if (!use_templates(a, g->templates, &t, tc, g->data, wc, g->fix)) t = AV_NONE;
-    } else if (t != AV_NONE && (g->njets || g->ctors || g->p2)) {
+    } else if (t != AV_NONE && (g->njets || g->ctors || g->p2 || g->nock_dec)) {
         t = av_jets_match(a, t);
     }
-    long p2kept = 0;
-    if (t != AV_NONE && g->p2 && (p2kept = av_p2_bind(a, t, p2id)) < 0) {
+    long p2kept = 0, ndkept = 0;
+    if ((t != AV_NONE && g->p2 && (p2kept = av_pin_bind(a, t, p2id)) < 0) ||
+        (t != AV_NONE && g->nock_dec && (ndkept = av_pin_bind(a, t, ndid)) < 0)) {
         fprintf(stderr, "avon: out of memory\n");
         t = AV_NONE;
     }
@@ -539,6 +550,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     o.data = g->data;
     o.fix = g->fix;
     o.p2 = g->p2 != NULL;
+    o.nock_dec = g->nock_dec != NULL;
     av_profile *prof = NULL;
     if (g->profile && o.strategy != AV_SHARE) {
         fprintf(stderr, "avon: --profile charges share-mode contractions only\n");
@@ -579,6 +591,12 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
                 p2kept, ph, (unsigned long long)r.p2_calls,
                 (unsigned long long)r.p2_declines, (unsigned long long)r.p2_unbound);
     }
+    if (g->nock_dec)
+        fprintf(stderr, "nock-dec: %ld occurrences of jetT decF bound; %llu decrements run natively "
+                "among the contractions, %llu declined (an argument not an encoded noun as it "
+                "stands, or a head atom past 32 bits), %llu unbound at a call\n",
+                ndkept, (unsigned long long)r.nock_dec_calls,
+                (unsigned long long)r.nock_dec_declines, (unsigned long long)r.nock_dec_unbound);
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE &&
                  (g->dag ? av_print_dag(a, r.term, g->budget, &b) : av_print(a, r.term, g->budget, &b));

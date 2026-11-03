@@ -31,7 +31,7 @@ Avon is C11 with no dependencies.  It needs clang and GNU Make 3.81 or later.
 
 ```sh
 make            # build/avon, optimized; about 3 s on an Apple M4 Max
-make check      # 28 unit-test suites under ASan and UBSan; also build/dbg/avon; about 7.5 min
+make check      # 29 unit-test suites under ASan and UBSan; also build/dbg/avon; about 7.5 min
 make smoke      # the release binary against 31 recorded commands
 ```
 
