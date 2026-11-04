@@ -401,6 +401,8 @@ TEST(a_core_with_no_decrement_is_err_in_one_step) {
     fires_as_the_term("a5", ERR);                   /* no sample */
     fires_as_the_term("[a0 a5]", ERR);
     fires_as_the_term("[~ a5]", ERR);
+    fires_as_the_term("a3+1", ERR);                 /* whatever the atom's bits */
+    fires_as_the_term("[~ a0+2]", ERR);
     hoon = false;
 }
 
@@ -409,7 +411,7 @@ TEST(a_core_with_no_decrement_is_err_in_one_step) {
 TEST(a_core_the_jet_does_not_answer_for_runs_the_term) {
     hoon = true;
     const char *cores[] = { "[a0 [[a1 a2] a0]]", "[a0 [{a1 a2 a0} a0]]", "[a0 [a4294967296 a0]]",
-                            "[a0 [a3+1 a0]]" };
+                            "[a0 [a3+1 a0]]", "[a0 [a0+1 a0]]" };
     for (size_t i = 0; i < sizeof cores / sizeof cores[0]; i++) {
         decrun r = dec_run(cores[i], true, false, 300000);
         CHECK(r.status == AV_FUEL && r.calls == 0 && r.declines == 1);
@@ -433,6 +435,7 @@ TEST(the_core_reader_reads_only_the_cells_and_the_sample) {
         { "[a0 [[a1 a2] a0]]", 0, 0 },    { "[a0 [a3+1 a0]]", 0, 0 },      { "~", 0, 0 },
         { "[a0 ~]", 0, 0 },               { "[a0 [~ a0]]", 0, 0 },         { "(I [a0 [a3 a0]])", 0, 0 },
         { "[a0 [a4294967296 a0]]", 0, 0 }, { "[a0 [a4294967295 a0]]", 1, 4294967294u },
+        { "a3+1", 2, 0 },          { "[~ a0+2]", 2, 0 },            { "[a0 [a0+1 a0]]", 0, 0 },
     };
     for (size_t i = 0; i < sizeof cs / sizeof cs[0]; i++) {
         text t = { 0 };

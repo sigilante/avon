@@ -148,13 +148,17 @@ int av_nock_dec_read(const av_arena *a, uint32_t t, uint32_t *k, uint32_t *rest)
 
 /*  Hoon's ++dec reads the gate core [bat [sam ctx]] at axis 6, the
  *  sample.  Either cell may carry code, as a compiled core's do, and
- *  neither bat nor ctx is read. */
+ *  neither bat nor ctx is read: skinock's hoon_dec_free_cl and its Err
+ *  cases (SKInock 4bcea15, Nock2Ski/HoonDecFree.lean) hold for any terms
+ *  there.  An atom where the core or the sample's cell should be is Err
+ *  whatever its bits (hoon_dec_err_atom, hoon_dec_err_noSample); a zero
+ *  sample is Err only when canonical, since the guard compares bit lists. */
 int av_hoon_dec_read(const av_arena *a, uint32_t t, uint32_t *k) {
     uint32_t b, bat, tl, sam, ctx, x, n;
     size_t len;
-    if (atom_read(a, t, &b)) return bits_read(a, b, &n, &len) ? 2 : 0;   /* no sample */
+    if (atom_read(a, t, &b)) return 2;                  /* no sample */
     if (!any_cell_read(a, t, &bat, &tl)) return 0;
-    if (atom_read(a, tl, &b)) return bits_read(a, b, &n, &len) ? 2 : 0;  /* [bat atom] */
+    if (atom_read(a, tl, &b)) return 2;                 /* [bat atom] */
     if (!any_cell_read(a, tl, &sam, &ctx)) return 0;
     if (any_cell_read(a, sam, &x, &x)) return 0;        /* off the domain: the arm diverges */
     if (!atom_read(a, sam, &b) || !bits_read(a, b, &n, &len)) return 0;

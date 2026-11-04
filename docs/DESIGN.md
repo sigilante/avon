@@ -1981,12 +1981,17 @@ and `dec_body_underflow`.
   `Err` where the contract does, and declines a cell sample, a longer or
   non-canonical atom, and anything else. The output, `Atom (n-1)`, takes
   at most 201 fresh nodes.
-- **Its licence.** As first proved, `hoon_dec_transport` covers inputs
-  that are `encNoun` of a noun, with no `Form` anywhere; on a compiled
-  core the jet would then never fire. skinock is proving the statement
-  the reader needs: the output depends on the sample alone, for any terms
-  at `bat` and `ctx` and either cell carrying code. Until it lands the jet
-  stays unmerged.
+- **Its licence.** `hoon_dec_transport` covers `encNoun` inputs, with no
+  `Form` anywhere, so on a compiled core it would never apply. skinock
+  then proved what the reader needs (SKInock `4bcea15`,
+  `Nock2Ski/HoonDecFree.lean`): with `bat`, `ctx` and the code arbitrary
+  closed terms and either cell a `Cell` or a `Form`, the term reaches
+  `Atom n` on sample n + 1 (`hoon_dec_free_cl`) and `Err` on a canonical
+  zero (`hoon_dec_free_cl_zero`), on an atom and on `[bat atom]` whatever
+  that atom's bits (`hoon_dec_err_atom`, `hoon_dec_err_noSample`). A
+  non-canonical zero enters the loop, as the guard compares bit lists, so
+  the jet declines it. `hoon_dec_fire_sound` proves skinock's own fire
+  check, which `av_hoon_dec_read` follows case for case.
 - **Results.** Fired against unfired, normal forms equal byte for byte:
   `[0 [7 [0 0]]]` 11,331 steps to one; `[0 [100 [3 4]]]` 169,676 to one;
   cores with a `Form` at either cell, and with `S K` at `bat` and `ctx`,

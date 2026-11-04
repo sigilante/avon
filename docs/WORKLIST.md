@@ -15,8 +15,8 @@ design lives. Last revised 2026-10-29.
   to the atom `n-1`, `Err` on a zero sample, an atom or `[bat atom]`. It reads
   only the core's two cells and the sample, either cell plain or carrying code,
   and declines a cell sample, where the arm diverges. `[0 [100 [3 4]]]`:
-  169,676 steps to one. Its merge waits on skinock's proof that the output
-  depends on the sample alone, whatever the battery and context hold.
+  169,676 steps to one. skinock's `hoon_dec_free_cl` and its `Err` cases
+  (SKInock `4bcea15`) license it whatever the battery, context and code hold.
 
 - **The Nock decrement, transported** (2026-11-04; `DESIGN.md` §6.15). With
   `--nock-dec=FILE`, share mode runs skinock's `jetT decF`, licensed by its
