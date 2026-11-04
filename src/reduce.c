@@ -799,20 +799,125 @@ static int p2_fire(R *r, uint32_t id, uint32_t *curp) {
     return 1;
 }
 
+/*  The decrement jets' argument, reduced before it is read.  In a whole
+ *  program the term meets its argument lazily, unreduced (a core such as
+ *  K (I (K Z)) W, its fields redexes too), so the reader is given a force
+ *  (jets.h, dec_rd) that reduces each node it reads to a weak head normal
+ *  form in place, by a nested share-mode run of this reducer, before it
+ *  matches it.  Each such reduction is a weak reduction t ->> t' of the
+ *  argument; skinock's hoon_dec_bare_fire_sound_red and
+ *  hoon_dec_fire_sound_red (jetT decF: dec_transport after the same steps)
+ *  license a fire on t' for the term applied to t, and the graph keeps the
+ *  reducts, so a normal form is the unjetted run's either way.  The
+ *  reductions are contractions of this run, counted in its steps as the
+ *  nested run counts them; the fire is one step more.  They stop at
+ *  DEC_FORCE_BUDGET contractions a call, or the fuel left, and the jet then
+ *  declines, the reducts kept.  The reader reads only what the term itself
+ *  forces (hoon: the core, its tail, the sample and its bits), so the
+ *  reductions are work the term would do; the Λ word's licence needs the
+ *  whole stack an encoded noun, so its reader forces all of it.  A nested
+ *  run fires the jets as this one does, DEC_FORCE_DEPTH deep at most;
+ *  past that its reader reads the argument as it stands. */
+#define DEC_FORCE_BUDGET (1u << 22)
+#define DEC_FORCE_DEPTH 4
+
+typedef struct {
+    dec_rd   rd;                /* first: the reader's force gets it back */
+    R       *r;
+    uint64_t left;              /* contractions the forces may still make */
+    bool     moved;             /* a nested run collected: read again     */
+} dec_forcer;
+
+static void add_counts(R *r, const av_result *x) {
+    r->steps += x->steps;
+    r->jet_calls += x->jet_calls;
+    r->interp_calls += x->interp_calls;
+    r->jet_steps += x->jet_steps;
+    r->jet_fault |= x->jet_fault;
+    r->tmpl_calls += x->tmpl_calls;
+    r->dispatches += x->dispatches;
+    r->fused += x->fused;
+    r->word_ops += x->word_ops;
+    r->bit_ops += x->bit_ops;
+    r->fix_calls += x->fix_calls;
+    r->joins += x->joins;
+    r->p2_calls += x->p2_calls;
+    r->p2_declines += x->p2_declines;
+    r->p2_unbound += x->p2_unbound;
+    r->deferred += x->deferred;
+    r->list_ops += x->list_ops;
+    r->nock_dec_calls += x->nock_dec_calls;
+    r->nock_dec_declines += x->nock_dec_declines;
+    r->nock_dec_unbound += x->nock_dec_unbound;
+    r->hoon_dec_calls += x->hoon_dec_calls;
+    r->hoon_dec_declines += x->hoon_dec_declines;
+    r->hoon_dec_unbound += x->hoon_dec_unbound;
+}
+
+static uint32_t dec_force(dec_rd *c, uint32_t t) {
+    dec_forcer *f = (dec_forcer *)c;
+    R *r = f->r;
+    av_arena *a = r->a;
+    uint32_t x = av_res(a, t), h = x;
+    size_t n = 0;
+    while (av_tag(a, h) == AV_APP) {
+        h = av_res(a, av_left(a, h));
+        n++;
+    }
+    if (av_tag(a, h) == AV_LEAF) {
+        unsigned k = ski_arity(av_right(a, h));
+        if (k == 0 || n < k) return x;          /* a weak head normal form */
+    } else if (n == 0) {
+        return x;                               /* a jet node or word, bare: a value */
+    }
+    if (f->left == 0) return AV_NONE;
+    av_opts o = *r->o;
+    o.whnf_only = true;
+    o.max_steps = f->left;
+    o.pin_depth++;
+    uint64_t gen = a->collections;
+    av_result res = av_reduce(a, x, &o);
+    add_counts(r, &res);
+    f->left -= res.steps < f->left ? res.steps : f->left;
+    if (a->collections != gen) {
+        f->moved = true;                        /* every node read may have moved */
+        return AV_NONE;
+    }
+    return res.status == AV_WHNF ? res.term : AV_NONE;
+}
+
 /*  A Nock decrement jet, its jet node *curp, of jet id, at the head with
- *  its argument: jetT decF, or with hoon jetT hoonDecBodyF.  1 fired, the
- *  redex root now the contract's output; 0 declined, the argument not one
- *  the jet answers for as it stands (av_nock_dec_read, av_hoon_dec_read),
- *  to run the term; 2 unbound, the node's term not the pinned one, the node
- *  now an indirection to it; -1 SIZE.  skinock's dec_transport and
- *  hoon_dec_transport are the licences: the term applied to such an
- *  argument reduces to the encoding of the model's outcome on it. */
+ *  its argument: jetT decF, or with hoon Hoon's ++dec (jetT hoonDecBodyF
+ *  or the bare arm nockToSki hoonDecBodyF).  1 fired, the redex root now
+ *  the contract's output; 0 declined, the argument not one the jet answers
+ *  for once reduced as above (av_nock_dec_read, av_hoon_dec_read), to run
+ *  the term; 2 unbound, the node's term not the pinned one, the node now an
+ *  indirection to it; -1 SIZE.  skinock's dec_transport,
+ *  hoon_dec_transport and their _red forms are the licences: the term
+ *  applied to such an argument reduces to the encoding of the model's
+ *  outcome on it. */
 static int dec_fire(R *r, uint32_t id, uint32_t *curp, bool hoon) {
     av_arena *a = r->a;
     uint32_t k = 0, rest = AV_NONE;
     if (!pin_ok(r, *curp, id, hoon ? &r->hoon_dec_unbound : &r->nock_dec_unbound)) return 2;
-    uint32_t arg = av_right(a, r->stk[r->top - 1]);
-    int c = hoon ? av_hoon_dec_read(a, arg, &k) : av_nock_dec_read(a, arg, &k, &rest);
+    dec_forcer f = { { a, NULL, false }, r, 0, false };
+    if (r->o->pin_depth < DEC_FORCE_DEPTH) {
+        f.rd.force = dec_force;
+        uint64_t fuel = r->o->max_steps > r->steps ? r->o->max_steps - r->steps : 0;
+        f.left = fuel < DEC_FORCE_BUDGET ? fuel : DEC_FORCE_BUDGET;
+    }
+    int c = 0;
+    r->jnode = *curp;                   /* rooted while the forces collect */
+    for (int tries = 0; tries < 8; tries++) {
+        f.rd.stop = f.moved = false;
+        uint32_t arg = av_right(a, r->stk[r->top - 1]);
+        c = hoon ? hoon_dec_read_rd(&f.rd, arg, &k) : nock_dec_read_rd(&f.rd, arg, &k, &rest);
+        if (!f.rd.stop) break;
+        c = 0;                          /* the read gave up: meaningless */
+        if (!f.moved) break;            /* out of budget, or no normal form */
+    }
+    *curp = r->jnode;
+    r->jnode = AV_NONE;
     if (!c) {
         if (hoon) r->hoon_dec_declines++;
         else r->nock_dec_declines++;

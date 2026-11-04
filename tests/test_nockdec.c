@@ -10,13 +10,20 @@
  *  the normal form the term reaches without it, byte for byte: [n r] to
  *  [n-1 r], Err on [0 r], on a cell at the head and on an atom.  A head
  *  atom of 32 bits fires; one of 33 runs the term.  An argument that is
- *  not an encoded noun as it stands---a Form, bits with a trailing 0, a
- *  thunk---runs the term, and so does an outer call over an inner one.
+ *  not an encoded noun once reduced---a Form, bits with a trailing 0---runs
+ *  the term.
  *
  *  Hoon's ++dec on the gate core [bat [n ctx]]: the atom n-1, Err on a
  *  zero sample, an atom and [bat atom], one step, the term's normal form,
  *  whatever bat and ctx hold and with either cell carrying code.  A cell
- *  sample, where the arm diverges, runs the term.
+ *  sample, where the arm diverges, runs the term.  The bare arm
+ *  (jets/pins/nockToSki-hoonDecBodyF.dag, SKInock 1ad32d5) does the same.
+ *
+ *  An argument that only reduces to one the jet answers for, a thunk, a
+ *  core whose fields are redexes, an inner call, is reduced in place first
+ *  and fires, after those contractions, to the unjetted normal form; one
+ *  with no weak head normal form declines.  A tree copy of a term binds,
+ *  and skinock's whole program hoon_dec_7 fires its bare arm.
  */
 
 #include <stdint.h>
@@ -29,9 +36,11 @@
 #include "test.h"
 
 static bool hoon;                   /* the runs below: Hoon's ++dec, else the Λ word */
+static bool bare;                   /* with hoon: the bare arm nockToSki hoonDecBodyF */
+static bool tree;                   /* the term applied a tree copy, never hash-consed */
 
-static char *term_src(size_t *len) {
-    FILE *f = test_open(hoon ? "jets/pins/jetT-hoonDecBodyF.dag" : "jets/pins/jetT-decF.dag");
+static char *file_src(const char *path, size_t *len) {
+    FILE *f = test_open(path);
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -40,6 +49,12 @@ static char *term_src(size_t *len) {
     p[*len] = '\0';
     fclose(f);
     return p;
+}
+
+static char *term_src(size_t *len) {
+    return file_src(!hoon ? "jets/pins/jetT-decF.dag"
+                    : bare ? "jets/pins/nockToSki-hoonDecBodyF.dag"
+                           : "jets/pins/jetT-hoonDecBodyF.dag", len);
 }
 
 /*  ------------------------------------------- nouns, in skinock's encoding */
@@ -75,12 +90,32 @@ static void atom(text *t, uint64_t n, int pad) {
 }
 
 /*  A noun: "a<n>", "a<n>+<pad>" (that many trailing 0 bits), "[h t]",
- *  "{h t k}" (a Form), or "(I x)" (a thunk); or "~", S K, a closed term
- *  that is no noun's encoding. */
+ *  "{h t k}" (a Form), or "(I x)" (a thunk); "<x>", S K K x, a thunk whose
+ *  contraction allocates; "b<n>", the atom with its bit list a thunk; "@",
+ *  S I I (S I I), a term with no weak head normal form; or "~", S K, a
+ *  closed term that is no noun's encoding. */
 static const char *noun(text *t, const char *p) {
     if (*p == '~') {
         put(t, "S K");
         return p + 1;
+    }
+    if (*p == '@') {
+        put(t, "S I I (S I I)");
+        return p + 1;
+    }
+    if (*p == '<') {
+        put(t, "S K K (");
+        p = noun(t, p + 1);
+        put(t, ")");
+        return p + 1;
+    }
+    if (*p == 'b') {
+        char *e;
+        uint64_t n = strtoull(p + 1, &e, 10);
+        put(t, "S (K K) (S (K K) (S (K K) (S I (K (I (");
+        bits(t, n, 0);
+        put(t, "))))))");
+        return e;
     }
     if (*p == 'a') {
         char *e;
@@ -112,6 +147,15 @@ static const char *noun(text *t, const char *p) {
 
 /*  ------------------------------------------------------------- runs */
 
+/*  t copied as a tree: every application node fresh, at each place it
+ *  occurs.  The arena must hold the tree without collecting. */
+static uint32_t unshare(av_arena *a, uint32_t t) {
+    t = av_view(a, t);
+    if (av_tag(a, t) != AV_APP) return t;
+    uint32_t f = unshare(a, av_left(a, t)), x = unshare(a, av_right(a, t));
+    return f == AV_NONE || x == AV_NONE ? AV_NONE : av_app(a, f, x);
+}
+
 typedef struct {
     av_status status;
     uint64_t steps, calls, declines, unbound, collections;
@@ -119,7 +163,7 @@ typedef struct {
     char *nf;
 } decrun;
 
-static bool crowd;                  /* the arena left short of a fire's nodes */
+static size_t crowd;                /* the arena left short of that many free nodes */
 
 #define FUEL 50000000u              /* a cap: every run that ends here ends far within it */
 
@@ -129,7 +173,7 @@ static bool crowd;                  /* the arena left short of a fire's nodes */
  *  nested; with the jet on or off; at most fuel contractions. */
 static decrun dec_run(const char *n, bool on, bool nested, uint64_t fuel) {
     decrun out = { 0 };
-    av_arena *a = av_arena_new(1u << 18);
+    av_arena *a = av_arena_new(tree ? 1u << 21 : 1u << 18);     /* a tree copy never collects */
     size_t len;
     char *src = term_src(&len);
     const char *msg = NULL;
@@ -145,13 +189,20 @@ static decrun dec_run(const char *n, bool on, bool nested, uint64_t fuel) {
     uint32_t x = av_parse(a, t.s, t.n, NULL);
     free(t.s);
     NEED(x != AV_NONE);
-    uint32_t root = av_app(a, j, x);
-    if (nested) root = av_app(a, j, root);
+    uint32_t head = j;
+    if (tree) {
+        /* the term copied as a tree, as a backtick-prefix input loads,
+         * its subterms never shared */
+        head = unshare(a, j);
+        NEED(head != AV_NONE && av_equal(a, head, j, 100000000) == 1);
+    }
+    uint32_t root = av_app(a, head, x);
+    if (nested) root = av_app(a, head, root);
     av_root_pop(a);
     root = av_jets_match(a, root);
     NEED(root != AV_NONE);
     out.kept = av_pin_bind(a, root, id);
-    while (crowd && a->cap - a->used >= NOCK_DEC_NODES)
+    while (crowd && a->cap - a->used >= crowd)
         (void)av_app(a, AV_NODE_S, AV_NODE_K);  /* garbage: the fire must collect */
     av_opts o = av_opts_default();
     o.nock_dec = on && !hoon;
@@ -286,6 +337,34 @@ static void declines_to_the_term(const char *n, bool nested) {
     free(off.nf);
 }
 
+/*  An argument that reduces to one the jet answers for: reduced in place
+ *  before the read, it fires, after the contractions that reduce it, to
+ *  the term's normal form, in fewer steps. */
+static void fires_once_reduced(const char *n, const char *want) {
+    decrun on = dec_run(n, true, false, FUEL), off = dec_run(n, false, false, FUEL);
+    CHECK(on.kept == 1);
+    CHECK(on.status == AV_NORMAL && off.status == AV_NORMAL);
+    CHECK(on.calls == 1 && on.declines == 0);
+    CHECK(on.steps > 1 && on.steps < off.steps);
+    CHECK(on.nf && off.nf && strcmp(on.nf, off.nf) == 0);
+    CHECK(on.nf && want && strcmp(on.nf, want) == 0);
+    if (!(on.calls == 1 && on.nf && off.nf && strcmp(on.nf, off.nf) == 0))
+        fprintf(stderr, "    on %s: %llu calls, %llu declines\n", n,
+                (unsigned long long)on.calls, (unsigned long long)on.declines);
+    free(on.nf);
+    free(off.nf);
+}
+
+TEST(a_lazy_stack_fires_once_reduced) {
+    char *w = enc("[a2 a0]");
+    fires_once_reduced("(I [a3 a0])", w);
+    fires_once_reduced("[a3 (I a0)]", w);
+    fires_once_reduced("<[<a3> <a0>]>", w);
+    fires_once_reduced("[b3 a0]", w);
+    free(w);
+    fires_once_reduced("<[<[a1 a2]> a0]>", ERR);       /* a cell at the head, once reduced */
+}
+
 TEST(anything_but_an_encoded_noun_runs_the_term) {
     declines_to_the_term("[a3 {a1 a2 a0}]", false);     /* a Form in the rest */
     /* a trailing 0 bit in the head: the term counts up and never meets
@@ -294,16 +373,20 @@ TEST(anything_but_an_encoded_noun_runs_the_term) {
     CHECK(r.status == AV_FUEL && r.calls == 0 && r.declines == 1);
     free(r.nf);
     declines_to_the_term("[a3 a0+2]", false);
-    declines_to_the_term("(I [a3 a0])", false);         /* a thunk */
-    declines_to_the_term("[a3 (I a0)]", false);
+    declines_to_the_term("[a3 <a0+2>]", false);
+    /* no weak head normal form: the reduction runs out of fuel, the jet
+     * declines, and the term, which forces it too, runs out after it */
+    r = dec_run("[a3 @]", true, false, 300000);
+    CHECK(r.status == AV_FUEL && r.calls == 0 && r.declines == 1);
+    free(r.nf);
 }
 
-/*  The outer call's argument is the inner call, a thunk: it runs its term,
- *  which forces the inner call, and that one fires. */
-TEST(a_call_over_a_call_fires_the_inner_one) {
+/*  The outer call's argument is the inner call: reduced before the read,
+ *  the inner call fires, then the outer. */
+TEST(a_call_over_a_call_fires_both) {
     decrun on = dec_run("[a3 a0]", true, true, FUEL), off = dec_run("[a3 a0]", false, true, FUEL);
     char *want = enc("[a1 a0]");
-    CHECK(on.status == AV_NORMAL && on.declines >= 1 && on.calls >= 1);
+    CHECK(on.status == AV_NORMAL && on.declines == 0 && on.calls == 2 && on.steps == 2);
     CHECK(on.nf && off.nf && strcmp(on.nf, off.nf) == 0);
     CHECK(on.nf && want && strcmp(on.nf, want) == 0);
     CHECK(on.steps < off.steps);
@@ -313,11 +396,20 @@ TEST(a_call_over_a_call_fires_the_inner_one) {
 }
 
 TEST(a_collection_at_the_fire_keeps_the_answer) {
+    char *lazy = enc("[a6 a0]");
+    crowd = 2;                          /* short of an S contraction's two */
+    decrun z = dec_run("<[<a7> <a0>]>", true, false, FUEL);    /* collects while it reduces */
+    crowd = 0;
+    CHECK(z.collections > 0);
+    CHECK(z.status == AV_NORMAL && z.calls == 1 && z.declines == 0);
+    CHECK(z.nf && lazy && strcmp(z.nf, lazy) == 0);
+    free(z.nf);
+    free(lazy);
     char *want = enc("[a40 [a7 [a8 a9]]]");
     decrun big = dec_run("[a41 [a7 [a8 a9]]]", true, false, FUEL);
-    crowd = true;
+    crowd = NOCK_DEC_NODES;
     decrun r = dec_run("[a41 [a7 [a8 a9]]]", true, false, FUEL);
-    crowd = false;
+    crowd = 0;
     CHECK(r.collections > big.collections);
     CHECK(r.status == AV_NORMAL && r.calls == 1);
     CHECK(r.nf && want && strcmp(r.nf, want) == 0);
@@ -417,14 +509,153 @@ TEST(a_core_the_jet_does_not_answer_for_runs_the_term) {
         CHECK(r.status == AV_FUEL && r.calls == 0 && r.declines == 1);
         free(r.nf);
     }
-    declines_to_the_term("(I [a0 [a3 a0]])", false);  /* a thunk */
-    decrun r = dec_run("[a0 [a4294967295 a0]]", true, false, FUEL);
+    decrun r = dec_run("@", true, false, 300000);      /* no weak head normal form */
+    CHECK(r.status == AV_FUEL && r.calls == 0 && r.declines == 1);
+    free(r.nf);
+    r = dec_run("[~ [@ ~]]", true, false, 300000);
+    CHECK(r.status == AV_FUEL && r.calls == 0 && r.declines == 1);
+    free(r.nf);
+    r = dec_run("[a0 [a4294967295 a0]]", true, false, FUEL);
     char *want = enc("a4294967294");
     CHECK(r.status == AV_NORMAL && r.steps == 1 && r.calls == 1);
     CHECK(r.nf && want && strcmp(r.nf, want) == 0);
     free(r.nf);
     free(want);
     hoon = false;
+}
+
+/*  A core the arm meets lazily, as in a whole program, where a core is
+ *  K (I (K Z)) W and its fields redexes too: reduced in place where the arm
+ *  forces it, the core, its tail, the sample and its bits, never bat or
+ *  ctx, which may have no normal form. */
+static void lazy_cores(void) {
+    const char *cores[][2] = {
+        { "(I [a0 [a3 a0]])", "a2" },        { "<[a0 [a7 a0]]>", "a6" },
+        { "[~ <[a7 ~]>]", "a6" },            { "[~ [<a7> ~]]", "a6" },
+        { "<[~ <[<b100> ~]>]>", "a99" },     { "<{@ <{b9 @ @}> @}>", "a8" },
+        { "[@ [<a1> @]]", "a0" },
+    };
+    for (size_t i = 0; i < sizeof cores / sizeof cores[0]; i++) {
+        char *w = enc(cores[i][1]);
+        fires_once_reduced(cores[i][0], w);
+        free(w);
+    }
+    fires_once_reduced("<[~ <a5>]>", ERR);             /* [bat atom], once reduced */
+    fires_once_reduced("[~ [<a0> ~]]", ERR);
+}
+
+TEST(a_lazy_core_fires_once_reduced) {
+    hoon = true;
+    lazy_cores();
+    hoon = false;
+}
+
+/*  The bare arm, the term a compiled program carries: the same fires, the
+ *  same declines, its own normal forms. */
+TEST(the_bare_arm_fires_as_its_term) {
+    hoon = bare = true;
+    decrun r = dec_run("[a0 [a7 a0]]", true, false, FUEL);
+    CHECK(r.kept == 1);
+    free(r.nf);
+    char *w = enc("a6");
+    fires_as_the_term("[a0 [a7 a0]]", w);
+    fires_as_the_term("{~ {a7 ~ ~} ~}", w);
+    free(w);
+    fires_as_the_term("[~ [a0 ~]]", ERR);
+    fires_as_the_term("[~ a5]", ERR);
+    lazy_cores();
+    r = dec_run("[a0 [[a1 a2] a0]]", true, false, 300000);
+    CHECK(r.status == AV_FUEL && r.calls == 0 && r.declines == 1);
+    free(r.nf);
+    hoon = bare = false;
+}
+
+/*  A term loaded as a tree, as from a backtick-prefix input, binds: the
+ *  comparison with the pinned term is budgeted by its size as a tree. */
+TEST(a_tree_copy_of_the_term_binds) {
+    tree = true;
+    char *w = enc("[a6 a0]");
+    fires_as_the_term("[a7 a0]", w);
+    free(w);
+    hoon = true;
+    for (int b = 0; b < 2; b++) {
+        bare = b;
+        w = enc("a6");
+        fires_as_the_term("[a0 [a7 a0]]", w);
+        free(w);
+    }
+    hoon = bare = tree = false;
+}
+
+/*  skinock's whole compiled program hoon_dec_7, release/nock/programs.txt's
+ *  hoon_dec_12 with the sample 7, unshared, as a DAG (Lean's dagText): its
+ *  ++dec arm is the bare term, applied lazily to an unreduced core.  Both of
+ *  Hoon's terms registered, as jets/pins.conf has them; on, the arm fires
+ *  once its argument is reduced, to the unjetted run's normal form.  The
+ *  shared form (skinock's `share`) holds the arm only after its sharing
+ *  betas, so no pin binds there. */
+static decrun program_run(const char *path, bool on) {
+    decrun out = { 0 };
+    av_arena *a = av_arena_new(1u << 18);
+    size_t len;
+    char *src = file_src(path, &len);
+    const char *msg = NULL, *err = NULL;
+    uint32_t t = av_parse_dag(a, src, len, &msg);
+    free(src);
+    NEED(t != AV_NONE);
+    uint32_t id[2];
+    hoon = true;
+    av_root_push(a, &t);
+    for (int b = 0; b < 2; b++) {
+        bare = b;
+        src = term_src(&len);
+        uint32_t j = av_parse_dag(a, src, len, &msg);
+        free(src);
+        id[b] = j == AV_NONE ? AV_NONE : av_hoon_dec_register(a, j, &err);
+    }
+    av_root_pop(a);
+    hoon = bare = false;
+    NEED(id[0] != AV_NONE && id[1] != AV_NONE);
+    t = av_jets_match(a, t);
+    NEED(t != AV_NONE);
+    out.kept = av_pin_bind(a, t, id[0]) + av_pin_bind(a, t, id[1]);
+    av_opts o = av_opts_default();
+    o.hoon_dec = on;
+    o.max_steps = FUEL;
+    av_root_push(a, &t);
+    av_result r = av_reduce(a, t, &o);
+    av_root_pop(a);
+    out.status = r.status;
+    out.steps = r.steps;
+    out.calls = r.hoon_dec_calls;
+    out.declines = r.hoon_dec_declines;
+    av_buf b = { 0 };
+    if (r.term != AV_NONE && av_print(a, r.term, 100000000, &b)) out.nf = strdup(b.s);
+    av_buf_free(&b);
+    av_arena_free(a);
+    return out;
+}
+
+TEST(a_whole_program_fires_the_bare_arm) {
+    decrun on = program_run("tests/data/hoon-dec/hoon_dec_7.dag", true),
+           off = program_run("tests/data/hoon-dec/hoon_dec_7.dag", false);
+    char *want = enc("a6");
+    CHECK(on.kept == 1);
+    CHECK(on.status == AV_NORMAL && off.status == AV_NORMAL);
+    CHECK(on.calls == 1 && on.declines == 0);
+    CHECK_EQ(off.steps, 12295u);
+    CHECK_EQ(on.steps, 1011u);
+    CHECK(on.nf && off.nf && strcmp(on.nf, off.nf) == 0);
+    CHECK(on.nf && want && strcmp(on.nf, want) == 0);
+    free(on.nf);
+    free(off.nf);
+    free(want);
+    on = program_run("tests/data/hoon-dec/hoon_dec_7.shared.dag", true);
+    off = program_run("tests/data/hoon-dec/hoon_dec_7.shared.dag", false);
+    CHECK(on.kept == 0 && on.calls == 0 && on.steps == off.steps);
+    CHECK(on.nf && off.nf && strcmp(on.nf, off.nf) == 0);
+    free(on.nf);
+    free(off.nf);
 }
 
 TEST(the_core_reader_reads_only_the_cells_and_the_sample) {
@@ -459,11 +690,16 @@ TEST_MAIN(
     TEST_CASE(every_head_to_64_matches_the_term),
     TEST_CASE(a_32_bit_head_fires_and_a_33_bit_one_runs_the_term),
     TEST_CASE(anything_but_an_encoded_noun_runs_the_term),
-    TEST_CASE(a_call_over_a_call_fires_the_inner_one),
+    TEST_CASE(a_lazy_stack_fires_once_reduced),
+    TEST_CASE(a_call_over_a_call_fires_both),
     TEST_CASE(a_collection_at_the_fire_keeps_the_answer),
     TEST_CASE(hoons_pin_holds_its_term_and_refuses_the_others),
     TEST_CASE(the_core_reader_reads_only_the_cells_and_the_sample),
     TEST_CASE(a_core_decrements_in_one_step_whatever_bat_and_ctx_hold),
     TEST_CASE(a_core_with_no_decrement_is_err_in_one_step),
     TEST_CASE(a_core_the_jet_does_not_answer_for_runs_the_term),
+    TEST_CASE(a_lazy_core_fires_once_reduced),
+    TEST_CASE(the_bare_arm_fires_as_its_term),
+    TEST_CASE(a_tree_copy_of_the_term_binds),
+    TEST_CASE(a_whole_program_fires_the_bare_arm),
 )

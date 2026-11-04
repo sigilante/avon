@@ -1926,8 +1926,10 @@ pinned jets share).
 argument, `av_nock_dec_read` reads the whole argument through
 indirections and jet nodes, the rest of the stack included, and requires
 the encoding of a noun: every atom canonical, no `Form` (a cell carrying
-code, which `encNoun` never makes), nothing left to reduce. A node shared
-within it is read once. Then the redex root becomes the output in one
+code, which `encNoun` never makes). A node shared within it is read once.
+The reader first reduces each node it reads in place, below ("The
+argument, reduced first"), so a thunk or a lazy field is read as its
+weak head normal form. Then the redex root becomes the output in one
 step, at most 209 fresh nodes: `Cell (Atom k) r` shares `r`'s nodes,
 since an encoding is normal and code-free already and `toCell` leaves it
 as it is. A head atom of more than 32 bits declines, as skinock's circuit
@@ -1942,8 +1944,8 @@ the whole stack, so a loop of N decrements over a stack of size m spends
 O(N m) in checking, and an argument that then declines is walked for
 nothing. No memo is kept across calls; skinock's programs so far pass
 short stacks. A call whose argument is itself a call, `dec (dec n)`,
-declines the outer call to the term, which forces the inner one, and
-that one fires; there is no chain as Poseidon2 has.
+reduces the inner call while it reads the outer one's argument, so the
+inner fires, then the outer; there is no chain as Poseidon2 has.
 
 **Counts change, as for the other share-mode jets.** A fire is one step,
 reported as `nock-dec: … decrements run natively`. The normal form is
@@ -1997,6 +1999,83 @@ and `dec_body_underflow`.
   cores with a `Form` at either cell, and with `S K` at `bat` and `ctx`,
   the same; a cell sample declines, and the term runs out of fuel, as
   `hoon_dec_off_domain` says.
+
+**In whole programs** (2026-11-04, branch `jet-reduce-arg`). The jet above
+fired on the term applied to a core, never inside a compiled program.
+skinock found why (SKInock `1ad32d5`, `release/nock/DECJET.md`, "In whole
+programs"), and four changes follow.
+
+- **The bare arm, a second term of kind `hoon-dec`.** `jetT f = S (K
+  toCellT) (nockToSki f)` exists only to pin; a compiled program carries
+  the bare arm `nockToSki hoonDecBodyF`, as a battery `Form`'s code and
+  inside the compiled hint. The arm's outputs on the fire shapes hold no
+  `Form`, so skinock proves the same family for it without `toCell`
+  (`hoon_dec_bare_cl`, `…_cl_zero`, `…_err_atom`, `…_err_noSample`,
+  `hoon_dec_bare_fire_sound`). `av_hoon_dec_register` takes either full
+  digest, `AV_HOON_DEC_SHA256` (`jetT`, a4baf0aa…) or
+  `AV_HOON_DEC_BARE_SHA256` (d320b173…), each its own jet entry with the
+  same reader and output; `jets/pins/nockToSki-hoonDecBodyF.dag` is
+  SKInock's `terms/` file (sha256 of the file 875515052b…), and
+  `jets/pins.conf` lists both, a kind that alone may have two lines.
+- **The argument, reduced first.** The arm meets its argument lazily: the
+  core is a redex such as `K (I (K Z)) W`, and its tail, sample and bits
+  are redexes inside it, so the literal check never matched. The readers
+  now take a force (`dec_rd`, `src/jets.h`): before it matches a node,
+  `dec_fire` reduces that node in place to a weak head normal form, by a
+  nested share-mode run of the reducer (`dec_force`, `src/reduce.c`).
+  Only the nodes the check reads are forced, and for `hoon-dec` those are
+  what the arm forces itself: the core, its tail, the sample and the
+  sample's bit list, never `bat`, `ctx` or a `Form`'s code. The licence is
+  skinock's `hoon_dec_bare_fire_sound_red : t ↠ t' → hoonDecFire? t' = some
+  u → nockToSki hoonDecBodyF ⬝ t ↠ u` and its `jetT` twin
+  `hoon_dec_fire_sound_red`; a reduction in place is a weak reduction of
+  the argument, the graph keeps the reducts, and so a normal form is the
+  unjetted run's either way. The Λ word's reader had the same limitation
+  and takes the same force, licensed by `dec_transport` after the same
+  steps (`WSteps.right`); its licence needs the whole stack an encoded
+  noun, so it forces all of it, which the term need not do on an `Err`
+  stack.
+- **Counting.** The reductions are contractions of the run: the nested
+  run counts them as share mode counts any, they are added to the run's
+  steps (and its other counters), and the fire is one step more. They
+  stop at `DEC_FORCE_BUDGET` (2^22) contractions a call, or at the fuel
+  left; the read then gives up, the jet declines, the reducts stay, and
+  the term runs from them. A nested run that collects makes the read start
+  again from the redex root, the nodes having moved. Nested runs fire the
+  pinned jets as the outer run does, `DEC_FORCE_DEPTH` (4) deep; deeper,
+  the reader reads as it stands.
+- **A term loaded as a tree binds.** `pin_same` compared a jet node's
+  term with the pinned one within `8 · pin_nodes + 4096` distinct pairs,
+  15,376 for `jetT hoonDecBodyF`; a backtick-prefix input is never
+  hash-consed, so its copy of the arm is about 65,000 application nodes,
+  and `av_pin_bind` unbound it. The budget is now also the term's size as a
+  tree (`pin_tree`, at most `PIN_TREE_MAX` = 2^22), enough for any copy
+  shared or not, since each node of a tree meets one node of the term.
+  The input is not hash-consed, which would change its counts.
+- **A shared program holds no pinned term.** skinock's `share` pass
+  λ-binds the arm's repeated subterms, so the arm exists only after the
+  sharing βs, as a reduct; `av_pin_bind` binds at load. Binding in
+  reducts would hash every node a contraction makes, so it is not done:
+  a program whose `++dec` should fire is loaded unshared, as a DAG
+  (`compiled f 0`, Lean's `dagText`) or as a prefix tree.
+
+Measured on skinock's `hoon_dec_N` (`release/nock/programs.txt`'s
+`hoon_dec_12` formula with the sample `[1 N]`, unshared, as a DAG), Avon
+`reduce --pins` against no pins, normal forms equal byte for byte:
+
+| N | unjetted | jetted | arm |
+|--:|--:|--:|---|
+| 7 | 12,295 | 1,011 | bare, 1 bound, 1 fired |
+| 100 | 170,640 | 1,011 | the same |
+| 10,000 | 17,040,411 (0.48 s, 58 MB) | 1,011 (0.04 s, 6 MB) | the same |
+
+The 1,010 contractions besides the fire are the program's own work and the
+core's reduction; they do not grow with N. As a prefix tree the same runs
+take 12,484, 170,938 and 17,040,897 steps unjetted and 1,011 jetted, the
+arm bound at its three tree occurrences. The shared form binds nothing:
+15,628 steps at N = 7, jetted or not. `tests/test_nockdec.c` holds lazy
+cores, lazy stacks, the bare arm, a tree copy and `hoon_dec_7` itself
+(`tests/data/hoon-dec/`) to the unjetted normal forms.
 
 ## 7. The interpreter jet
 

@@ -135,6 +135,19 @@ TEST(pins_reads_its_file_and_refuses_a_bad_one) {
     snprintf(cmd, sizeof cmd, AVON " reduce --pins --p2=x %s 2>&1", path);
     CHECK_EQ(run(cmd, out, sizeof out), 1);
     CHECK(strstr(out, "p2 given twice") != NULL);
+    /* hoon-dec names two terms at most: the licensed jetT and the bare arm */
+    term("two.conf", "hoon-dec hd.dag\nhoon-dec hd.dag\n", conf, sizeof conf);
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins=%s %s 2>&1", conf, path);
+    CHECK_EQ(run(cmd, out, sizeof out), 0);
+    term("three.conf", "hoon-dec hd.dag\nhoon-dec hd.dag\nhoon-dec hd.dag\n", conf, sizeof conf);
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins=%s %s 2>&1", conf, path);
+    CHECK_EQ(run(cmd, out, sizeof out), 1);
+    CHECK(strstr(out, "hoon-dec given twice") != NULL);
+    /* skinock's whole program, its bare arm fired once its core is reduced */
+    snprintf(cmd, sizeof cmd, AVON " reduce --pins tests/data/hoon-dec/hoon_dec_7.dag 2>&1");
+    CHECK_EQ(run(cmd, out, sizeof out), 0);
+    CHECK(strstr(out, "(jetT 0, bare 1); 1 decrements run natively") != NULL);
+    CHECK(strstr(out, "NORMAL 1011\n") != NULL);
 }
 
 TEST_MAIN(

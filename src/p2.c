@@ -40,7 +40,7 @@ bool av_p2_selftest(void) {
 /*  ------------------------------------------------------------ the jet */
 
 uint32_t p2_register(av_arena *a, uint32_t p, bool pin, const char **err) {
-    uint32_t id = pin_register(a, p, pin ? AV_P2_SHA256 : NULL,
+    uint32_t id = pin_register(a, p, pin ? AV_P2_SHA256 : NULL, NULL,
                                "not lean-ski's Poseidon2 term P: its full digest is not " AV_P2_SHA256,
                                err);
     if (id != AV_NONE && (a->jets[id].nock_dec || a->jets[id].hoon_dec)) {
