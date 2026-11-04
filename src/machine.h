@@ -56,6 +56,7 @@ typedef struct {
     uint64_t       dispatches, fused, word_ops, list_ops, bit_ops, fix_calls, joins;
     uint64_t       p2_calls, p2_declines, p2_unbound, deferred;
     uint64_t       nock_dec_calls, nock_dec_declines, nock_dec_unbound;
+    uint64_t       hoon_dec_calls, hoon_dec_declines, hoon_dec_unbound;
     uint32_t      *p2c;         /* share: a chain of P calls, its call and
                                    jet node at each level, outermost first */
     size_t         p2cap;

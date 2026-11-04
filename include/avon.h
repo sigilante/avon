@@ -398,6 +398,10 @@ typedef struct {
     bool        nock_dec;       /* share mode: skinock's jetT decF applied
                                    to an encoded stack runs natively, one
                                    step; copy mode ignores it */
+    bool        hoon_dec;       /* share mode: skinock's jetT hoonDecBodyF
+                                   applied to a gate core with an atom
+                                   sample runs natively, one step; copy
+                                   mode ignores it */
     bool        no_join;        /* with data: never join a case to its
                                    instance, for tests comparing
                                    the two; every count is the same       */
@@ -452,6 +456,15 @@ typedef struct {
     uint64_t  nock_dec_unbound;   /* jet nodes whose term was not jetT
                                      decF's at a fire or a decline, made
                                      indirections                         */
+    uint64_t  hoon_dec_calls;     /* jetT hoonDecBodyF run natively, one
+                                     step each, among steps               */
+    uint64_t  hoon_dec_declines;  /* it met an argument it does not
+                                     answer for: a cell sample, a sample
+                                     past 32 bits, anything not a core
+                                     as it stands; it ran a fresh copy
+                                     of its term                          */
+    uint64_t  hoon_dec_unbound;   /* jet nodes whose term was not its at
+                                     a fire or a decline                  */
 } av_result;
 
 av_opts   av_opts_default(void);
@@ -751,7 +764,7 @@ uint32_t av_p2_register(av_arena *a, uint32_t p, const char **err);
 long     av_pin_bind(av_arena *a, uint32_t t, uint32_t id);  /* jet nodes kept, or -1 */
 bool     av_p2_state_read(const av_arena *a, uint32_t t, uint32_t s[16]);
 
-/*  The transported Nock decrement.  skinock's term jetT decF
+/*  The transported Nock decrements.  skinock's term jetT decF
  *  (Nock2Ski/JetTransport.lean, printed by scripts/PinDec.lean) is
  *  `λx. toCell (nockToSki decF x)`, the Λ word dec compiled from Nock and
  *  its output copied code-free; dec_transport proves it implements the
@@ -775,6 +788,25 @@ bool     av_p2_state_read(const av_arena *a, uint32_t t, uint32_t s[16]);
 #define AV_NOCK_DEC_SHA256 "17bcbb92ade0f0c73e0585dfeab21bbda123ce89b4965b79ba5857f47b518657"
 uint32_t av_nock_dec_register(av_arena *a, uint32_t p, const char **err);
 int      av_nock_dec_read(const av_arena *a, uint32_t t, uint32_t *k, uint32_t *rest);
+
+/*  And Hoon's own ++dec.  skinock's jetT hoonDecBodyF
+ *  (Nock2Ski/HoonDec.lean, printed by scripts/PinDec.lean) is the compiled
+ *  body of the ++dec arm under any hint, the guard and the count-up loop:
+ *  on the gate core [bat [n+1 ctx]] the atom n; Err on [bat [0 ctx]], on an
+ *  atom and on [bat atom].  On a core whose sample is a cell the arm
+ *  diverges, and so does the term.  skinock's licence covers the core
+ *  whatever its battery and context hold, and either cell carrying code (a
+ *  Form, K (K (S (K K) (S (pairT h t) (K k))))) or not.  So
+ *  av_hoon_dec_read reads the core's two cells and the sample only: 1 a
+ *  core it fires on, *k the sample less one; 2 one whose output is Err; 0
+ *  a cell sample, a sample past 32 bits or not canonical, or anything else.
+ *  av_hoon_dec_register pins the term by AV_HOON_DEC_SHA256, and with
+ *  av_opts.hoon_dec share mode rewrites it at the head with such an
+ *  argument to Atom k, or to Err, one step; any other argument runs a
+ *  fresh copy of the term, a decline counted. */
+#define AV_HOON_DEC_SHA256 "a4baf0aae2d7ea5032800f533b7cef103ea134e7ee0ac95c3d1a996d34f16d6b"
+uint32_t av_hoon_dec_register(av_arena *a, uint32_t p, const char **err);
+int      av_hoon_dec_read(const av_arena *a, uint32_t t, uint32_t *k);
 
 /*  The table in lean-ski's `composed check-cj` format, as bench/plonky3's
  *  compj-prove writes it: the header, `W w`, the memory padded with nil
@@ -905,6 +937,8 @@ typedef struct av_jet {
                                    state runs natively                    */
     bool      nock_dec;         /* skinock's jetT decF: applied to an
                                    encoded stack, runs natively           */
+    bool      hoon_dec;         /* skinock's jetT hoonDecBodyF: applied
+                                   to a gate core, runs natively          */
     uint32_t  pin_nodes;        /* a pinned jet's term's distinct nodes,
                                    the bound on comparing a jet node's
                                    term with it                           */

@@ -799,35 +799,39 @@ static int p2_fire(R *r, uint32_t id, uint32_t *curp) {
     return 1;
 }
 
-/*  The Nock decrement jet, its jet node *curp, of jet id, at the head with
- *  its argument: 1 fired, the redex root now the contract's output; 0
- *  declined, the argument not a noun's encoding as it stands or its head
- *  atom past 32 bits, to run the term; 2 unbound, the node's term not
- *  jetT decF's, the node now an indirection to it; -1 SIZE.  skinock's
- *  dec_transport is the licence: jetT decF applied to the encoding of a
- *  stack reduces to the encoding of decC's outcome on it. */
-static int nock_dec_fire(R *r, uint32_t id, uint32_t *curp) {
+/*  A Nock decrement jet, its jet node *curp, of jet id, at the head with
+ *  its argument: jetT decF, or with hoon jetT hoonDecBodyF.  1 fired, the
+ *  redex root now the contract's output; 0 declined, the argument not one
+ *  the jet answers for as it stands (av_nock_dec_read, av_hoon_dec_read),
+ *  to run the term; 2 unbound, the node's term not the pinned one, the node
+ *  now an indirection to it; -1 SIZE.  skinock's dec_transport and
+ *  hoon_dec_transport are the licences: the term applied to such an
+ *  argument reduces to the encoding of the model's outcome on it. */
+static int dec_fire(R *r, uint32_t id, uint32_t *curp, bool hoon) {
     av_arena *a = r->a;
-    uint32_t k, rest;
-    if (!pin_ok(r, *curp, id, &r->nock_dec_unbound)) return 2;
-    int c = av_nock_dec_read(a, av_right(a, r->stk[r->top - 1]), &k, &rest);
+    uint32_t k = 0, rest = AV_NONE;
+    if (!pin_ok(r, *curp, id, hoon ? &r->hoon_dec_unbound : &r->nock_dec_unbound)) return 2;
+    uint32_t arg = av_right(a, r->stk[r->top - 1]);
+    int c = hoon ? av_hoon_dec_read(a, arg, &k) : av_nock_dec_read(a, arg, &k, &rest);
     if (!c) {
-        r->nock_dec_declines++;
+        if (hoon) r->hoon_dec_declines++;
+        else r->nock_dec_declines++;
         return 0;
     }
     uint64_t gen = a->collections;
     if (!ensure(r, NOCK_DEC_NODES)) return -1;
-    if (c == 1 && a->collections != gen)            /* rest moved: read it again */
+    if (c == 1 && !hoon && a->collections != gen)   /* rest moved: read it again */
         c = av_nock_dec_read(a, av_right(a, r->stk[r->top - 1]), &k, &rest);
     if (c == 0) return -1;              /* a collection keeps the shape: out of memory */
-    uint32_t x = c == 1 ? nock_dec_build(a, k, rest) : nock_dec_err(a);
+    uint32_t x = c == 2 ? nock_dec_err(a) : hoon ? hoon_dec_build(a, k) : nock_dec_build(a, k, rest);
     uint32_t nd = r->stk[r->top - 1];               /* the redex root, reread */
     if (r->o->profile) profile_rewrote(r->o->profile, nd);
     arena_set(a, nd, (av_node){ (AV_IND << AV_TAG_SHIFT) | x, 0 });
     r->top -= 1;
     *curp = nd;
     r->steps++;
-    r->nock_dec_calls++;
+    if (hoon) r->hoon_dec_calls++;
+    else r->nock_dec_calls++;
     return 1;
 }
 
@@ -1141,16 +1145,17 @@ static inline __attribute__((always_inline)) av_status whnf_share_d(R *r, const 
                 if (cur == AV_NONE) return AV_SIZE;
                 continue;
             }
-            if (o->nock_dec && a->jets[id].nock_dec) {
-                /* the Nock decrement: natively on an encoded stack as it
-                 * stands; else a fresh copy of its term, so the node's own
-                 * term is never written */
+            if ((o->nock_dec && a->jets[id].nock_dec) || (o->hoon_dec && a->jets[id].hoon_dec)) {
+                /* a Nock decrement: natively on an argument it answers
+                 * for as it stands; else a fresh copy of its term, so the
+                 * node's own term is never written */
+                bool hoon = a->jets[id].hoon_dec;
                 if (r->top - bottom >= 1) {
                     if (!materialize(r, bottom, &cur)) return stop(r, bottom, cur, AV_SIZE);
-                    int nf = nock_dec_fire(r, id, &cur);
+                    int nf = dec_fire(r, id, &cur, hoon);
                     if (nf < 0) return stop(r, bottom, cur, AV_SIZE);
                     if (nf > 0) continue;       /* fired, or unbound */
-                } else if (!pin_ok(r, cur, id, &r->nock_dec_unbound)) {
+                } else if (!pin_ok(r, cur, id, hoon ? &r->hoon_dec_unbound : &r->nock_dec_unbound)) {
                     continue;                   /* bare, as a normal form reaches it: its own term */
                 }
                 r->jnode = cur;
@@ -1446,6 +1451,7 @@ av_result av_reduce(av_arena *a, uint32_t t, const av_opts *o) {
                       r.jet_steps, r.jet_fault, r.tmpl_calls,
                       r.dispatches, r.fused, r.word_ops, r.bit_ops, r.fix_calls, r.joins,
                       r.p2_calls, r.p2_declines, r.p2_unbound, r.deferred, r.list_ops,
-                      r.nock_dec_calls, r.nock_dec_declines, r.nock_dec_unbound };
+                      r.nock_dec_calls, r.nock_dec_declines, r.nock_dec_unbound,
+                      r.hoon_dec_calls, r.hoon_dec_declines, r.hoon_dec_unbound };
     return res;
 }

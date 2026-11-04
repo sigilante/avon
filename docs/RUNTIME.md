@@ -108,7 +108,7 @@ term that runs out of fuel or room still exits 0. Exit 1 is a failure:
 - a dictionary, template directory or interpreter file that does not
   load;
 - an option missing what it needs: `--data` or `--fix` without
-  `--templates`, `--templates`, `--p2`, `--nock-dec` or `--profile` in copy mode,
+  `--templates`, `--templates`, `--pins`, `--p2`, `--nock-dec` or `--profile` in copy mode,
   `--interp` without `--jets`;
 - `scry` finding a run off the reference, or a pier that will not open,
   boot or commit.
@@ -158,8 +158,7 @@ differently (§6).
 | `--fix` | with `--templates` or `--discover`: Curry's Y at the head with an argument, `Y g`, rewritten to `g (Y g)` in one step (§6.11) | `share` only | one step per unfolding, reported |
 | `--memory` | with `--templates` or `--discover`: `--fix`, and every unfolding of a generator `g` passes on one `Y g`, never written, leading to one shared unfolding (§6.11, "Shared"): peak memory of a few MB where `--fix` holds hundreds, at about `--fix`'s time | `share` only | one step per unfolding, and one per call through the shared `Y g`, reported |
 | `--no-defer` | with `--templates` or `--discover`: every instance writes its root and spine at once, as before deferred roots (§6.13), for comparing the two | `share` only | none: every count and state is the same |
-| `--p2=FILE` | lean-ski's Poseidon2 term `P` (`lake exe p2run` writes `P.dag`): `P` applied to a state of sixteen 31-bit elements runs natively (§6.12) | `share` only; `copy` refuses | one step per permutation, reported |
-| `--nock-dec=FILE` | skinock's `jetT decF` (SKInock `terms/jetT-decF.dag`): applied to an encoded Nock stack, the transported decrement runs natively (§6.15) | `share` only; `copy` refuses | one step per decrement, reported |
+| `--pins[=FILE]` | the pinned jets FILE lists (by default the checkout's `jets/pins.conf`: Poseidon2, the Λ word `dec`, Hoon's `++dec`): each runs natively on an argument its proof covers (§6.12, §6.15). `--p2=FILE` and `--nock-dec=FILE` turn on one each | `share` only; `copy` refuses | one step per fire, reported per jet |
 
 ```sh
 build/avon reduce --strategy=copy --jets=tests/conformance/dictionary.tsv --jet-check=1 \
@@ -233,7 +232,33 @@ convertible, not a reduct: normal forms and answers are SKI's, a term
 without a normal form still stops at FUEL, and a WHNF state may differ in
 form (`Y K` stops at `K (Y K)`).
 
-**Poseidon2 run natively** (`--p2=FILE`, §6.12) prints
+**Pinned jets** (`--pins[=FILE]`). A pinned jet is native code licensed for
+one exact term, which Avon refuses unless its full digest is the one
+compiled in. `--pins` turns on every pinned jet a file lists, one `KIND
+TERM-FILE` a line, each path relative to the file, `#` a comment:
+
+```
+p2        pins/P.dag
+nock-dec  pins/jetT-decF.dag
+hoon-dec  pins/jetT-hoonDecBodyF.dag
+```
+
+That is `jets/pins.conf`, which `--pins` alone reads (its path is compiled
+in from the checkout). Its terms are in `jets/pins/`: `P.dag` from lean-ski
+`e72fff0` (`lake exe p2run 1 OUT`), the other two from SKInock `d89b96c`
+and `fe3c031` (`scripts/PinDec.lean`). Leave a line out to leave that jet
+off, or write a file of your own. Each jet that binds in the term prints
+its line; when none does, `pins: no pinned term occurs in the term (…)`.
+A file that cannot be read, an unknown kind, or a kind given twice (as by
+`--pins` and `--p2` together) exits 1. `--p2=FILE` and `--nock-dec=FILE`
+turn on one jet each, as before.
+
+```sh
+build/avon reduce --pins prog.dag
+build/avon reduce --pins=my-pins.conf prog.dag
+```
+
+**Poseidon2 run natively** (kind `p2`, `--p2=FILE`, §6.12) prints
 `p2: 1 occurrences of P bound (skijack-2:…, P's structural hash); 1
 permutations run natively among the contractions, 0 declined (an argument
 neither a state nor a chain of calls ending in one), 0 unbound at a call`. FILE must hold
@@ -249,7 +274,7 @@ state is built before it is passed on.
 build/avon reduce --p2=/tmp/p2/P.dag /tmp/p2/p2.dag   # NORMAL 1, then p2.expected
 ```
 
-**The Nock decrement run natively** (`--nock-dec=FILE`, §6.15) prints
+**The Nock decrement run natively** (kind `nock-dec`, `--nock-dec=FILE`, §6.15) prints
 `nock-dec: 1 occurrences of jetT decF bound; 1 decrements run natively
 among the contractions, 0 declined (an argument not an encoded noun as it
 stands, or a head atom past 32 bits), 0 unbound at a call`. FILE must
@@ -258,8 +283,16 @@ fires on the encoding of a Nock stack `[n r]` as it stands, to `[n-1 r]`,
 or to `Err` on `[0 r]`, on a cell at the head and on an atom; skinock's
 `dec_transport` is the licence. A head atom past 32 bits, a `Form`, a
 non-canonical atom or a thunk runs the term, counted as a decline, so the
-normal form is SKI's. `tests/nockdec/jetT-decF.dag` is the term at
-SKInock `d89b96c`.
+normal form is SKI's.
+
+**Hoon's `++dec` run natively** (kind `hoon-dec`, §6.15) prints
+`hoon-dec: 1 occurrences of jetT hoonDecBodyF bound; 1 decrements run
+natively …, 0 declined (a cell sample, a sample past 32 bits, or an
+argument not a core as it stands), 0 unbound at a call`. It fires on the
+gate core `[bat [n ctx]]`, either cell plain or carrying code, to the atom
+`n-1`, or to `Err` on a zero sample, an atom and `[bat atom]`; it reads
+nothing of `bat` and `ctx`. A cell sample, where `++dec` diverges, runs the
+term.
 
 ## Measuring
 
@@ -525,7 +558,7 @@ build/avon enum 12 | sed 's/$/ X/' | build/avon batch --trace-frame=summary --fu
 jets; a term with K, I or another atom is refused. Options it would ignore
 are refused: `--strategy=share`, `--jets`, `--ctors`, `--interp`,
 `--jet-floor`, `--jet-check`, `--templates`, `--discover`, `--data`, `--fix`,
-`--memory`, `--no-defer`, `--p2`, `--nock-dec`, `--profile`, `--budget`. So are
+`--memory`, `--no-defer`, `--pins`, `--p2`, `--nock-dec`, `--profile`, `--budget`. So are
 `--passenger`, `--records`, `--frame-dump` and `--defect` without it. Each term gives one block:
 
 ```
@@ -607,6 +640,7 @@ enum --base=FILE --shape=sxy,ssaq,hide` builds `S a q`, `S (S a) q` and
 | `tests/workloads/skilark/manifest.tsv` | SKIlark's workloads | skilark's export |
 | `tests/workloads/reduceron/*.ascii.ski` | five Reduceron benchmarks in SKIjack; `run.py` compiles, runs and times them (`docs/BENCHMARK.md`) | written by hand |
 | `jets/birds.tsv`, `jets/joy.tsv` | bird and Joy dictionaries; `*_names.tsv` label them | `jets/birds.py`, `jets/joy.py` |
+| `jets/pins.conf`, `jets/pins/*.dag` | the pinned jets `--pins` turns on, and their terms | lean-ski's `p2run`; SKInock's `scripts/PinDec.lean` |
 | `tests/selfhost/*` | the compiler core's terms and calls | `tests/selfhost/export.py` |
 | `tests/kernel/*` | kernel pills, events, expected values | `tests/kernel/export.py`, `tests/kernel/entropy_export.py` |
 | `tests/fixtures/*` | the paper's targets T0 to T2, T0's reference result, and `corpus.tsv`, every distinct corpus term | `tests/fixtures/export.py` |

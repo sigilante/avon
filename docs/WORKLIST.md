@@ -6,6 +6,18 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **Hoon's `++dec`, transported, and `--pins`** (2026-11-04; `DESIGN.md` §6.15,
+  RUNTIME "Pinned jets"). `--pins[=FILE]` turns on the pinned jets a file lists,
+  `KIND TERM-FILE` a line, by default `jets/pins.conf` with the terms vendored in
+  `jets/pins/`; `--p2` and `--nock-dec` remain. Kind `hoon-dec` runs skinock's
+  `jetT hoonDecBodyF`, the
+  compiled body of Hoon's `++dec` arm, natively on a gate core: `[bat [n ctx]]`
+  to the atom `n-1`, `Err` on a zero sample, an atom or `[bat atom]`. It reads
+  only the core's two cells and the sample, either cell plain or carrying code,
+  and declines a cell sample, where the arm diverges. `[0 [100 [3 4]]]`:
+  169,676 steps to one. skinock's `hoon_dec_free_cl` and its `Err` cases
+  (SKInock `4bcea15`) license it whatever the battery, context and code hold.
+
 - **The Nock decrement, transported** (2026-11-04; `DESIGN.md` §6.15). With
   `--nock-dec=FILE`, share mode runs skinock's `jetT decF`, licensed by its
   `dec_transport`, natively on an encoded Nock stack: `[n r]` to `[n-1 r]`,

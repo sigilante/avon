@@ -1895,8 +1895,9 @@ still needs §18.2's word cells, and a list cell beside them.
 
 ### 6.15 The Nock decrement, transported
 
-**With `--nock-dec=FILE`, share mode runs skinock's decrement natively.**
-FILE holds `jetT decF` in the DAG form, as skinock's `scripts/PinDec.lean`
+**With `--pins`, share mode runs skinock's decrement natively** (kind
+`nock-dec`; `--nock-dec=FILE` turns it on alone). The term is `jetT decF`
+in the DAG form, as skinock's `scripts/PinDec.lean`
 prints it (SKInock `terms/jetT-decF.dag`). `decF` is the Nock formula of
 the Λ word `dec`, a guarded count-up decrement on the top of a stack, and
 `jetT decF = λx. toCell (nockToSki decF x)` is its compilation to SKI with
@@ -1914,7 +1915,8 @@ atom, it is `Err`, `K (K (K I))`. A noun is skinock's encoding:
   `K (pairT bit rest)`, a bit `K` (1) or `K I` (0);
 - `Cell h t = K (S (K K) (S (K K) (pairT h t)))`.
 
-**The term is pinned as `P` is.** `av_nock_dec_register` refuses FILE
+**The term is pinned as `P` is**, and `--pins` turns both on from one
+file (`jets/pins.conf`, RUNTIME "Pinned jets"). `av_nock_dec_register` refuses FILE
 unless its full digest is `AV_NOCK_DEC_SHA256`, `av_pin_bind` keeps a jet
 node only where its term is FILE's, node for node, and every fire and
 decline checks its node again (§6.12; `src/pin.c` holds what the two
@@ -1949,13 +1951,52 @@ SKI's, byte for byte, because the contract gives it. Copy mode refuses
 `--nock-dec`.
 
 **Results, 2026-11-04.** On `[10000 0]` the term takes 13,430,171
-steps, 0.23 s and 30 MB unjetted; with `--nock-dec` it takes one step,
+steps, 0.23 s and 30 MB unjetted; jetted it takes one step,
 under 0.01 s and 2.4 MB, to the same normal form, byte for byte. The term
 costs about 1,340 steps per unit of the head, so the unjetted run cannot
 check a head near 2^32; `[2^32 - 1 0]` fires to `[2^32 - 2 0]`, read back
 from the output. `tests/test_nockdec.c` holds the jet to the term's
 normal form on every head from 0 to 64 and on the crash cases, and holds
 the declines to it too.
+
+**Hoon's own `++dec`** (kind `hoon-dec` in `--pins`, 2026-11-04). The Λ word never
+occurs in Hoon's code, so the jet above never fires on a Hoon program.
+skinock pins a second term, `jetT hoonDecBodyF` (SKInock `fe3c031`): the
+compiled body of Hoon's `++dec` arm, the guard and the count-up loop. A
+hint over the battery compiles away or to "evaluate the clue, then the
+body", so one term serves the benchmark's `dec.nock`, the released
+programs' battery and lean-nock's `decBat`. skinock proves
+`hoon_dec_transport` from lean-nock's battery-generic `dec_body_correct`
+and `dec_body_underflow`.
+
+- **The contract.** On the gate core `[bat [n+1 ctx]]` the output is the
+  atom `n`, code-free. On `[bat [0 ctx]]`, on an atom and on `[bat atom]`
+  it is `Err`. On a core whose sample is a cell the arm diverges
+  (`hoon_dec_off_domain`), and so does the term; the jet must never answer
+  there.
+- **What it reads.** A compiled core's battery carries code, and the core
+  itself may parse as a formula, so `av_hoon_dec_read` takes either cell of
+  `[bat [sam ctx]]` as a `Cell` or a `Form` and reads nothing of `bat` and
+  `ctx`. It fires on a canonical atom sample of at most 32 bits, gives
+  `Err` where the contract does, and declines a cell sample, a longer or
+  non-canonical atom, and anything else. The output, `Atom (n-1)`, takes
+  at most 201 fresh nodes.
+- **Its licence.** `hoon_dec_transport` covers `encNoun` inputs, with no
+  `Form` anywhere, so on a compiled core it would never apply. skinock
+  then proved what the reader needs (SKInock `4bcea15`,
+  `Nock2Ski/HoonDecFree.lean`): with `bat`, `ctx` and the code arbitrary
+  closed terms and either cell a `Cell` or a `Form`, the term reaches
+  `Atom n` on sample n + 1 (`hoon_dec_free_cl`) and `Err` on a canonical
+  zero (`hoon_dec_free_cl_zero`), on an atom and on `[bat atom]` whatever
+  that atom's bits (`hoon_dec_err_atom`, `hoon_dec_err_noSample`). A
+  non-canonical zero enters the loop, as the guard compares bit lists, so
+  the jet declines it. `hoon_dec_fire_sound` proves skinock's own fire
+  check, which `av_hoon_dec_read` follows case for case.
+- **Results.** Fired against unfired, normal forms equal byte for byte:
+  `[0 [7 [0 0]]]` 11,331 steps to one; `[0 [100 [3 4]]]` 169,676 to one;
+  cores with a `Form` at either cell, and with `S K` at `bat` and `ctx`,
+  the same; a cell sample declines, and the term runs out of fuel, as
+  `hoon_dec_off_domain` says.
 
 ## 7. The interpreter jet
 
@@ -2974,7 +3015,7 @@ reduction option it would ignore.
   cycle would share it.
 - **Poseidon2 run natively** (§6.12, `--p2`): `P ⬝ stateN x` in one step,
   against 962 million steps and 10.1 s unjetted.
-- **The Nock decrement, transported** (§6.15, `--nock-dec`): skinock's
+- **The Nock decrement, transported** (§6.15, `--pins`): skinock's
   `jetT decF` on an encoded stack in one step, licensed by
   `dec_transport`; unjetted it counts up, about 1,340 steps per unit.
 - **Against the Reduceron** (`docs/BENCHMARK.md`, "Remeasured,

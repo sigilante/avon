@@ -7,18 +7,24 @@
 
 #include "cli.h"
 
+/*  The file --pins reads when it names none: the checkout's, as the
+ *  Makefile says. */
+#ifndef AV_PINS_DEFAULT
+#define AV_PINS_DEFAULT "jets/pins.conf"
+#endif
+
 /*  Each option parse_args takes, a bit of args.given, so options_fit can
  *  refuse one the command would ignore. */
 enum {
     O_STRATEGY, O_WHNF, O_BIRDS, O_JETS, O_CTORS, O_NO_JETS, O_PROFILE, O_TEMPLATES, O_DISCOVER,
-    O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_NOCK_DEC, O_INTERP, O_JET_TABLE, O_PLAN,
+    O_DATA, O_FIX, O_MEMORY, O_NO_DEFER, O_P2, O_NOCK_DEC, O_PINS, O_INTERP, O_JET_TABLE, O_PLAN,
     O_STATEMENT, O_JET_FLOOR, O_JET_CHECK, O_FUEL, O_MAX_NODES, O_AGGRESSIVE_HEAP, O_BUDGET, O_ROWS,
     O_CELLS, O_TRACE, O_PASSENGER, O_RECORDS, O_FRAME_DUMP, O_DEFECT, O_DAG, O_FILE, O_COUNT
 };
 static const char *const option_name[O_COUNT] = {
     "--strategy", "--whnf", "--allow-bird-atoms", "--jets", "--ctors", "--no-jets",
     "--profile", "--templates", "--discover", "--data", "--fix", "--memory", "--no-defer", "--p2",
-    "--nock-dec", "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
+    "--nock-dec", "--pins", "--interp", "--jet-table", "--plan", "--statement", "--jet-floor", "--jet-check",
     "--fuel", "--max-nodes", "--aggressive-heap", "--budget", "--rows", "--cells", "--trace-frame",
     "--passenger", "--records", "--frame-dump", "--defect", "--dag", "a FILE",
 };
@@ -52,8 +58,13 @@ typedef struct {
                                      NULL without either */
     bool        data;             /* --data: data jets */
     bool        fix;              /* --fix: Y unfolded in one step */
-    const char *p2;               /* --p2: P's term, a file, or NULL */
-    const char *nock_dec;         /* --nock-dec: jetT decF's term, a file, or NULL */
+    /* the pinned jets' terms, files or NULL: from --pins's file, or
+     * --p2 and --nock-dec */
+    const char *p2;               /* Poseidon2's P */
+    const char *nock_dec;         /* jetT decF, the Λ word dec */
+    const char *hoon_dec;         /* jetT hoonDecBodyF, Hoon's ++dec arm */
+    char        pin_path[3][1024];    /* --pins's paths, resolved */
+    bool        pins_bad;         /* --pins's file, or a kind twice, refused */
     const char *file;
     bool        dag;              /* --dag: print the term reached in the DAG form */
     /* frame traces */
@@ -66,6 +77,70 @@ typedef struct {
     bool        dump_records, dump_halt, dump_restart, dump_census;
     uint64_t    given;            /* OPT(O_...) of each option given */
 } args;
+
+/*  The pinned jets' kinds, in the order of args.p2, nock_dec and hoon_dec. */
+static const char *const pin_kind[3] = { "p2", "nock-dec", "hoon-dec" };
+
+static const char **pin_slot(args *g, int k) {
+    return k == 0 ? &g->p2 : k == 1 ? &g->nock_dec : &g->hoon_dec;
+}
+
+/*  Turn on kind k's jet with the term at path; false, with a message, if
+ *  it is on already. */
+static bool pin_set(args *g, int k, const char *path, const char *where) {
+    const char **slot = pin_slot(g, k);
+    if (*slot) {
+        fprintf(stderr, "avon: %s%s given twice\n", where, pin_kind[k]);
+        return false;
+    }
+    *slot = path;
+    return true;
+}
+
+/*  --pins's file: `KIND TERM-FILE` a line, `#` a comment, each TERM-FILE
+ *  relative to the file's directory (jets/pins.conf).  False, with a
+ *  message, on a file that cannot be read, an unknown kind, a kind twice,
+ *  or a path too long. */
+static bool read_pins(const char *conf, args *g) {
+    FILE *f = fopen(conf, "r");
+    if (!f) {
+        fprintf(stderr, "avon: %s: cannot open\n", conf);
+        return false;
+    }
+    const char *slash = strrchr(conf, '/');
+    int dirlen = slash ? (int)(slash - conf) : 1;
+    const char *dir = slash ? conf : ".";
+    char line[2048], where[1100];
+    bool ok = true;
+    for (int n = 1; ok && fgets(line, sizeof line, f); n++) {
+        char *hash = strchr(line, '#');
+        if (hash) *hash = '\0';
+        char kind[32], term[1024], extra[2];
+        int got = sscanf(line, "%31s %1023s %1s", kind, term, extra);
+        if (got <= 0) continue;
+        snprintf(where, sizeof where, "%s:%d: ", conf, n);
+        int k = 0;
+        while (k < 3 && strcmp(kind, pin_kind[k]) != 0) k++;
+        if (k == 3 || got != 2) {
+            fprintf(stderr, "avon: %s%s\n", where,
+                    k == 3 ? "not a pinned jet's kind (p2, nock-dec, hoon-dec)"
+                           : "a line is KIND and one TERM-FILE");
+            ok = false;
+            break;
+        }
+        int w = term[0] == '/' ? snprintf(g->pin_path[k], sizeof g->pin_path[k], "%s", term)
+                               : snprintf(g->pin_path[k], sizeof g->pin_path[k], "%.*s/%s",
+                                          dirlen, dir, term);
+        if (w < 0 || (size_t)w >= sizeof g->pin_path[k]) {
+            fprintf(stderr, "avon: %sa path too long\n", where);
+            ok = false;
+            break;
+        }
+        ok = pin_set(g, k, g->pin_path[k], where);
+    }
+    fclose(f);
+    return ok;
+}
 
 static bool parse_args(int argc, char **argv, args *g) {
     g->o = av_opts_default();
@@ -80,6 +155,8 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->fix = false;
     g->p2 = NULL;
     g->nock_dec = NULL;
+    g->hoon_dec = NULL;
+    g->pins_bad = false;
     g->jet_table = NULL;
     g->plan = NULL;
     g->statement = NULL;
@@ -125,8 +202,15 @@ static bool parse_args(int argc, char **argv, args *g) {
         else if (strcmp(s, "--fix") == 0)            g->fix = true;
         else if (strcmp(s, "--memory") == 0)         g->fix = g->o.fix_shared = true;
         else if (strcmp(s, "--no-defer") == 0)       g->o.no_defer = true;
-        else if (strncmp(s, "--p2=", 5) == 0 && s[5])  g->p2 = s + 5;
-        else if (strncmp(s, "--nock-dec=", 11) == 0 && s[11]) g->nock_dec = s + 11;
+        else if (strncmp(s, "--p2=", 5) == 0 && s[5]) {
+            if (!pin_set(g, 0, s + 5, "")) g->pins_bad = true;
+        } else if (strncmp(s, "--nock-dec=", 11) == 0 && s[11]) {
+            if (!pin_set(g, 1, s + 11, "")) g->pins_bad = true;
+        } else if (strcmp(s, "--pins") == 0) {
+            if (!read_pins(AV_PINS_DEFAULT, g)) g->pins_bad = true;
+        } else if (strncmp(s, "--pins=", 7) == 0 && s[7]) {
+            if (!read_pins(s + 7, g)) g->pins_bad = true;
+        }
         else if (strncmp(s, "--interp=", 9) == 0 && s[9]) {
             g->interp = s + 9;
             g->o.interp_jets = true;
@@ -203,7 +287,7 @@ static bool parse_args(int argc, char **argv, args *g) {
 static bool options_fit(const args *g, const char *cmd) {
     const uint64_t frames = OPT(O_PASSENGER) | OPT(O_RECORDS) | OPT(O_FRAME_DUMP) | OPT(O_DEFECT);
     const uint64_t untraced = OPT(O_TEMPLATES) | OPT(O_DISCOVER) | OPT(O_DATA) | OPT(O_FIX) | OPT(O_MEMORY) |
-                              OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_NOCK_DEC) | OPT(O_PROFILE) | OPT(O_JETS) |
+                              OPT(O_NO_DEFER) | OPT(O_P2) | OPT(O_NOCK_DEC) | OPT(O_PINS) | OPT(O_PROFILE) | OPT(O_JETS) |
                               OPT(O_CTORS) | OPT(O_INTERP) |
                               OPT(O_JET_FLOOR) | OPT(O_JET_CHECK) | OPT(O_BUDGET) |
                               OPT(O_DAG) | OPT(O_AGGRESSIVE_HEAP);
@@ -512,12 +596,13 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_arena_free(a);
         return 1;
     }
-    if ((g->p2 || g->nock_dec) && g->o.strategy != AV_SHARE) {
-        fprintf(stderr, "avon: %s runs in share mode only\n", g->p2 ? "--p2" : "--nock-dec");
+    if ((g->p2 || g->nock_dec || g->hoon_dec) && g->o.strategy != AV_SHARE) {
+        fprintf(stderr, "avon: the pinned jets (%s) run in share mode only\n",
+                g->p2 ? "p2" : g->nock_dec ? "nock-dec" : "hoon-dec");
         av_arena_free(a);
         return 1;
     }
-    uint32_t p2id = AV_NONE, ndid = AV_NONE;
+    uint32_t p2id = AV_NONE, ndid = AV_NONE, hdid = AV_NONE;
     if (t != AV_NONE && g->p2) {
         av_root_push(a, &t);
         p2id = use_pinned(a, g->p2, av_p2_register);
@@ -530,14 +615,21 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_root_pop(a);
         if (ndid == AV_NONE) t = AV_NONE;
     }
+    if (t != AV_NONE && g->hoon_dec) {
+        av_root_push(a, &t);
+        hdid = use_pinned(a, g->hoon_dec, av_hoon_dec_register);
+        av_root_pop(a);
+        if (hdid == AV_NONE) t = AV_NONE;
+    }
     if (t != AV_NONE && g->templates) {
         if (!use_templates(a, g->templates, &t, tc, g->data, wc, g->fix)) t = AV_NONE;
-    } else if (t != AV_NONE && (g->njets || g->ctors || g->p2 || g->nock_dec)) {
+    } else if (t != AV_NONE && (g->njets || g->ctors || g->p2 || g->nock_dec || g->hoon_dec)) {
         t = av_jets_match(a, t);
     }
-    long p2kept = 0, ndkept = 0;
+    long p2kept = 0, ndkept = 0, hdkept = 0;
     if ((t != AV_NONE && g->p2 && (p2kept = av_pin_bind(a, t, p2id)) < 0) ||
-        (t != AV_NONE && g->nock_dec && (ndkept = av_pin_bind(a, t, ndid)) < 0)) {
+        (t != AV_NONE && g->nock_dec && (ndkept = av_pin_bind(a, t, ndid)) < 0) ||
+        (t != AV_NONE && g->hoon_dec && (hdkept = av_pin_bind(a, t, hdid)) < 0)) {
         fprintf(stderr, "avon: out of memory\n");
         t = AV_NONE;
     }
@@ -551,6 +643,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     o.fix = g->fix;
     o.p2 = g->p2 != NULL;
     o.nock_dec = g->nock_dec != NULL;
+    o.hoon_dec = g->hoon_dec != NULL;
     av_profile *prof = NULL;
     if (g->profile && o.strategy != AV_SHARE) {
         fprintf(stderr, "avon: --profile charges share-mode contractions only\n");
@@ -579,7 +672,16 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
                 (unsigned long long)r.tmpl_calls);
     if (g->data) report_data(wc, &r);
     if (g->fix) report_fix(&r);
-    if (g->p2) {
+    /* a pinned jet's line where its term occurs; one line if none does */
+    bool p2_seen = g->p2 && (p2kept || r.p2_calls || r.p2_declines || r.p2_unbound);
+    bool nd_seen = g->nock_dec && (ndkept || r.nock_dec_calls || r.nock_dec_declines ||
+                                   r.nock_dec_unbound);
+    bool hd_seen = g->hoon_dec && (hdkept || r.hoon_dec_calls || r.hoon_dec_declines ||
+                                   r.hoon_dec_unbound);
+    if ((g->p2 || g->nock_dec || g->hoon_dec) && !p2_seen && !nd_seen && !hd_seen)
+        fprintf(stderr, "pins: no pinned term occurs in the term (%s%s%s)\n",
+                g->p2 ? "p2 " : "", g->nock_dec ? "nock-dec " : "", g->hoon_dec ? "hoon-dec" : "");
+    if (p2_seen) {
         /* P's structural hash, of the term registered: its full digest is
          * pinned (AV_P2_SHA256), this one names it */
         char ph[AV_HASH_LEN + 1] = "?";
@@ -591,12 +693,18 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
                 p2kept, ph, (unsigned long long)r.p2_calls,
                 (unsigned long long)r.p2_declines, (unsigned long long)r.p2_unbound);
     }
-    if (g->nock_dec)
+    if (nd_seen)
         fprintf(stderr, "nock-dec: %ld occurrences of jetT decF bound; %llu decrements run natively "
                 "among the contractions, %llu declined (an argument not an encoded noun as it "
                 "stands, or a head atom past 32 bits), %llu unbound at a call\n",
                 ndkept, (unsigned long long)r.nock_dec_calls,
                 (unsigned long long)r.nock_dec_declines, (unsigned long long)r.nock_dec_unbound);
+    if (hd_seen)
+        fprintf(stderr, "hoon-dec: %ld occurrences of jetT hoonDecBodyF bound; %llu decrements run "
+                "natively among the contractions, %llu declined (a cell sample, a sample past 32 "
+                "bits, or an argument not a core as it stands), %llu unbound at a call\n",
+                hdkept, (unsigned long long)r.hoon_dec_calls,
+                (unsigned long long)r.hoon_dec_declines, (unsigned long long)r.hoon_dec_unbound);
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE &&
                  (g->dag ? av_print_dag(a, r.term, g->budget, &b) : av_print(a, r.term, g->budget, &b));
@@ -703,6 +811,7 @@ out:
 int term_main(int argc, char **argv) {
     args g;
     if (!parse_args(argc, argv, &g)) return usage();
+    if (g.pins_bad) return 1;               /* its message is out */
     if (!options_fit(&g, argv[1])) return 2;
 
     const char *cmd = argv[1];

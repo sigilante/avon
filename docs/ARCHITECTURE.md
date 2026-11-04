@@ -10,7 +10,7 @@ them.  `DESIGN.md` gives the reasons; this page gives the places.
    or DAG (`src/read.c`), SKIT (`src/wire.c`), prefix (`src/witness.c`).  The
    term becomes nodes in an arena (`src/arena.c`): eight bytes each,
    addressed by 32-bit index, S, K and I interned at 0, 1 and 2.
-2. **Match.**  With `--jets`, `--ctors`, `--templates` or `--p2`, the
+2. **Match.**  With `--jets`, `--ctors`, `--templates` or `--pins`, the
    matcher (`src/jets.c`) finds the subterms that are the dashboard's
    terms, tree for tree, and binds each to its jet; templates (`src/tmpl.c`) and words
    (`src/words.c`) register theirs the same way.
@@ -23,7 +23,7 @@ them.  `DESIGN.md` gives the reasons; this page gives the places.
    data jets, the interpreter jet (`src/interp.c`), the compiler jet
    (`src/compiler.c`), the unquoter (`src/install.c`), and the pinned
    jets (`src/pin.c`): Poseidon2 (`src/p2.c`) and the transported Nock
-   decrement (`src/nockdec.c`).
+   decrements (`src/nockdec.c`).
 4. **Print.**  `src/print.c` writes the printed form under a node budget,
    or, with `--dag`, the DAG form, each node once; or `src/wire.c` jams the
    result.
@@ -97,7 +97,7 @@ through the walk before the run goes live.
 | `witness.c` | the witness strategy: lean-ski's machine, its trace written as a table; and the prefix form's reader and writer |
 | `pin.c` | pinned jets: a term fixed by its full digest, its jet nodes bound and checked at every fire |
 | `p2.c`, `p2_consts.h`, `p2_prog.h` | Poseidon2 over BabyBear and its jet; the two headers are generated from Lean |
-| `nockdec.c` | skinock's transported Nock decrement, `jetT decF`, and the nouns it reads and writes |
+| `nockdec.c` | skinock's transported Nock decrements, the Λ word's `jetT decF` and Hoon's `++dec` arm, and the nouns they read and write |
 | `census.c` | a census of the terms a run calls, for choosing jets |
 | `jetstats.c` | each jet's fires, misses, demotions and their origins; template instances by their body's head |
 | `profile.c` | which named terms a share-mode run's contractions execute |
@@ -124,7 +124,7 @@ Outside `src/`
 | `lean/Fix.lean` | `--fix`'s rewrite: convertible with the plain run for every term, and Y's simulation up to lean-ski's `Tr` with Y a jet (`LEAN-JETS.md` §7) |
 | `lean/Templates.lean` | `tmpl.c`'s load check and `tmpl_instance`, modelled and proved sound against lean-ski's bracket abstraction, and a replay of the loader (`LEAN-JETS.md` §6) |
 | `lean/Words.lean` | the word operations' terms and the constructors they read, printed as `src/word_pins.h`, each operation proved to compute its function, and the C's fires, modelled, proved sound (`LEAN-JETS.md`) |
-| `jets/` | the bird and Joy jet dictionaries and the scripts that write them |
+| `jets/` | the bird and Joy jet dictionaries and the scripts that write them; `pins.conf` and `pins/`, the pinned jets' terms |
 | `tests/test_*.c`, `tests/test.h` | the unit suites (`TESTING.md`) |
 | `tests/*_check.sh`, `tests/pins.sh` | the checks against other repositories, and their pins |
 | `tests/smoke.sh`, `tests/smoke.tsv` | the smoke test |

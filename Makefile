@@ -35,6 +35,8 @@ DEBUG   := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
            -fno-sanitize-recover=all
 
 BUILD   := build
+# the pinned jets' file `avon reduce --pins` reads when it names none
+PINS    := -DAV_PINS_DEFAULT='"$(CURDIR)/jets/pins.conf"'
 LIB_SRC := $(filter-out src/main.c,$(wildcard src/*.c))
 CLI_SRC := src/main.c $(wildcard src/cli/*.c)     # the command, built into avon alone
 TESTS   := $(wildcard tests/test_*.c)
@@ -53,11 +55,11 @@ all: $(BUILD)/avon
 
 $(BUILD)/avon: $(CLI_SRC) $(REL_OBJ) $(HDRS)
 	@mkdir -p $(@D)
-	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -o $@ $(CLI_SRC) $(REL_OBJ)
+	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) $(PINS) -o $@ $(CLI_SRC) $(REL_OBJ)
 
 $(BUILD)/dbg/avon: $(CLI_SRC) $(DBG_OBJ) $(HDRS)
 	@mkdir -p $(@D)
-	$(CC) $(CSTD) $(WARN) $(INC) $(DEBUG) -o $@ $(CLI_SRC) $(DBG_OBJ)
+	$(CC) $(CSTD) $(WARN) $(INC) $(DEBUG) $(PINS) -o $@ $(CLI_SRC) $(DBG_OBJ)
 
 # build/stats/avon: the release build counting what becomes of template
 # instances' cells (src/sstats.h), for one reduce or front0 run at a time.
@@ -71,7 +73,7 @@ stats-check: $(BUILD)/avon $(BUILD)/stats/avon
 
 $(BUILD)/stats/avon: $(CLI_SRC) $(STATS_OBJ) $(HDRS)
 	@mkdir -p $(@D)
-	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -DAV_STRICT_STATS -o $@ $(CLI_SRC) $(STATS_OBJ)
+	$(CC) $(CSTD) $(WARN) $(INC) $(RELEASE) -DAV_STRICT_STATS $(PINS) -o $@ $(CLI_SRC) $(STATS_OBJ)
 
 $(BUILD)/stats/%.o: src/%.c $(HDRS)
 	@mkdir -p $(@D)

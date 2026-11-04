@@ -1,14 +1,22 @@
 /**  test_nockdec.c
  *
- *  The transported Nock decrement (src/nockdec.c) on skinock's own term,
- *  tests/nockdec/jetT-decF.dag (SKInock d89b96c, terms/jetT-decF.dag, as
- *  scripts/PinDec.lean prints it), which registers only under its pinned
- *  digest.  On every encoded stack the jet fires in one step and reaches
+ *  The transported Nock decrements (src/nockdec.c) on skinock's own terms,
+ *  as scripts/PinDec.lean prints them, each registering only under its
+ *  pinned digest: jets/pins/jetT-decF.dag (SKInock d89b96c), the Λ
+ *  word, and jets/pins/jetT-hoonDecBodyF.dag (SKInock fe3c031), Hoon's
+ *  ++dec arm.
+ *
+ *  The Λ word's digest.  On every encoded stack the jet fires in one step and reaches
  *  the normal form the term reaches without it, byte for byte: [n r] to
  *  [n-1 r], Err on [0 r], on a cell at the head and on an atom.  A head
  *  atom of 32 bits fires; one of 33 runs the term.  An argument that is
  *  not an encoded noun as it stands---a Form, bits with a trailing 0, a
  *  thunk---runs the term, and so does an outer call over an inner one.
+ *
+ *  Hoon's ++dec on the gate core [bat [n ctx]]: the atom n-1, Err on a
+ *  zero sample, an atom and [bat atom], one step, the term's normal form,
+ *  whatever bat and ctx hold and with either cell carrying code.  A cell
+ *  sample, where the arm diverges, runs the term.
  */
 
 #include <stdint.h>
@@ -20,10 +28,10 @@
 #include "../src/jets.h"
 #include "test.h"
 
-#define TERM "tests/nockdec/jetT-decF.dag"
+static bool hoon;                   /* the runs below: Hoon's ++dec, else the Λ word */
 
 static char *term_src(size_t *len) {
-    FILE *f = test_open(TERM);
+    FILE *f = test_open(hoon ? "jets/pins/jetT-hoonDecBodyF.dag" : "jets/pins/jetT-decF.dag");
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -67,8 +75,13 @@ static void atom(text *t, uint64_t n, int pad) {
 }
 
 /*  A noun: "a<n>", "a<n>+<pad>" (that many trailing 0 bits), "[h t]",
- *  "{h t k}" (a Form), or "(I x)" (a thunk). */
+ *  "{h t k}" (a Form), or "(I x)" (a thunk); or "~", S K, a closed term
+ *  that is no noun's encoding. */
 static const char *noun(text *t, const char *p) {
+    if (*p == '~') {
+        put(t, "S K");
+        return p + 1;
+    }
     if (*p == 'a') {
         char *e;
         uint64_t n = strtoull(p + 1, &e, 10);
@@ -125,7 +138,7 @@ static decrun dec_run(const char *n, bool on, bool nested, uint64_t fuel) {
     NEED(j != AV_NONE);
     av_root_push(a, &j);
     const char *err = NULL;
-    uint32_t id = av_nock_dec_register(a, j, &err);
+    uint32_t id = hoon ? av_hoon_dec_register(a, j, &err) : av_nock_dec_register(a, j, &err);
     NEED(id != AV_NONE);                    /* the pin holds */
     text t = { 0 };
     noun(&t, n);
@@ -141,16 +154,17 @@ static decrun dec_run(const char *n, bool on, bool nested, uint64_t fuel) {
     while (crowd && a->cap - a->used >= NOCK_DEC_NODES)
         (void)av_app(a, AV_NODE_S, AV_NODE_K);  /* garbage: the fire must collect */
     av_opts o = av_opts_default();
-    o.nock_dec = on;
+    o.nock_dec = on && !hoon;
+    o.hoon_dec = on && hoon;
     o.max_steps = fuel;
     av_root_push(a, &root);
     av_result r = av_reduce(a, root, &o);
     av_root_pop(a);
     out.status = r.status;
     out.steps = r.steps;
-    out.calls = r.nock_dec_calls;
-    out.declines = r.nock_dec_declines;
-    out.unbound = r.nock_dec_unbound;
+    out.calls = hoon ? r.hoon_dec_calls : r.nock_dec_calls;
+    out.declines = hoon ? r.hoon_dec_declines : r.nock_dec_declines;
+    out.unbound = hoon ? r.hoon_dec_unbound : r.nock_dec_unbound;
     out.collections = a->collections;
     av_buf b = { 0 };
     if (r.term != AV_NONE && av_print(a, r.term, 100000000, &b)) out.nf = strdup(b.s);
@@ -334,6 +348,109 @@ TEST(the_reader_reads_only_an_encoded_stack) {
     av_arena_free(a);
 }
 
+/*  ------------------------------------------------------- Hoon's ++dec */
+
+TEST(hoons_pin_holds_its_term_and_refuses_the_others) {
+    hoon = true;
+    decrun r = dec_run("[a0 [a7 a0]]", true, false, FUEL);
+    CHECK(r.kept == 1);
+    free(r.nf);
+    av_arena *a = av_arena_new(1u << 18);
+    size_t len;
+    char *src = term_src(&len);
+    const char *msg = NULL, *err = NULL;
+    uint32_t j = av_parse_dag(a, src, len, &msg);
+    free(src);
+    hoon = false;
+    REQUIRE(j != AV_NONE);
+    CHECK(av_nock_dec_register(a, j, &err) == AV_NONE);    /* not jetT decF */
+    uint32_t id = av_hoon_dec_register(a, j, &err);
+    CHECK(id != AV_NONE && av_hoon_dec_register(a, j, &err) == id);
+    CHECK(p2_register(a, j, false, &err) == AV_NONE);
+    av_arena_free(a);
+}
+
+TEST(a_core_decrements_in_one_step_whatever_bat_and_ctx_hold) {
+    hoon = true;
+    const char *cores[][2] = {
+        { "[a0 [a7 a0]]", "a6" },                   { "[a0 [a1 a0]]", "a0" },
+        { "[[a1 a2] [a100 [a3 a4]]]", "a99" },      { "[~ [a7 ~]]", "a6" },
+        { "{[a1 a2] [a7 [a0 a0]] a3}", "a6" },      { "[a0 {a7 [a0 a0] a1}]", "a6" },
+        { "{~ {a9 ~ ~} ~}", "a8" },
+    };
+    for (size_t i = 0; i < sizeof cores / sizeof cores[0]; i++) {
+        char *w = enc(cores[i][1]);
+        fires_as_the_term(cores[i][0], w);
+        free(w);
+    }
+    for (unsigned n = 1; n <= 40; n++) {
+        char s[48], w[16];
+        snprintf(s, sizeof s, "[~ [a%u [a%u ~]]]", n, n);
+        snprintf(w, sizeof w, "a%u", n - 1);
+        char *want = enc(w);
+        fires_as_the_term(s, want);
+        free(want);
+    }
+    hoon = false;
+}
+
+TEST(a_core_with_no_decrement_is_err_in_one_step) {
+    hoon = true;
+    fires_as_the_term("[a0 [a0 a0]]", ERR);         /* underflow */
+    fires_as_the_term("[~ [a0 ~]]", ERR);
+    fires_as_the_term("a5", ERR);                   /* no sample */
+    fires_as_the_term("[a0 a5]", ERR);
+    fires_as_the_term("[~ a5]", ERR);
+    fires_as_the_term("a3+1", ERR);                 /* whatever the atom's bits */
+    fires_as_the_term("[~ a0+2]", ERR);
+    hoon = false;
+}
+
+/*  The sample a cell: the arm diverges, and so does the term; the jet runs
+ *  it.  Past 32 bits, or with a trailing 0, the jet runs the term too. */
+TEST(a_core_the_jet_does_not_answer_for_runs_the_term) {
+    hoon = true;
+    const char *cores[] = { "[a0 [[a1 a2] a0]]", "[a0 [{a1 a2 a0} a0]]", "[a0 [a4294967296 a0]]",
+                            "[a0 [a3+1 a0]]", "[a0 [a0+1 a0]]" };
+    for (size_t i = 0; i < sizeof cores / sizeof cores[0]; i++) {
+        decrun r = dec_run(cores[i], true, false, 300000);
+        CHECK(r.status == AV_FUEL && r.calls == 0 && r.declines == 1);
+        free(r.nf);
+    }
+    declines_to_the_term("(I [a0 [a3 a0]])", false);  /* a thunk */
+    decrun r = dec_run("[a0 [a4294967295 a0]]", true, false, FUEL);
+    char *want = enc("a4294967294");
+    CHECK(r.status == AV_NORMAL && r.steps == 1 && r.calls == 1);
+    CHECK(r.nf && want && strcmp(r.nf, want) == 0);
+    free(r.nf);
+    free(want);
+    hoon = false;
+}
+
+TEST(the_core_reader_reads_only_the_cells_and_the_sample) {
+    av_arena *a = av_arena_new(1u << 16);
+    struct { const char *n; int want; uint32_t k; } cs[] = {
+        { "[a0 [a7 a0]]", 1, 6 },         { "[~ [a1 ~]]", 1, 0 },          { "{~ {a2 ~ ~} ~}", 1, 1 },
+        { "[a0 [a0 a0]]", 2, 0 },         { "a9", 2, 0 },                  { "[~ a9]", 2, 0 },
+        { "[a0 [[a1 a2] a0]]", 0, 0 },    { "[a0 [a3+1 a0]]", 0, 0 },      { "~", 0, 0 },
+        { "[a0 ~]", 0, 0 },               { "[a0 [~ a0]]", 0, 0 },         { "(I [a0 [a3 a0]])", 0, 0 },
+        { "[a0 [a4294967296 a0]]", 0, 0 }, { "[a0 [a4294967295 a0]]", 1, 4294967294u },
+        { "a3+1", 2, 0 },          { "[~ a0+2]", 2, 0 },            { "[a0 [a0+1 a0]]", 0, 0 },
+    };
+    for (size_t i = 0; i < sizeof cs / sizeof cs[0]; i++) {
+        text t = { 0 };
+        noun(&t, cs[i].n);
+        uint32_t x = av_parse(a, t.s, t.n, NULL), k = 0;
+        free(t.s);
+        REQUIRE(x != AV_NONE);
+        int got = av_hoon_dec_read(a, x, &k);
+        CHECK_EQ(got, cs[i].want);
+        if (got != cs[i].want) fprintf(stderr, "    on %s\n", cs[i].n);
+        if (got == 1) CHECK_EQ(k, cs[i].k);
+    }
+    av_arena_free(a);
+}
+
 TEST_MAIN(
     TEST_CASE(the_pin_holds_the_term_and_refuses_another),
     TEST_CASE(the_reader_reads_only_an_encoded_stack),
@@ -344,4 +461,9 @@ TEST_MAIN(
     TEST_CASE(anything_but_an_encoded_noun_runs_the_term),
     TEST_CASE(a_call_over_a_call_fires_the_inner_one),
     TEST_CASE(a_collection_at_the_fire_keeps_the_answer),
+    TEST_CASE(hoons_pin_holds_its_term_and_refuses_the_others),
+    TEST_CASE(the_core_reader_reads_only_the_cells_and_the_sample),
+    TEST_CASE(a_core_decrements_in_one_step_whatever_bat_and_ctx_hold),
+    TEST_CASE(a_core_with_no_decrement_is_err_in_one_step),
+    TEST_CASE(a_core_the_jet_does_not_answer_for_runs_the_term),
 )
