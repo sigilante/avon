@@ -166,15 +166,17 @@ uint32_t p2_state_build(av_arena *a, const uint32_t s[16]);
 uint32_t p2_register(av_arena *a, uint32_t p, bool pin, const char **err);
 
 /*  Pinned jets (pin.c).  pin_register makes p a dashboard entry, its
- *  pin_nodes set, refusing it unless its full digest is sha256 (none when
- *  NULL), with `refusal` as the message; the caller refuses an entry of the
+ *  pin_nodes set, refusing it unless its full digest is sha256 or sha256b (no
+ *  pin when sha256 is NULL; sha256b may be NULL), with `refusal` as the message; the caller refuses an entry of the
  *  other pinned kind, and sets its own: registering a term again is a no-op.
- *  pin_same: whether x is jet id's term, node for node, within eight pairs
- *  per node of it (false past them, or out of memory).  pairT x y =
+ *  pin_same: whether x is jet id's term, node for node, within pin_budget
+ *  pairs (false past them, or out of memory): enough for any x that is the
+ *  term as a tree, shared or not, up to PIN_TREE_MAX nodes.  pairT x y =
  *  S (S I (K x)) (K y), read through views and built from reserved nodes,
  *  si the node S I. */
-uint32_t pin_register(av_arena *a, uint32_t p, const char *sha256, const char *refusal,
-                      const char **err);
+uint32_t pin_register(av_arena *a, uint32_t p, const char *sha256, const char *sha256b,
+                      const char *refusal, const char **err);
+#define PIN_TREE_MAX (1u << 22)
 bool     pin_same(const av_arena *a, uint32_t x, uint32_t id);
 bool     pin_pair_read(const av_arena *a, uint32_t t, uint32_t *x, uint32_t *y);
 uint32_t pin_pair_build(av_arena *a, uint32_t si, uint32_t x, uint32_t y);
@@ -187,6 +189,24 @@ uint32_t nock_dec_build(av_arena *a, uint32_t k, uint32_t rest);
 uint32_t nock_dec_err(av_arena *a);
 /*  Hoon's ++dec's output: Atom k, k below 2^32, within NOCK_DEC_NODES. */
 uint32_t hoon_dec_build(av_arena *a, uint32_t k);
+
+/*  The decrements' readers (nockdec.c) over a reader c: with c->force
+ *  NULL, the term as it stands (av_nock_dec_read, av_hoon_dec_read);
+ *  else every node read is first given to c->force, which reduces it in
+ *  place to a weak head normal form and returns it, or AV_NONE to give up
+ *  (c->stop is then set, and what the reader returns is meaningless).  A
+ *  reduction in place is a weak reduction t ->> t', so a fire on t' is
+ *  licensed for t (skinock's hoon_dec_bare_fire_sound_red,
+ *  hoon_dec_fire_sound_red; for jetT decF, dec_transport under the same
+ *  step). */
+typedef struct dec_rd dec_rd;
+struct dec_rd {
+    const av_arena *a;
+    uint32_t      (*force)(dec_rd *c, uint32_t t);
+    bool            stop;
+};
+int nock_dec_read_rd(dec_rd *c, uint32_t t, uint32_t *k, uint32_t *rest);
+int hoon_dec_read_rd(dec_rd *c, uint32_t t, uint32_t *k);
 
 /*  The census's hook (census.c): x was put in function position with
  *  `avail` arguments at the head. */

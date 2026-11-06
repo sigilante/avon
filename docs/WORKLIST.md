@@ -6,6 +6,16 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **Hoon's `++dec` in whole programs** (2026-11-04, branch `jet-reduce-arg`;
+  `DESIGN.md` §6.15, "In whole programs"). Kind `hoon-dec` also takes the bare arm
+  `nockToSki hoonDecBodyF`, the term a compiled program carries (SKInock `1ad32d5`,
+  `hoon_dec_bare_fire_sound`); both readers reduce the argument in place, under a
+  budget, before the literal check (`hoon_dec_bare_fire_sound_red`); and a term
+  loaded as a tree now binds. skinock's whole program `hoon_dec_N`, unshared:
+  12,295 / 170,640 / 17,040,411 steps unjetted at N = 7 / 100 / 10,000, 1,011
+  jetted at each, the same normal forms. A program `share`d by skinock holds the arm
+  only as a reduct, and binds nothing.
+
 - **Hoon's `++dec`, transported, and `--pins`** (2026-11-04; `DESIGN.md` §6.15,
   RUNTIME "Pinned jets"). `--pins[=FILE]` turns on the pinned jets a file lists,
   `KIND TERM-FILE` a line, by default `jets/pins.conf` with the terms vendored in

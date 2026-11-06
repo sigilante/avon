@@ -62,8 +62,10 @@ typedef struct {
      * --p2 and --nock-dec */
     const char *p2;               /* Poseidon2's P */
     const char *nock_dec;         /* jetT decF, the Λ word dec */
-    const char *hoon_dec;         /* jetT hoonDecBodyF, Hoon's ++dec arm */
-    char        pin_path[3][1024];    /* --pins's paths, resolved */
+    const char *hoon_dec;         /* Hoon's ++dec arm: jetT hoonDecBodyF or the
+                                     bare nockToSki hoonDecBodyF */
+    const char *hoon_dec2;        /* a second hoon-dec line: the other of the two */
+    char        pin_path[4][1024];    /* --pins's paths, resolved; [3] hoon_dec2's */
     bool        pins_bad;         /* --pins's file, or a kind twice, refused */
     const char *file;
     bool        dag;              /* --dag: print the term reached in the DAG form */
@@ -128,15 +130,19 @@ static bool read_pins(const char *conf, args *g) {
             ok = false;
             break;
         }
-        int w = term[0] == '/' ? snprintf(g->pin_path[k], sizeof g->pin_path[k], "%s", term)
-                               : snprintf(g->pin_path[k], sizeof g->pin_path[k], "%.*s/%s",
+        /* hoon-dec may name two terms: its licensed jetT and the bare arm
+         * a compiled program carries */
+        int at = k == 2 && g->hoon_dec && !g->hoon_dec2 ? 3 : k;
+        int w = term[0] == '/' ? snprintf(g->pin_path[at], sizeof g->pin_path[at], "%s", term)
+                               : snprintf(g->pin_path[at], sizeof g->pin_path[at], "%.*s/%s",
                                           dirlen, dir, term);
-        if (w < 0 || (size_t)w >= sizeof g->pin_path[k]) {
+        if (w < 0 || (size_t)w >= sizeof g->pin_path[at]) {
             fprintf(stderr, "avon: %sa path too long\n", where);
             ok = false;
             break;
         }
-        ok = pin_set(g, k, g->pin_path[k], where);
+        if (at == 3) g->hoon_dec2 = g->pin_path[3];
+        else ok = pin_set(g, k, g->pin_path[k], where);
     }
     fclose(f);
     return ok;
@@ -156,6 +162,7 @@ static bool parse_args(int argc, char **argv, args *g) {
     g->p2 = NULL;
     g->nock_dec = NULL;
     g->hoon_dec = NULL;
+    g->hoon_dec2 = NULL;
     g->pins_bad = false;
     g->jet_table = NULL;
     g->plan = NULL;
@@ -426,8 +433,8 @@ bool use_templates(av_arena *a, const char *dir, uint32_t *t, long counts[4],
     return ok;
 }
 
-/*  A pinned jet's term from path, registered by reg: Poseidon2's P or
- *  jetT decF.  Its id, or AV_NONE with a message. */
+/*  A pinned jet's term from path, registered by reg: Poseidon2's P,
+ *  jetT decF, or one of Hoon's ++dec terms.  Its id, or AV_NONE with a message. */
 static uint32_t use_pinned(av_arena *a, const char *path,
                            uint32_t (*reg)(av_arena *, uint32_t, const char **)) {
     FILE *f = fopen(path, "rb");
@@ -602,7 +609,7 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_arena_free(a);
         return 1;
     }
-    uint32_t p2id = AV_NONE, ndid = AV_NONE, hdid = AV_NONE;
+    uint32_t p2id = AV_NONE, ndid = AV_NONE, hdid = AV_NONE, hdid2 = AV_NONE;
     if (t != AV_NONE && g->p2) {
         av_root_push(a, &t);
         p2id = use_pinned(a, g->p2, av_p2_register);
@@ -621,15 +628,23 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
         av_root_pop(a);
         if (hdid == AV_NONE) t = AV_NONE;
     }
+    if (t != AV_NONE && g->hoon_dec2) {
+        av_root_push(a, &t);
+        hdid2 = use_pinned(a, g->hoon_dec2, av_hoon_dec_register);
+        av_root_pop(a);
+        if (hdid2 == AV_NONE) t = AV_NONE;
+    }
     if (t != AV_NONE && g->templates) {
         if (!use_templates(a, g->templates, &t, tc, g->data, wc, g->fix)) t = AV_NONE;
     } else if (t != AV_NONE && (g->njets || g->ctors || g->p2 || g->nock_dec || g->hoon_dec)) {
         t = av_jets_match(a, t);
     }
-    long p2kept = 0, ndkept = 0, hdkept = 0;
+    long p2kept = 0, ndkept = 0, hdkept = 0, hdkept2 = 0;
     if ((t != AV_NONE && g->p2 && (p2kept = av_pin_bind(a, t, p2id)) < 0) ||
         (t != AV_NONE && g->nock_dec && (ndkept = av_pin_bind(a, t, ndid)) < 0) ||
-        (t != AV_NONE && g->hoon_dec && (hdkept = av_pin_bind(a, t, hdid)) < 0)) {
+        (t != AV_NONE && g->hoon_dec && (hdkept = av_pin_bind(a, t, hdid)) < 0) ||
+        (t != AV_NONE && g->hoon_dec2 && hdid2 != hdid &&
+         (hdkept2 = av_pin_bind(a, t, hdid2)) < 0)) {
         fprintf(stderr, "avon: out of memory\n");
         t = AV_NONE;
     }
@@ -676,8 +691,19 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     bool p2_seen = g->p2 && (p2kept || r.p2_calls || r.p2_declines || r.p2_unbound);
     bool nd_seen = g->nock_dec && (ndkept || r.nock_dec_calls || r.nock_dec_declines ||
                                    r.nock_dec_unbound);
-    bool hd_seen = g->hoon_dec && (hdkept || r.hoon_dec_calls || r.hoon_dec_declines ||
-                                   r.hoon_dec_unbound);
+    bool hd_seen = g->hoon_dec && (hdkept || hdkept2 || r.hoon_dec_calls ||
+                                   r.hoon_dec_declines || r.hoon_dec_unbound);
+    /* which of Hoon's two terms bound: each registered one, by its digest */
+    char hoon_terms[64] = "";
+    for (int i = 0; i < 2; i++) {
+        uint32_t id = i ? hdid2 : hdid;
+        long kept = i ? hdkept2 : hdkept;
+        char d[65];
+        if (id == AV_NONE || (i && id == hdid) || !av_pin_digest(a, a->jets[id].fallback, d)) continue;
+        snprintf(hoon_terms + strlen(hoon_terms), sizeof hoon_terms - strlen(hoon_terms), "%s%s %ld",
+                 *hoon_terms ? ", " : "",
+                 strcmp(d, AV_HOON_DEC_SHA256) == 0 ? "jetT" : "bare", kept);
+    }
     if ((g->p2 || g->nock_dec || g->hoon_dec) && !p2_seen && !nd_seen && !hd_seen)
         fprintf(stderr, "pins: no pinned term occurs in the term (%s%s%s)\n",
                 g->p2 ? "p2 " : "", g->nock_dec ? "nock-dec " : "", g->hoon_dec ? "hoon-dec" : "");
@@ -695,15 +721,16 @@ static int run_one(const args *g, const char *src, size_t len, char sep) {
     }
     if (nd_seen)
         fprintf(stderr, "nock-dec: %ld occurrences of jetT decF bound; %llu decrements run natively "
-                "among the contractions, %llu declined (an argument not an encoded noun as it "
-                "stands, or a head atom past 32 bits), %llu unbound at a call\n",
+                "among the contractions, %llu declined (an argument not an encoded noun once "
+                "reduced, or a head atom past 32 bits), %llu unbound at a call\n",
                 ndkept, (unsigned long long)r.nock_dec_calls,
                 (unsigned long long)r.nock_dec_declines, (unsigned long long)r.nock_dec_unbound);
     if (hd_seen)
-        fprintf(stderr, "hoon-dec: %ld occurrences of jetT hoonDecBodyF bound; %llu decrements run "
-                "natively among the contractions, %llu declined (a cell sample, a sample past 32 "
-                "bits, or an argument not a core as it stands), %llu unbound at a call\n",
-                hdkept, (unsigned long long)r.hoon_dec_calls,
+        fprintf(stderr, "hoon-dec: %ld occurrences of Hoon's ++dec arm bound (%s); %llu "
+                "decrements run natively among the contractions, %llu declined (a cell sample, a "
+                "sample past 32 bits, or an argument not a core once its core, tail, sample and "
+                "bits are reduced), %llu unbound at a call\n",
+                hdkept + hdkept2, hoon_terms, (unsigned long long)r.hoon_dec_calls,
                 (unsigned long long)r.hoon_dec_declines, (unsigned long long)r.hoon_dec_unbound);
     av_buf b = { 0 };
     bool whole = r.term != AV_NONE &&

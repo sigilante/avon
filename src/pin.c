@@ -123,12 +123,65 @@ static uint32_t view_nodes(const av_arena *a, uint32_t t) {
     return ok ? n : 0;
 }
 
-bool pin_same(const av_arena *a, uint32_t x, uint32_t id) {
-    return av_equal(a, x, a->jets[id].fallback, 8 * (size_t)a->jets[id].pin_nodes + 4096) == 1;
+/*  A term's application nodes as a tree, through views, past PIN_TREE_MAX
+ *  saturated: a comparison of a tree with it visits at most that many
+ *  distinct pairs, as each node of the tree meets one of the term's.
+ *  0 out of memory. */
+static uint32_t tree_apps(const av_arena *a, uint32_t t) {
+    nmap at = { 0 };                        /* viewed node -> 1 + its size */
+    typedef struct { uint32_t node; bool done; } item;
+    size_t cap = 256, top = 0;
+    item *todo = malloc(cap * sizeof *todo);
+    bool ok = todo != NULL;
+    if (ok) todo[top++] = (item){ av_view(a, t), false };
+    while (ok && top) {
+        item it = todo[--top];
+        uint64_t v, dl, dr;
+        if (nmap_get(&at, it.node, &v)) continue;
+        if (av_tag(a, it.node) != AV_APP) {
+            ok = nmap_put(&at, it.node, 1);
+            continue;
+        }
+        uint32_t f = av_view(a, av_left(a, it.node)), x = av_view(a, av_right(a, it.node));
+        if (!it.done) {
+            if (top + 3 > cap) {
+                item *q = realloc(todo, (cap *= 2) * sizeof *q);
+                if (!(ok = q != NULL)) break;
+                todo = q;
+            }
+            todo[top++] = (item){ it.node, true };
+            todo[top++] = (item){ x, false };
+            todo[top++] = (item){ f, false };
+            continue;
+        }
+        nmap_get(&at, f, &dl);
+        nmap_get(&at, x, &dr);
+        uint64_t n = (dl - 1) + (dr - 1) + 1;
+        if (n > PIN_TREE_MAX) n = PIN_TREE_MAX;
+        ok = nmap_put(&at, it.node, n + 1);
+    }
+    uint64_t r = 0;
+    if (ok && !nmap_get(&at, av_view(a, t), &r)) ok = false;
+    free(todo);
+    nmap_free(&at);
+    return ok ? (uint32_t)(r - 1 ? r - 1 : 1) : 0;
 }
 
-uint32_t pin_register(av_arena *a, uint32_t p, const char *sha256, const char *refusal,
-                      const char **err) {
+/*  The pairs a comparison with jet id's term may visit: eight a distinct
+ *  node of it, as before, or the term's size as a tree, whichever is more,
+ *  so that a term loaded as a tree, never hash-consed (a backtick-prefix
+ *  input), compares whole. */
+static size_t pin_budget(const av_jet *j) {
+    size_t b = 8 * (size_t)j->pin_nodes + 4096;
+    return j->pin_tree > b ? j->pin_tree : b;
+}
+
+bool pin_same(const av_arena *a, uint32_t x, uint32_t id) {
+    return av_equal(a, x, a->jets[id].fallback, pin_budget(&a->jets[id]) + 1) == 1;
+}
+
+uint32_t pin_register(av_arena *a, uint32_t p, const char *sha256, const char *sha256b,
+                      const char *refusal, const char **err) {
     char h[AV_HASH_LEN + 1];
     av_digest d;
     if (!av_structural_hash(a, p, h) || !av_hash_parse(h, &d)) {
@@ -136,12 +189,13 @@ uint32_t pin_register(av_arena *a, uint32_t p, const char *sha256, const char *r
         return AV_NONE;
     }
     char full[65];
-    if (sha256 && (!av_pin_digest(a, p, full) || strcmp(full, sha256) != 0)) {
+    if (sha256 && (!av_pin_digest(a, p, full) ||
+                   (strcmp(full, sha256) != 0 && (!sha256b || strcmp(full, sha256b) != 0)))) {
         *err = refusal;
         return AV_NONE;
     }
-    uint32_t nodes = view_nodes(a, p);
-    if (!nodes) {
+    uint32_t nodes = view_nodes(a, p), tree = tree_apps(a, p);
+    if (!nodes || !tree) {
         *err = "out of memory";
         return AV_NONE;
     }
@@ -153,7 +207,8 @@ uint32_t pin_register(av_arena *a, uint32_t p, const char *sha256, const char *r
         *err = "the term's digest is already another kind of jet";
         return AV_NONE;
     }
-    if (id < before && av_equal(a, j->fallback, p, 8 * (size_t)nodes + 4096) != 1) {
+    av_jet probe = { .pin_nodes = nodes, .pin_tree = tree };
+    if (id < before && av_equal(a, j->fallback, p, pin_budget(&probe) + 1) != 1) {
         /* an entry under the same digest from elsewhere (a --jets
          * dictionary): its term must be the pinned one, since the fires
          * check against it */
@@ -161,6 +216,7 @@ uint32_t pin_register(av_arena *a, uint32_t p, const char *sha256, const char *r
         return AV_NONE;
     }
     j->pin_nodes = nodes;
+    j->pin_tree = tree;
     return id;
 }
 

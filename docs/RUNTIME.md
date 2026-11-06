@@ -241,12 +241,14 @@ TERM-FILE` a line, each path relative to the file, `#` a comment:
 p2        pins/P.dag
 nock-dec  pins/jetT-decF.dag
 hoon-dec  pins/jetT-hoonDecBodyF.dag
+hoon-dec  pins/nockToSki-hoonDecBodyF.dag
 ```
 
 That is `jets/pins.conf`, which `--pins` alone reads (its path is compiled
 in from the checkout). Its terms are in `jets/pins/`: `P.dag` from lean-ski
-`e72fff0` (`lake exe p2run 1 OUT`), the other two from SKInock `d89b96c`
-and `fe3c031` (`scripts/PinDec.lean`). Leave a line out to leave that jet
+`e72fff0` (`lake exe p2run 1 OUT`), the others from SKInock `d89b96c`,
+`fe3c031` and `1ad32d5` (`scripts/PinDec.lean`). `hoon-dec` alone may have
+two lines, its two terms. Leave a line out to leave that jet
 off, or write a file of your own. Each jet that binds in the term prints
 its line; when none does, `pins: no pinned term occurs in the term (…)`.
 A file that cannot be read, an unknown kind, or a kind given twice (as by
@@ -276,23 +278,31 @@ build/avon reduce --p2=/tmp/p2/P.dag /tmp/p2/p2.dag   # NORMAL 1, then p2.expect
 
 **The Nock decrement run natively** (kind `nock-dec`, `--nock-dec=FILE`, §6.15) prints
 `nock-dec: 1 occurrences of jetT decF bound; 1 decrements run natively
-among the contractions, 0 declined (an argument not an encoded noun as it
-stands, or a head atom past 32 bits), 0 unbound at a call`. FILE must
+among the contractions, 0 declined (an argument not an encoded noun once
+reduced, or a head atom past 32 bits), 0 unbound at a call`. FILE must
 hold skinock's `jetT decF`, pinned by its 256-bit digest as `P` is. It
 fires on the encoding of a Nock stack `[n r]` as it stands, to `[n-1 r]`,
 or to `Err` on `[0 r]`, on a cell at the head and on an atom; skinock's
-`dec_transport` is the licence. A head atom past 32 bits, a `Form`, a
-non-canonical atom or a thunk runs the term, counted as a decline, so the
-normal form is SKI's.
+`dec_transport` is the licence. The argument is reduced in place first,
+within 2^22 contractions counted among the run's, so a thunk is read as
+its value. A head atom past 32 bits, a `Form` or a non-canonical atom runs
+the term, counted as a decline, so the normal form is SKI's.
 
 **Hoon's `++dec` run natively** (kind `hoon-dec`, §6.15) prints
-`hoon-dec: 1 occurrences of jetT hoonDecBodyF bound; 1 decrements run
-natively …, 0 declined (a cell sample, a sample past 32 bits, or an
-argument not a core as it stands), 0 unbound at a call`. It fires on the
-gate core `[bat [n ctx]]`, either cell plain or carrying code, to the atom
-`n-1`, or to `Err` on a zero sample, an atom and `[bat atom]`; it reads
-nothing of `bat` and `ctx`. A cell sample, where `++dec` diverges, runs the
-term.
+`hoon-dec: 1 occurrences of Hoon's ++dec arm bound (jetT 0, bare 1); 1
+decrements run natively …, 0 declined (a cell sample, a sample past 32
+bits, or an argument not a core once its core, tail, sample and bits are
+reduced), 0 unbound at a call`, the parenthesis counting the occurrences
+of each term: `jetT hoonDecBodyF`, or the bare arm `nockToSki
+hoonDecBodyF` a compiled program carries. It fires on the gate core `[bat
+[n ctx]]`, either cell plain or carrying code, to the atom `n-1`, or to
+`Err` on a zero sample, an atom and `[bat atom]`; it reads nothing of `bat`
+and `ctx`. The core, its tail, the sample and its bits are reduced in place
+first, as the arm would force them, so the arm fires inside a whole
+compiled program, where it meets its core unreduced. A cell sample, where
+`++dec` diverges, runs the term. A program skinock has `share`d holds the
+arm only after its sharing betas, and no pin binds: load it unshared, as a
+DAG or a prefix tree.
 
 ## Measuring
 

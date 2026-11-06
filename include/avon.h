@@ -402,6 +402,9 @@ typedef struct {
                                    applied to a gate core with an atom
                                    sample runs natively, one step; copy
                                    mode ignores it */
+    uint8_t     pin_depth;      /* internal: how deep in the argument
+                                   reductions of the decrement jets
+                                   (§6.15) this run is; 0 from a caller */
     bool        no_join;        /* with data: never join a case to its
                                    instance, for tests comparing
                                    the two; every count is the same       */
@@ -803,8 +806,16 @@ int      av_nock_dec_read(const av_arena *a, uint32_t t, uint32_t *k, uint32_t *
  *  av_hoon_dec_register pins the term by AV_HOON_DEC_SHA256, and with
  *  av_opts.hoon_dec share mode rewrites it at the head with such an
  *  argument to Atom k, or to Err, one step; any other argument runs a
- *  fresh copy of the term, a decline counted. */
+ *  fresh copy of the term, a decline counted.  The two readers read the
+ *  argument as it stands; share mode first reduces in place the nodes they
+ *  read (DESIGN.md §6.15, "In whole programs"), the contractions counted. */
 #define AV_HOON_DEC_SHA256 "a4baf0aae2d7ea5032800f533b7cef103ea134e7ee0ac95c3d1a996d34f16d6b"
+/*  The bare arm nockToSki hoonDecBodyF (SKInock 1ad32d5,
+ *  terms/nockToSki-hoonDecBodyF.dag), the term a compiled program carries:
+ *  its outputs on the fire shapes hold no Form, so toCell leaves them, and
+ *  hoon_dec_bare_fire_sound licenses the same fire check.
+ *  av_hoon_dec_register takes either digest, each its own jet entry. */
+#define AV_HOON_DEC_BARE_SHA256 "d320b173f4b5afcad727a12dde7857b9b698acfc45fea1f6c353d8e87b14a54f"
 uint32_t av_hoon_dec_register(av_arena *a, uint32_t p, const char **err);
 int      av_hoon_dec_read(const av_arena *a, uint32_t t, uint32_t *k);
 
@@ -942,6 +953,9 @@ typedef struct av_jet {
     uint32_t  pin_nodes;        /* a pinned jet's term's distinct nodes,
                                    the bound on comparing a jet node's
                                    term with it                           */
+    uint32_t  pin_tree;         /* and its application nodes as a tree,
+                                   saturating: the bound when the jet
+                                   node's term is a tree                  */
 } av_jet;
 
 /*  The numeral operations, skijack's natAdd .. natIfLe, natDiv and natRem:
