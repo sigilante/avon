@@ -2052,12 +2052,16 @@ programs"), and four changes follow.
   tree (`pin_tree`, at most `PIN_TREE_MAX` = 2^22), enough for any copy
   shared or not, since each node of a tree meets one node of the term.
   The input is not hash-consed, which would change its counts.
-- **A shared program holds no pinned term.** skinock's `share` pass
-  λ-binds the arm's repeated subterms, so the arm exists only after the
-  sharing βs, as a reduct; `av_pin_bind` binds at load. Binding in
-  reducts would hash every node a contraction makes, so it is not done:
-  a program whose `++dec` should fire is loaded unshared, as a DAG
-  (`compiled f 0`, Lean's `dagText`) or as a prefix tree.
+- **A shared program holds the pinned term only if its sharing keeps it.**
+  skinock's `share` pass λ-binds the arm's repeated subterms, so the arm
+  exists only after the sharing βs, as a reduct; `av_pin_bind` binds at
+  load. Binding in reducts would hash every node a contraction makes, so it
+  is not done. skinock's `shareKeep` (SKInock `6bdb028`,
+  `Nock2Ski/Share.lean`) shares as `share` does but keeps the bare arm
+  literal (`shareKeep_red`), so it binds. A program whose `++dec` should
+  fire is loaded unshared, as a DAG (`compiled f 0`, Lean's `dagText`) or
+  as a prefix tree, or shared by `shareKeep` (`nockstatement --dag
+  keep-hoon-dec`).
 
 Measured on skinock's `hoon_dec_N` (`release/nock/programs.txt`'s
 `hoon_dec_12` formula with the sample `[1 N]`, unshared, as a DAG), Avon
@@ -2068,6 +2072,11 @@ Measured on skinock's `hoon_dec_N` (`release/nock/programs.txt`'s
 | 7 | 12,295 | 1,011 | bare, 1 bound, 1 fired |
 | 100 | 170,640 | 1,011 | the same |
 | 10,000 | 17,040,411 (0.48 s, 58 MB) | 1,011 (0.04 s, 6 MB) | the same |
+
+Shared by `shareKeep`, at N = 7 / 100 / 10,000: 15,387 / 173,732 /
+17,043,503 steps unjetted, 4,103 jetted at each, the arm bound and fired
+once, normal forms equal; the excess over 1,011 is the sharing's βs.
+`tests/test_nockdec.c` checks N = 7 (`hoon_dec_7.keep.dag`).
 
 The 1,010 contractions besides the fire are the program's own work and the
 core's reduction; they do not grow with N. As a prefix tree the same runs

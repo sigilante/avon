@@ -6,6 +6,14 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **Hoon's `++dec` in shared programs** (2026-11-06; `DESIGN.md` §6.15). skinock's
+  `shareKeep` (SKInock `6bdb028`) shares a program but keeps the bare arm literal,
+  so the pin binds at load: `hoon_dec_N` 15,387 / 173,732 / 17,043,503 steps
+  unjetted at N = 7 / 100 / 10,000, 4,103 jetted at each, normal forms equal.
+  `tests/data/hoon-dec/hoon_dec_7.keep.dag` and `test_nockdec` check N = 7; the
+  three fixtures are skinock's `nockstatement --dag` output, reproduced byte for
+  byte at SKInock `c5a3cb7`.
+
 - **Hoon's `++dec` in whole programs** (2026-11-04, branch `jet-reduce-arg`;
   `DESIGN.md` §6.15, "In whole programs"). Kind `hoon-dec` also takes the bare arm
   `nockToSki hoonDecBodyF`, the term a compiled program carries (SKInock `1ad32d5`,

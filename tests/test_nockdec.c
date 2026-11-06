@@ -23,7 +23,8 @@
  *  core whose fields are redexes, an inner call, is reduced in place first
  *  and fires, after those contractions, to the unjetted normal form; one
  *  with no weak head normal form declines.  A tree copy of a term binds,
- *  and skinock's whole program hoon_dec_7 fires its bare arm.
+ *  and skinock's whole program hoon_dec_7 fires its bare arm, unshared or
+ *  shared with the arm kept literal.
  */
 
 #include <stdint.h>
@@ -593,7 +594,10 @@ TEST(a_tree_copy_of_the_term_binds) {
  *  Hoon's terms registered, as jets/pins.conf has them; on, the arm fires
  *  once its argument is reduced, to the unjetted run's normal form.  The
  *  shared form (skinock's `share`) holds the arm only after its sharing
- *  betas, so no pin binds there. */
+ *  betas, so no pin binds there; shared keeping the arm literal (skinock's
+ *  `shareKeep`, hoon_dec_7.keep.dag, SKInock c5a3cb7), it binds and fires.
+ *  All three are `nockstatement --dag unshared|shared|keep-hoon-dec` of the
+ *  formula with the sample [1 7], at subject 0. */
 static decrun program_run(const char *path, bool on) {
     decrun out = { 0 };
     av_arena *a = av_arena_new(1u << 18);
@@ -656,6 +660,19 @@ TEST(a_whole_program_fires_the_bare_arm) {
     CHECK(on.nf && off.nf && strcmp(on.nf, off.nf) == 0);
     free(on.nf);
     free(off.nf);
+    on = program_run("tests/data/hoon-dec/hoon_dec_7.keep.dag", true);
+    off = program_run("tests/data/hoon-dec/hoon_dec_7.keep.dag", false);
+    want = enc("a6");
+    CHECK(on.kept == 1);
+    CHECK(on.status == AV_NORMAL && off.status == AV_NORMAL);
+    CHECK(on.calls == 1 && on.declines == 0);
+    CHECK_EQ(off.steps, 15387u);
+    CHECK_EQ(on.steps, 4103u);
+    CHECK(on.nf && off.nf && strcmp(on.nf, off.nf) == 0);
+    CHECK(on.nf && want && strcmp(on.nf, want) == 0);
+    free(on.nf);
+    free(off.nf);
+    free(want);
 }
 
 TEST(the_core_reader_reads_only_the_cells_and_the_sample) {

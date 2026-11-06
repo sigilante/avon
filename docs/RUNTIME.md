@@ -302,7 +302,9 @@ first, as the arm would force them, so the arm fires inside a whole
 compiled program, where it meets its core unreduced. A cell sample, where
 `++dec` diverges, runs the term. A program skinock has `share`d holds the
 arm only after its sharing betas, and no pin binds: load it unshared, as a
-DAG or a prefix tree.
+DAG or a prefix tree, or shared by skinock's `shareKeep`, which keeps the
+arm literal (`nockstatement --dag keep-hoon-dec`; 15,387 steps to 4,103 at
+N = 7).
 
 ## Measuring
 
