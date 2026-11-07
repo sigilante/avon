@@ -6,6 +6,11 @@ design lives. Last revised 2026-10-29.
 
 ## Done since the last revision
 
+- **SKIlark 0.10.0 pinned** (2026-11-07). `tests/pins.sh` moves SKIlark from `1025e36` to
+  `dfd4789`, its 0.10.0 merge (SKIlark #33): skijack 0.2.6, CI on Avon `a4b2db4`, a
+  changelog. No fixture changes: at the new pin, with Avon's pinned skijack, `skilark.export`
+  and `jets/joy.py` reproduce `tests/workloads/skilark/` and `jets/joy.tsv` byte for byte.
+
 - **Hoon's `++dec` in shared programs** (2026-11-06; `DESIGN.md` §6.15). skinock's
   `shareKeep` (SKInock `6bdb028`) shares a program but keeps the bare arm literal,
   so the pin binds at load: `hoon_dec_N` 15,387 / 173,732 / 17,043,503 steps
