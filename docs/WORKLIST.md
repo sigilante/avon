@@ -10,6 +10,12 @@ design lives. Last revised 2026-10-29.
   `dfd4789`, its 0.10.0 merge (SKIlark #33): skijack 0.2.6, CI on Avon `a4b2db4`, a
   changelog. No fixture changes: at the new pin, with Avon's pinned skijack, `skilark.export`
   and `jets/joy.py` reproduce `tests/workloads/skilark/` and `jets/joy.tsv` byte for byte.
+- **SKIlark 0.11.0 pinned** (2026-11-09). `tests/pins.sh` moves SKIlark from `dfd4789` to
+  `3a11507`, its 0.11.0 merge (SKIlark #36), released as `v0.11.0` and on PyPI as
+  `skilark-joy`. It adopts the reference's own tests (Wodan58/Joy `test2/`, stage 16) and
+  fixes what they found. No fixture changes: at the new pin, with Avon's pinned skijack,
+  `skilark.export` and `jets/joy.py` reproduce `tests/workloads/skilark/` and `jets/` byte
+  for byte (53 files).
 
 - **Hoon's `++dec` in shared programs** (2026-11-06; `DESIGN.md` §6.15). skinock's
   `shareKeep` (SKInock `6bdb028`) shares a program but keeps the bare arm literal,
