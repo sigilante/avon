@@ -2,6 +2,8 @@
 
 ![](./img/hero.jpg)
 
+Built by N. E. Davis under the auspices of [ZeroAttest Research](https://zeroattest.com).
+
 Avon is a solid-state $SKI$ interpreter runtime with accelerated supercombinator support.  It is particularly designed to evaluate [SKIjack](https://github.com/sigilante/SKIjack) and [SKIlark](https://github.com/sigilante/SKIlark) programs.
 
 Avon reduces the pure $SKI$ combinator calculus, and every acceleration it offers carries a licence: an argument that the fast path agrees with the term it replaces.  One term can therefore run fast, run conformant to the published contraction counts, or run as a zero-knowledge proof, and the three agree.
